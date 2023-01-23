@@ -11,7 +11,8 @@ service Sharer {
 }
 
 message PutPhotoReq {
-    bytes data = 1;
+    string name = 1;
+    bytes data = 2;
 }
 
 message PutPhotoResp {
@@ -19,7 +20,8 @@ message PutPhotoResp {
 }
 
 message GetPhotoReq {
-    bytes file = 1;
+    string name = 1;
+    string file = 2;
 }
 
 message GetPhotoResp {
