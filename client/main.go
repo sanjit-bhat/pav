@@ -38,16 +38,16 @@ func main() {
 		if err != nil {
 			log.Fatalln("failed to read file: ", err)
 		}
-		resp, err := c.AddPhoto(ctx, &pb.AddPhotoReq{File: data})
+		resp, err := c.PutPhoto(ctx, &pb.PutPhotoReq{Data: data})
 		if err != nil {
 			log.Fatalln("could not put photo: ", err)
 		}
-		log.Println("File is saved under: ", resp.GetPath())
+		log.Println("File is saved under: ", resp.GetFile())
 	} else if *modeList {
 		resp, err := c.ListPhotos(ctx, &pb.ListPhotosReq{Name: *name})	
 		if err != nil {
 			log.Fatalln("failed to list photos: ", err)
 		}
-		log.Println("Available photos: ", resp.GetPaths())
+		log.Println("Available photos: ", resp.GetFiles())
 	}
 }

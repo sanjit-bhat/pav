@@ -23,7 +23,7 @@ type server struct {
 	pb.UnimplementedSharerServer
 }
 
-func (s *server) AddPhoto(ctx context.Context, in *pb.AddPhotoReq) (*pb.AddPhotoResp, error) {
+func (s *server) PutPhoto(ctx context.Context, in *pb.PutPhotoReq) (*pb.PutPhotoResp, error) {
 	log.Printf("Received new photo")
 	fileName := fmt.Sprintf("file-%d.jpg", rand.Intn(1000))
 	filePath := uploadsDir + fileName
@@ -33,12 +33,12 @@ func (s *server) AddPhoto(ctx context.Context, in *pb.AddPhotoReq) (*pb.AddPhoto
 	}
 	defer file.Close()
 
-	_, err = file.Write(in.GetFile())
+	_, err = file.Write(in.GetData())
 	if err != nil {
 		log.Fatalln("failed to write file: ", err)
 	}
 
-	return &pb.AddPhotoResp{Path: fileName}, nil
+	return &pb.PutPhotoResp{File: fileName}, nil
 }
 
 func (s *server) ListPhotos(ctx context.Context, in *pb.ListPhotosReq) (*pb.ListPhotosResp, error) {
@@ -53,7 +53,7 @@ func (s *server) ListPhotos(ctx context.Context, in *pb.ListPhotosReq) (*pb.List
 	if err != nil {
 		log.Fatalln("failed to read uploads dir: ", err)
 	}
-	return &pb.ListPhotosResp{Paths: imgs}, nil
+	return &pb.ListPhotosResp{Files: imgs}, nil
 }
 
 func main() {

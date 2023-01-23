@@ -5,16 +5,25 @@ option go_package = ".";
 package photo_sharing;
 
 service Sharer {
-    rpc AddPhoto (AddPhotoReq) returns (AddPhotoResp) {}
+    rpc PutPhoto (PutPhotoReq) returns (PutPhotoResp) {}
+    rpc GetPhoto (GetPhotoReq) returns (GetPhotoResp) {} 
     rpc ListPhotos (ListPhotosReq) returns (ListPhotosResp) {}
 }
 
-message AddPhotoReq {
+message PutPhotoReq {
+    bytes data = 1;
+}
+
+message PutPhotoResp {
+    string file = 1;
+}
+
+message GetPhotoReq {
     bytes file = 1;
 }
 
-message AddPhotoResp {
-    string path = 1;
+message GetPhotoResp {
+    bytes data = 1;
 }
 
 message ListPhotosReq {
@@ -22,5 +31,5 @@ message ListPhotosReq {
 }
 
 message ListPhotosResp {
-    repeated string paths = 1;
+    repeated string files = 1;
 }
