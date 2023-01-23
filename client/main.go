@@ -23,6 +23,46 @@ var (
 	getDir = "client/get/"
 )
 
+func putHandler(client pb.SharerClient, ctx context.Context) {
+	log.Println("Putting a photo onto the server")
+	filePath := photosDir + *file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Fatalln("failed to read file:", err)
+	}
+	resp, err := client.PutPhoto(ctx, &pb.PutPhotoReq{Name: *name, Data: data})
+	if err != nil {
+		log.Fatalln("could not put photo:", err)
+	}
+	log.Println("File is saved under:", resp.GetFile())
+}
+
+func getHandler(client pb.SharerClient, ctx context.Context) {
+	log.Println("Getting a photo from the server")
+	resp, err := client.GetPhoto(ctx, &pb.GetPhotoReq{Name: *name, File: *file})	
+	if err != nil {
+		log.Fatalln("could not get photo:", err)
+	}
+	err = os.MkdirAll(getDir, 0777)
+	if err != nil {
+		log.Fatalln("could not create get dir:", err)
+	}	
+	filePath := getDir + *file
+	err = os.WriteFile(filePath, resp.GetData(), 0777)
+	if err != nil {
+		log.Fatalln("could not write file:", err)
+	}
+}
+
+func listHandler(client pb.SharerClient, ctx context.Context) {
+	log.Println("Getting a list of photos on the server")
+	resp, err := client.ListPhotos(ctx, &pb.ListPhotosReq{Name: *name})	
+	if err != nil {
+		log.Fatalln("failed to list photos:", err)
+	}
+	log.Println("Available photos:", resp.GetFiles())
+}
+
 func main() {
 	flag.Parse()
 	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -30,44 +70,15 @@ func main() {
 		log.Fatalln("failed to connect:", err)
 	}
 	defer conn.Close()
-	c := pb.NewSharerClient(conn)
-
+	client := pb.NewSharerClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	if *modePut {
-		log.Println("Putting a photo onto the server")
-		filePath := photosDir + *file
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			log.Fatalln("failed to read file:", err)
-		}
-		resp, err := c.PutPhoto(ctx, &pb.PutPhotoReq{Name: *name, Data: data})
-		if err != nil {
-			log.Fatalln("could not put photo:", err)
-		}
-		log.Println("File is saved under:", resp.GetFile())
+		putHandler(client, ctx)
 	} else if *modeGet {
-		log.Println("Getting a photo from the server")
-		resp, err := c.GetPhoto(ctx, &pb.GetPhotoReq{Name: *name, File: *file})	
-		if err != nil {
-			log.Fatalln("could not get photo:", err)
-		}
-		err = os.MkdirAll(getDir, 0777)
-		if err != nil {
-			log.Fatalln("could not create get dir:", err)
-		}	
-		filePath := getDir + *file
-		err = os.WriteFile(filePath, resp.GetData(), 0777)
-		if err != nil {
-			log.Fatalln("could not write file:", err)
-		}
+		getHandler(client, ctx)
 	} else if *modeList {
-		log.Println("Getting a list of photos on the server")
-		resp, err := c.ListPhotos(ctx, &pb.ListPhotosReq{Name: *name})	
-		if err != nil {
-			log.Fatalln("failed to list photos:", err)
-		}
-		log.Println("Available photos:", resp.GetFiles())
+		listHandler(client, ctx)
 	}
 }
