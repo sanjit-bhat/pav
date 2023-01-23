@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = ".";
+
+package photo_sharing;
+
+service Sharer {
+    rpc PutPhoto (PhotoRequest) returns (PhotoReply) {}
+}
+
+message PhotoRequest {
+    bytes file = 1;
+}
+
+message PhotoReply {
+    string path = 1;
+}
