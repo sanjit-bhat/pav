@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
+	"time"
 
 	pb "example.com/rpc"
 	"google.golang.org/grpc"
@@ -23,7 +25,7 @@ type server struct {
 func (s *server) PutPhoto(ctx context.Context, in *pb.PhotoRequest) (*pb.PhotoReply, error) {
 	log.Printf("Received new photo")
 	uploadDir := "server/uploads/"
-	fileName := "example.jpg"
+	fileName := fmt.Sprintf("file-%d.jpg", rand.Intn(1000))
 	filePath := uploadDir + fileName
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -40,6 +42,7 @@ func (s *server) PutPhoto(ctx context.Context, in *pb.PhotoRequest) (*pb.PhotoRe
 }
 
 func main() {
+	rand.Seed(time.Now().UTC().UnixNano())
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
