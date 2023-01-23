@@ -22,8 +22,8 @@ type server struct {
 
 func (s *server) PutPhoto(ctx context.Context, in *pb.PhotoRequest) (*pb.PhotoReply, error) {
     log.Printf("Received new photo")    
-    uploadDir := "upload/"
-    fileName := "example.txt"
+    uploadDir := "server/uploads/"
+    fileName := "example.jpg"
     filePath := uploadDir + fileName 
     file, err := os.Create(filePath)
     if err != nil {
