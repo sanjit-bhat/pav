@@ -14,7 +14,10 @@ import (
 
 var (
 	addr = flag.String("addr", "localhost:50051", "server address")
-	file = flag.String("file", "frans.jpg", "path to photo file")
+	file = flag.String("file", "frans.jpg", "path to photo file: used for adding photos")
+	modeAdd = flag.Bool("add", false, "mode: add photo to server")
+	modeList = flag.Bool("list", false, "mode: list photos in server")
+	name = flag.String("name", "sanjit", "client name")
 )
 
 func main() {
@@ -29,14 +32,22 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	fullFile := "client/photos/" + *file
-	data, err := os.ReadFile(fullFile)
-	if err != nil {
-		log.Fatalln("failed to read file: ", err)
+	if *modeAdd {
+		fullFile := "client/photos/" + *file
+		data, err := os.ReadFile(fullFile)
+		if err != nil {
+			log.Fatalln("failed to read file: ", err)
+		}
+		resp, err := c.AddPhoto(ctx, &pb.AddPhotoReq{File: data})
+		if err != nil {
+			log.Fatalln("could not put photo: ", err)
+		}
+		log.Println("File is saved under: ", resp.GetPath())
+	} else if *modeList {
+		resp, err := c.ListPhotos(ctx, &pb.ListPhotosReq{Name: *name})	
+		if err != nil {
+			log.Fatalln("failed to list photos: ", err)
+		}
+		log.Println("Available photos: ", resp.GetPaths())
 	}
-	resp, err := c.PutPhoto(ctx, &pb.PhotoRequest{File: data})
-	if err != nil {
-		log.Fatalln("could not put photo: ", err)
-	}
-	log.Println("File is saved under: ", resp.GetPath())
 }

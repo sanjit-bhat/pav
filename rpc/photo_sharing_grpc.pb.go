@@ -22,7 +22,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SharerClient interface {
-	PutPhoto(ctx context.Context, in *PhotoRequest, opts ...grpc.CallOption) (*PhotoReply, error)
+	AddPhoto(ctx context.Context, in *AddPhotoReq, opts ...grpc.CallOption) (*AddPhotoResp, error)
+	ListPhotos(ctx context.Context, in *ListPhotosReq, opts ...grpc.CallOption) (*ListPhotosResp, error)
 }
 
 type sharerClient struct {
@@ -33,9 +34,18 @@ func NewSharerClient(cc grpc.ClientConnInterface) SharerClient {
 	return &sharerClient{cc}
 }
 
-func (c *sharerClient) PutPhoto(ctx context.Context, in *PhotoRequest, opts ...grpc.CallOption) (*PhotoReply, error) {
-	out := new(PhotoReply)
-	err := c.cc.Invoke(ctx, "/photo_sharing.Sharer/PutPhoto", in, out, opts...)
+func (c *sharerClient) AddPhoto(ctx context.Context, in *AddPhotoReq, opts ...grpc.CallOption) (*AddPhotoResp, error) {
+	out := new(AddPhotoResp)
+	err := c.cc.Invoke(ctx, "/photo_sharing.Sharer/AddPhoto", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sharerClient) ListPhotos(ctx context.Context, in *ListPhotosReq, opts ...grpc.CallOption) (*ListPhotosResp, error) {
+	out := new(ListPhotosResp)
+	err := c.cc.Invoke(ctx, "/photo_sharing.Sharer/ListPhotos", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +56,8 @@ func (c *sharerClient) PutPhoto(ctx context.Context, in *PhotoRequest, opts ...g
 // All implementations must embed UnimplementedSharerServer
 // for forward compatibility
 type SharerServer interface {
-	PutPhoto(context.Context, *PhotoRequest) (*PhotoReply, error)
+	AddPhoto(context.Context, *AddPhotoReq) (*AddPhotoResp, error)
+	ListPhotos(context.Context, *ListPhotosReq) (*ListPhotosResp, error)
 	mustEmbedUnimplementedSharerServer()
 }
 
@@ -54,8 +65,11 @@ type SharerServer interface {
 type UnimplementedSharerServer struct {
 }
 
-func (UnimplementedSharerServer) PutPhoto(context.Context, *PhotoRequest) (*PhotoReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PutPhoto not implemented")
+func (UnimplementedSharerServer) AddPhoto(context.Context, *AddPhotoReq) (*AddPhotoResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddPhoto not implemented")
+}
+func (UnimplementedSharerServer) ListPhotos(context.Context, *ListPhotosReq) (*ListPhotosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPhotos not implemented")
 }
 func (UnimplementedSharerServer) mustEmbedUnimplementedSharerServer() {}
 
@@ -70,20 +84,38 @@ func RegisterSharerServer(s grpc.ServiceRegistrar, srv SharerServer) {
 	s.RegisterService(&Sharer_ServiceDesc, srv)
 }
 
-func _Sharer_PutPhoto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PhotoRequest)
+func _Sharer_AddPhoto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPhotoReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SharerServer).PutPhoto(ctx, in)
+		return srv.(SharerServer).AddPhoto(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/photo_sharing.Sharer/PutPhoto",
+		FullMethod: "/photo_sharing.Sharer/AddPhoto",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SharerServer).PutPhoto(ctx, req.(*PhotoRequest))
+		return srv.(SharerServer).AddPhoto(ctx, req.(*AddPhotoReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sharer_ListPhotos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPhotosReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SharerServer).ListPhotos(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/photo_sharing.Sharer/ListPhotos",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SharerServer).ListPhotos(ctx, req.(*ListPhotosReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -96,8 +128,12 @@ var Sharer_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*SharerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "PutPhoto",
-			Handler:    _Sharer_PutPhoto_Handler,
+			MethodName: "AddPhoto",
+			Handler:    _Sharer_AddPhoto_Handler,
+		},
+		{
+			MethodName: "ListPhotos",
+			Handler:    _Sharer_ListPhotos_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

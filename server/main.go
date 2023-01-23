@@ -16,17 +16,17 @@ import (
 
 var (
 	port = flag.Int("port", 50051, "Server port")
+	uploadsDir = "server/uploads/"
 )
 
 type server struct {
 	pb.UnimplementedSharerServer
 }
 
-func (s *server) PutPhoto(ctx context.Context, in *pb.PhotoRequest) (*pb.PhotoReply, error) {
+func (s *server) AddPhoto(ctx context.Context, in *pb.AddPhotoReq) (*pb.AddPhotoResp, error) {
 	log.Printf("Received new photo")
-	uploadDir := "server/uploads/"
 	fileName := fmt.Sprintf("file-%d.jpg", rand.Intn(1000))
-	filePath := uploadDir + fileName
+	filePath := uploadsDir + fileName
 	file, err := os.Create(filePath)
 	if err != nil {
 		log.Fatalln("failed to create file: ", err)
@@ -38,7 +38,22 @@ func (s *server) PutPhoto(ctx context.Context, in *pb.PhotoRequest) (*pb.PhotoRe
 		log.Fatalln("failed to write file: ", err)
 	}
 
-	return &pb.PhotoReply{Path: fileName}, nil
+	return &pb.AddPhotoResp{Path: fileName}, nil
+}
+
+func (s *server) ListPhotos(ctx context.Context, in *pb.ListPhotosReq) (*pb.ListPhotosResp, error) {
+	log.Printf("Getting list of photos")
+	file, err := os.Open(uploadsDir)
+	if err != nil {
+		log.Fatalln("failed to open uploads dir: ", err)
+	}	
+	defer file.Close()
+
+	imgs, err := file.Readdirnames(0)
+	if err != nil {
+		log.Fatalln("failed to read uploads dir: ", err)
+	}
+	return &pb.ListPhotosResp{Paths: imgs}, nil
 }
 
 func main() {
