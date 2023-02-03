@@ -32,29 +32,12 @@ type server struct {
 
 func (s *server) PutPhoto(ctx context.Context, in *pb.PutPhotoReq) (*pb.PutPhotoResp, error) {
 	log.Printf("Received photo")
-	fileName := fmt.Sprintf("file-%d.jpg", rand.Intn(1000))
-	uploadsDirUser := uploadsDir + in.GetName() + "/"
-	err := os.MkdirAll(uploadsDirUser, 0777)
-	if err != nil {
-		log.Fatalln("failed to create user uploads dir:", err)
-	}
-	filePath := uploadsDirUser + fileName
-	err = os.WriteFile(filePath, in.GetData(), 0777)
-	if err != nil {
-		log.Fatalln("failed to create/write file:", err)
-	}	
-	return &pb.PutPhotoResp{File: fileName}, nil
+	return &pb.PutPhotoResp{File: "tmpPutPhotoStr"}, nil
 }
 
 func (s *server) GetPhoto(ctx context.Context, in *pb.GetPhotoReq) (*pb.GetPhotoResp, error) {
 	log.Printf("Getting photo")
-	filePath := uploadsDir + in.GetName() + "/" + in.GetFile()
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		log.Println("failed to find file:", filePath)
-		return nil, err
-	}
-	return &pb.GetPhotoResp{Data: data}, nil	
+	return &pb.GetPhotoResp{Data: "tmpGetPhotoStr"}, nil	
 }
 
 func (s *server) ListPhotos(ctx context.Context, in *pb.ListPhotosReq) (*pb.ListPhotosResp, error) {

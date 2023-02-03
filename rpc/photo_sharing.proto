@@ -12,7 +12,7 @@ service Sharer {
 
 message PutPhotoReq {
     string name = 1;
-    bytes data = 2;
+    string data = 2;
 }
 
 message PutPhotoResp {
@@ -25,7 +25,7 @@ message GetPhotoReq {
 }
 
 message GetPhotoResp {
-    bytes data = 1;
+    string data = 1;
 }
 
 message ListPhotosReq {
