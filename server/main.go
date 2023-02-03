@@ -15,13 +15,20 @@ import (
 )
 
 var (
-	port = flag.Int("port", 50051, "Server port")
+	port = 50051
 	uploadsDir = "server/uploads/"
 )
 
 type server struct {
 	pb.UnimplementedSharerServer
 }
+
+//type serverInMem struct {
+
+	// map of users to their photos	
+	// register user
+	// map of users to their   
+//}
 
 func (s *server) PutPhoto(ctx context.Context, in *pb.PutPhotoReq) (*pb.PutPhotoResp, error) {
 	log.Printf("Received photo")
@@ -69,7 +76,7 @@ func (s *server) ListPhotos(ctx context.Context, in *pb.ListPhotosReq) (*pb.List
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	flag.Parse()
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalln("failed to listen to port:", err)
 	}
