@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	pb "example.com/rpc"
+	pb "example.com/chatGrpc"
 	"google.golang.org/grpc"
 )
 
@@ -20,7 +20,7 @@ var (
 )
 
 type server struct {
-	pb.UnimplementedSharerServer
+	pb.UnimplementedChatServer
 }
 
 //type serverInMem struct {
@@ -30,17 +30,12 @@ type server struct {
 	// map of users to their   
 //}
 
-func (s *server) PutPhoto(ctx context.Context, in *pb.PutPhotoReq) (*pb.PutPhotoResp, error) {
+func (s *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
 	log.Printf("Received photo")
-	return &pb.PutPhotoResp{File: "tmpPutPhotoStr"}, nil
+	return &pb.PutMsgResp{}, nil
 }
 
-func (s *server) GetPhoto(ctx context.Context, in *pb.GetPhotoReq) (*pb.GetPhotoResp, error) {
-	log.Printf("Getting photo")
-	return &pb.GetPhotoResp{Data: "tmpGetPhotoStr"}, nil	
-}
-
-func (s *server) ListPhotos(ctx context.Context, in *pb.ListPhotosReq) (*pb.ListPhotosResp, error) {
+func (s *server) GetMsgs(ctx context.Context, in *pb.GetMsgsReq) (*pb.GetMsgsResp, error) {
 	log.Printf("Getting list of photos")
 	uploadsDirUser := uploadsDir + in.GetName()
 	file, err := os.Open(uploadsDirUser)
@@ -53,7 +48,7 @@ func (s *server) ListPhotos(ctx context.Context, in *pb.ListPhotosReq) (*pb.List
 	if err != nil {
 		log.Fatalln("failed to read uploads dir:", err)
 	}
-	return &pb.ListPhotosResp{Files: imgs}, nil
+	return &pb.GetMsgsResp{Msgs: imgs}, nil
 }
 
 func main() {
@@ -64,7 +59,7 @@ func main() {
 		log.Fatalln("failed to listen to port:", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterSharerServer(s, &server{})
+	pb.RegisterChatServer(s, &server{})
 	log.Println("server listening at ", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalln("failed to serve:", err)

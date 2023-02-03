@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option go_package = ".";
+
+package chat;
+
+service Chat {
+    rpc PutMsg (PutMsgReq) returns (PutMsgResp) {}
+    rpc GetMsgs (GetMsgsReq) returns (GetMsgsResp) {}
+}
+
+message PutMsgReq {
+    string name = 1;
+    string msg = 2;
+}
+
+message PutMsgResp {}
+
+message GetMsgsReq {
+    string name = 1;
+}
+
+message GetMsgsResp {
+    repeated string msgs = 1;
+}

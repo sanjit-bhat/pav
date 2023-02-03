@@ -5,32 +5,31 @@ import (
 	"log"
 	"time"
 
-	pb "example.com/rpc"
+	pb "example.com/chatGrpc"
 	"github.com/manifoldco/promptui"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func putHandler(client pb.SharerClient, name string, msg string) {
+func putHandler(client pb.ChatClient, name string, msg string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	log.Println("Putting a msg onto the server")
-	resp, err := client.PutPhoto(ctx, &pb.PutPhotoReq{Name: name, Data: msg})
+	_, err := client.PutMsg(ctx, &pb.PutMsgReq{Name: name, Msg: msg})
 	if err != nil {
 		log.Fatalln("could not put photo:", err)
 	}
-	log.Println("File is saved under:", resp.GetFile())
 }
 
-func listHandler(client pb.SharerClient, name string) {
+func listHandler(client pb.ChatClient, name string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	log.Println("Getting a list of photos on the server")
-	resp, err := client.ListPhotos(ctx, &pb.ListPhotosReq{Name: name})
+	resp, err := client.GetMsgs(ctx, &pb.GetMsgsReq{Name: name})
 	if err != nil {
 		log.Fatalln("failed to list photos:", err)
 	}
-	log.Println("Available photos:", resp.GetFiles())
+	log.Println("Available photos:", resp.GetMsgs())
 }
 
 func main() {
@@ -42,7 +41,7 @@ func main() {
 		log.Fatalln("failed to connect:", err)
 	}
 	defer conn.Close()
-	client := pb.NewSharerClient(conn)
+	client := pb.NewChatClient(conn)
 
 	for {
 		prompt := promptui.Select{

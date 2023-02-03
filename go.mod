@@ -1,4 +1,4 @@
-module example.com/photo-sharing
+module example.com/secure-chat
 
 go 1.19
 
