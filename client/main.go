@@ -48,9 +48,9 @@ func createUserHandler(client pb.ChatClient, db *inMem, name *string) {
 	_, err := client.CreateUser(ctx, &pb.CreateUserReq{Name: *name})
 	if err != nil {
 		log.Println("failed to create user:", err)
-	} else {
-		db.myUserData.name = *name
+		return
 	}
+	db.myUserData.name = *name
 }
 
 func listMsgsHandler(db *inMem) {
@@ -114,30 +114,30 @@ func synchronizeHandler(client pb.ChatClient, db *inMem) {
 	synchResp, err := client.Synchronize(ctx, &pb.SynchronizeReq{Name: db.myUserData.name, SeqNums: seqNums})
 	if err != nil {
 		log.Println("failed to synchronize:", err)
-	} else {
-		for _, synchMsg := range synchResp.GetMsgs() {
-			newTime := new(time.Time)
-			err = newTime.UnmarshalText([]byte(synchMsg.GetTime()))
-			if err != nil {
-				log.Println("failed to unmarshal text:", err)
-				continue
-			}
-			newMsg := msgData{
-				sender: synchMsg.GetSender(),
-				msg:    synchMsg.GetMsg(),
-				seqNum: synchMsg.GetSeqNum(),
-				time:   *newTime,
-			}
-			userData, ok := db.allUserData[newMsg.sender]
-			if !ok {
-				userData = &userMetadata{name: newMsg.sender, latestSeqNum: 0}
-				db.allUserData[newMsg.sender] = userData
-			}
-			if db.isValidMsg(&newMsg) {
-				db.addMsg(&newMsg)
-			} else {
-				log.Printf("expected new msg to have seq num %v, got seq num %v\n, discarding...", userData.latestSeqNum+1, newMsg.seqNum)
-			}
+		return
+	}
+	for _, synchMsg := range synchResp.GetMsgs() {
+		newTime := new(time.Time)
+		err = newTime.UnmarshalText([]byte(synchMsg.GetTime()))
+		if err != nil {
+			log.Println("failed to unmarshal text:", err)
+			continue
+		}
+		newMsg := msgData{
+			sender: synchMsg.GetSender(),
+			msg:    synchMsg.GetMsg(),
+			seqNum: synchMsg.GetSeqNum(),
+			time:   *newTime,
+		}
+		userData, ok := db.allUserData[newMsg.sender]
+		if !ok {
+			userData = &userMetadata{name: newMsg.sender, latestSeqNum: 0}
+			db.allUserData[newMsg.sender] = userData
+		}
+		if db.isValidMsg(&newMsg) {
+			db.addMsg(&newMsg)
+		} else {
+			log.Printf("expected new msg to have seq num %v, got seq num %v\n, discarding...", userData.latestSeqNum+1, newMsg.seqNum)
 		}
 	}
 }
