@@ -31,6 +31,13 @@ type inMem struct {
 	msgs []*msgData
 }
 
+func newInMem() *inMem {
+	db := inMem{}
+	db.myUserData = new(userMetadata)
+	db.allUserData = make(map[string]*userMetadata)
+	return &db
+}
+
 func loginUserHandler(db *inMem, name *string) {
 	db.myUserData.name = *name
 }
@@ -49,7 +56,7 @@ func createUserHandler(client pb.ChatClient, db *inMem, name *string) {
 func listMsgsHandler(db *inMem) {
 	log.Println("All messages:")
 	for _, msg := range db.msgs {
-		log.Printf("`%v` [%v]: \"%v\"\n", msg.sender, msg.time, msg.msg)
+		log.Printf("`%v` [%v]: \"%v\"\n", msg.sender, msg.time.Format(time.UnixDate), msg.msg)
 	}
 }
 
@@ -136,7 +143,7 @@ func synchronizeHandler(client pb.ChatClient, db *inMem) {
 }
 
 func main() {
-	myDB := inMem{}
+	myDB := newInMem() 
 	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalln("failed to connect:", err)
@@ -167,12 +174,12 @@ func main() {
 				continue
 			}
 			if op == "CreateUser" {
-				createUserHandler(client, &myDB, &name)
+				createUserHandler(client, myDB, &name)
 			} else {
-				loginUserHandler(&myDB, &name)
+				loginUserHandler(myDB, &name)
 			}
 		} else if op == "ListMsgs" {
-			listMsgsHandler(&myDB)
+			listMsgsHandler(myDB)
 		} else if op == "PutMsg" {
 			prompt := promptui.Prompt{
 				Label: "Msg",
@@ -182,9 +189,9 @@ func main() {
 				log.Println("failed prompt:", err)
 				continue
 			}
-			putMsgHandler(client, &myDB, &msg)
+			putMsgHandler(client, myDB, &msg)
 		} else if op == "Synchronize" {
-			synchronizeHandler(client, &myDB)
+			synchronizeHandler(client, myDB)
 		}
 	}
 }

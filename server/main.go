@@ -17,9 +17,15 @@ type inMem struct {
 	userMsgs map[string][]*pb.MsgData
 }
 
+func newInMem() *inMem {
+	db := inMem{}
+	db.userMsgs = make(map[string][]*pb.MsgData)
+	return &db
+}
+
 type server struct {
 	pb.UnimplementedChatServer
-	db inMem
+	db *inMem
 }
 
 func (serv *server) CreateUser(ctx context.Context, in *pb.CreateUserReq) (*pb.CreateUserResp, error) {
@@ -27,6 +33,7 @@ func (serv *server) CreateUser(ctx context.Context, in *pb.CreateUserReq) (*pb.C
 		return nil, errors.New("username already exists")
 	}
 	serv.db.userMsgs[in.GetName()] = make([]*pb.MsgData, 0, 10)
+	log.Println("created user")
 	return &pb.CreateUserResp{}, nil
 }
 
@@ -45,6 +52,7 @@ func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgRes
 	}
 	msgs = append(msgs, newMsgData)
 	serv.db.userMsgs[newMsgData.GetSender()] = msgs
+	log.Println("put new msg")
 	return &pb.PutMsgResp{}, nil
 }
 
@@ -64,6 +72,7 @@ func (serv *server) Synchronize(ctx context.Context, in *pb.SynchronizeReq) (*pb
 		searchIdx := sort.Search(len(msgs), func(i int) bool { return lastSeenSeqNum < msgs[i].GetSeqNum() })
 		unseenMsgs = append(unseenMsgs, msgs[searchIdx:]...)
 	}
+	log.Println("synchronized user")
 	return &pb.SynchronizeResp{Msgs: unseenMsgs}, nil
 }
 
@@ -73,7 +82,7 @@ func main() {
 		log.Fatalln("failed to listen to port:", err)
 	}
 	grpcServ := grpc.NewServer()
-	pb.RegisterChatServer(grpcServ, &server{})
+	pb.RegisterChatServer(grpcServ, &server{db: newInMem()})
 	log.Println("server listening at ", lis.Addr())
 	if err := grpcServ.Serve(lis); err != nil {
 		log.Fatalln("failed to serve:", err)
