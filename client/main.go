@@ -27,7 +27,8 @@ type msgData struct {
 type inMem struct {
 	myUserData  *userMetadata
 	allUserData map[string]*userMetadata
-	msgs        []*msgData // Invariant: always sorted by earliest time first
+	// Invariant: `msgs` always sorted by earliest time first
+	msgs []*msgData
 }
 
 func loginUserHandler(db *inMem, name *string) {
@@ -39,7 +40,7 @@ func createUserHandler(client pb.ChatClient, db *inMem, name *string) {
 	defer cancel()
 	_, err := client.CreateUser(ctx, &pb.CreateUserReq{Name: *name})
 	if err != nil {
-		log.Println("failed to create user", err)
+		log.Println("failed to create user:", err)
 	} else {
 		db.myUserData.name = *name
 	}
@@ -57,7 +58,7 @@ func putMsgHandler(client pb.ChatClient, db *inMem, msg *string) {
 	currTime := time.Now()
 	currTimeBytes, err := currTime.MarshalText()
 	if err != nil {
-		log.Println("failed to marshal time", err)
+		log.Println("failed to marshal time:", err)
 		return
 	}
 	currTimeStr := string(currTimeBytes)
@@ -67,7 +68,7 @@ func putMsgHandler(client pb.ChatClient, db *inMem, msg *string) {
 		Sender: db.myUserData.name, Msg: *msg, SeqNum: newSeqNum, Time: currTimeStr,
 	}})
 	if err != nil {
-		log.Println("failed to put msg", err)
+		log.Println("failed to put msg:", err)
 		return
 	}
 	db.myUserData.latestSeqNum = newSeqNum
@@ -105,13 +106,13 @@ func synchronizeHandler(client pb.ChatClient, db *inMem) {
 	defer cancel()
 	synchResp, err := client.Synchronize(ctx, &pb.SynchronizeReq{Name: db.myUserData.name, SeqNums: seqNums})
 	if err != nil {
-		log.Println("failed to synchronize", err)
+		log.Println("failed to synchronize:", err)
 	} else {
 		for _, synchMsg := range synchResp.GetMsgs() {
 			newTime := new(time.Time)
 			err = newTime.UnmarshalText([]byte(synchMsg.GetTime()))
 			if err != nil {
-				log.Println("failed to unmarshal text", err)
+				log.Println("failed to unmarshal text:", err)
 				continue
 			}
 			newMsg := msgData{
@@ -150,7 +151,7 @@ func main() {
 		}
 		_, op, err := prompt.Run()
 		if err != nil {
-			log.Println("Prompt failed", err)
+			log.Println("failed prompt:", err)
 			continue
 		}
 
@@ -162,7 +163,7 @@ func main() {
 			}
 			name, err := prompt.Run()
 			if err != nil {
-				log.Println("Prompt failed", err)
+				log.Println("failed prompt:", err)
 				continue
 			}
 			if op == "CreateUser" {
@@ -178,7 +179,7 @@ func main() {
 			}
 			msg, err := prompt.Run()
 			if err != nil {
-				log.Println("Prompt failed", err)
+				log.Println("failed prompt:", err)
 				continue
 			}
 			putMsgHandler(client, &myDB, &msg)

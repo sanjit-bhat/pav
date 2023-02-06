@@ -2,66 +2,80 @@ package main
 
 import (
 	"context"
-	"flag"
-	"fmt"
+	"errors"
 	"log"
-	"math/rand"
 	"net"
-	"os"
-	"time"
+	"sort"
 
 	pb "example.com/chatGrpc"
 	"google.golang.org/grpc"
 )
 
-var (
-	port = 50051
-	uploadsDir = "server/uploads/"
-)
+type inMem struct {
+	// key is username
+	// invariant: msgs sorted by lowest seq num first
+	userMsgs map[string][]*pb.MsgData
+}
 
 type server struct {
 	pb.UnimplementedChatServer
+	db inMem
 }
 
-//type serverInMem struct {
+func (serv *server) CreateUser(ctx context.Context, in *pb.CreateUserReq) (*pb.CreateUserResp, error) {
+	if _, ok := serv.db.userMsgs[in.GetName()]; ok {
+		return nil, errors.New("username already exists")
+	}
+	serv.db.userMsgs[in.GetName()] = make([]*pb.MsgData, 0, 10)
+	return &pb.CreateUserResp{}, nil
+}
 
-	// map of users to their photos	
-	// register user
-	// map of users to their   
-//}
-
-func (s *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
-	log.Printf("Received photo")
+func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
+	newMsgData := in.GetMsgData()
+	msgs, ok := serv.db.userMsgs[newMsgData.GetSender()]
+	if !ok {
+		return nil, errors.New("username hasn't been created")
+	}
+	lastSeqNum := uint64(0)
+	if len(msgs) > 0 {
+		lastSeqNum = msgs[len(msgs)-1].GetSeqNum()
+	}
+	if lastSeqNum+1 != newMsgData.GetSeqNum() {
+		return nil, errors.New("new msg seq num is out-of-order")
+	}
+	msgs = append(msgs, newMsgData)
+	serv.db.userMsgs[newMsgData.GetSender()] = msgs
 	return &pb.PutMsgResp{}, nil
 }
 
-func (s *server) GetMsgs(ctx context.Context, in *pb.GetMsgsReq) (*pb.GetMsgsResp, error) {
-	log.Printf("Getting list of photos")
-	uploadsDirUser := uploadsDir + in.GetName()
-	file, err := os.Open(uploadsDirUser)
-	if err != nil {
-		log.Fatalln("failed to open uploads dir:", err)
-	}	
-	defer file.Close()
-
-	imgs, err := file.Readdirnames(0)
-	if err != nil {
-		log.Fatalln("failed to read uploads dir:", err)
+func (serv *server) Synchronize(ctx context.Context, in *pb.SynchronizeReq) (*pb.SynchronizeResp, error) {
+	unseenMsgs := []*pb.MsgData{}
+	for name, msgs := range serv.db.userMsgs {
+		if name == in.GetName() {
+			// For now, assume that a user already has their own updates. This might change with multi-device
+			continue
+		}
+		userSeqNum, ok := in.GetSeqNums()[name]
+		lastSeenSeqNum := uint64(0)
+		if ok {
+			lastSeenSeqNum = userSeqNum.GetSeqNum()
+		}
+		// Inside lambda, LT, not LEQ, so get index after what client has already seen
+		searchIdx := sort.Search(len(msgs), func(i int) bool { return lastSeenSeqNum < msgs[i].GetSeqNum() })
+		unseenMsgs = append(unseenMsgs, msgs[searchIdx:]...)
 	}
-	return &pb.GetMsgsResp{Msgs: imgs}, nil
+	return &pb.SynchronizeResp{Msgs: unseenMsgs}, nil
 }
 
 func main() {
-	rand.Seed(time.Now().UTC().UnixNano())
-	flag.Parse()
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalln("failed to listen to port:", err)
 	}
-	s := grpc.NewServer()
-	pb.RegisterChatServer(s, &server{})
+	grpcServ := grpc.NewServer()
+	pb.RegisterChatServer(grpcServ, &server{})
 	log.Println("server listening at ", lis.Addr())
-	if err := s.Serve(lis); err != nil {
+	if err := grpcServ.Serve(lis); err != nil {
 		log.Fatalln("failed to serve:", err)
 	}
 }
