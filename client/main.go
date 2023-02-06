@@ -129,21 +129,19 @@ func synchronizeHandler(client pb.ChatClient, db *inMem) {
 			seqNum: synchMsg.GetSeqNum(),
 			time:   *newTime,
 		}
-		userData, ok := db.allUserData[newMsg.sender]
-		if !ok {
-			userData = &userMetadata{name: newMsg.sender, latestSeqNum: 0}
-			db.allUserData[newMsg.sender] = userData
+		if _, ok := db.allUserData[newMsg.sender]; !ok {
+			db.allUserData[newMsg.sender] = &userMetadata{name: newMsg.sender, latestSeqNum: 0}
 		}
 		if db.isValidMsg(&newMsg) {
 			db.addMsg(&newMsg)
 		} else {
-			log.Printf("expected new msg to have seq num %v, got seq num %v\n, discarding...", userData.latestSeqNum+1, newMsg.seqNum)
+			log.Printf("new msg had unexpected seq num, discarding it")
 		}
 	}
 }
 
 func main() {
-	myDB := newInMem() 
+	myDB := newInMem()
 	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalln("failed to connect:", err)
