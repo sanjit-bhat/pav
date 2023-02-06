@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.21.12
-// source: rpc/chat.proto
+// source: chatGrpc/chat.proto
 
 package __
 
@@ -22,8 +22,9 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ChatClient interface {
+	CreateUser(ctx context.Context, in *CreateUserReq, opts ...grpc.CallOption) (*CreateUserResp, error)
+	Synchronize(ctx context.Context, in *SynchronizeReq, opts ...grpc.CallOption) (*SynchronizeResp, error)
 	PutMsg(ctx context.Context, in *PutMsgReq, opts ...grpc.CallOption) (*PutMsgResp, error)
-	GetMsgs(ctx context.Context, in *GetMsgsReq, opts ...grpc.CallOption) (*GetMsgsResp, error)
 }
 
 type chatClient struct {
@@ -32,6 +33,24 @@ type chatClient struct {
 
 func NewChatClient(cc grpc.ClientConnInterface) ChatClient {
 	return &chatClient{cc}
+}
+
+func (c *chatClient) CreateUser(ctx context.Context, in *CreateUserReq, opts ...grpc.CallOption) (*CreateUserResp, error) {
+	out := new(CreateUserResp)
+	err := c.cc.Invoke(ctx, "/chat.Chat/CreateUser", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chatClient) Synchronize(ctx context.Context, in *SynchronizeReq, opts ...grpc.CallOption) (*SynchronizeResp, error) {
+	out := new(SynchronizeResp)
+	err := c.cc.Invoke(ctx, "/chat.Chat/Synchronize", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *chatClient) PutMsg(ctx context.Context, in *PutMsgReq, opts ...grpc.CallOption) (*PutMsgResp, error) {
@@ -43,21 +62,13 @@ func (c *chatClient) PutMsg(ctx context.Context, in *PutMsgReq, opts ...grpc.Cal
 	return out, nil
 }
 
-func (c *chatClient) GetMsgs(ctx context.Context, in *GetMsgsReq, opts ...grpc.CallOption) (*GetMsgsResp, error) {
-	out := new(GetMsgsResp)
-	err := c.cc.Invoke(ctx, "/chat.Chat/GetMsgs", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // ChatServer is the server API for Chat service.
 // All implementations must embed UnimplementedChatServer
 // for forward compatibility
 type ChatServer interface {
+	CreateUser(context.Context, *CreateUserReq) (*CreateUserResp, error)
+	Synchronize(context.Context, *SynchronizeReq) (*SynchronizeResp, error)
 	PutMsg(context.Context, *PutMsgReq) (*PutMsgResp, error)
-	GetMsgs(context.Context, *GetMsgsReq) (*GetMsgsResp, error)
 	mustEmbedUnimplementedChatServer()
 }
 
@@ -65,11 +76,14 @@ type ChatServer interface {
 type UnimplementedChatServer struct {
 }
 
+func (UnimplementedChatServer) CreateUser(context.Context, *CreateUserReq) (*CreateUserResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateUser not implemented")
+}
+func (UnimplementedChatServer) Synchronize(context.Context, *SynchronizeReq) (*SynchronizeResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Synchronize not implemented")
+}
 func (UnimplementedChatServer) PutMsg(context.Context, *PutMsgReq) (*PutMsgResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PutMsg not implemented")
-}
-func (UnimplementedChatServer) GetMsgs(context.Context, *GetMsgsReq) (*GetMsgsResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetMsgs not implemented")
 }
 func (UnimplementedChatServer) mustEmbedUnimplementedChatServer() {}
 
@@ -82,6 +96,42 @@ type UnsafeChatServer interface {
 
 func RegisterChatServer(s grpc.ServiceRegistrar, srv ChatServer) {
 	s.RegisterService(&Chat_ServiceDesc, srv)
+}
+
+func _Chat_CreateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateUserReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChatServer).CreateUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/chat.Chat/CreateUser",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChatServer).CreateUser(ctx, req.(*CreateUserReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Chat_Synchronize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SynchronizeReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChatServer).Synchronize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/chat.Chat/Synchronize",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChatServer).Synchronize(ctx, req.(*SynchronizeReq))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Chat_PutMsg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -102,24 +152,6 @@ func _Chat_PutMsg_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Chat_GetMsgs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetMsgsReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ChatServer).GetMsgs(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/chat.Chat/GetMsgs",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChatServer).GetMsgs(ctx, req.(*GetMsgsReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // Chat_ServiceDesc is the grpc.ServiceDesc for Chat service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -128,14 +160,18 @@ var Chat_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ChatServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "CreateUser",
+			Handler:    _Chat_CreateUser_Handler,
+		},
+		{
+			MethodName: "Synchronize",
+			Handler:    _Chat_Synchronize_Handler,
+		},
+		{
 			MethodName: "PutMsg",
 			Handler:    _Chat_PutMsg_Handler,
 		},
-		{
-			MethodName: "GetMsgs",
-			Handler:    _Chat_GetMsgs_Handler,
-		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "rpc/chat.proto",
+	Metadata: "chatGrpc/chat.proto",
 }

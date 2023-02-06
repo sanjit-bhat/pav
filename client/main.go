@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"sort"
 	"time"
 
 	pb "example.com/chatGrpc"
@@ -11,32 +12,131 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func putHandler(client pb.ChatClient, name string, msg string) {
+type userMetadata struct {
+	name         string
+	latestSeqNum uint64
+}
+
+type msgData struct {
+	sender string
+	msg    string
+	seqNum uint64
+	time   time.Time
+}
+
+type inMem struct {
+	myUserData  *userMetadata
+	allUserData map[string]*userMetadata
+	msgs        []*msgData // Invariant: always sorted by earliest time first
+}
+
+func loginUserHandler(db *inMem, name *string) {
+	db.myUserData.name = *name
+}
+
+func createUserHandler(client pb.ChatClient, db *inMem, name *string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	log.Println("Putting a msg onto the server")
-	_, err := client.PutMsg(ctx, &pb.PutMsgReq{Name: name, Msg: msg})
+	_, err := client.CreateUser(ctx, &pb.CreateUserReq{Name: *name})
 	if err != nil {
-		log.Fatalln("could not put photo:", err)
+		log.Println("failed to create user", err)
+	} else {
+		db.myUserData.name = *name
 	}
 }
 
-func listHandler(client pb.ChatClient, name string) {
+func listMsgsHandler(db *inMem) {
+	log.Println("All messages:")
+	for _, msg := range db.msgs {
+		log.Printf("`%v` [%v]: \"%v\"\n", msg.sender, msg.time, msg.msg)
+	}
+}
+
+func putMsgHandler(client pb.ChatClient, db *inMem, msg *string) {
+	newSeqNum := db.myUserData.latestSeqNum + 1
+	currTime := time.Now()
+	currTimeBytes, err := currTime.MarshalText()
+	if err != nil {
+		log.Println("failed to marshal time", err)
+		return
+	}
+	currTimeStr := string(currTimeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	log.Println("Getting a list of photos on the server")
-	resp, err := client.GetMsgs(ctx, &pb.GetMsgsReq{Name: name})
+	_, err = client.PutMsg(ctx, &pb.PutMsgReq{MsgData: &pb.MsgData{
+		Sender: db.myUserData.name, Msg: *msg, SeqNum: newSeqNum, Time: currTimeStr,
+	}})
 	if err != nil {
-		log.Fatalln("failed to list photos:", err)
+		log.Println("failed to put msg", err)
+		return
 	}
-	log.Println("Available photos:", resp.GetMsgs())
+	db.myUserData.latestSeqNum = newSeqNum
+	db.msgs = append(db.msgs, &msgData{
+		sender: db.myUserData.name, msg: *msg, seqNum: newSeqNum, time: currTime,
+	})
+}
+
+func (db *inMem) isValidMsg(newMsg *msgData) bool {
+	userData := db.allUserData[newMsg.sender]
+	return userData.latestSeqNum+1 == newMsg.seqNum
+}
+
+func (db *inMem) addMsg(newMsg *msgData) {
+	userData := db.allUserData[newMsg.sender]
+	userData.latestSeqNum += 1
+	// Lambda returns false for some prefix of list, then true for remainder
+	insertIdx := sort.Search(len(db.msgs), func(i int) bool { return newMsg.time.Before(db.msgs[i].time) })
+	insertAtEnd := insertIdx == len(db.msgs)
+	db.msgs = append(db.msgs, newMsg)
+	if !insertAtEnd {
+		copy(db.msgs[insertIdx+1:], db.msgs[insertIdx:])
+		db.msgs[insertIdx] = newMsg
+	}
+}
+
+func synchronizeHandler(client pb.ChatClient, db *inMem) {
+	seqNums := make(map[string]*pb.UserSeqNum, len(db.allUserData))
+	for name, userData := range db.allUserData {
+		seqNums[name] = new(pb.UserSeqNum)
+		seqNums[name].Name = userData.name
+		seqNums[name].SeqNum = userData.latestSeqNum
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	synchResp, err := client.Synchronize(ctx, &pb.SynchronizeReq{Name: db.myUserData.name, SeqNums: seqNums})
+	if err != nil {
+		log.Println("failed to synchronize", err)
+	} else {
+		for _, synchMsg := range synchResp.GetMsgs() {
+			newTime := new(time.Time)
+			err = newTime.UnmarshalText([]byte(synchMsg.GetTime()))
+			if err != nil {
+				log.Println("failed to unmarshal text", err)
+				continue
+			}
+			newMsg := msgData{
+				sender: synchMsg.GetSender(),
+				msg:    synchMsg.GetMsg(),
+				seqNum: synchMsg.GetSeqNum(),
+				time:   *newTime,
+			}
+			userData, ok := db.allUserData[newMsg.sender]
+			if !ok {
+				userData = &userMetadata{name: newMsg.sender, latestSeqNum: 0}
+				db.allUserData[newMsg.sender] = userData
+			}
+			if db.isValidMsg(&newMsg) {
+				db.addMsg(&newMsg)
+			} else {
+				log.Printf("expected new msg to have seq num %v, got seq num %v\n, discarding...", userData.latestSeqNum+1, newMsg.seqNum)
+			}
+		}
+	}
 }
 
 func main() {
-	addr := "localhost:50051"
-	name := "sanjit"
-
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	myDB := inMem{}
+	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalln("failed to connect:", err)
 	}
@@ -46,7 +146,7 @@ func main() {
 	for {
 		prompt := promptui.Select{
 			Label: "Op",
-			Items: []string{"Put", "Get", "List", "End"},
+			Items: []string{"CreateUser", "LoginUser", "Synchronize", "PutMsg", "ListMsgs", "End"},
 		}
 		_, op, err := prompt.Run()
 		if err != nil {
@@ -54,10 +154,25 @@ func main() {
 			continue
 		}
 
-		switch op{
-		case "End":
+		if op == "End" {
 			return
-		case "Put":
+		} else if op == "CreateUser" || op == "LoginUser" {
+			prompt := promptui.Prompt{
+				Label: "Username",
+			}
+			name, err := prompt.Run()
+			if err != nil {
+				log.Println("Prompt failed", err)
+				continue
+			}
+			if op == "CreateUser" {
+				createUserHandler(client, &myDB, &name)
+			} else {
+				loginUserHandler(&myDB, &name)
+			}
+		} else if op == "ListMsgs" {
+			listMsgsHandler(&myDB)
+		} else if op == "PutMsg" {
 			prompt := promptui.Prompt{
 				Label: "Msg",
 			}
@@ -66,9 +181,9 @@ func main() {
 				log.Println("Prompt failed", err)
 				continue
 			}
-			putHandler(client, name, msg)
-		case "List":
-			listHandler(client, name)
+			putMsgHandler(client, &myDB, &msg)
+		} else if op == "Synchronize" {
+			synchronizeHandler(client, &myDB)
 		}
 	}
 }
