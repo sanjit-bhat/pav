@@ -14,12 +14,12 @@ import (
 type inMem struct {
 	// key is username
 	// invariant: msgs sorted by lowest seq num first
-	userMsgs map[string][]*pb.MsgData
+	userMsgs map[string][]*pb.MsgDataSig
 }
 
 func newInMem() *inMem {
 	db := inMem{}
-	db.userMsgs = make(map[string][]*pb.MsgData)
+	db.userMsgs = make(map[string][]*pb.MsgDataSig)
 	return &db
 }
 
@@ -32,32 +32,33 @@ func (serv *server) CreateUser(ctx context.Context, in *pb.CreateUserReq) (*pb.C
 	if _, ok := serv.db.userMsgs[in.GetName()]; ok {
 		return nil, errors.New("username already exists")
 	}
-	serv.db.userMsgs[in.GetName()] = make([]*pb.MsgData, 0, 10)
+	serv.db.userMsgs[in.GetName()] = make([]*pb.MsgDataSig, 0, 10)
 	log.Println("created user")
 	return &pb.CreateUserResp{}, nil
 }
 
 func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
-	newMsgData := in.GetMsgData()
+	newMsgDataSig := in.GetMsg()
+	newMsgData := newMsgDataSig.GetMsg()
 	msgs, ok := serv.db.userMsgs[newMsgData.GetSender()]
 	if !ok {
 		return nil, errors.New("username hasn't been created")
 	}
 	lastSeqNum := uint64(0)
 	if len(msgs) > 0 {
-		lastSeqNum = msgs[len(msgs)-1].GetSeqNum()
+		lastSeqNum = msgs[len(msgs)-1].GetMsg().GetSeqNum()
 	}
 	if lastSeqNum+1 != newMsgData.GetSeqNum() {
 		return nil, errors.New("new msg seq num is out-of-order")
 	}
-	msgs = append(msgs, newMsgData)
+	msgs = append(msgs, newMsgDataSig)
 	serv.db.userMsgs[newMsgData.GetSender()] = msgs
 	log.Println("put new msg")
 	return &pb.PutMsgResp{}, nil
 }
 
 func (serv *server) Synchronize(ctx context.Context, in *pb.SynchronizeReq) (*pb.SynchronizeResp, error) {
-	unseenMsgs := []*pb.MsgData{}
+	unseenMsgs := []*pb.MsgDataSig{}
 	for name, msgs := range serv.db.userMsgs {
 		if name == in.GetName() {
 			// For now, assume that a user already has their own updates. This might change with multi-device
@@ -69,7 +70,7 @@ func (serv *server) Synchronize(ctx context.Context, in *pb.SynchronizeReq) (*pb
 			lastSeenSeqNum = userSeqNum.GetSeqNum()
 		}
 		// Inside lambda, LT, not LEQ, so get index after what client has already seen
-		searchIdx := sort.Search(len(msgs), func(i int) bool { return lastSeenSeqNum < msgs[i].GetSeqNum() })
+		searchIdx := sort.Search(len(msgs), func(i int) bool { return lastSeenSeqNum < msgs[i].GetMsg().GetSeqNum() })
 		unseenMsgs = append(unseenMsgs, msgs[searchIdx:]...)
 	}
 	log.Println("synchronized user")

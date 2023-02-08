@@ -16,9 +16,7 @@ message UserKey {
   bytes pubKey = 3;
 }
 
-message ManyUserKeys {
-    repeated UserKey userKeys = 1;
-}
+message ManyUserKeys { repeated UserKey userKeys = 1; }
 
 message CreateUserReq { string name = 1; }
 
@@ -41,27 +39,13 @@ message MsgData {
   bytes time = 4;
 }
 
-message SynchronizeResp { repeated MsgData msgs = 1; }
+message MsgDataSig {
+  MsgData msg = 1;
+  bytes sig = 2;
+}
 
-message PutMsgReq { MsgData msgData = 1; }
+message SynchronizeResp { repeated MsgDataSig msgs = 1; }
+
+message PutMsgReq { MsgDataSig msg = 1; }
 
 message PutMsgResp {}
-
-/*
-Want:
-    - Multiple people added to same group to be able to send msg's there
-    and get the latest msg's back from everyone.
-
-Modifies log:
-PutMsg: add a msg to the server's list of msgs, sends group # to server as well.
-
-Other server op:
-CreateUser: creates username in server mem
-CreateGroup: creates new group, gets back GroupID
-Synchronize: synch log with server.
-
-Just client op:
-LoginUser: provide username, set that.
-JoinGroup: provide GroupID, just a client op to set the group # in exchanges.
-ListMsgs: list all messages so far, just a client op.
-*/
