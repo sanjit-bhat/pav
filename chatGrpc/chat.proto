@@ -16,6 +16,10 @@ message UserKey {
   bytes pubKey = 3;
 }
 
+message ManyUserKeys {
+    repeated UserKey userKeys = 1;
+}
+
 message CreateUserReq { string name = 1; }
 
 message CreateUserResp {}
