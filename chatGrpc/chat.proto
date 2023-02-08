@@ -38,7 +38,7 @@ message MsgData {
   string sender = 1;
   string msg = 2;
   uint64 seqNum = 3;
-  string time = 4;
+  bytes time = 4;
 }
 
 message SynchronizeResp { repeated MsgData msgs = 1; }

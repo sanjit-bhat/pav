@@ -63,16 +63,15 @@ func listMsgsHandler(db *inMem) {
 func putMsgHandler(client pb.ChatClient, db *inMem, msg *string) {
 	newSeqNum := db.myUserData.latestSeqNum + 1
 	currTime := time.Now()
-	currTimeBytes, err := currTime.MarshalText()
+	currTimeBytes, err := currTime.MarshalBinary()
 	if err != nil {
 		log.Println("failed to marshal time:", err)
 		return
 	}
-	currTimeStr := string(currTimeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_, err = client.PutMsg(ctx, &pb.PutMsgReq{MsgData: &pb.MsgData{
-		Sender: db.myUserData.name, Msg: *msg, SeqNum: newSeqNum, Time: currTimeStr,
+		Sender: db.myUserData.name, Msg: *msg, SeqNum: newSeqNum, Time: currTimeBytes,
 	}})
 	if err != nil {
 		log.Println("failed to put msg:", err)
@@ -118,9 +117,8 @@ func synchronizeHandler(client pb.ChatClient, db *inMem) {
 	}
 	for _, synchMsg := range synchResp.GetMsgs() {
 		newTime := new(time.Time)
-		err = newTime.UnmarshalText([]byte(synchMsg.GetTime()))
-		if err != nil {
-			log.Println("failed to unmarshal text:", err)
+		if err := newTime.UnmarshalBinary(synchMsg.GetTime()); err != nil {
+			log.Println("failed to unmarshal time:", err)
 			continue
 		}
 		newMsg := msgData{
