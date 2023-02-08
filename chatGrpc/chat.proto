@@ -5,41 +5,41 @@ option go_package = ".";
 package chat;
 
 service Chat {
-    rpc CreateUser (CreateUserReq) returns (CreateUserResp) {}
-    rpc Synchronize (SynchronizeReq) returns (SynchronizeResp) {}
-    rpc PutMsg (PutMsgReq) returns (PutMsgResp) {}
+  rpc CreateUser(CreateUserReq) returns (CreateUserResp) {}
+  rpc Synchronize(SynchronizeReq) returns (SynchronizeResp) {}
+  rpc PutMsg(PutMsgReq) returns (PutMsgResp) {}
 }
 
-message CreateUserReq {
-    string name = 1;
+message UserKey {
+  string name = 1;
+  bytes privKey = 2;
+  bytes pubKey = 3;
 }
+
+message CreateUserReq { string name = 1; }
 
 message CreateUserResp {}
 
 message UserSeqNum {
-    string name = 1;
-    uint64 seqNum = 2;
+  string name = 1;
+  uint64 seqNum = 2;
 }
 
 message SynchronizeReq {
-    string name = 1;
-    map<string, UserSeqNum> seqNums = 2;
+  string name = 1;
+  map<string, UserSeqNum> seqNums = 2;
 }
 
 message MsgData {
-    string sender = 1;
-    string msg = 2;
-    uint64 seqNum = 3;
-    string time = 4;
+  string sender = 1;
+  string msg = 2;
+  uint64 seqNum = 3;
+  string time = 4;
 }
 
-message SynchronizeResp {
-    repeated MsgData msgs = 1;
-}
+message SynchronizeResp { repeated MsgData msgs = 1; }
 
-message PutMsgReq {
-    MsgData msgData = 1;
-}
+message PutMsgReq { MsgData msgData = 1; }
 
 message PutMsgResp {}
 
