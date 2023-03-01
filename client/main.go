@@ -89,6 +89,10 @@ func (myClient *client) loadKeys() error {
 			user.pubKey = pubKey
 		}
 	}
+
+	if myClient.myData.privKey == nil {
+		return errors.New("couldn't find key for user")
+	}
 	return nil
 }
 
@@ -130,7 +134,7 @@ func (myClient *client) isValidMsg(msgHashSig *pb.MsgHashSig) error {
 		return err
 	}
 	if !bytes.Equal(hashForChain, msgHash.GetHashChain()) {
-		return errors.New("failed to verify hash chain")
+		return errors.New("hash chains aren't equal")
 	}
 
 	return nil
@@ -217,14 +221,14 @@ func (myClient *client) putMsg(text *string) error {
 	}
 
 	// Send it out.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 	defer cancel()
 	_, err = myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{MsgHashSig: msgHashSig})
 	if err != nil {
 		return err
 	}
 	myClient.msgs = append(myClient.msgs, &msgData{
-		sender: msg.GetSender(), text: msg.GetText(), time: currTime,
+		sender: msg.GetSender(), text: msg.GetText(), time: currTime, hashChain: msgHash.GetHashChain(),
 	})
 	return nil
 }
