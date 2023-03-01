@@ -2,90 +2,73 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net"
-	"sort"
 
 	pb "example.com/chatGrpc"
 	"google.golang.org/grpc"
 )
 
-type inMem struct {
-	// key is username
-	// invariant: msgs sorted by lowest seq num first
-	userMsgs map[string][]*pb.MsgDataSig
-}
-
-func newInMem() *inMem {
-	db := inMem{}
-	db.userMsgs = make(map[string][]*pb.MsgDataSig)
-	return &db
-}
-
 type server struct {
 	pb.UnimplementedChatServer
-	db *inMem
+	msgs      []*pb.MsgHashSig
+	mailboxes map[string]chan *pb.MsgHashSig
 }
 
-func (serv *server) CreateUser(ctx context.Context, in *pb.CreateUserReq) (*pb.CreateUserResp, error) {
-	if _, ok := serv.db.userMsgs[in.GetName()]; ok {
-		return nil, errors.New("username already exists")
-	}
-	serv.db.userMsgs[in.GetName()] = make([]*pb.MsgDataSig, 0, 10)
-	log.Println("created user")
-	return &pb.CreateUserResp{}, nil
-}
+func newServer() *server {
+	serv := &server{}
+	serv.mailboxes = make(map[string]chan *pb.MsgHashSig)
 
-func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
-	newMsgDataSig := in.GetMsg()
-	newMsgData := newMsgDataSig.GetMsg()
-	msgs, ok := serv.db.userMsgs[newMsgData.GetSender()]
-	if !ok {
-		return nil, errors.New("username hasn't been created")
-	}
-	lastSeqNum := uint64(0)
-	if len(msgs) > 0 {
-		lastSeqNum = msgs[len(msgs)-1].GetMsg().GetSeqNum()
-	}
-	if lastSeqNum+1 != newMsgData.GetSeqNum() {
-		return nil, errors.New("new msg seq num is out-of-order")
-	}
-	msgs = append(msgs, newMsgDataSig)
-	serv.db.userMsgs[newMsgData.GetSender()] = msgs
-	log.Println("put new msg")
-	return &pb.PutMsgResp{}, nil
-}
-
-func (serv *server) Synchronize(ctx context.Context, in *pb.SynchronizeReq) (*pb.SynchronizeResp, error) {
-	unseenMsgs := []*pb.MsgDataSig{}
-	for name, msgs := range serv.db.userMsgs {
-		if name == in.GetName() {
-			// For now, assume that a user already has their own updates. This might change with multi-device
-			continue
-		}
-		userSeqNum, ok := in.GetSeqNums()[name]
-		lastSeenSeqNum := uint64(0)
-		if ok {
-			lastSeenSeqNum = userSeqNum.GetSeqNum()
-		}
-		// Inside lambda, LT, not LEQ, so get index after what client has already seen
-		searchIdx := sort.Search(len(msgs), func(i int) bool { return lastSeenSeqNum < msgs[i].GetMsg().GetSeqNum() })
-		unseenMsgs = append(unseenMsgs, msgs[searchIdx:]...)
-	}
-	log.Println("synchronized user")
-	return &pb.SynchronizeResp{Msgs: unseenMsgs}, nil
-}
-
-func main() {
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalln("failed to listen to port:", err)
 	}
 	grpcServ := grpc.NewServer()
-	pb.RegisterChatServer(grpcServ, &server{db: newInMem()})
+	pb.RegisterChatServer(grpcServ, serv)
 	log.Println("server listening at ", lis.Addr())
 	if err := grpcServ.Serve(lis); err != nil {
 		log.Fatalln("failed to serve:", err)
 	}
+	return serv
+}
+
+func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) error {
+	// Send all the prior msgs.
+	for _, msg := range serv.msgs {
+		resp := pb.GetMsgsResp{MsgHashSig: msg}
+		if err := stream.Send(&resp); err != nil {
+			return err
+		}
+	}
+
+	// Wait for new messages and send them to the client.
+	mailbox := make(chan *pb.MsgHashSig)
+	serv.mailboxes[in.GetSender()] = mailbox
+
+	for {
+		newMsg, more := <-mailbox
+		if !more {
+			return nil
+		}
+		resp := pb.GetMsgsResp{MsgHashSig: newMsg}
+		if err := stream.Send(&resp); err != nil {
+			return err
+		}
+	}
+}
+
+func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
+	msg := in.GetMsgHashSig()
+	sender := msg.GetMsgHash().GetMsg().GetSender()
+	serv.msgs = append(serv.msgs, msg)
+	for recvr, ch := range serv.mailboxes {
+		if recvr != sender {
+			ch <- msg
+		}
+	}
+	return &pb.PutMsgResp{}, nil
+}
+
+func main() {
+	newServer()
 }
