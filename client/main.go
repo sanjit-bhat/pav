@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -8,9 +9,9 @@ import (
 	"crypto/sha512"
 	"crypto/x509"
 	"errors"
+	"io"
 	"log"
 	"os"
-	"sort"
 	"time"
 
 	pb "example.com/chatGrpc"
@@ -21,262 +22,269 @@ import (
 )
 
 type userMetadata struct {
-	name         string
-	latestSeqNum uint64
-	privKey      *rsa.PrivateKey
 	pubKey       *rsa.PublicKey
+}
+
+type myMetadata struct {
+	userMetadata 
+	name string
+	privKey *rsa.PrivateKey
 }
 
 type msgData struct {
 	sender string
-	msg    string
-	seqNum uint64
+	text   string
 	time   time.Time
+	hashChain []byte
 }
 
-type inMem struct {
-	myUserData  *userMetadata
-	allUserData map[string]*userMetadata
-	// Invariant: `msgs` always sorted by earliest time first
+type client struct {
+	rpc pb.ChatClient
+	myData *myMetadata
+	// Key is the username.
+	allData map[string]*userMetadata
 	msgs []*msgData
 }
 
-func newInMem() *inMem {
-	db := inMem{}
-	db.myUserData = &userMetadata{}
-	db.allUserData = make(map[string]*userMetadata)
-	return &db
+func newClient() (*client, *grpc.ClientConn) {
+	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalln("failed to connect:", err)
+	}
+    c := &client{rpc: pb.NewChatClient(conn)}
+	c.myData = &myMetadata{}
+	c.allData = make(map[string]*userMetadata)
+	return c, conn
 }
 
-func loginUserHandler(db *inMem, name *string) {
-	db.myUserData.name = *name
-
+func (myClient *client) loadKeys() error {
 	fileBytes, err := os.ReadFile("demo_keys")
 	if err != nil {
-		log.Println("failed to read key file:", err)
-		return
+		return err
 	}
 	manyUserKeys := &pb.ManyUserKeys{}
 	if err := proto.Unmarshal(fileBytes, manyUserKeys); err != nil {
-		log.Println("failed to unmarshal keys:", err)
-		return
+		return err
 	}
 
 	for _, userKey := range manyUserKeys.GetUserKeys() {
 		pubKey, err := x509.ParsePKCS1PublicKey(userKey.GetPubKey())
 		if err != nil {
-			log.Println("failed to parse pub key:", err)
-			return
+			return err
 		}
 
-		if *name == userKey.GetName() {
+		if myClient.myData.name == userKey.GetName() {
 			privKey, err := x509.ParsePKCS1PrivateKey(userKey.GetPrivKey())
 			if err != nil {
-				log.Println("failed to parse priv key:", err)
-				return
+				return err
 			}
-			db.myUserData.privKey = privKey
-			db.myUserData.pubKey = pubKey
+			myClient.myData.privKey = privKey
+			myClient.myData.pubKey = pubKey
 		} else {
-			user, ok := db.allUserData[userKey.GetName()]
+			user, ok := myClient.allData[userKey.GetName()]
 			if !ok {
 				user = &userMetadata{}
-				db.allUserData[userKey.GetName()] = user
+				myClient.allData[userKey.GetName()] = user
 			}
 			user.pubKey = pubKey
 		}
 	}
-}
-
-func createUserHandler(client pb.ChatClient, db *inMem, name *string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_, err := client.CreateUser(ctx, &pb.CreateUserReq{Name: *name})
-	if err != nil {
-		log.Println("failed to create user:", err)
-		return
-	}
-	loginUserHandler(db, name)
-}
-
-func listMsgsHandler(db *inMem) {
-	log.Println("All messages:")
-	for _, msg := range db.msgs {
-		log.Printf("`%v` [%v]: \"%v\"\n", msg.sender, msg.time.Format(time.UnixDate), msg.msg)
-	}
-}
-
-func hashMsgData(msg *pb.MsgData) ([]byte, error) {
-	bytes, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, errors.New("failed to marshal msgData")
-	}
-	hash := sha512.Sum512(bytes)
-	return hash[:], nil
-}
-
-func signMsgData(db *inMem, msg *pb.MsgData) ([]byte, error) {
-	hash, err := hashMsgData(msg)
-	if err != nil {
-		return nil, err
-	}
-	return rsa.SignPSS(rand.Reader, db.myUserData.privKey, crypto.SHA512, hash[:], nil)
-}
-
-func putMsgHandler(client pb.ChatClient, db *inMem, msg *string) {
-	newSeqNum := db.myUserData.latestSeqNum + 1
-	currTime := time.Now()
-	currTimeBytes, err := currTime.MarshalBinary()
-	if err != nil {
-		log.Println("failed to marshal time:", err)
-		return
-	}
-
-	pbMsgData := &pb.MsgData{
-		Sender: db.myUserData.name, Msg: *msg, SeqNum: newSeqNum, Time: currTimeBytes,
-	}
-	sig, err := signMsgData(db, pbMsgData)
-	if err != nil {
-		log.Println("failed to sign msg:", err)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_, err = client.PutMsg(ctx, &pb.PutMsgReq{Msg: &pb.MsgDataSig{Msg: pbMsgData, Sig: sig}})
-	if err != nil {
-		log.Println("failed to put msg:", err)
-		return
-	}
-	db.myUserData.latestSeqNum = newSeqNum
-	db.msgs = append(db.msgs, &msgData{
-		sender: db.myUserData.name, msg: *msg, seqNum: newSeqNum, time: currTime,
-	})
-}
-
-func (db *inMem) isValidMsg(msg *pb.MsgDataSig) error {
-	sender := msg.GetMsg().GetSender()
-	seqNum := msg.GetMsg().GetSeqNum()
-	userData, ok := db.allUserData[sender]
-	if !ok {
-		return errors.New("don't have public key for user")
-	}
-	if userData.latestSeqNum+1 != seqNum {
-		return errors.New("unexpected seq num")
-	}
-
-	hash, err := hashMsgData(msg.GetMsg())
-	if err != nil {
-		return err
-	}
-	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, hash, msg.GetSig(), nil); err != nil {
-		return err
-	}
 	return nil
 }
 
-func (db *inMem) addMsg(newMsg *msgData) {
-	userData := db.allUserData[newMsg.sender]
-	userData.latestSeqNum += 1
-	// Lambda returns false for some prefix of list, then true for remainder
-	insertIdx := sort.Search(len(db.msgs), func(i int) bool { return newMsg.time.Before(db.msgs[i].time) })
-	insertAtEnd := insertIdx == len(db.msgs)
-	db.msgs = append(db.msgs, newMsg)
-	if !insertAtEnd {
-		copy(db.msgs[insertIdx+1:], db.msgs[insertIdx:])
-		db.msgs[insertIdx] = newMsg
+func (myClient *client) compHashChain(msg *pb.Msg) ([]byte, error) {
+	bytesForChain, err := proto.Marshal(msg)
+	if err != nil {
+		return nil, err
 	}
+	if len(myClient.msgs) > 0 {
+		bytesForChain = append(myClient.msgs[len(myClient.msgs) - 1].hashChain, bytesForChain...)
+	}
+	hashForChain := sha512.Sum512(bytesForChain)
+	return hashForChain[:], nil
 }
 
-func synchronizeHandler(client pb.ChatClient, db *inMem) {
-	seqNums := make(map[string]*pb.UserSeqNum, len(db.allUserData))
-	for name, userData := range db.allUserData {
-		seqNums[name] = new(pb.UserSeqNum)
-		seqNums[name].Name = userData.name
-		seqNums[name].SeqNum = userData.latestSeqNum
+func (myClient *client) isValidMsg(msgHashSig *pb.MsgHashSig) error {
+	// Check signature.
+	msgHash := msgHashSig.GetMsgHash()
+	msg := msgHash.GetMsg()
+	sender := msg.GetSender() 
+	userData, ok := myClient.allData[sender]
+	if !ok {
+		return errors.New("don't have public key for user")
 	}
+
+	bytesForSig, err := proto.Marshal(msgHash)
+	if err != nil {
+		return err
+	}
+	preHashForSig := sha512.Sum512(bytesForSig)
+	hashForSig := preHashForSig[:]
+	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, hashForSig, msgHashSig.GetSig(), nil); err != nil {
+		return err
+	}
+
+	// Check hash chain.
+	hashForChain, err := myClient.compHashChain(msg)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(hashForChain, msgHash.GetHashChain()) {
+		return errors.New("failed to verify hash chain")
+	}
+
+	return nil
+}
+
+func (myClient *client) tryAddNewMsg(getMsgsResp *pb.GetMsgsResp) error {
+	msgHashSig := getMsgsResp.GetMsgHashSig()
+	msgHash := msgHashSig.GetMsgHash()
+	msg := msgHash.GetMsg()
+
+	if err := myClient.isValidMsg(msgHashSig); err != nil {
+		return err
+	}
+	newTime := new(time.Time)
+	if err := newTime.UnmarshalBinary(msg.GetTime()); err != nil {
+		return err
+	}
+	newMsg := msgData{
+		sender: msg.GetSender(),
+		text:   msg.GetText(),
+		time:   *newTime,
+		hashChain: msgHash.GetHashChain(),
+	}
+	myClient.msgs = append(myClient.msgs, &newMsg)
+	log.Printf("`%v` [%v]: \"%v\"\n", newMsg.sender, newMsg.time.Format(time.UnixDate), newMsg.text)
+	return nil
+}
+
+func (myClient *client) getMsgs() {
+	// TODO: don't know how to do indefinite timeout, so use an hour instead.
+    ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+    defer cancel()
+    stream, err := myClient.rpc.GetMsgs(ctx, &pb.GetMsgsReq{Sender: myClient.myData.name})
+    if err != nil {
+        log.Fatalln("failed getMsgs:", err)
+    }
+
+    for {
+        msg, err := stream.Recv()
+        if err == io.EOF {
+            return
+        }
+        if err != nil {
+            log.Fatalln("failed getMsgs stream recv:", err)
+        }
+		if err = myClient.tryAddNewMsg(msg); err != nil {
+			log.Println("failed to add msg:", err)
+		}
+    }
+}
+
+func (myClient *client) putMsg(text *string) error {
+	currTime := time.Now()
+	currTimeBytes, err := currTime.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	msg := &pb.Msg{
+		Sender: myClient.myData.name, Text: *text, Time: currTimeBytes,
+	}
+
+	// Compute hash chain.
+	hashChain, err := myClient.compHashChain(msg)
+	if err != nil {
+		return err
+	}
+	msgHash := &pb.MsgHash{
+		Msg: msg, HashChain: hashChain,
+	}
+
+	// Sign the msg. 
+	bytesForSigHash, err := proto.Marshal(msgHash)
+	if err != nil {
+		return err
+	}
+	preHashForSig := sha512.Sum512(bytesForSigHash)
+	hashForSig := preHashForSig[:]
+	sig, err := rsa.SignPSS(rand.Reader, myClient.myData.privKey, crypto.SHA512, hashForSig, nil)
+	if err != nil {
+		return err
+	}	
+	msgHashSig := &pb.MsgHashSig{
+		MsgHash: msgHash, Sig: sig,
+	}
+
+	// Send it out.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	synchResp, err := client.Synchronize(ctx, &pb.SynchronizeReq{Name: db.myUserData.name, SeqNums: seqNums})
+	_, err = myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{MsgHashSig: msgHashSig})
 	if err != nil {
-		log.Println("failed to synchronize:", err)
-		return
+		return err
 	}
-	for _, synchMsg := range synchResp.GetMsgs() {
-		if err := db.isValidMsg(synchMsg); err != nil {
-			log.Println("failed to validate new msg:", err)
-			return
-		}
+	myClient.msgs = append(myClient.msgs, &msgData{
+		sender: msg.GetSender(), text: msg.GetText(), time: currTime,
+	})
+	return nil
+}
 
-		newTime := new(time.Time)
-		msg := synchMsg.GetMsg()
-		if err := newTime.UnmarshalBinary(msg.GetTime()); err != nil {
-			log.Println("failed to unmarshal time:", err)
+func (myClient *client) runNameLoop() {
+	for {
+		prompt := promptui.Prompt{
+			Label: "Name",
+		}	
+		name, err := prompt.Run()
+		if err != nil {
+			log.Println("warning: failed prompt:", err)
 			continue
 		}
-		newMsg := msgData{
-			sender: msg.GetSender(),
-			msg:    msg.GetMsg(),
-			seqNum: msg.GetSeqNum(),
-			time:   *newTime,
-		}
-		if _, ok := db.allUserData[newMsg.sender]; !ok {
-			db.allUserData[newMsg.sender] = &userMetadata{name: newMsg.sender, latestSeqNum: 0}
-		}
-		db.addMsg(&newMsg)
+		myClient.myData.name = name
+		return
 	}
 }
 
-func main() {
-	myDB := newInMem()
-	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalln("failed to connect:", err)
-	}
-	defer conn.Close()
-	client := pb.NewChatClient(conn)
-
+func (myClient *client) runMsgLoop() {
 	for {
 		prompt := promptui.Select{
-			Label: "Op",
-			Items: []string{"CreateUser", "LoginUser", "Synchronize", "PutMsg", "ListMsgs", "End"},
+			Label: "Action",
+			Items: []string{"PutMsg", "End"},
 		}
-		_, op, err := prompt.Run()
+		_, action, err := prompt.Run()
 		if err != nil {
-			log.Println("failed prompt:", err)
+			log.Println("warning: failed prompt:", err)
 			continue
 		}
 
-		if op == "End" {
+		if action == "End" {
 			return
-		} else if op == "CreateUser" || op == "LoginUser" {
-			prompt := promptui.Prompt{
-				Label: "Username",
-			}
-			name, err := prompt.Run()
-			if err != nil {
-				log.Println("failed prompt:", err)
-				continue
-			}
-			if op == "CreateUser" {
-				createUserHandler(client, myDB, &name)
-			} else {
-				loginUserHandler(myDB, &name)
-			}
-		} else if op == "ListMsgs" {
-			listMsgsHandler(myDB)
-		} else if op == "PutMsg" {
+		} else if action == "PutMsg" {
 			prompt := promptui.Prompt{
 				Label: "Msg",
 			}
 			msg, err := prompt.Run()
 			if err != nil {
-				log.Println("failed prompt:", err)
+				log.Println("warning: failed prompt:", err)
 				continue
 			}
-			putMsgHandler(client, myDB, &msg)
-		} else if op == "Synchronize" {
-			synchronizeHandler(client, myDB)
+			err = myClient.putMsg(&msg)
+			if err != nil {
+				log.Println("failed putMsg:", err)
+			}
+		} else {
+			log.Println("warning: unrecognized action:", action)
 		}
 	}
+}
+
+func main() {
+	myClient, conn := newClient()
+	defer conn.Close()
+	myClient.runNameLoop()
+	err := myClient.loadKeys()
+	if err != nil {
+		log.Fatalln("failed to load keys:", err)
+	}
+	go myClient.getMsgs()
+	myClient.runMsgLoop()	
 }
