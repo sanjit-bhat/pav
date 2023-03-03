@@ -34,7 +34,6 @@ type myMetadata struct {
 type msgData struct {
 	sender    string
 	text      string
-	time      time.Time
 	hashChain []byte
 }
 
@@ -43,7 +42,7 @@ type client struct {
 	myData *myMetadata
 	// Key is the username.
 	allData map[string]*userMetadata
-	msgs    []*msgData
+	lastMsg *msgData
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -101,8 +100,8 @@ func (myClient *client) compHashChain(msg *pb.Msg) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(myClient.msgs) > 0 {
-		bytesForChain = append(myClient.msgs[len(myClient.msgs)-1].hashChain, bytesForChain...)
+	if myClient.lastMsg != nil {
+		bytesForChain = append(myClient.lastMsg.hashChain, bytesForChain...)
 	}
 	hashForChain := sha512.Sum512(bytesForChain)
 	return hashForChain[:], nil
@@ -148,18 +147,13 @@ func (myClient *client) tryAddNewMsg(getMsgsResp *pb.GetMsgsResp) error {
 	if err := myClient.isValidMsg(msgHashSig); err != nil {
 		return err
 	}
-	newTime := new(time.Time)
-	if err := newTime.UnmarshalBinary(msg.GetTime()); err != nil {
-		return err
-	}
 	newMsg := msgData{
 		sender:    msg.GetSender(),
 		text:      msg.GetText(),
-		time:      *newTime,
 		hashChain: msgHash.GetHashChain(),
 	}
-	myClient.msgs = append(myClient.msgs, &newMsg)
-	log.Printf("`%v` [%v]: \"%v\"\n", newMsg.sender, newMsg.time.Format(time.UnixDate), newMsg.text)
+	myClient.lastMsg = &newMsg
+	log.Printf("`%v`: \"%v\"\n", newMsg.sender, newMsg.text)
 	return nil
 }
 
@@ -187,13 +181,8 @@ func (myClient *client) getMsgs() {
 }
 
 func (myClient *client) putMsg(text *string) error {
-	currTime := time.Now()
-	currTimeBytes, err := currTime.MarshalBinary()
-	if err != nil {
-		return err
-	}
 	msg := &pb.Msg{
-		Sender: myClient.myData.name, Text: *text, Time: currTimeBytes,
+		Sender: myClient.myData.name, Text: *text,
 	}
 
 	// Compute hash chain.
@@ -227,18 +216,19 @@ func (myClient *client) putMsg(text *string) error {
 	if err != nil {
 		return err
 	}
-	myClient.msgs = append(myClient.msgs, &msgData{
-		sender: msg.GetSender(), text: msg.GetText(), time: currTime, hashChain: msgHash.GetHashChain(),
-	})
+	myClient.lastMsg = &msgData{
+		sender: msg.GetSender(), text: msg.GetText(), hashChain: msgHash.GetHashChain(),
+	}
 	return nil
 }
 
 func (myClient *client) runNameLoop() {
 	for {
-		prompt := promptui.Prompt{
+		prompt := promptui.Select{
 			Label: "Name",
+			Items: []string{"alice", "bob", "charlie", "danny", "eve"},
 		}
-		name, err := prompt.Run()
+		_, name, err := prompt.Run()
 		if err != nil {
 			log.Println("warning: failed prompt:", err)
 			continue

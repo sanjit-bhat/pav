@@ -12,7 +12,6 @@ service Chat {
 message Msg {
   string sender = 1;
   string text = 2;
-  bytes time = 3;
 }
 
 message MsgHash {
