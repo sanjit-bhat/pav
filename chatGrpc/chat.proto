@@ -16,7 +16,7 @@ message Msg {
 
 message MsgHash {
   Msg msg = 1;
-  bytes hashChain = 2;
+  bytes hash = 2;
 }
 
 message MsgHashSig {

@@ -31,18 +31,15 @@ type myMetadata struct {
 	privKey *rsa.PrivateKey
 }
 
-type msgData struct {
-	sender    string
-	text      string
-	hashChain []byte
-}
-
 type client struct {
 	rpc    pb.ChatClient
 	myData *myMetadata
 	// Key is the username.
 	allData map[string]*userMetadata
-	lastMsg *msgData
+	// TODO: simplify and write as "clean" code as possible.
+	// TODO: might want to put a lock around the putMsg rpc, but not clear what would be inside the CS.
+	// TODO: might need a lock around this. Multiple threads reading/writing it.
+	lastMsg *pb.MsgHash
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -66,24 +63,24 @@ func (myClient *client) loadKeys() error {
 		return err
 	}
 
-	for _, userKey := range manyUserKeys.GetUserKeys() {
-		pubKey, err := x509.ParsePKCS1PublicKey(userKey.GetPubKey())
+	for _, userKey := range manyUserKeys.UserKeys() {
+		pubKey, err := x509.ParsePKCS1PublicKey(userKey.PubKey)
 		if err != nil {
 			return err
 		}
 
-		if myClient.myData.name == userKey.GetName() {
-			privKey, err := x509.ParsePKCS1PrivateKey(userKey.GetPrivKey())
+		if myClient.myData.name == userKey.Name {
+			privKey, err := x509.ParsePKCS1PrivateKey(userKey.PrivKey)
 			if err != nil {
 				return err
 			}
 			myClient.myData.privKey = privKey
 			myClient.myData.pubKey = pubKey
 		} else {
-			user, ok := myClient.allData[userKey.GetName()]
+			user, ok := myClient.allData[userKey.Name]
 			if !ok {
 				user = &userMetadata{}
-				myClient.allData[userKey.GetName()] = user
+				myClient.allData[userKey.Name] = user
 			}
 			user.pubKey = pubKey
 		}
@@ -95,23 +92,20 @@ func (myClient *client) loadKeys() error {
 	return nil
 }
 
-func (myClient *client) compHashChain(msg *pb.Msg) ([]byte, error) {
-	bytesForChain, err := proto.Marshal(msg)
+func (myClient *client) compMsgHash(msg *pb.Msg) ([]byte, error) {
+	bytes, err := proto.Marshal(msg)
 	if err != nil {
 		return nil, err
 	}
-	if myClient.lastMsg != nil {
-		bytesForChain = append(myClient.lastMsg.hashChain, bytesForChain...)
-	}
-	hashForChain := sha512.Sum512(bytesForChain)
-	return hashForChain[:], nil
+	hash := sha512.Sum512(bytes)
+	return hash[:], nil
 }
 
 func (myClient *client) isValidMsg(msgHashSig *pb.MsgHashSig) error {
 	// Check signature.
-	msgHash := msgHashSig.GetMsgHash()
-	msg := msgHash.GetMsg()
-	sender := msg.GetSender()
+	msgHash := msgHashSig.MsgHash
+	msg := msgHash.Msg
+	sender := msg.Sender
 	userData, ok := myClient.allData[sender]
 	if !ok {
 		return errors.New("don't have public key for user")
@@ -123,16 +117,17 @@ func (myClient *client) isValidMsg(msgHashSig *pb.MsgHashSig) error {
 	}
 	preHashForSig := sha512.Sum512(bytesForSig)
 	hashForSig := preHashForSig[:]
-	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, hashForSig, msgHashSig.GetSig(), nil); err != nil {
+	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, hashForSig, msgHashSig.Sig, nil); err != nil {
 		return err
 	}
 
 	// Check hash chain.
+	hashComputed, err := myClient.compMsgHash(myClient.lastMsg.Msg)
 	hashForChain, err := myClient.compHashChain(msg)
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(hashForChain, msgHash.GetHashChain()) {
+	if !bytes.Equal(hashForChain, msgHash.HashChain) {
 		return errors.New("hash chains aren't equal")
 	}
 
@@ -140,17 +135,17 @@ func (myClient *client) isValidMsg(msgHashSig *pb.MsgHashSig) error {
 }
 
 func (myClient *client) tryAddNewMsg(getMsgsResp *pb.GetMsgsResp) error {
-	msgHashSig := getMsgsResp.GetMsgHashSig()
-	msgHash := msgHashSig.GetMsgHash()
-	msg := msgHash.GetMsg()
+	msgHashSig := getMsgsResp.MsgHashSig
+	msgHash := msgHashSig.MsgHash
+	msg := msgHash.Msg
 
 	if err := myClient.isValidMsg(msgHashSig); err != nil {
 		return err
 	}
 	newMsg := msgData{
-		sender:    msg.GetSender(),
-		text:      msg.GetText(),
-		hashChain: msgHash.GetHashChain(),
+		sender:    msg.Sender,
+		text:      msg.Text,
+		hashChain: msgHash.HashChain,
 	}
 	myClient.lastMsg = &newMsg
 	log.Printf("`%v`: \"%v\"\n", newMsg.sender, newMsg.text)
@@ -210,14 +205,14 @@ func (myClient *client) putMsg(text *string) error {
 	}
 
 	// Send it out.
-	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_, err = myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{MsgHashSig: msgHashSig})
 	if err != nil {
 		return err
 	}
 	myClient.lastMsg = &msgData{
-		sender: msg.GetSender(), text: msg.GetText(), hashChain: msgHash.GetHashChain(),
+		sender: msg.Sender, text: msg.Text, hashChain: msgHash.HashChain,
 	}
 	return nil
 }

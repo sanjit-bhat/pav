@@ -43,7 +43,7 @@ func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) err
 
 	// Wait for new messages and send them to the client.
 	mailbox := make(chan *pb.MsgHashSig)
-	serv.mailboxes[in.GetSender()] = mailbox
+	serv.mailboxes[in.Sender] = mailbox
 
 	for {
 		newMsg, more := <-mailbox
@@ -58,8 +58,8 @@ func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) err
 }
 
 func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
-	msg := in.GetMsgHashSig()
-	sender := msg.GetMsgHash().GetMsg().GetSender()
+	msg := in.MsgHashSig
+	sender := msg.MsgHash.Msg.Sender
 	serv.msgs = append(serv.msgs, msg)
 	for recvr, ch := range serv.mailboxes {
 		if recvr != sender {
