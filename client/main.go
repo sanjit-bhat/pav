@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	pb "example.com/chatGrpc"
@@ -31,15 +32,17 @@ type myMetadata struct {
 	privKey *rsa.PrivateKey
 }
 
+type msgGuard struct {
+	msg *pb.Msg
+	mu  sync.Mutex
+}
+
 type client struct {
 	rpc    pb.ChatClient
 	myData *myMetadata
 	// Key is the username.
 	allData map[string]*userMetadata
-	// TODO: simplify and write as "clean" code as possible.
-	// TODO: might want to put a lock around the putMsg rpc, but not clear what would be inside the CS.
-	// TODO: might need a lock around this. Multiple threads reading/writing it.
-	lastMsg *pb.Msg
+	lastMsg msgGuard
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -132,31 +135,26 @@ func (myClient *client) checkSig(msgHashSig *pb.MsgHashSig) error {
 	return nil
 }
 
-func (myClient *client) checkValidMsg(msgHashSig *pb.MsgHashSig) error {
+func (myClient *client) tryAddNewMsg(msgHashSig *pb.MsgHashSig) error {
 	// Check signature.
 	if err := myClient.checkSig(msgHashSig); err != nil {
 		return err
 	}
 
 	// Check hash chain.
-	hashComputed, err := myClient.compHash(myClient.lastMsg)
+	myClient.lastMsg.mu.Lock()
+	defer myClient.lastMsg.mu.Unlock()
+	hashComputed, err := myClient.compHash(myClient.lastMsg.msg)
 	if err != nil {
 		return err
 	}
 	if !bytes.Equal(hashComputed, msgHashSig.MsgHash.Hash) {
 		return errors.New("hash chains are not equal")
 	}
-	return nil
-}
 
-func (myClient *client) tryAddNewMsg(getMsgsResp *pb.GetMsgsResp) error {
-	msgHashSig := getMsgsResp.MsgHashSig
 	msg := msgHashSig.MsgHash.Msg
-	if err := myClient.checkValidMsg(msgHashSig); err != nil {
-		return err
-	}
 	log.Printf("`%v`: \"%v\"\n", msg.Sender, msg.Text)
-	myClient.lastMsg = msg
+	myClient.lastMsg.msg = msg
 	return nil
 }
 
@@ -170,26 +168,29 @@ func (myClient *client) getMsgs() {
 	}
 
 	for {
-		msg, err := stream.Recv()
+		resp, err := stream.Recv()
 		if err == io.EOF {
 			return
 		}
 		if err != nil {
 			log.Fatalln("failed getMsgs stream recv:", err)
 		}
-		if err = myClient.tryAddNewMsg(msg); err != nil {
+		if err = myClient.tryAddNewMsg(resp.MsgHashSig); err != nil {
 			log.Println("failed to add msg:", err)
 		}
 	}
 }
 
+// TODO: might want to put a lock around the putMsg rpc, but not clear what would be inside the CS.
 func (myClient *client) putMsg(text *string) error {
 	msg := &pb.Msg{
 		Sender: myClient.myData.name, Text: *text,
 	}
 
 	// Compute hash of prior msg.
-	priorHash, err := myClient.compHash(myClient.lastMsg)
+	myClient.lastMsg.mu.Lock()
+	defer myClient.lastMsg.mu.Unlock()
+	priorHash, err := myClient.compHash(myClient.lastMsg.msg)
 	if err != nil {
 		return err
 	}
@@ -213,11 +214,10 @@ func (myClient *client) putMsg(text *string) error {
 	// Send it out.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, err = myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{MsgHashSig: msgHashSig})
-	if err != nil {
+	if _, err = myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{MsgHashSig: msgHashSig}); err != nil {
 		return err
 	}
-	myClient.lastMsg = msg
+	myClient.lastMsg.msg = msg
 	return nil
 }
 
