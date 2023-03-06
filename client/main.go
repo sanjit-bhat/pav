@@ -39,7 +39,7 @@ type client struct {
 	// TODO: simplify and write as "clean" code as possible.
 	// TODO: might want to put a lock around the putMsg rpc, but not clear what would be inside the CS.
 	// TODO: might need a lock around this. Multiple threads reading/writing it.
-	lastMsg *pb.MsgHash
+	lastMsg *pb.Msg
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -53,6 +53,22 @@ func newClient() (*client, *grpc.ClientConn) {
 	return c, conn
 }
 
+func (myClient *client) runNameLoop() {
+	for {
+		prompt := promptui.Select{
+			Label: "Name",
+			Items: []string{"alice", "bob", "charlie", "danny", "eve"},
+		}
+		_, name, err := prompt.Run()
+		if err != nil {
+			log.Println("warning: failed prompt:", err)
+			continue
+		}
+		myClient.myData.name = name
+		return
+	}
+}
+
 func (myClient *client) loadKeys() error {
 	fileBytes, err := os.ReadFile("demo_keys")
 	if err != nil {
@@ -63,7 +79,7 @@ func (myClient *client) loadKeys() error {
 		return err
 	}
 
-	for _, userKey := range manyUserKeys.UserKeys() {
+	for _, userKey := range manyUserKeys.UserKeys {
 		pubKey, err := x509.ParsePKCS1PublicKey(userKey.PubKey)
 		if err != nil {
 			return err
@@ -87,12 +103,12 @@ func (myClient *client) loadKeys() error {
 	}
 
 	if myClient.myData.privKey == nil {
-		return errors.New("couldn't find key for user")
+		return errors.New("do not have private key for user")
 	}
 	return nil
 }
 
-func (myClient *client) compMsgHash(msg *pb.Msg) ([]byte, error) {
+func (myClient *client) compHash(msg proto.Message) ([]byte, error) {
 	bytes, err := proto.Marshal(msg)
 	if err != nil {
 		return nil, err
@@ -101,54 +117,46 @@ func (myClient *client) compMsgHash(msg *pb.Msg) ([]byte, error) {
 	return hash[:], nil
 }
 
-func (myClient *client) isValidMsg(msgHashSig *pb.MsgHashSig) error {
-	// Check signature.
-	msgHash := msgHashSig.MsgHash
-	msg := msgHash.Msg
-	sender := msg.Sender
-	userData, ok := myClient.allData[sender]
-	if !ok {
-		return errors.New("don't have public key for user")
-	}
-
-	bytesForSig, err := proto.Marshal(msgHash)
+func (myClient *client) checkSig(msgHashSig *pb.MsgHashSig) error {
+	msgHash, err := myClient.compHash(msgHashSig.MsgHash)
 	if err != nil {
 		return err
 	}
-	preHashForSig := sha512.Sum512(bytesForSig)
-	hashForSig := preHashForSig[:]
-	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, hashForSig, msgHashSig.Sig, nil); err != nil {
+	userData, ok := myClient.allData[msgHashSig.MsgHash.Msg.Sender]
+	if !ok {
+		return errors.New("do not have public key for user")
+	}
+	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, msgHash, msgHashSig.Sig, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (myClient *client) checkValidMsg(msgHashSig *pb.MsgHashSig) error {
+	// Check signature.
+	if err := myClient.checkSig(msgHashSig); err != nil {
 		return err
 	}
 
 	// Check hash chain.
-	hashComputed, err := myClient.compMsgHash(myClient.lastMsg.Msg)
-	hashForChain, err := myClient.compHashChain(msg)
+	hashComputed, err := myClient.compHash(myClient.lastMsg)
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(hashForChain, msgHash.HashChain) {
-		return errors.New("hash chains aren't equal")
+	if !bytes.Equal(hashComputed, msgHashSig.MsgHash.Hash) {
+		return errors.New("hash chains are not equal")
 	}
-
 	return nil
 }
 
 func (myClient *client) tryAddNewMsg(getMsgsResp *pb.GetMsgsResp) error {
 	msgHashSig := getMsgsResp.MsgHashSig
-	msgHash := msgHashSig.MsgHash
-	msg := msgHash.Msg
-
-	if err := myClient.isValidMsg(msgHashSig); err != nil {
+	msg := msgHashSig.MsgHash.Msg
+	if err := myClient.checkValidMsg(msgHashSig); err != nil {
 		return err
 	}
-	newMsg := msgData{
-		sender:    msg.Sender,
-		text:      msg.Text,
-		hashChain: msgHash.HashChain,
-	}
-	myClient.lastMsg = &newMsg
-	log.Printf("`%v`: \"%v\"\n", newMsg.sender, newMsg.text)
+	log.Printf("`%v`: \"%v\"\n", msg.Sender, msg.Text)
+	myClient.lastMsg = msg
 	return nil
 }
 
@@ -180,23 +188,21 @@ func (myClient *client) putMsg(text *string) error {
 		Sender: myClient.myData.name, Text: *text,
 	}
 
-	// Compute hash chain.
-	hashChain, err := myClient.compHashChain(msg)
+	// Compute hash of prior msg.
+	priorHash, err := myClient.compHash(myClient.lastMsg)
 	if err != nil {
 		return err
 	}
 	msgHash := &pb.MsgHash{
-		Msg: msg, HashChain: hashChain,
+		Msg: msg, Hash: priorHash,
 	}
 
-	// Sign the msg.
-	bytesForSigHash, err := proto.Marshal(msgHash)
+	// Sign the current msg.
+	currHash, err := myClient.compHash(msgHash)
 	if err != nil {
 		return err
 	}
-	preHashForSig := sha512.Sum512(bytesForSigHash)
-	hashForSig := preHashForSig[:]
-	sig, err := rsa.SignPSS(rand.Reader, myClient.myData.privKey, crypto.SHA512, hashForSig, nil)
+	sig, err := rsa.SignPSS(rand.Reader, myClient.myData.privKey, crypto.SHA512, currHash, nil)
 	if err != nil {
 		return err
 	}
@@ -211,26 +217,8 @@ func (myClient *client) putMsg(text *string) error {
 	if err != nil {
 		return err
 	}
-	myClient.lastMsg = &msgData{
-		sender: msg.Sender, text: msg.Text, hashChain: msgHash.HashChain,
-	}
+	myClient.lastMsg = msg
 	return nil
-}
-
-func (myClient *client) runNameLoop() {
-	for {
-		prompt := promptui.Select{
-			Label: "Name",
-			Items: []string{"alice", "bob", "charlie", "danny", "eve"},
-		}
-		_, name, err := prompt.Run()
-		if err != nil {
-			log.Println("warning: failed prompt:", err)
-			continue
-		}
-		myClient.myData.name = name
-		return
-	}
 }
 
 func (myClient *client) runMsgLoop() {
@@ -256,8 +244,7 @@ func (myClient *client) runMsgLoop() {
 				log.Println("warning: failed prompt:", err)
 				continue
 			}
-			err = myClient.putMsg(&msg)
-			if err != nil {
+			if err = myClient.putMsg(&msg); err != nil {
 				log.Println("failed putMsg:", err)
 			}
 		} else {
@@ -270,8 +257,7 @@ func main() {
 	myClient, conn := newClient()
 	defer conn.Close()
 	myClient.runNameLoop()
-	err := myClient.loadKeys()
-	if err != nil {
+	if err := myClient.loadKeys(); err != nil {
 		log.Fatalln("failed to load keys:", err)
 	}
 	go myClient.getMsgs()
