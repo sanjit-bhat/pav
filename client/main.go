@@ -32,8 +32,9 @@ type myMetadata struct {
 	privKey *rsa.PrivateKey
 }
 
-type msgGuard struct {
-	msg *pb.Msg
+type mutexMsgs struct {
+	// Key is the seqNum.
+	msgs map[uint64]*pb.MsgWrap
 	mu  sync.Mutex
 }
 
@@ -42,7 +43,7 @@ type client struct {
 	myData *myMetadata
 	// Key is the username.
 	allData map[string]*userMetadata
-	lastMsg msgGuard
+	msgs mutexMsgs
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -53,6 +54,7 @@ func newClient() (*client, *grpc.ClientConn) {
 	c := &client{rpc: pb.NewChatClient(conn)}
 	c.myData = &myMetadata{}
 	c.allData = make(map[string]*userMetadata)
+	c.msgs.msgs = make(map[uint64]*pb.MsgWrap)
 	return c, conn
 }
 
@@ -111,7 +113,7 @@ func (myClient *client) loadKeys() error {
 	return nil
 }
 
-func (myClient *client) compHash(msg proto.Message) ([]byte, error) {
+func hash(msg proto.Message) ([]byte, error) {
 	bytes, err := proto.Marshal(msg)
 	if err != nil {
 		return nil, err
@@ -120,41 +122,72 @@ func (myClient *client) compHash(msg proto.Message) ([]byte, error) {
 	return hash[:], nil
 }
 
-func (myClient *client) checkSig(msgHashSig *pb.MsgHashSig) error {
-	msgHash, err := myClient.compHash(msgHashSig.MsgHash)
+func checkHash(msgWrap *pb.MsgWrap) error {
+	refHash, err := hash(msgWrap.Msg)
 	if err != nil {
 		return err
 	}
-	userData, ok := myClient.allData[msgHashSig.MsgHash.Msg.Sender]
+	if !bytes.Equal(refHash, msgWrap.Hash) {
+		return errors.New("given hash does not match reference hash")
+	}
+	return nil
+}
+
+func (myClient *client) checkSig(msgWrap *pb.MsgWrap) error {
+	userData, ok := myClient.allData[msgWrap.Msg.Sender]
 	if !ok {
 		return errors.New("do not have public key for user")
 	}
-	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, msgHash, msgHashSig.Sig, nil); err != nil {
+	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, msgWrap.Hash, msgWrap.Sig, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (myClient *client) tryAddNewMsg(msgHashSig *pb.MsgHashSig) error {
-	// Check signature.
-	if err := myClient.checkSig(msgHashSig); err != nil {
+func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
+	msgs := myClient.msgs.msgs
+	// TODO: add functionality to wait on pins not being there.
+	for _, pin := range msgWrap.Msg.Pins {
+		pinnedMsg, ok := msgs[pin.SeqNum]
+		if !ok {
+			return errors.New("pinned msg not contained in local history")
+		}
+		if msgWrap.SeqNum <= pinnedMsg.SeqNum {
+			return errors.New("pinned msg has greater seqNum than actual msg")
+		}	
+		if !bytes.Equal(pinnedMsg.Hash, pin.Hash) {
+			return errors.New("pin has diff msg hash than local history")
+		}
+	}
+	return nil
+}
+
+func (myClient *client) checkDupSeqNumAndAdd(msgWrap *pb.MsgWrap) error {
+	myClient.msgs.mu.Lock()
+	msgs := myClient.msgs.msgs
+	defer myClient.msgs.mu.Unlock()
+	if _, ok := msgs[msgWrap.SeqNum]; ok {
+		return errors.New("seqNum already exists in local history")
+	}
+	log.Printf("`%v`: \"%v\"\n", msgWrap.Msg.Sender, msgWrap.Msg.Body)
+	msgs[msgWrap.SeqNum] = msgWrap
+	return nil
+}
+
+func (myClient *client) checkAndAddRcvdMsg(msgWrap *pb.MsgWrap) error {
+	if err := checkHash(msgWrap); err != nil {
 		return err
 	}
-
-	// Check hash chain.
-	myClient.lastMsg.mu.Lock()
-	defer myClient.lastMsg.mu.Unlock()
-	hashComputed, err := myClient.compHash(myClient.lastMsg.msg)
-	if err != nil {
+	// Note: sig check relies on hash check occuring *before* it.
+	if err := myClient.checkSig(msgWrap); err != nil {
 		return err
 	}
-	if !bytes.Equal(hashComputed, msgHashSig.MsgHash.Hash) {
-		return errors.New("hash chains are not equal")
+	if err := myClient.checkPins(msgWrap); err != nil {
+		return err
 	}
-
-	msg := msgHashSig.MsgHash.Msg
-	log.Printf("`%v`: \"%v\"\n", msg.Sender, msg.Text)
-	myClient.lastMsg.msg = msg
+	if err := myClient.checkDupSeqNumAndAdd(msgWrap); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -175,49 +208,70 @@ func (myClient *client) getMsgs() {
 		if err != nil {
 			log.Fatalln("failed getMsgs stream recv:", err)
 		}
-		if err = myClient.tryAddNewMsg(resp.MsgHashSig); err != nil {
+		if err = myClient.checkAndAddRcvdMsg(resp.Msg); err != nil {
 			log.Println("failed to add msg:", err)
 		}
 	}
 }
 
-// TODO: might want to put a lock around the putMsg rpc, but not clear what would be inside the CS.
-func (myClient *client) putMsg(text *string) error {
+func (myClient *client) getPins() (maxPinSeqNum uint64, pins []*pb.Pin) {
+	pins = make([]*pb.Pin, 0, len(myClient.msgs.msgs))
+	for seqNum, msgWrap := range myClient.msgs.msgs {
+		if maxPinSeqNum < seqNum {
+			maxPinSeqNum = seqNum
+		}
+		pin := &pb.Pin{
+			SeqNum: seqNum, Hash: msgWrap.Hash,
+		}
+		pins = append(pins, pin)
+	}
+	return
+}
+
+func (myClient *client) hashAndSignMsg(msg *pb.Msg) (*pb.MsgWrap, error) {
+	msgWrap := &pb.MsgWrap{}
+	msgWrap.Msg = msg
+	hash, err := hash(msg)
+	if err != nil {
+		return nil, err
+	}
+	msgWrap.Hash = hash
+	sig, err := rsa.SignPSS(rand.Reader, myClient.myData.privKey, crypto.SHA512, hash, nil)
+	if err != nil {
+		return nil, err
+	}
+	msgWrap.Sig = sig
+	return msgWrap, nil
+}
+
+func (myClient *client) putMsg(body *string) error {
+	maxPinSeqNum, pins := myClient.getPins()
 	msg := &pb.Msg{
-		Sender: myClient.myData.name, Text: *text,
+		Sender: myClient.myData.name, Body: *body, Pins: pins,
 	}
-
-	// Compute hash of prior msg.
-	myClient.lastMsg.mu.Lock()
-	priorHash, err := myClient.compHash(myClient.lastMsg.msg)
+	msgWrap, err := myClient.hashAndSignMsg(msg)
 	if err != nil {
 		return err
 	}
-	msgHash := &pb.MsgHash{
-		Msg: msg, Hash: priorHash,
-	}
 
-	// Sign the current msg.
-	currHash, err := myClient.compHash(msgHash)
-	if err != nil {
-		return err
-	}
-	sig, err := rsa.SignPSS(rand.Reader, myClient.myData.privKey, crypto.SHA512, currHash, nil)
-	if err != nil {
-		return err
-	}
-	msgHashSig := &pb.MsgHashSig{
-		MsgHash: msgHash, Sig: sig,
-	}
-	myClient.lastMsg.msg = msg
-	// TODO: deal with early rets.
-	myClient.lastMsg.mu.Unlock()
-
-	// Send it out.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if _, err = myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{MsgHashSig: msgHashSig}); err != nil {
-		return err
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		putResp, err := myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{Msg: msgWrap})
+		if err != nil {
+			log.Println("put rpc returned an err, retrying...")
+			continue
+		}
+		if putResp.SeqNum <= maxPinSeqNum {
+			log.Println("put rpc gave a seqNum before our pins, retrying...")
+			continue
+		}
+		msgWrap.SeqNum = putResp.SeqNum	
+		if err := myClient.checkDupSeqNumAndAdd(msgWrap); err != nil {
+			log.Println("put rpc return a duplicate seqNum, retrying...")
+			continue
+		}
+		break
 	}
 	return nil
 }
