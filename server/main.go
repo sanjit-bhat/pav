@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"sync"
 
 	pb "example.com/chatGrpc"
 	"google.golang.org/grpc"
@@ -11,13 +12,15 @@ import (
 
 type server struct {
 	pb.UnimplementedChatServer
-	msgs      []*pb.MsgHashSig
-	mailboxes map[string]chan *pb.MsgHashSig
+	msgs      []*pb.MsgWrap
+	mailboxes map[string]chan *pb.MsgWrap
+	seqNum    uint64
+	seqNumMu  sync.Mutex
 }
 
 func newServer() *server {
 	serv := &server{}
-	serv.mailboxes = make(map[string]chan *pb.MsgHashSig)
+	serv.mailboxes = make(map[string]chan *pb.MsgWrap)
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -35,14 +38,14 @@ func newServer() *server {
 func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) error {
 	// Send all the prior msgs.
 	for _, msg := range serv.msgs {
-		resp := pb.GetMsgsResp{MsgHashSig: msg}
+		resp := pb.GetMsgsResp{Msg: msg}
 		if err := stream.Send(&resp); err != nil {
 			return err
 		}
 	}
 
 	// Wait for new messages and send them to the client.
-	mailbox := make(chan *pb.MsgHashSig)
+	mailbox := make(chan *pb.MsgWrap)
 	serv.mailboxes[in.Sender] = mailbox
 
 	for {
@@ -50,7 +53,7 @@ func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) err
 		if !more {
 			return nil
 		}
-		resp := pb.GetMsgsResp{MsgHashSig: newMsg}
+		resp := pb.GetMsgsResp{Msg: newMsg}
 		if err := stream.Send(&resp); err != nil {
 			return err
 		}
@@ -58,15 +61,21 @@ func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) err
 }
 
 func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
-	msg := in.MsgHashSig
-	sender := msg.MsgHash.Msg.Sender
+	msg := in.Msg
+	sender := msg.Msg.Sender
+
+	serv.seqNumMu.Lock()
+	serv.seqNum += 1
+	msg.SeqNum = serv.seqNum
+	serv.seqNumMu.Unlock()
+
 	serv.msgs = append(serv.msgs, msg)
 	for recvr, ch := range serv.mailboxes {
 		if recvr != sender {
 			ch <- msg
 		}
 	}
-	return &pb.PutMsgResp{}, nil
+	return &pb.PutMsgResp{SeqNum: msg.SeqNum}, nil
 }
 
 func main() {
