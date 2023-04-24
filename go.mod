@@ -1,6 +1,6 @@
 module example.com/secure-chat
 
-go 1.19
+go 1.20
 
 replace example.com => ./
 

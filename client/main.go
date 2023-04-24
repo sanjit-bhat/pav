@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	pb "example.com/chatGrpc"
+	pb "example.com/protoDefs"
 	"github.com/manifoldco/promptui"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

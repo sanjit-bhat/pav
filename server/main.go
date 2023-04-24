@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	pb "example.com/chatGrpc"
+	pb "example.com/protoDefs"
 	"google.golang.org/grpc"
 )
 

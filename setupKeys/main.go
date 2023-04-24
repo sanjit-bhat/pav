@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	pb "example.com/chatGrpc"
+	pb "example.com/protoDefs"
 	"google.golang.org/protobuf/proto"
 )
 
