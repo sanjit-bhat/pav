@@ -22,9 +22,9 @@ message Msg {
 
 message MsgWrap {
   Msg msg = 1;
-  uint64 seqNum = 2;
-  bytes hash = 3;
-  bytes sig = 4;
+  bytes hash = 2;
+  bytes sig = 3;
+  uint64 seqNum = 4;
 }
 
 message PutMsgReq { MsgWrap msg = 1; }
