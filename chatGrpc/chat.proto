@@ -9,28 +9,31 @@ service Chat {
   rpc GetMsgs(GetMsgsReq) returns (stream GetMsgsResp) {}
 }
 
-message Msg {
-  string sender = 1;
-  string text = 2;
-}
-
-message MsgHash {
-  Msg msg = 1;
+message Pin {
+  uint64 seqNum = 1;
   bytes hash = 2;
 }
 
-message MsgHashSig {
-  MsgHash msgHash = 1;
-  bytes sig = 2;
+message Msg {
+  string sender = 1;
+  string body = 2;
+  repeated Pin pins = 3;
 }
 
-message PutMsgReq { MsgHashSig msgHashSig = 1; }
+message MsgWrap {
+  Msg msg = 1;
+  uint64 seqNum = 2;
+  bytes hash = 3;
+  bytes sig = 4;
+}
 
-message PutMsgResp {}
+message PutMsgReq { MsgWrap msg = 1; }
+
+message PutMsgResp { uint64 seqNum = 1; }
 
 message GetMsgsReq { string sender = 1; }
 
-message GetMsgsResp { MsgHashSig msgHashSig = 1; }
+message GetMsgsResp { MsgWrap msg = 1; }
 
 // UserKey used for serializing pre-generated pub/priv keys.
 message UserKey {

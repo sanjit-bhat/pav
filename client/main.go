@@ -189,7 +189,6 @@ func (myClient *client) putMsg(text *string) error {
 
 	// Compute hash of prior msg.
 	myClient.lastMsg.mu.Lock()
-	defer myClient.lastMsg.mu.Unlock()
 	priorHash, err := myClient.compHash(myClient.lastMsg.msg)
 	if err != nil {
 		return err
@@ -210,6 +209,9 @@ func (myClient *client) putMsg(text *string) error {
 	msgHashSig := &pb.MsgHashSig{
 		MsgHash: msgHash, Sig: sig,
 	}
+	myClient.lastMsg.msg = msg
+	// TODO: deal with early rets.
+	myClient.lastMsg.mu.Unlock()
 
 	// Send it out.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -217,7 +219,6 @@ func (myClient *client) putMsg(text *string) error {
 	if _, err = myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{MsgHashSig: msgHashSig}); err != nil {
 		return err
 	}
-	myClient.lastMsg.msg = msg
 	return nil
 }
 
