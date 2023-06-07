@@ -10,17 +10,19 @@ import (
 	"google.golang.org/grpc"
 )
 
+type uname string
+
 type server struct {
 	pb.UnimplementedChatServer
 	msgs      []*pb.MsgWrap
-	mailboxes map[string]chan *pb.MsgWrap
+	mailboxes map[uname]chan *pb.MsgWrap
 	seqNum    uint64
 	seqNumMu  sync.Mutex
 }
 
 func newServer() *server {
 	serv := &server{}
-	serv.mailboxes = make(map[string]chan *pb.MsgWrap)
+	serv.mailboxes = make(map[uname]chan *pb.MsgWrap)
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -46,7 +48,7 @@ func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) err
 
 	// Wait for new messages and send them to the client.
 	mailbox := make(chan *pb.MsgWrap)
-	serv.mailboxes[in.Sender] = mailbox
+	serv.mailboxes[uname(in.Sender)] = mailbox
 
 	for {
 		newMsg, more := <-mailbox
@@ -67,11 +69,11 @@ func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgRes
 	serv.seqNumMu.Lock()
 	serv.seqNum += 1
 	msg.SeqNum = serv.seqNum
+	serv.msgs = append(serv.msgs, msg)
 	serv.seqNumMu.Unlock()
 
-	serv.msgs = append(serv.msgs, msg)
 	for recvr, ch := range serv.mailboxes {
-		if recvr != sender {
+		if string(recvr) != sender {
 			ch <- msg
 		}
 	}
