@@ -32,17 +32,17 @@ type myMetadata struct {
 	privKey *rsa.PrivateKey
 }
 
+type seqNumT uint64
 type mutexMsgs struct {
-	// Key is the seqNum.
-	msgs map[uint64]*pb.MsgWrap
+	msgs map[seqNumT]*pb.MsgWrap
 	mu  sync.Mutex
 }
 
+type unameT string
 type client struct {
 	rpc    pb.ChatClient
 	myData *myMetadata
-	// Key is the username.
-	allData map[string]*userMetadata
+	allData map[unameT]*userMetadata
 	msgs mutexMsgs
 }
 
@@ -53,8 +53,8 @@ func newClient() (*client, *grpc.ClientConn) {
 	}
 	c := &client{rpc: pb.NewChatClient(conn)}
 	c.myData = &myMetadata{}
-	c.allData = make(map[string]*userMetadata)
-	c.msgs.msgs = make(map[uint64]*pb.MsgWrap)
+	c.allData = make(map[unameT]*userMetadata)
+	c.msgs.msgs = make(map[seqNumT]*pb.MsgWrap)
 	return c, conn
 }
 
@@ -92,10 +92,10 @@ func (myClient *client) loadKeys() error {
 
 		// Want this client's public key credentials to appear both in
 		// allData and myData so that this client can `get` its own msgs.
-		user, ok := myClient.allData[userKey.Name]
+		user, ok := myClient.allData[unameT(userKey.Name)]
 		if !ok {
 			user = &userMetadata{}
-			myClient.allData[userKey.Name] = user
+			myClient.allData[unameT(userKey.Name)] = user
 		}
 		user.pubKey = pubKey
 
@@ -136,7 +136,7 @@ func checkHash(msgWrap *pb.MsgWrap) error {
 }
 
 func (myClient *client) checkSig(msgWrap *pb.MsgWrap) error {
-	userData, ok := myClient.allData[msgWrap.Msg.Sender]
+	userData, ok := myClient.allData[unameT(msgWrap.Msg.Sender)]
 	if !ok {
 		return errors.New("do not have public key for user")
 	}
@@ -149,7 +149,7 @@ func (myClient *client) checkSig(msgWrap *pb.MsgWrap) error {
 func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
 	msgs := myClient.msgs.msgs
 	for _, pin := range msgWrap.Msg.Pins {
-		pinnedMsg, ok := msgs[pin.SeqNum]
+		pinnedMsg, ok := msgs[seqNumT(pin.SeqNum)]
 		if !ok {
 			return errors.New("pinned msg not contained in local history")
 		}
@@ -167,11 +167,11 @@ func (myClient *client) checkDupSeqNumAndAdd(msgWrap *pb.MsgWrap) error {
 	myClient.msgs.mu.Lock()
 	defer myClient.msgs.mu.Unlock()
 	msgs := myClient.msgs.msgs
-	if _, ok := msgs[msgWrap.SeqNum]; ok {
+	if _, ok := msgs[seqNumT(msgWrap.SeqNum)]; ok {
 		return errors.New("seqNum already exists in local history")
 	}
 	log.Printf("`%v`: \"%v\"\n", msgWrap.Msg.Sender, msgWrap.Msg.Body)
-	msgs[msgWrap.SeqNum] = msgWrap
+	msgs[seqNumT(msgWrap.SeqNum)] = msgWrap
 	return nil
 }
 
@@ -219,7 +219,7 @@ func (myClient *client) getPins() []*pb.Pin {
 	pins := make([]*pb.Pin, 0, len(myClient.msgs.msgs))
 	for seqNum, msgWrap := range myClient.msgs.msgs {
 		pin := &pb.Pin{
-			SeqNum: seqNum, Hash: msgWrap.Hash,
+			SeqNum: uint64(seqNum), Hash: msgWrap.Hash,
 		}
 		pins = append(pins, pin)
 	}

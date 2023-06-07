@@ -10,13 +10,12 @@ import (
 	"google.golang.org/grpc"
 )
 
-type uname string
-
 type seqNumProt struct {
 	sync.Mutex
 	uint64
 }
 
+type uname string
 type server struct {
 	pb.UnimplementedChatServer
 	msgs      []*pb.MsgWrap
