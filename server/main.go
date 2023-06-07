@@ -12,12 +12,16 @@ import (
 
 type uname string
 
+type seqNumProt struct {
+	sync.Mutex
+	uint64
+}
+
 type server struct {
 	pb.UnimplementedChatServer
 	msgs      []*pb.MsgWrap
 	mailboxes map[uname]chan *pb.MsgWrap
-	seqNum    uint64
-	seqNumMu  sync.Mutex
+	seqNum    seqNumProt
 }
 
 func newServer() *server {
@@ -66,11 +70,11 @@ func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgRes
 	msg := in.Msg
 	sender := msg.Msg.Sender
 
-	serv.seqNumMu.Lock()
-	serv.seqNum += 1
-	msg.SeqNum = serv.seqNum
+	serv.seqNum.Mutex.Lock()
+	serv.seqNum.uint64 += 1
+	msg.SeqNum = serv.seqNum.uint64
 	serv.msgs = append(serv.msgs, msg)
-	serv.seqNumMu.Unlock()
+	serv.seqNum.Mutex.Unlock()
 
 	for recvr, ch := range serv.mailboxes {
 		if string(recvr) != sender {
