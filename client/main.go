@@ -90,6 +90,15 @@ func (myClient *client) loadKeys() error {
 			return err
 		}
 
+		// Want this client's public key credentials to appear both in
+		// allData and myData so that this client can `get` its own msgs.
+		user, ok := myClient.allData[userKey.Name]
+		if !ok {
+			user = &userMetadata{}
+			myClient.allData[userKey.Name] = user
+		}
+		user.pubKey = pubKey
+
 		if myClient.myData.name == userKey.Name {
 			privKey, err := x509.ParsePKCS1PrivateKey(userKey.PrivKey)
 			if err != nil {
@@ -97,13 +106,6 @@ func (myClient *client) loadKeys() error {
 			}
 			myClient.myData.privKey = privKey
 			myClient.myData.pubKey = pubKey
-		} else {
-			user, ok := myClient.allData[userKey.Name]
-			if !ok {
-				user = &userMetadata{}
-				myClient.allData[userKey.Name] = user
-			}
-			user.pubKey = pubKey
 		}
 	}
 
@@ -146,7 +148,6 @@ func (myClient *client) checkSig(msgWrap *pb.MsgWrap) error {
 
 func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
 	msgs := myClient.msgs.msgs
-	// TODO: add functionality to wait on pins not being there.
 	for _, pin := range msgWrap.Msg.Pins {
 		pinnedMsg, ok := msgs[pin.SeqNum]
 		if !ok {
@@ -164,8 +165,8 @@ func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
 
 func (myClient *client) checkDupSeqNumAndAdd(msgWrap *pb.MsgWrap) error {
 	myClient.msgs.mu.Lock()
-	msgs := myClient.msgs.msgs
 	defer myClient.msgs.mu.Unlock()
+	msgs := myClient.msgs.msgs
 	if _, ok := msgs[msgWrap.SeqNum]; ok {
 		return errors.New("seqNum already exists in local history")
 	}
@@ -214,18 +215,15 @@ func (myClient *client) getMsgs() {
 	}
 }
 
-func (myClient *client) getPins() (maxPinSeqNum uint64, pins []*pb.Pin) {
-	pins = make([]*pb.Pin, 0, len(myClient.msgs.msgs))
+func (myClient *client) getPins() []*pb.Pin {
+	pins := make([]*pb.Pin, 0, len(myClient.msgs.msgs))
 	for seqNum, msgWrap := range myClient.msgs.msgs {
-		if maxPinSeqNum < seqNum {
-			maxPinSeqNum = seqNum
-		}
 		pin := &pb.Pin{
 			SeqNum: seqNum, Hash: msgWrap.Hash,
 		}
 		pins = append(pins, pin)
 	}
-	return
+	return pins
 }
 
 func (myClient *client) hashAndSignMsg(msg *pb.Msg) (*pb.MsgWrap, error) {
@@ -245,7 +243,7 @@ func (myClient *client) hashAndSignMsg(msg *pb.Msg) (*pb.MsgWrap, error) {
 }
 
 func (myClient *client) putMsg(body *string) error {
-	maxPinSeqNum, pins := myClient.getPins()
+	pins := myClient.getPins()
 	msg := &pb.Msg{
 		Sender: myClient.myData.name, Body: *body, Pins: pins,
 	}
@@ -257,18 +255,9 @@ func (myClient *client) putMsg(body *string) error {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		putResp, err := myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{Msg: msgWrap})
+		_, err := myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{Msg: msgWrap})
 		if err != nil {
 			log.Println("put rpc returned an err, retrying...")
-			continue
-		}
-		if putResp.SeqNum <= maxPinSeqNum {
-			log.Println("put rpc gave a seqNum before our pins, retrying...")
-			continue
-		}
-		msgWrap.SeqNum = putResp.SeqNum	
-		if err := myClient.checkDupSeqNumAndAdd(msgWrap); err != nil {
-			log.Println("put rpc return a duplicate seqNum, retrying...")
 			continue
 		}
 		break

@@ -68,7 +68,6 @@ func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) err
 
 func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
 	msg := in.Msg
-	sender := msg.Msg.Sender
 
 	serv.seqNum.Mutex.Lock()
 	serv.seqNum.uint64 += 1
@@ -76,12 +75,10 @@ func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgRes
 	serv.msgs = append(serv.msgs, msg)
 	serv.seqNum.Mutex.Unlock()
 
-	for recvr, ch := range serv.mailboxes {
-		if string(recvr) != sender {
-			ch <- msg
-		}
+	for _, ch := range serv.mailboxes {
+		ch <- msg
 	}
-	return &pb.PutMsgResp{SeqNum: msg.SeqNum}, nil
+	return &pb.PutMsgResp{}, nil
 }
 
 func main() {

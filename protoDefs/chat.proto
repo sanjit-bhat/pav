@@ -29,7 +29,7 @@ message MsgWrap {
 
 message PutMsgReq { MsgWrap msg = 1; }
 
-message PutMsgResp { uint64 seqNum = 1; }
+message PutMsgResp { }
 
 message GetMsgsReq { string sender = 1; }
 
