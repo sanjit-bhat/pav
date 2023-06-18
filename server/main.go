@@ -47,18 +47,11 @@ func newServer() *server {
 	return serv
 }
 
-func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) error {
-	// Add a mailbox for this client.
-	mailbox := make(chan notifT, 10)
-	serv.mailboxes.mu.Lock()
-	serv.mailboxes.data[uname(in.Sender)] = mailbox
-	serv.mailboxes.mu.Unlock()
-
-	// Send pending msgs.
+func (serv *server) sendPending(msgsIdx *int, stream pb.Chat_GetMsgsServer) error {
 	serv.msgs.mu.RLock()
 	msgsLen := len(serv.msgs.data)
-	pending := make([]*pb.MsgWrap, msgsLen)
-	copy(pending, serv.msgs.data)
+	pending := make([]*pb.MsgWrap, msgsLen-*msgsIdx)
+	copy(pending, serv.msgs.data[*msgsIdx:msgsLen])
 	serv.msgs.mu.RUnlock()
 
 	for _, msg := range pending {
@@ -67,28 +60,29 @@ func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) err
 			return err
 		}
 	}
-	msgsIdx := msgsLen
+	*msgsIdx = msgsLen
+	return nil
+}
 
-	// Wait for new messages and send them to the client.
+func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) error {
+	mailbox := make(chan notifT, 10)
+	serv.mailboxes.mu.Lock()
+	serv.mailboxes.data[uname(in.Sender)] = mailbox
+	serv.mailboxes.mu.Unlock()
+
+	msgsIdx := new(int)	
+	if err := serv.sendPending(msgsIdx, stream); err != nil {
+		return err
+	}
+
 	for {
 		_, more := <-mailbox
 		if !more {
 			return nil
 		}
-
-		serv.msgs.mu.RLock()
-		msgsLen = len(serv.msgs.data)
-		newMsgs := make([]*pb.MsgWrap, msgsLen-msgsIdx)
-		copy(newMsgs, serv.msgs.data[msgsIdx:msgsLen])
-		serv.msgs.mu.RUnlock()
-
-		for _, msg := range newMsgs {
-			resp := pb.GetMsgsResp{Msg: msg}
-			if err := stream.Send(&resp); err != nil {
-				return err
-			}
+		if err := serv.sendPending(msgsIdx, stream); err != nil {
+			return err
 		}
-		msgsIdx = msgsLen
 	}
 }
 
