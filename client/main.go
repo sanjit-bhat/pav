@@ -9,6 +9,7 @@ import (
 	"crypto/sha512"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -16,7 +17,6 @@ import (
 	"time"
 
 	pb "example.com/protoDefs"
-	"github.com/manifoldco/promptui"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -60,11 +60,11 @@ func newClient() (*client, *grpc.ClientConn) {
 
 func (myClient *client) runNameLoop() {
 	for {
-		prompt := promptui.Select{
+		prompt := Select{
 			Label: "Name",
 			Items: []string{"alice", "bob", "charlie", "danny", "eve"},
 		}
-		_, name, err := prompt.Run()
+		name, err := prompt.Run()
 		if err != nil {
 			log.Println("warning: failed prompt:", err)
 			continue
@@ -172,7 +172,6 @@ func (myClient *client) checkDupSeqNumAndAdd(msgWrap *pb.MsgWrap) error {
 	if _, ok := msgs[seqNumT(msgWrap.SeqNum)]; ok {
 		return errors.New("seqNum already exists in local history")
 	}
-	log.Printf("`%v`: \"%v\"\n", msgWrap.Msg.Sender, msgWrap.Msg.Body)
 	msgs[seqNumT(msgWrap.SeqNum)] = msgWrap
 	return nil
 }
@@ -270,22 +269,33 @@ func (myClient *client) putMsg(body *string) error {
 	return nil
 }
 
+func (myClient *client) listMsgs() {
+	myClient.msgs.mu.RLock()
+	defer myClient.msgs.mu.RUnlock()
+	msgs := myClient.msgs.data 
+	for seqNum, msg := range msgs {
+		fmt.Printf("[%v] [%v]: \"%v\"\n", seqNum, msg.Msg.Sender, msg.Msg.Body)
+	}
+}
+
 func (myClient *client) runMsgLoop() {
 	for {
-		prompt := promptui.Select{
+		prompt := Select{
 			Label: "Action",
-			Items: []string{"PutMsg", "End"},
+			Items: []string{"put", "list", "end"},
 		}
-		_, action, err := prompt.Run()
+		action, err := prompt.Run()
 		if err != nil {
 			log.Println("warning: failed prompt:", err)
 			continue
 		}
 
-		if action == "End" {
+		if action == "end" {
 			return
-		} else if action == "PutMsg" {
-			prompt := promptui.Prompt{
+		} else if action == "list" {
+			myClient.listMsgs() 
+		} else if action == "put" {
+			prompt := Prompt{
 				Label: "Msg",
 			}
 			msg, err := prompt.Run()
@@ -296,8 +306,6 @@ func (myClient *client) runMsgLoop() {
 			if err = myClient.putMsg(&msg); err != nil {
 				log.Println("failed putMsg:", err)
 			}
-		} else {
-			log.Println("warning: unrecognized action:", action)
 		}
 	}
 }
