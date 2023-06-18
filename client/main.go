@@ -41,10 +41,11 @@ type msgsProt struct {
 
 type unameT string
 type client struct {
-	rpc     pb.ChatClient
-	myData  *myMetadata
-	allData map[unameT]*userMetadata
-	msgs    msgsProt
+	rpc          pb.ChatClient
+	myData       *myMetadata
+	allData      map[unameT]*userMetadata
+	msgs         msgsProt
+	getRPCCancel context.CancelFunc
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -195,8 +196,8 @@ func (myClient *client) checkAndAddRcvdMsg(msgWrap *pb.MsgWrap) error {
 }
 
 func (myClient *client) getMsgs() {
-	// TODO: don't know how to do indefinite timeout, so use an hour instead.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	ctx, cancel := context.WithCancel(context.Background())
+	myClient.getRPCCancel = cancel
 	defer cancel()
 	stream, err := myClient.rpc.GetMsgs(ctx, &pb.GetMsgsReq{Sender: myClient.myData.name})
 	if err != nil {
@@ -209,6 +210,8 @@ func (myClient *client) getMsgs() {
 			return
 		}
 		if err != nil {
+			// TODO: figure out how to escape a normal context close as a result of the client ending.
+			// TODO: should prob handle this in the server as well.
 			log.Fatalln("failed getMsgs stream recv:", err)
 		}
 		if err = myClient.checkAndAddRcvdMsg(resp.Msg); err != nil {
@@ -259,13 +262,13 @@ func (myClient *client) putMsg(body *string) error {
 
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
 		_, err := myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{Msg: msgWrap})
+		cancel()
 		if err != nil {
 			log.Println("put rpc returned an err, retrying...")
-			continue
+		} else {
+			break
 		}
-		break
 	}
 	return nil
 }
@@ -292,6 +295,7 @@ func (myClient *client) runMsgLoop() {
 		}
 
 		if action == "end" {
+			myClient.getRPCCancel()
 			return
 		} else if action == "list" {
 			myClient.listMsgs()
@@ -318,6 +322,15 @@ func main() {
 	if err := myClient.loadKeys(); err != nil {
 		log.Fatalln("failed to load keys:", err)
 	}
-	go myClient.getMsgs()
-	myClient.runMsgLoop()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		myClient.getMsgs()
+		wg.Done()
+	}()
+	go func() {
+		myClient.runMsgLoop()
+		wg.Done()
+	}()
+	wg.Wait()
 }
