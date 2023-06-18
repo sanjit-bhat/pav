@@ -33,17 +33,17 @@ type myMetadata struct {
 }
 
 type seqNumT uint64
-type mutexMsgs struct {
-	msgs map[seqNumT]*pb.MsgWrap
-	mu  sync.Mutex
+type msgsProt struct {
+	mu   sync.Mutex
+	data map[seqNumT]*pb.MsgWrap
 }
 
 type unameT string
 type client struct {
-	rpc    pb.ChatClient
-	myData *myMetadata
+	rpc     pb.ChatClient
+	myData  *myMetadata
 	allData map[unameT]*userMetadata
-	msgs mutexMsgs
+	msgs    msgsProt
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -54,7 +54,7 @@ func newClient() (*client, *grpc.ClientConn) {
 	c := &client{rpc: pb.NewChatClient(conn)}
 	c.myData = &myMetadata{}
 	c.allData = make(map[unameT]*userMetadata)
-	c.msgs.msgs = make(map[seqNumT]*pb.MsgWrap)
+	c.msgs.data = make(map[seqNumT]*pb.MsgWrap)
 	return c, conn
 }
 
@@ -147,7 +147,7 @@ func (myClient *client) checkSig(msgWrap *pb.MsgWrap) error {
 }
 
 func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
-	msgs := myClient.msgs.msgs
+	msgs := myClient.msgs.data
 	for _, pin := range msgWrap.Msg.Pins {
 		pinnedMsg, ok := msgs[seqNumT(pin.SeqNum)]
 		if !ok {
@@ -155,7 +155,7 @@ func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
 		}
 		if msgWrap.SeqNum <= pinnedMsg.SeqNum {
 			return errors.New("pinned msg has greater seqNum than actual msg")
-		}	
+		}
 		if !bytes.Equal(pinnedMsg.Hash, pin.Hash) {
 			return errors.New("pin has diff msg hash than local history")
 		}
@@ -166,7 +166,7 @@ func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
 func (myClient *client) checkDupSeqNumAndAdd(msgWrap *pb.MsgWrap) error {
 	myClient.msgs.mu.Lock()
 	defer myClient.msgs.mu.Unlock()
-	msgs := myClient.msgs.msgs
+	msgs := myClient.msgs.data
 	if _, ok := msgs[seqNumT(msgWrap.SeqNum)]; ok {
 		return errors.New("seqNum already exists in local history")
 	}
@@ -216,8 +216,8 @@ func (myClient *client) getMsgs() {
 }
 
 func (myClient *client) getPins() []*pb.Pin {
-	pins := make([]*pb.Pin, 0, len(myClient.msgs.msgs))
-	for seqNum, msgWrap := range myClient.msgs.msgs {
+	pins := make([]*pb.Pin, 0, len(myClient.msgs.data))
+	for seqNum, msgWrap := range myClient.msgs.data {
 		pin := &pb.Pin{
 			SeqNum: uint64(seqNum), Hash: msgWrap.Hash,
 		}

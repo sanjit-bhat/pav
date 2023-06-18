@@ -70,7 +70,7 @@ func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) err
 	serv.mailboxes.data[uname(in.Sender)] = mailbox
 	serv.mailboxes.mu.Unlock()
 
-	msgsIdx := new(int)	
+	msgsIdx := new(int)
 	if err := serv.sendPending(msgsIdx, stream); err != nil {
 		return err
 	}
