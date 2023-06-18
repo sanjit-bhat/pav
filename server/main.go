@@ -5,27 +5,34 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	pb "example.com/protoDefs"
 	"google.golang.org/grpc"
 )
 
-type seqNumProt struct {
-	sync.Mutex
-	uint64
+type msgsProt struct {
+	mu   sync.RWMutex
+	data []*pb.MsgWrap
+}
+
+type mailboxesProt struct {
+	mu   sync.RWMutex
+	data map[uname]chan notifT
 }
 
 type uname string
+type notifT struct{}
 type server struct {
 	pb.UnimplementedChatServer
-	msgs      []*pb.MsgWrap
-	mailboxes map[uname]chan *pb.MsgWrap
-	seqNum    seqNumProt
+	seqNum    atomic.Uint64
+	msgs      msgsProt
+	mailboxes mailboxesProt
 }
 
 func newServer() *server {
 	serv := &server{}
-	serv.mailboxes = make(map[uname]chan *pb.MsgWrap)
+	serv.mailboxes.data = make(map[uname]chan notifT)
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -41,42 +48,68 @@ func newServer() *server {
 }
 
 func (serv *server) GetMsgs(in *pb.GetMsgsReq, stream pb.Chat_GetMsgsServer) error {
-	// Send all the prior msgs.
-	for _, msg := range serv.msgs {
+	// Add a mailbox for this client.
+	mailbox := make(chan notifT, 10)
+	serv.mailboxes.mu.Lock()
+	serv.mailboxes.data[uname(in.Sender)] = mailbox
+	serv.mailboxes.mu.Unlock()
+
+	// Send pending msgs.
+	serv.msgs.mu.RLock()
+	msgsLen := len(serv.msgs.data)
+	pending := make([]*pb.MsgWrap, msgsLen)
+	copy(pending, serv.msgs.data)
+	serv.msgs.mu.RUnlock()
+
+	for _, msg := range pending {
 		resp := pb.GetMsgsResp{Msg: msg}
 		if err := stream.Send(&resp); err != nil {
 			return err
 		}
 	}
+	msgsIdx := msgsLen
 
 	// Wait for new messages and send them to the client.
-	mailbox := make(chan *pb.MsgWrap)
-	serv.mailboxes[uname(in.Sender)] = mailbox
-
 	for {
-		newMsg, more := <-mailbox
+		_, more := <-mailbox
 		if !more {
 			return nil
 		}
-		resp := pb.GetMsgsResp{Msg: newMsg}
-		if err := stream.Send(&resp); err != nil {
-			return err
+
+		serv.msgs.mu.RLock()
+		msgsLen = len(serv.msgs.data)
+		newMsgs := make([]*pb.MsgWrap, msgsLen-msgsIdx)
+		copy(newMsgs, serv.msgs.data[msgsIdx:msgsLen])
+		serv.msgs.mu.RUnlock()
+
+		for _, msg := range newMsgs {
+			resp := pb.GetMsgsResp{Msg: msg}
+			if err := stream.Send(&resp); err != nil {
+				return err
+			}
 		}
+		msgsIdx = msgsLen
 	}
 }
 
 func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgResp, error) {
 	msg := in.Msg
 
-	serv.seqNum.Mutex.Lock()
-	serv.seqNum.uint64 += 1
-	msg.SeqNum = serv.seqNum.uint64
-	serv.msgs = append(serv.msgs, msg)
-	serv.seqNum.Mutex.Unlock()
+	msg.SeqNum = serv.seqNum.Add(1)
 
-	for _, ch := range serv.mailboxes {
-		ch <- msg
+	serv.msgs.mu.Lock()
+	serv.msgs.data = append(serv.msgs.data, msg)
+	serv.msgs.mu.Unlock()
+
+	// This CS should not deadlock.
+	// The channel read is not acquiring the mailbox lock.
+	// It is acquiring the msgs lock, but that should always make progress.
+	serv.mailboxes.mu.RLock()
+	for _, ch := range serv.mailboxes.data {
+		ch <- notifT{}
 	}
+	serv.mailboxes.mu.RUnlock()
+
 	return &pb.PutMsgResp{}, nil
 }
 
