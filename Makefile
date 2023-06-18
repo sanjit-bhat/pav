@@ -11,3 +11,9 @@ server:
 
 client:
 	go run client/main.go
+
+server-race:
+	go run -race server/main.go
+
+client-race:
+	go run -race client/main.go
