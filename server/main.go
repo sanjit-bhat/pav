@@ -49,9 +49,10 @@ func newServer() *server {
 
 func (serv *server) sendPending(msgsIdx *int, stream pb.Chat_GetMsgsServer) error {
 	serv.msgs.mu.RLock()
-	msgsLen := len(serv.msgs.data)
+	msgs := serv.msgs.data	
+	msgsLen := len(msgs)
 	pending := make([]*pb.MsgWrap, msgsLen-*msgsIdx)
-	copy(pending, serv.msgs.data[*msgsIdx:msgsLen])
+	copy(pending, msgs[*msgsIdx:msgsLen])
 	serv.msgs.mu.RUnlock()
 
 	for _, msg := range pending {

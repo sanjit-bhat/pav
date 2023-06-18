@@ -34,7 +34,7 @@ type myMetadata struct {
 
 type seqNumT uint64
 type msgsProt struct {
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	data map[seqNumT]*pb.MsgWrap
 }
 
@@ -147,6 +147,8 @@ func (myClient *client) checkSig(msgWrap *pb.MsgWrap) error {
 }
 
 func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
+	myClient.msgs.mu.RLock()
+	defer myClient.msgs.mu.RUnlock()
 	msgs := myClient.msgs.data
 	for _, pin := range msgWrap.Msg.Pins {
 		pinnedMsg, ok := msgs[seqNumT(pin.SeqNum)]
@@ -216,8 +218,11 @@ func (myClient *client) getMsgs() {
 }
 
 func (myClient *client) getPins() []*pb.Pin {
-	pins := make([]*pb.Pin, 0, len(myClient.msgs.data))
-	for seqNum, msgWrap := range myClient.msgs.data {
+	myClient.msgs.mu.RLock()
+	defer myClient.msgs.mu.RUnlock()
+	msgs := myClient.msgs.data
+	pins := make([]*pb.Pin, 0, len(msgs))
+	for seqNum, msgWrap := range msgs {
 		pin := &pb.Pin{
 			SeqNum: uint64(seqNum), Hash: msgWrap.Hash,
 		}
