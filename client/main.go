@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"example.com/internal/promptui"
-	pb "example.com/protoDefs"
+	pb "example.com/internal/protoDefs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -273,7 +273,7 @@ func (myClient *client) putMsg(body *string) error {
 func (myClient *client) listMsgs() {
 	myClient.msgs.mu.RLock()
 	defer myClient.msgs.mu.RUnlock()
-	msgs := myClient.msgs.data 
+	msgs := myClient.msgs.data
 	for seqNum, msg := range msgs {
 		fmt.Printf("[%v] [%v]: \"%v\"\n", seqNum, msg.Msg.Sender, msg.Msg.Body)
 	}
@@ -294,7 +294,7 @@ func (myClient *client) runMsgLoop() {
 		if action == "end" {
 			return
 		} else if action == "list" {
-			myClient.listMsgs() 
+			myClient.listMsgs()
 		} else if action == "put" {
 			prompt := promptui.Prompt{
 				Label: "Msg",

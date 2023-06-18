@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	pb "example.com/protoDefs"
+	pb "example.com/internal/protoDefs"
 	"google.golang.org/protobuf/proto"
 )
 

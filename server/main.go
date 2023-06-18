@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	pb "example.com/protoDefs"
+	pb "example.com/internal/protoDefs"
 	"google.golang.org/grpc"
 )
 
@@ -49,7 +49,7 @@ func newServer() *server {
 
 func (serv *server) sendPending(msgsIdx *int, stream pb.Chat_GetMsgsServer) error {
 	serv.msgs.mu.RLock()
-	msgs := serv.msgs.data	
+	msgs := serv.msgs.data
 	msgsLen := len(msgs)
 	pending := make([]*pb.MsgWrap, msgsLen-*msgsIdx)
 	copy(pending, msgs[*msgsIdx:msgsLen])
