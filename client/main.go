@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"example.com/internal/promptui"
 	pb "example.com/protoDefs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -60,7 +61,7 @@ func newClient() (*client, *grpc.ClientConn) {
 
 func (myClient *client) runNameLoop() {
 	for {
-		prompt := Select{
+		prompt := promptui.Select{
 			Label: "Name",
 			Items: []string{"alice", "bob", "charlie", "danny", "eve"},
 		}
@@ -280,7 +281,7 @@ func (myClient *client) listMsgs() {
 
 func (myClient *client) runMsgLoop() {
 	for {
-		prompt := Select{
+		prompt := promptui.Select{
 			Label: "Action",
 			Items: []string{"put", "list", "end"},
 		}
@@ -295,7 +296,7 @@ func (myClient *client) runMsgLoop() {
 		} else if action == "list" {
 			myClient.listMsgs() 
 		} else if action == "put" {
-			prompt := Prompt{
+			prompt := promptui.Prompt{
 				Label: "Msg",
 			}
 			msg, err := prompt.Run()
