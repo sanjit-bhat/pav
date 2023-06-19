@@ -45,7 +45,7 @@ type client struct {
 	myData       *myMetadata
 	allData      map[unameT]*userMetadata
 	msgs         msgsProt
-	getRPCCancel context.CancelFunc
+	getRPCCancel context.CancelCauseFunc
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -195,10 +195,12 @@ func (myClient *client) checkAndAddRcvdMsg(msgWrap *pb.MsgWrap) error {
 	return nil
 }
 
+var errUserEndClient = errors.New("user ended the client")
+
 func (myClient *client) getMsgs() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancelCause(context.Background())
 	myClient.getRPCCancel = cancel
-	defer cancel()
+	defer cancel(nil)
 	stream, err := myClient.rpc.GetMsgs(ctx, &pb.GetMsgsReq{Sender: myClient.myData.name})
 	if err != nil {
 		log.Fatalln("failed getMsgs:", err)
@@ -210,9 +212,11 @@ func (myClient *client) getMsgs() {
 			return
 		}
 		if err != nil {
-			// TODO: figure out how to escape a normal context close as a result of the client ending.
-			// TODO: should prob handle this in the server as well.
-			log.Fatalln("failed getMsgs stream recv:", err)
+			if errors.Is(context.Cause(ctx), errUserEndClient) {
+				return
+			} else {
+				log.Fatalln("failed getMsgs stream recv:", err)
+			}
 		}
 		if err = myClient.checkAndAddRcvdMsg(resp.Msg); err != nil {
 			log.Println("failed to add msg:", err)
@@ -295,7 +299,7 @@ func (myClient *client) runMsgLoop() {
 		}
 
 		if action == "end" {
-			myClient.getRPCCancel()
+			myClient.getRPCCancel(errUserEndClient)
 			return
 		} else if action == "list" {
 			myClient.listMsgs()
