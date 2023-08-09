@@ -12,12 +12,12 @@ import (
 )
 
 type msgsProt struct {
-	mu   sync.RWMutex
+	mu   sync.Mutex
 	data []*pb.MsgWrap
 }
 
 type mailboxesProt struct {
-	mu   sync.RWMutex
+	mu   sync.Mutex
 	data map[uname]chan notifT
 }
 
@@ -48,12 +48,12 @@ func newServer() *server {
 }
 
 func (serv *server) sendPending(msgsIdx *int, stream pb.Chat_GetMsgsServer) error {
-	serv.msgs.mu.RLock()
+	serv.msgs.mu.Lock()
 	msgs := serv.msgs.data
 	msgsLen := len(msgs)
 	pending := make([]*pb.MsgWrap, msgsLen-*msgsIdx)
 	copy(pending, msgs[*msgsIdx:msgsLen])
-	serv.msgs.mu.RUnlock()
+	serv.msgs.mu.Unlock()
 
 	for _, msg := range pending {
 		resp := pb.GetMsgsResp{Msg: msg}
@@ -99,11 +99,11 @@ func (serv *server) PutMsg(ctx context.Context, in *pb.PutMsgReq) (*pb.PutMsgRes
 	// This CS should not deadlock.
 	// The channel read is not acquiring the mailbox lock.
 	// It is acquiring the msgs lock, but that should always make progress.
-	serv.mailboxes.mu.RLock()
+	serv.mailboxes.mu.Lock()
 	for _, ch := range serv.mailboxes.data {
 		ch <- notifT{}
 	}
-	serv.mailboxes.mu.RUnlock()
+	serv.mailboxes.mu.Unlock()
 
 	return &pb.PutMsgResp{}, nil
 }

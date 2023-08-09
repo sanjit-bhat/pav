@@ -35,17 +35,23 @@ type myMetadata struct {
 
 type seqNumT uint64
 type msgsProt struct {
-	mu   sync.RWMutex
+	mu   sync.Mutex
 	data map[seqNumT]*pb.MsgWrap
+}
+
+type cancelProt struct {
+	mu   sync.Mutex
+	data context.CancelCauseFunc
+	end  bool
 }
 
 type unameT string
 type client struct {
-	rpc          pb.ChatClient
-	myData       *myMetadata
-	allData      map[unameT]*userMetadata
-	msgs         msgsProt
-	getRPCCancel context.CancelCauseFunc
+	rpc     pb.ChatClient
+	myData  *myMetadata
+	allData map[unameT]*userMetadata
+	msgs    msgsProt
+	cancel  cancelProt
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -149,8 +155,8 @@ func (myClient *client) checkSig(msgWrap *pb.MsgWrap) error {
 }
 
 func (myClient *client) checkPins(msgWrap *pb.MsgWrap) error {
-	myClient.msgs.mu.RLock()
-	defer myClient.msgs.mu.RUnlock()
+	myClient.msgs.mu.Lock()
+	defer myClient.msgs.mu.Unlock()
 	msgs := myClient.msgs.data
 	for _, pin := range msgWrap.Msg.Pins {
 		pinnedMsg, ok := msgs[seqNumT(pin.SeqNum)]
@@ -197,10 +203,23 @@ func (myClient *client) checkAndAddRcvdMsg(msgWrap *pb.MsgWrap) error {
 
 var errUserEndClient = errors.New("user ended the client")
 
+func (myClient *client) setCancel(f context.CancelCauseFunc) error {
+	myClient.cancel.mu.Lock()
+	defer myClient.cancel.mu.Unlock()
+	if myClient.cancel.end {
+		return errors.New("client already ended connection")
+	} else {
+		myClient.cancel.data = f
+		return nil
+	}
+}
+
 func (myClient *client) getMsgs() {
 	ctx, cancel := context.WithCancelCause(context.Background())
-	myClient.getRPCCancel = cancel
 	defer cancel(nil)
+	if err := myClient.setCancel(cancel); err != nil {
+		return
+	}
 	stream, err := myClient.rpc.GetMsgs(ctx, &pb.GetMsgsReq{Sender: myClient.myData.name})
 	if err != nil {
 		log.Fatalln("failed getMsgs:", err)
@@ -225,8 +244,8 @@ func (myClient *client) getMsgs() {
 }
 
 func (myClient *client) getPins() []*pb.Pin {
-	myClient.msgs.mu.RLock()
-	defer myClient.msgs.mu.RUnlock()
+	myClient.msgs.mu.Lock()
+	defer myClient.msgs.mu.Unlock()
 	msgs := myClient.msgs.data
 	pins := make([]*pb.Pin, 0, len(msgs))
 	for seqNum, msgWrap := range msgs {
@@ -267,6 +286,7 @@ func (myClient *client) putMsg(body *string) error {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		_, err := myClient.rpc.PutMsg(ctx, &pb.PutMsgReq{Msg: msgWrap})
+		// Need to cancel now, as opposed to deferring, to not leak contexts inside loop.
 		cancel()
 		if err != nil {
 			log.Println("put rpc returned an err, retrying...")
@@ -278,11 +298,21 @@ func (myClient *client) putMsg(body *string) error {
 }
 
 func (myClient *client) listMsgs() {
-	myClient.msgs.mu.RLock()
-	defer myClient.msgs.mu.RUnlock()
+	myClient.msgs.mu.Lock()
+	defer myClient.msgs.mu.Unlock()
 	msgs := myClient.msgs.data
 	for seqNum, msg := range msgs {
 		fmt.Printf("[%v] [%v]: \"%v\"\n", seqNum, msg.Msg.Sender, msg.Msg.Body)
+	}
+}
+
+func (myClient *client) callCancel() {
+	myClient.cancel.mu.Lock()
+	defer myClient.cancel.mu.Unlock()
+	if myClient.cancel.data != nil {
+		myClient.cancel.data(errUserEndClient)
+	} else {
+		myClient.cancel.end = true
 	}
 }
 
@@ -299,7 +329,7 @@ func (myClient *client) runMsgLoop() {
 		}
 
 		if action == "end" {
-			myClient.getRPCCancel(errUserEndClient)
+			myClient.callCancel()
 			return
 		} else if action == "list" {
 			myClient.listMsgs()
