@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -22,16 +23,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 )
-
-type userMetadata struct {
-	pubKey *rsa.PublicKey
-}
-
-type myMetadata struct {
-	userMetadata
-	name    string
-	privKey *rsa.PrivateKey
-}
 
 type seqNumT uint64
 type msgsProt struct {
@@ -47,11 +38,12 @@ type cancelProt struct {
 
 type unameT string
 type client struct {
-	rpc     pb.ChatClient
-	myData  *myMetadata
-	allData map[unameT]*userMetadata
-	msgs    msgsProt
-	cancel  cancelProt
+	rpc    pb.ChatClient
+	name   string
+	priv   *rsa.PrivateKey
+	allPub map[unameT]*rsa.PublicKey
+	msgs   msgsProt
+	cancel cancelProt
 }
 
 func newClient() (*client, *grpc.ClientConn) {
@@ -60,65 +52,60 @@ func newClient() (*client, *grpc.ClientConn) {
 		log.Fatalln("failed to connect:", err)
 	}
 	c := &client{rpc: pb.NewChatClient(conn)}
-	c.myData = &myMetadata{}
-	c.allData = make(map[unameT]*userMetadata)
+	c.allPub = make(map[unameT]*rsa.PublicKey)
 	c.msgs.data = make(map[seqNumT]*pb.MsgWrap)
 	return c, conn
+}
+
+func getNames() []string {
+	return []string{"alice", "bob", "charlie", "danny", "eve"}
 }
 
 func (myClient *client) runNameLoop() {
 	for {
 		prompt := promptui.Select{
 			Label: "Name",
-			Items: []string{"alice", "bob", "charlie", "danny", "eve"},
+			Items: getNames(), 
 		}
 		name, err := prompt.Run()
 		if err != nil {
 			log.Println("warning: failed prompt:", err)
 			continue
 		}
-		myClient.myData.name = name
+		myClient.name = name
 		return
 	}
 }
 
 func (myClient *client) loadKeys() error {
-	fileBytes, err := os.ReadFile("demo_keys")
-	if err != nil {
-		return err
-	}
-	manyUserKeys := &pb.ManyUserKeys{}
-	if err := proto.Unmarshal(fileBytes, manyUserKeys); err != nil {
-		return err
-	}
+	keyDir := "keys"
+	pubDir := path.Join(keyDir, "pub")
+	privDir := path.Join(keyDir, "priv")
 
-	for _, userKey := range manyUserKeys.UserKeys {
-		pubKey, err := x509.ParsePKCS1PublicKey(userKey.PubKey)
+	for _, name := range getNames() {
+		pubFile := path.Join(pubDir, name)
+		pubB, err := os.ReadFile(pubFile)
 		if err != nil {
 			return err
 		}
-
-		// Want this client's public key credentials to appear both in
-		// allData and myData so that this client can `get` its own msgs.
-		user, ok := myClient.allData[unameT(userKey.Name)]
-		if !ok {
-			user = &userMetadata{}
-			myClient.allData[unameT(userKey.Name)] = user
+		pub, err := x509.ParsePKCS1PublicKey(pubB)
+		if err != nil {
+			return err
 		}
-		user.pubKey = pubKey
+		myClient.allPub[unameT(name)] = pub
 
-		if myClient.myData.name == userKey.Name {
-			privKey, err := x509.ParsePKCS1PrivateKey(userKey.PrivKey)
+		if name == myClient.name {
+			privFile := path.Join(privDir, name)
+			privB, err := os.ReadFile(privFile)
 			if err != nil {
 				return err
 			}
-			myClient.myData.privKey = privKey
-			myClient.myData.pubKey = pubKey
+			priv, err := x509.ParsePKCS1PrivateKey(privB)
+			if err != nil {
+				return err
+			}
+			myClient.priv = priv
 		}
-	}
-
-	if myClient.myData.privKey == nil {
-		return errors.New("do not have private key for user")
 	}
 	return nil
 }
@@ -144,11 +131,11 @@ func checkHash(msgWrap *pb.MsgWrap) error {
 }
 
 func (myClient *client) checkSig(msgWrap *pb.MsgWrap) error {
-	userData, ok := myClient.allData[unameT(msgWrap.Msg.Sender)]
+	pub, ok := myClient.allPub[unameT(msgWrap.Msg.Sender)]
 	if !ok {
 		return errors.New("do not have public key for user")
 	}
-	if err := rsa.VerifyPSS(userData.pubKey, crypto.SHA512, msgWrap.Hash, msgWrap.Sig, nil); err != nil {
+	if err := rsa.VerifyPSS(pub, crypto.SHA512, msgWrap.Hash, msgWrap.Sig, nil); err != nil {
 		return err
 	}
 	return nil
@@ -220,7 +207,7 @@ func (myClient *client) getMsgs() {
 	if err := myClient.setCancel(cancel); err != nil {
 		return
 	}
-	stream, err := myClient.rpc.GetMsgs(ctx, &pb.GetMsgsReq{Sender: myClient.myData.name})
+	stream, err := myClient.rpc.GetMsgs(ctx, &pb.GetMsgsReq{Sender: myClient.name})
 	if err != nil {
 		log.Fatalln("failed getMsgs:", err)
 	}
@@ -266,7 +253,7 @@ func (myClient *client) hashAndSignMsg(msg *pb.Msg) (*pb.MsgWrap, error) {
 		return nil, err
 	}
 	msgWrap.Hash = hash
-	sig, err := rsa.SignPSS(rand.Reader, myClient.myData.privKey, crypto.SHA512, hash, nil)
+	sig, err := rsa.SignPSS(rand.Reader, myClient.priv, crypto.SHA512, hash, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +264,7 @@ func (myClient *client) hashAndSignMsg(msg *pb.Msg) (*pb.MsgWrap, error) {
 func (myClient *client) putMsg(body *string) error {
 	pins := myClient.getPins()
 	msg := &pb.Msg{
-		Sender: myClient.myData.name, Body: *body, Pins: pins,
+		Sender: myClient.name, Body: *body, Pins: pins,
 	}
 	msgWrap, err := myClient.hashAndSignMsg(msg)
 	if err != nil {

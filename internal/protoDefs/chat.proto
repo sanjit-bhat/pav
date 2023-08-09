@@ -34,12 +34,3 @@ message PutMsgResp { }
 message GetMsgsReq { string sender = 1; }
 
 message GetMsgsResp { MsgWrap msg = 1; }
-
-// UserKey used for serializing pre-generated pub/priv keys.
-message UserKey {
-  string name = 1;
-  bytes privKey = 2;
-  bytes pubKey = 3;
-}
-
-message ManyUserKeys { repeated UserKey userKeys = 1; }

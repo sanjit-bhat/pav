@@ -4,40 +4,36 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"fmt"
+	"log"
 	"os"
-
-	pb "example.com/internal/protoDefs"
-	"google.golang.org/protobuf/proto"
+	"path"
 )
 
 func main() {
+	keyDir := "keys"
+	pubDir := path.Join(keyDir, "pub")
+	privDir := path.Join(keyDir, "priv")
+	if err := os.MkdirAll(pubDir, 0700); err != nil {
+		log.Fatalln(err)
+	}
+	if err := os.MkdirAll(privDir, 0700); err != nil {
+		log.Fatalln(err)
+	}
+
 	names := []string{"alice", "bob", "charlie", "danny", "eve"}
-	userKeys := make([]*pb.UserKey, 5)
-
-	for idx := range userKeys {
-		privKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	for _, name := range names {
+		priv, err := rsa.GenerateKey(rand.Reader, 4096)
 		if err != nil {
-			fmt.Println("failed rsa key gen:", err)
-			return
+			log.Fatalln(err)
 		}
-		pubKey := &privKey.PublicKey
-
-		privKeyBytes := x509.MarshalPKCS1PrivateKey(privKey)
-		pubKeyBytes := x509.MarshalPKCS1PublicKey(pubKey)
-
-		userKey := &pb.UserKey{Name: names[idx], PrivKey: privKeyBytes, PubKey: pubKeyBytes}
-		userKeys[idx] = userKey
-	}
-
-	manyUserKeys := &pb.ManyUserKeys{UserKeys: userKeys}
-	toDisk, err := proto.Marshal(manyUserKeys)
-	if err != nil {
-		fmt.Println("failed to marshal:", err)
-		return
-	}
-	if err := os.WriteFile("demo_keys", toDisk, 0644); err != nil {
-		fmt.Println("failed to write file:", err)
-		return
+		pub := &priv.PublicKey
+		pubB := x509.MarshalPKCS1PublicKey(pub)
+		privB := x509.MarshalPKCS1PrivateKey(priv)
+		if err := os.WriteFile(path.Join(pubDir, name), pubB, 0600); err != nil {
+			log.Fatalln(err)
+		}
+		if err := os.WriteFile(path.Join(privDir, name), privB, 0600); err != nil {
+			log.Fatalln(err)
+		}
 	}
 }
