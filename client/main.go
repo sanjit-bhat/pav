@@ -227,7 +227,8 @@ func (myClient *client) getMsgs() {
 
 	for {
 		resp, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
+			log.Println("server closed getMsgs stream")
 			return
 		}
 		if err != nil {
