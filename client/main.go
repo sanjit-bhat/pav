@@ -42,7 +42,7 @@ type msgsProt struct {
 type cancelProt struct {
 	mu   sync.Mutex
 	data context.CancelCauseFunc
-	end  bool
+	done bool
 }
 
 type unameT string
@@ -206,7 +206,7 @@ var errUserEndClient = errors.New("user ended the client")
 func (myClient *client) setCancel(f context.CancelCauseFunc) error {
 	myClient.cancel.mu.Lock()
 	defer myClient.cancel.mu.Unlock()
-	if myClient.cancel.end {
+	if myClient.cancel.done {
 		return errors.New("client already ended connection")
 	} else {
 		myClient.cancel.data = f
@@ -313,7 +313,7 @@ func (myClient *client) callCancel() {
 	if myClient.cancel.data != nil {
 		myClient.cancel.data(errUserEndClient)
 	} else {
-		myClient.cancel.end = true
+		myClient.cancel.done = true
 	}
 }
 
@@ -360,12 +360,12 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
+		defer wg.Done()
 		myClient.getMsgs()
-		wg.Done()
 	}()
 	go func() {
+		defer wg.Done()
 		myClient.runMsgLoop()
-		wg.Done()
 	}()
 	wg.Wait()
 }
