@@ -23,8 +23,8 @@ func NewVerifier(name string) (*Verifier, error) {
 	return &Verifier{key: k}, nil
 }
 
-func (v *Verifier) Verify(msg []byte, sig []byte) error {
-	h := Hash(msg)
+func (v *Verifier) Verify(data []byte, sig []byte) error {
+	h := Hash(data)
 	if err := rsa.VerifyPSS(v.key, crypto.SHA512, h, sig, nil); err != nil {
 		return err
 	}

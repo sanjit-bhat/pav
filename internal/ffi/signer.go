@@ -24,8 +24,8 @@ func NewSigner(name string) (*Signer, error) {
 	return &Signer{key: k}, nil
 }
 
-func (s *Signer) Sign(msg []byte) ([]byte, error) {
-	h := Hash(msg)
+func (s *Signer) Sign(data []byte) ([]byte, error) {
+	h := Hash(data)
 	sig, err := rsa.SignPSS(rand.Reader, s.key, crypto.SHA512, h, nil)
 	if err != nil {
 		return nil, err
