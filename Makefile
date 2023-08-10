@@ -3,17 +3,6 @@ proto:
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		internal/protoDefs/chat.proto
 
-keys:
-	go run internal/setupKeys/main.go
+build:
+	go build -o bin/ ./...
 
-server:
-	go run server/main.go
-
-client:
-	go run client/main.go
-
-server-race:
-	go run -race server/main.go
-
-client-race:
-	go run -race client/main.go

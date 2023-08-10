@@ -1,4 +1,4 @@
-package promptui
+package prompt
 
 import (
 	"errors"
