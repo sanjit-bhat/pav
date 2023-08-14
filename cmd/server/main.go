@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	pb "example.com/internal/proto"
+	pb "github.com/mit-pdos/secure-chat/internal/proto"
 	"google.golang.org/grpc"
 )
 

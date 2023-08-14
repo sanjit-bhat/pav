@@ -1,3 +1,5 @@
+(* TODO: add predicates to this.
+Set predicate on register. *)
 (* Register: adds sign/verify keys to map.
 keys = map[VerKey]SignKey
 keys[sk] = pk
@@ -14,6 +16,11 @@ Lemma wp_sign :
     {{{ sk ∈ keys }}}
     Sign sk data
     {{{ ret #SOMEV (data, sig), sk ↦ [(data, sig); sk'] }}}
+
+Lemma wp_sign' :
+    {{{ sk ∈ keys }}}
+    Sign sk data
+    {{{ ret #SOMEV sig, (data, sig) ∈ sk(vk) }}}
 
 (* Verify: checks map for signature.
 return (data, sig) in signs[keys[vk]] *)

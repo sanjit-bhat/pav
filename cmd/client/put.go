@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"example.com/internal/ffi"
-	pb "example.com/internal/proto"
+	"github.com/mit-pdos/secure-chat/internal/ffi"
+	pb "github.com/mit-pdos/secure-chat/internal/proto"
 	"google.golang.org/protobuf/proto"
 )
 

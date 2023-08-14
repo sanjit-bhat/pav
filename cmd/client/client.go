@@ -8,8 +8,8 @@ import (
 	"path"
 	"sync"
 
-	"example.com/internal/ffi"
-	pb "example.com/internal/proto"
+	"github.com/mit-pdos/secure-chat/internal/ffi"
+	pb "github.com/mit-pdos/secure-chat/internal/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

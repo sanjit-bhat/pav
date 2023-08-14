@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"example.com/internal/prompt"
+	"github.com/mit-pdos/secure-chat/internal/prompt"
 )
 
 func (c *client) nameLoop() {
