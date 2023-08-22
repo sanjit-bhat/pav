@@ -1,123 +1,64 @@
 package chat4
 
-import (
-	"sync"
-
-	"github.com/mit-pdos/gokv/grove_ffi"
-	"github.com/tchajed/marshal"
-)
-
 type errorT = bool
-type rpcIdT = uint64
 
 const (
-	ERRNONE bool   = false
-	ERRSOME bool   = true
-	RPCGET  rpcIdT = 1
-	RPCPUT  rpcIdT = 2
+	ERRNONE bool = false
+	ERRSOME bool = true
 )
 
-func encodeUint64(data uint64) []byte {
-	return marshal.WriteInt(make([]byte, 0), data)
+type protRet struct {
+	err errorT
+	sn1 uint64
 }
 
-func decodeUint64(data []byte) uint64 {
-	out, _ := marshal.ReadInt(data)
-	return out
+//lint:ignore U1000 top level of verif unit.
+func aliceMain() protRet {
+	// Event 1.
+	body1 := uint64(3948)
+	sn1Scratch := uint64(0)
+	pin1Empt := uint64(0)
+	msg1 := newMsgT(body1, sn1Scratch, pin1Empt)
+	msg1B := encodeMsgT(msg1)
+	ret1Empt := make([]byte, 0)
+	rpcCall(RPCPUT, msg1B, ret1Empt)
+
+	// Event 2.1.
+	args2Empt := make([]byte, 0)
+	msg1BRet := newMsgTSlice()
+	rpcCall(RPCGET, args2Empt, msg1BRet)
+	msg1Ret := decodeMsgT(msg1BRet)
+
+	// Event 4.
+	args3Empt := make([]byte, 0)
+	msg2B := newMsgTSlice()
+	rpcCall(RPCGET, args3Empt, msg2B)
+	msg2 := decodeMsgT(msg2B)
+
+	// Event 5.
+	if msg1Ret.sn != msg2.pin {
+		return protRet{err: ERRSOME, sn1: 0}
+	}
+
+	return protRet{err: ERRNONE, sn1: msg1Ret.sn}
 }
 
-func rpcCall(rpcId rpcIdT, in []byte, out []byte) errorT {
-	return ERRNONE
-}
+//lint:ignore U1000 top level of verif unit.
+func bobMain() protRet {
+	// Event 2.2.
+	args1Empt := make([]byte, 0)
+	msg1B := newMsgTSlice()
+	rpcCall(RPCGET, args1Empt, msg1B)
+	msg1 := decodeMsgT(msg1B)
 
-type aliceRet struct {
-	err    errorT
-	passed bool
-}
+	// Event 3.
+	body2 := uint64(8959)
+	sn2Scratch := uint64(0)
+	// Core protocol: msg1's sn becomes pin for msg2.
+	msg2 := newMsgT(body2, sn2Scratch, msg1.sn)
+	msg2B := encodeMsgT(msg2)
+	ret2Empt := make([]byte, 0)
+	rpcCall(RPCPUT, msg2B, ret2Empt)
 
-func aliceMain() aliceRet {
-	cr := grove_ffi.Connect(addr)
-	if cr.Err {
-		return aliceRet{err: ERRSOME, passed: false}
-	}
-	conn := cr.Connection
-
-	r1 := grove_ffi.Receive(conn)
-	if r1.Err {
-		return aliceRet{err: ERRSOME, passed: false}
-	}
-	snOrig := decodeUint64(r1.Data)
-
-	r2 := grove_ffi.Receive(conn)
-	if r2.Err {
-		return aliceRet{err: ERRSOME, passed: false}
-	}
-	snLater := decodeUint64(r2.Data)
-
-	snEq := snOrig == snLater
-	return aliceRet{err: ERRNONE, passed: snEq}
-}
-
-func bobMain(addr grove_ffi.Address) errorT {
-	cr := grove_ffi.Connect(addr)
-	if cr.Err {
-		return ERRSOME
-	}
-	conn := cr.Connection
-
-	r1 := grove_ffi.Receive(conn)
-	if r1.Err {
-		return ERRSOME
-	}
-
-	return grove_ffi.Send(conn, r1.Data)
-}
-
-func serverMain(addr grove_ffi.Address) errorT {
-	ln := grove_ffi.Listen(addr)
-	// TODO: need to know that alice was the first connection.
-	// Or, alice/bob announce themselves as the first msg on the channel.
-	connAlice := grove_ffi.Accept(ln)
-	connBob := grove_ffi.Accept(ln)
-
-	snOrig := uint64(87294)
-	snOrigB := encodeUint64(snOrig)
-	err1 := grove_ffi.Send(connAlice, snOrigB)
-	if err1 {
-		return ERRSOME
-	}
-	err2 := grove_ffi.Send(connBob, snOrigB)
-	if err2 {
-		return ERRSOME
-	}
-
-	snLater := grove_ffi.Receive(connBob)
-	if snLater.Err {
-		return ERRSOME
-	}
-	err3 := grove_ffi.Send(connAlice, snLater.Data)
-	if err3 {
-		return ERRSOME
-	}
-
-	return ERRNONE
-}
-
-func RunAll(addr grove_ffi.Address) {
-	//var wg sync.WaitGroup
-	wg := new(sync.WaitGroup)
-	wg.Add(3)
-	go func() {
-		serverMain(addr)
-		wg.Done()
-	}()
-	go func() {
-		aliceMain(addr)
-		wg.Done()
-	}()
-	go func() {
-		bobMain(addr)
-		wg.Done()
-	}()
-	wg.Wait()
+	return protRet{err: ERRNONE, sn1: msg1.sn}
 }
