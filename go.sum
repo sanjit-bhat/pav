@@ -27,10 +27,6 @@ github.com/mattn/go-isatty v0.0.10/go.mod h1:qgIWMr58cqv1PHHyhnkY9lrL7etaEgOFcME
 github.com/mattn/go-isatty v0.0.11/go.mod h1:PhnuNfih5lzO57/f3n+odYbM4JtupLOxQOAqxQCu2WE=
 github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
 github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27kJ6hsGG94=
-github.com/mit-pdos/gokv v0.0.0-20230728200941-76dc258d2132 h1:G0zqjnZoT4yzVQBtTIFamNxGw5GcTIylooQrti9Xtzc=
-github.com/mit-pdos/gokv v0.0.0-20230728200941-76dc258d2132/go.mod h1:0Z27KZUVpQG/K6K8YIuRlSYaPxfrqmuhLWb4CvwWeHA=
-github.com/mit-pdos/gokv v0.0.0-20230821140129-c39d8b581f25 h1:2fpThnlchY3A+eKDk1gN+OQLNGEGzemGNOcIKwgmkbA=
-github.com/mit-pdos/gokv v0.0.0-20230821140129-c39d8b581f25/go.mod h1:0Z27KZUVpQG/K6K8YIuRlSYaPxfrqmuhLWb4CvwWeHA=
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLANZcx1PVRCS0qkT7pwLkGfwJo4zjcN/Tysno=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
