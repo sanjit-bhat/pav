@@ -16,13 +16,13 @@ func aliceMain(skAlice *signerT, vkBob *verifierT) (uint64, errorT) {
 	pin1Empt := uint64(0)
 	msg1 := newMsgT(tag1, body1, pin1Empt)
 	msg1B := encodeMsgT(msg1)
-	sig1, err1 := skAlice.sign(msg1B) 
+	sig1, err1 := skAlice.sign(msg1B)
 	if err1 {
 		return 0, err1
 	}
 	sn1Scratch := uint64(0)
 	msgWrap1 := newMsgWrapT(msg1, sig1, sn1Scratch)
-	msgWrap1B := encodeMsgWrapT(msgWrap1) 
+	msgWrap1B := encodeMsgWrapT(msgWrap1)
 	ret1Empt := make([]byte, 0)
 	rpcCall(RPCPUT, msgWrap1B, ret1Empt)
 
@@ -38,9 +38,9 @@ func aliceMain(skAlice *signerT, vkBob *verifierT) (uint64, errorT) {
 	rpcCall(RPCGET, args3Empt, msgWrap3B)
 	msgWrap3, _ := decodeMsgWrapT(msgWrap3B)
 	msg3B := encodeMsgT(msgWrap3.msg)
-	ok := vkBob.verify(msg3B, msgWrap3.sig)
-	if !ok {
-		return 0, ERRSOME
+	err3 := vkBob.verify(msg3B, msgWrap3.sig)
+	if err3 {
+		return 0, err3
 	}
 
 	// Event 5.
@@ -58,9 +58,9 @@ func bobMain(skBob *signerT, vkAlice *verifierT) (uint64, errorT) {
 	rpcCall(RPCGET, args1Empt, msgWrap1B)
 	msgWrap1, _ := decodeMsgWrapT(msgWrap1B)
 	msg1B := encodeMsgT(msgWrap1.msg)
-	ok := vkAlice.verify(msg1B, msgWrap1.sig)
-	if !ok {
-		return 0, ERRSOME
+	err1 := vkAlice.verify(msg1B, msgWrap1.sig)
+	if err1 {
+		return 0, err1
 	}
 
 	// Event 3.

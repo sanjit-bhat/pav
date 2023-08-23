@@ -16,9 +16,9 @@ type signerT struct {
 
 // Generate signature.
 // The actual implementation would return an err if the signing key is invalid.
-// The sig is 64 bytes.
+// The sig is SIG_LEN bytes.
 func (s *signerT) sign(data []byte) ([]byte, errorT) {
-	return make([]byte, 64), ERRNONE
+	return make([]byte, SIG_LEN), ERRNONE
 }
 
 type verifierT struct {
@@ -26,11 +26,13 @@ type verifierT struct {
 }
 
 // Verify a signature.
-// The actual implementation would return an err if the verifier key is invalid.
-func (v *verifierT) verify(data []byte, sig []byte) bool {
-	return true
+// The actual implementation would return an err if the verifier key is invalid
+// or if the verification failed.
+func (v *verifierT) verify(data []byte, sig []byte) errorT {
+	return ERRNONE
 }
 
+// Arbitrarily made keys 64 bytes for now.
 func makeKeys() (*signerT, *verifierT) {
 	s := &signerT{key: make([]byte, 64)}
 	v := &verifierT{key: make([]byte, 64)}

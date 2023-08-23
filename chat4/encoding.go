@@ -5,7 +5,7 @@ import (
 )
 
 type msgT struct {
-	tag uint64
+	tag  uint64
 	body uint64
 	pin  uint64
 }
@@ -16,9 +16,11 @@ func newMsgT(tag, body, pin uint64) *msgT {
 	return &msgT{tag: tag, body: body, pin: pin}
 }
 
+/*
 func newMsgTSlice() []byte {
 	return make([]byte, MSGT_SIZE)
 }
+*/
 
 func encodeMsgT(m *msgT) []byte {
 	b1 := make([]byte, 0)
@@ -42,7 +44,9 @@ type msgWrapT struct {
 	sig []byte
 	sn  uint64
 }
-const MSGWRAPT_ADD_SIZE uint64 = 64 + 8
+
+const SIG_LEN uint64 = 64
+const MSGWRAPT_ADD_SIZE uint64 = SIG_LEN + 8
 const MSGWRAPT_SIZE uint64 = MSGT_SIZE + MSGWRAPT_ADD_SIZE
 
 func newMsgWrapT(msg *msgT, sig []byte, sn uint64) *msgWrapT {
@@ -62,7 +66,7 @@ func encodeMsgWrapT(m *msgWrapT) []byte {
 
 func decodeMsgWrapT(b []byte) (*msgWrapT, []byte) {
 	msg, b2 := decodeMsgT(b)
-	sig, b3 := marshal.ReadBytesCopy(b2, 64)
+	sig, b3 := marshal.ReadBytesCopy(b2, SIG_LEN)
 	sn, b4 := marshal.ReadInt(b3)
 	return newMsgWrapT(msg, sig, sn), b4
 }
