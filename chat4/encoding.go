@@ -4,6 +4,13 @@ import (
 	"github.com/tchajed/marshal"
 )
 
+type errorT = bool
+
+const (
+	ERRNONE bool = false
+	ERRSOME bool = true
+)
+
 type msgT struct {
 	tag  uint64
 	body uint64
