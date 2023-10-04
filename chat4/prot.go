@@ -4,6 +4,7 @@ import "sync"
 
 func aliceMain(skAlice *signerT, vkBob []byte) (uint64, errorT) {
 	// Event 1.
+	// Makes Alice's first msg, signs it, and sends it over the network.
 	tag1 := uint64(1)
 	body1 := uint64(3948)
 	pin1Empt := uint64(0)
@@ -17,12 +18,14 @@ func aliceMain(skAlice *signerT, vkBob []byte) (uint64, errorT) {
 	rpcCall(RPCPUT, msgWrap1B, ret1Empt)
 
 	// Event 2.1.
+	// Receives Alice's msg, with an sn assigned to it.
 	args2Empt := make([]byte, 0)
 	msgWrap2B := newMsgWrapTSlice()
 	rpcCall(RPCGET, args2Empt, msgWrap2B)
 	msgWrap2, _ := decodeMsgWrapT(msgWrap2B)
 
 	// Event 4.
+	// Receives Bob's msg, which has a pin to the sn assigned to Alice's first msg.
 	args3Empt := make([]byte, 0)
 	msgWrap3B := newMsgWrapTSlice()
 	rpcCall(RPCGET, args3Empt, msgWrap3B)
@@ -34,6 +37,7 @@ func aliceMain(skAlice *signerT, vkBob []byte) (uint64, errorT) {
 	}
 
 	// Event 5.
+	// Compares the sn Alice received to the sn Bob received.
 	if msgWrap2.sn != msgWrap3.msg.pin {
 		return 0, ERRSOME
 	}
@@ -43,6 +47,7 @@ func aliceMain(skAlice *signerT, vkBob []byte) (uint64, errorT) {
 
 func bobMain(skBob *signerT, vkAlice []byte) (uint64, errorT) {
 	// Event 2.2.
+	// Receives Alice's msg, with an sn assigned to it.
 	args1Empt := make([]byte, 0)
 	msgWrap1B := newMsgWrapTSlice()
 	rpcCall(RPCGET, args1Empt, msgWrap1B)
@@ -54,9 +59,11 @@ func bobMain(skBob *signerT, vkAlice []byte) (uint64, errorT) {
 	}
 
 	// Event 3.
+	// Makes a new msg, with a pin back to the sn for Alice's msg.
+	// Signs it and sends it over the network.
 	tag2 := uint64(2)
 	body2 := uint64(8959)
-	// Core protocol: msg1's sn becomes pin for msg2.
+	// Core protocol: stores Alice's msg sn as pin for Bob's msg.
 	msg2 := newMsgT(tag2, body2, msgWrap1.sn)
 	msg2B := encodeMsgT(msg2)
 	sig2 := skBob.sign(msg2B)
@@ -74,15 +81,15 @@ func bobMain(skBob *signerT, vkAlice []byte) (uint64, errorT) {
 func game() bool {
 	skAlice, vkAlice := makeKeys()
 	skBob, vkBob := makeKeys()
-    aliceSn := new(uint64)
-    aliceErr := new(bool)
-    bobSn := new(uint64)
-    bobErr := new(bool)
+	aliceSn := new(uint64)
+	aliceErr := new(bool)
+	bobSn := new(uint64)
+	bobErr := new(bool)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 	go func() {
-        *aliceSn, *aliceErr = aliceMain(skAlice, vkBob)
+		*aliceSn, *aliceErr = aliceMain(skAlice, vkBob)
 		wg.Done()
 	}()
 	go func() {
@@ -91,9 +98,5 @@ func game() bool {
 	}()
 	wg.Wait()
 
-
-    if !*aliceErr && !*bobErr && *aliceSn != *bobSn {
-        return false
-    }
-    return true
+	return *aliceErr || *bobErr || *aliceSn == *bobSn
 }
