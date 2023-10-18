@@ -22,6 +22,7 @@ func aliceMain(skAlice *signerT, vkBob []byte) (uint64, errorT) {
 	args2Empt := make([]byte, 0)
 	msgWrap2B := newMsgWrapTSlice()
 	rpcCall(RPCGET, args2Empt, msgWrap2B)
+	// Decoding bytes we don't know, apart from the len.
 	msgWrap2, _ := decodeMsgWrapT(msgWrap2B)
 
 	// Event 4.
@@ -29,6 +30,7 @@ func aliceMain(skAlice *signerT, vkBob []byte) (uint64, errorT) {
 	args3Empt := make([]byte, 0)
 	msgWrap3B := newMsgWrapTSlice()
 	rpcCall(RPCGET, args3Empt, msgWrap3B)
+	// Decoding bytes we don't know, apart from the len.
 	msgWrap3, _ := decodeMsgWrapT(msgWrap3B)
 	msg3B := encodeMsgT(msgWrap3.msg)
 	err3 := verify(vkBob, msg3B, msgWrap3.sig)
@@ -51,12 +53,8 @@ func bobMain(skBob *signerT, vkAlice []byte) (uint64, errorT) {
 	args1Empt := make([]byte, 0)
 	msgWrap1B := newMsgWrapTSlice()
 	rpcCall(RPCGET, args1Empt, msgWrap1B)
+	// Decoding bytes we don't know, apart from the len.
 	msgWrap1, _ := decodeMsgWrapT(msgWrap1B)
-	msg1B := encodeMsgT(msgWrap1.msg)
-	err1 := verify(vkAlice, msg1B, msgWrap1.sig)
-	if err1 {
-		return 0, err1
-	}
 
 	// Event 3.
 	// Makes a new msg, with a pin back to the sn for Alice's msg.
@@ -66,6 +64,7 @@ func bobMain(skBob *signerT, vkAlice []byte) (uint64, errorT) {
 	// Core protocol: stores Alice's msg sn as pin for Bob's msg.
 	msg2 := newMsgT(tag2, body2, msgWrap1.sn)
 	msg2B := encodeMsgT(msg2)
+	// Encode needs to preserve connection bc of this sign op.
 	sig2 := skBob.sign(msg2B)
 	sn2Scratch := uint64(0)
 	msgWrap2 := newMsgWrapT(msg2, sig2, sn2Scratch)
@@ -81,22 +80,23 @@ func bobMain(skBob *signerT, vkAlice []byte) (uint64, errorT) {
 func game() bool {
 	skAlice, vkAlice := makeKeys()
 	skBob, vkBob := makeKeys()
-	aliceSn := new(uint64)
-	aliceErr := new(bool)
-	bobSn := new(uint64)
-	bobErr := new(bool)
+	var aliceSn uint64
+	var aliceErr bool
+	var bobSn uint64
+	var bobErr bool
 
 	wg := new(sync.WaitGroup)
-	wg.Add(2)
+    wg.Add(1)
 	go func() {
-		*aliceSn, *aliceErr = aliceMain(skAlice, vkBob)
+		aliceSn, aliceErr = aliceMain(skAlice, vkBob)
 		wg.Done()
 	}()
+    wg.Add(1)
 	go func() {
-		*bobSn, *bobErr = bobMain(skBob, vkAlice)
+		bobSn, bobErr = bobMain(skBob, vkAlice)
 		wg.Done()
 	}()
 	wg.Wait()
 
-	return *aliceErr || *bobErr || *aliceSn == *bobSn
+	return aliceErr || bobErr || aliceSn == bobSn
 }
