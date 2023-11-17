@@ -8,18 +8,18 @@ const aliceMsg uint64 = 10
 const bobMsg uint64 = 11
 
 func alice() {
-	Init()
+	c := Init()
 	a_msg := &msgT{body: aliceMsg}
 	b_msg := &msgT{body: bobMsg}
-	Put(a_msg)
+	c.Put(*a_msg)
 
-	g := Get()
+	g := c.Get()
 	if 2 <= len(g) {
 		machine.Assert(g[0].body == a_msg.body)
 		machine.Assert(g[1].body == b_msg.body)
 		machine.Assert(len(g) == 2)
 
-		g2 := Get()
+		g2 := c.Get()
 		machine.Assert(g2[0].body == a_msg.body)
 		machine.Assert(g2[1].body == b_msg.body)
 		machine.Assert(len(g2) == 2)
@@ -27,12 +27,12 @@ func alice() {
 }
 
 func bob() {
-	Init()
+	c := Init()
 	a_msg := &msgT{body: aliceMsg}
 	b_msg := &msgT{body: bobMsg}
-	g := Get()
+	g := c.Get()
 	if 1 <= len(g) {
 		machine.Assert(g[0].body == a_msg.body)
-		Put(b_msg)
+		c.Put(*b_msg)
 	}
 }
