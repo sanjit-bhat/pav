@@ -7,11 +7,10 @@ import (
 const aliceMsg uint64 = 10
 const bobMsg uint64 = 11
 
-func alice() {
-	c := Init()
+func alice(c *ChatCli) {
 	a_msg := &msgT{body: aliceMsg}
 	b_msg := &msgT{body: bobMsg}
-	c.Put(*a_msg)
+	c.Put(a_msg)
 
 	g := c.Get()
 	if 2 <= len(g) {
@@ -26,13 +25,19 @@ func alice() {
 	}
 }
 
-func bob() {
-	c := Init()
+func bob(c *ChatCli) {
 	a_msg := &msgT{body: aliceMsg}
 	b_msg := &msgT{body: bobMsg}
 	g := c.Get()
 	if 1 <= len(g) {
 		machine.Assert(g[0].body == a_msg.body)
-		c.Put(*b_msg)
+		machine.Assert(len(g) == 1)
+		c.Put(b_msg)
 	}
+}
+
+func main() {
+	c := Init()
+	go func() { alice(c) }()
+	bob(c)
 }
