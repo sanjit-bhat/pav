@@ -2,11 +2,9 @@ package full2
 
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
+	"github.com/mit-pdos/secure-chat/full2/fc_ffi"
 	"github.com/tchajed/goose/machine"
 )
-
-const aliceMsg uint64 = 10
-const bobMsg uint64 = 11
 
 type Alice struct {
 	ck    *Clerk
@@ -19,13 +17,15 @@ func (a *Alice) One() {
 }
 
 func (a *Alice) Two() uint64 {
-	g := a.ck.Get()
+	g, err := a.ck.Get()
+	machine.Assume(err == ErrNone)
 	if 2 <= len(g) {
 		machine.Assert(g[0].body == a.a_msg.body)
 		machine.Assert(g[1].body == a.b_msg.body)
 		machine.Assert(len(g) == 2)
 
-		g2 := a.ck.Get()
+		g2, err := a.ck.Get()
+		machine.Assume(err == ErrNone)
 		machine.Assert(g2[0].body == a.a_msg.body)
 		machine.Assert(g2[1].body == a.b_msg.body)
 		machine.Assert(len(g2) == 2)
@@ -34,11 +34,11 @@ func (a *Alice) Two() uint64 {
 	return 0
 }
 
-func MakeAlice(host grove_ffi.Address) *Alice {
+func MakeAlice(host grove_ffi.Address, sk *fc_ffi.SignerT, pks []*fc_ffi.VerifierT) *Alice {
 	a := &Alice{}
-	a.ck = MakeClerk(host)
-	a.a_msg = &msgT{body: aliceMsg}
-	a.b_msg = &msgT{body: bobMsg}
+	a.ck = MakeClerk(host, AliceNum, sk, pks)
+	a.a_msg = &msgT{body: AliceMsg}
+	a.b_msg = &msgT{body: BobMsg}
 	return a
 }
 
@@ -49,7 +49,8 @@ type Bob struct {
 }
 
 func (b *Bob) One() uint64 {
-	g := b.ck.Get()
+	g, err := b.ck.Get()
+	machine.Assume(err == ErrNone)
 	if 1 <= len(g) {
 		machine.Assert(g[0].body == b.a_msg.body)
 		machine.Assert(len(g) == 1)
@@ -59,10 +60,10 @@ func (b *Bob) One() uint64 {
 	return 0
 }
 
-func MakeBob(host grove_ffi.Address) *Bob {
+func MakeBob(host grove_ffi.Address, sk *fc_ffi.SignerT, pks []*fc_ffi.VerifierT) *Bob {
 	b := &Bob{}
-	b.ck = MakeClerk(host)
-	b.a_msg = &msgT{body: aliceMsg}
-	b.b_msg = &msgT{body: bobMsg}
+	b.ck = MakeClerk(host, BobNum, sk, pks)
+	b.a_msg = &msgT{body: AliceMsg}
+	b.b_msg = &msgT{body: BobMsg}
 	return b
 }

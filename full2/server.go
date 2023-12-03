@@ -7,44 +7,38 @@ import (
 )
 
 type Server struct {
-	log  []*msgT
+	log  []byte
 	lock *sync.Mutex
 }
 
-func (s *Server) Put(m *msgT) {
+func (s *Server) Put(m []byte) {
 	s.lock.Lock()
-	s.log = append(s.log, m)
+	s.log = m
 	s.lock.Unlock()
 }
 
-func (s *Server) Get() []*msgT {
+func (s *Server) Get() []byte {
 	s.lock.Lock()
-	ret := make([]*msgT, len(s.log))
-	copy(ret, s.log)
+	ret := s.log
 	s.lock.Unlock()
 	return ret
 }
 
 func MakeServer() *Server {
-	s := &Server{}
-	s.log = make([]*msgT, 0)
-	s.lock = new(sync.Mutex)
-	return s
+	return &Server{lock: new(sync.Mutex)}
 }
 
 func (s *Server) Start(me grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
-	handlers[rpcPut] =
+	handlers[RpcPut] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			m, _ := decodeMsgT(enc_args)
-			s.Put(m)
+			s.Put(enc_args)
 		}
 
-	handlers[rpcGet] =
+	handlers[RpcGet] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			sl := s.Get()
-			*enc_reply = encodeSliceMsgT(sl)
+			*enc_reply = s.Get()
 		}
 
 	urpc.MakeServer(handlers).Serve(me)
