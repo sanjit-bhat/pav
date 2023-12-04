@@ -1,8 +1,9 @@
-package full2
+package fc_ffi
 
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
+	"github.com/mit-pdos/secure-chat/full2/shared"
 	"sync"
 )
 
@@ -31,12 +32,12 @@ func MakeServer() *Server {
 func (s *Server) Start(me grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
-	handlers[RpcPut] =
+	handlers[shared.RpcPut] =
 		func(enc_args []byte, enc_reply *[]byte) {
 			s.Put(enc_args)
 		}
 
-	handlers[RpcGet] =
+	handlers[shared.RpcGet] =
 		func(enc_args []byte, enc_reply *[]byte) {
 			*enc_reply = s.Get()
 		}
