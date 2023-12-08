@@ -13,13 +13,13 @@ import (
 
 func main() {
 	c := fc_ffi.Init()
-	skA, pkA, err := c.MakeKeys()
+	sA, vA, err := c.MakeKeys()
 	machine.Assume(err == shared.ErrNone)
-	skB, pkB, err := c.MakeKeys()
+	sB, vB, err := c.MakeKeys()
 	machine.Assume(err == shared.ErrNone)
-	var pks = make([]*fc_ffi.VerifierT, 2)
-	pks[shared.AliceNum] = pkA
-	pks[shared.BobNum] = pkB
+	var vs = make([]*fc_ffi.VerifierT, 2)
+	vs[shared.AliceNum] = vA
+	vs[shared.BobNum] = vB
 
 	addr := grove_ffi.MakeAddress("0.0.0.0:6060")
 	var retA *shared.MsgT
@@ -36,7 +36,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		time.Sleep(serverStartup)
-		a := full2.MakeAlice(addr, skA, pks)
+		a := full2.MakeAlice(addr, sA, vs)
 		a.One()
 		aEvent <- struct{}{}
 
@@ -48,7 +48,7 @@ func main() {
 	go func() {
 		time.Sleep(serverStartup)
 		<-aEvent
-		b := full2.MakeBob(addr, skB, pks)
+		b := full2.MakeBob(addr, sB, vs)
 		retB = b.One()
 		bEvent <- struct{}{}
 		wg.Done()
