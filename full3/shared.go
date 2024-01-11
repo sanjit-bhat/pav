@@ -1,5 +1,10 @@
 package shared
 
+/*
+Note: this "shared file" came from the start of a more complex
+pinning implementation.
+*/
+
 import (
 	"github.com/tchajed/goose/machine"
 	"github.com/tchajed/marshal"
