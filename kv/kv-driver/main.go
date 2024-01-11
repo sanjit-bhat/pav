@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/secure-chat/kv"
 	"github.com/mit-pdos/secure-chat/kv/ffi"
@@ -12,50 +11,50 @@ import (
 )
 
 func main() {
-	c := fc_ffi.Init()
+	c := ffi.Init()
 	sA, vA, err := c.MakeKeys()
-	machine.Assume(err == shared.ErrNone)
+	machine.Assert(err == shared.ErrNone)
 	sB, vB, err := c.MakeKeys()
-	machine.Assume(err == shared.ErrNone)
-	var vs = make([]*fc_ffi.VerifierT, 2)
-	vs[shared.AliceNum] = vA
-	vs[shared.BobNum] = vB
+	machine.Assert(err == shared.ErrNone)
+	vs := []*ffi.VerifierT{vA, vB}
 
 	addr := grove_ffi.MakeAddress("0.0.0.0:6060")
-	var retA *shared.MsgT
-	var retB *shared.MsgT
-	aEvent := make(chan struct{})
-	bEvent := make(chan struct{})
 	serverStartup := 10 * time.Millisecond
 
 	var wg sync.WaitGroup
 	go func() {
-		s := fc_ffi.MakeServer()
+		s := ffi.MakeServer()
 		s.Start(addr)
 	}()
-	wg.Add(1)
-	go func() {
-		time.Sleep(serverStartup)
-		a := full2.MakeAlice(addr, sA, vs)
-		a.One()
-		aEvent <- struct{}{}
+	oneDone := make(chan struct{}, 1)
+	twoDone := make(chan struct{}, 1)
+	k := uint64(3)
+	v := uint64(11)
 
-		<-bEvent
-		retA = a.Two()
-		wg.Done()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(serverStartup)
+		c := kv.MakeKvCli(addr, sA, vs, 0)
+
+		c.Put(k, v)
+		oneDone <- struct{}{}
+
+		<-twoDone
+		v2 := c.Get(k)
+		machine.Assert(v+1 == v2)
 	}()
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		time.Sleep(serverStartup)
-		<-aEvent
-		b := full2.MakeBob(addr, sB, vs)
-		retB = b.One()
-		bEvent <- struct{}{}
-		wg.Done()
+		c := kv.MakeKvCli(addr, sB, vs, 1)
+
+		<-oneDone
+		v2 := c.Get(k)
+		c.Put(k, v2+1)
+		twoDone <- struct{}{}
 	}()
+
 	wg.Wait()
-
-	fmt.Println("retA:", retA)
-	fmt.Println("retB:", retB)
-	machine.Assert(retA != nil && retB != nil && retA.Equals(retB))
 }

@@ -3,8 +3,8 @@ package kv
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
+	"github.com/mit-pdos/secure-chat/kv/ffi"
 	"github.com/mit-pdos/secure-chat/kv/shared"
-	"github.com/mit-pdos/secure-chat/kv/shim"
 	"github.com/tchajed/goose/machine"
 )
 
@@ -13,58 +13,52 @@ type FcCli struct {
 	urpc      *urpc.Client
 	log       []*shared.MsgT
 	myNum     uint64
-	signer    *shim.SignerT
-	verifiers []*shim.VerifierT
+	signer    *ffi.SignerT
+	verifiers []*ffi.VerifierT
 }
 
-func (c *FcCli) Put(m *shared.MsgT) ([]*shared.MsgT, shared.ErrorT) {
+func (c *FcCli) Put(m *shared.MsgT) []*shared.MsgT {
 	// Copy bc I don't want to deal with caller ownership transfer.
 	m2 := m.Copy()
 	m2.Op = shared.OpPut
 	return c.prepareCommit(m2)
 }
 
-func (c *FcCli) Get() ([]*shared.MsgT, shared.ErrorT) {
+func (c *FcCli) Get() []*shared.MsgT {
 	m := shared.NewMsgT(shared.OpGet, 0, 0)
 	return c.prepareCommit(m)
 }
 
-func (c *FcCli) prepareCommit(m *shared.MsgT) ([]*shared.MsgT, shared.ErrorT) {
-	nilRet := make([]*shared.MsgT, 0)
-	err1 := c.prepare()
-	if err1 != urpc.ErrNone {
-		return nilRet, shared.ErrSome
-	}
+func (c *FcCli) prepareCommit(m *shared.MsgT) []*shared.MsgT {
+	c.prepare()
 	c.commit(m)
 	log := shared.CopyMsgTSlice(c.log)
-	return log, shared.ErrNone
+	return log
 }
 
-func (c *FcCli) prepare() shared.ErrorT {
+func (c *FcCli) prepare() {
 	r := make([]byte, 0)
 	err1 := c.urpc.Call(shared.RpcPrepare, make([]byte, 0), &r, 100)
-	if err1 != urpc.ErrNone {
-		return shared.ErrSome
+	machine.Assume(err1 == urpc.ErrNone)
+
+	if len(r) == 0 {
+		// Init system with empty log.
+		machine.Assume(len(c.log) == 0)
+		return
 	}
 
 	arg, err2 := shared.DecodePutArg(r)
-	if err2 != shared.ErrNone {
-		return shared.ErrSome
-	}
+	machine.Assume(err2 == shared.ErrNone)
 
 	pk := c.verifiers[arg.Sender]
 	err3 := pk.Verify(arg.Sig, arg.LogB)
-	if err3 != shared.ErrNone {
-		return shared.ErrSome
-	}
+	machine.Assume(err3 == shared.ErrNone)
 
 	log, _ := shared.DecodeMsgTSlice(arg.LogB)
-	if !shared.IsMsgTSlicePrefix(c.log, log) {
-		return shared.ErrSome
-	}
+	isPrefix := shared.IsMsgTSlicePrefix(c.log, log)
+	machine.Assume(isPrefix)
 
 	c.log = log
-	return shared.ErrNone
 }
 
 func (c *FcCli) commit(m *shared.MsgT) {
@@ -77,13 +71,14 @@ func (c *FcCli) commit(m *shared.MsgT) {
 
 	pa := shared.NewPutArg(c.myNum, sig, log2B)
 	argB := pa.Encode()
+
 	r := make([]byte, 0)
 	err2 := c.urpc.Call(shared.RpcCommit, argB, &r, 100)
 	machine.Assume(err2 == urpc.ErrNone)
 	c.log = log2
 }
 
-func MakeFcCli(host grove_ffi.Address, myNum uint64, signer *shim.SignerT, verifiers []*shim.VerifierT) *FcCli {
+func MakeFcCli(host grove_ffi.Address, myNum uint64, signer *ffi.SignerT, verifiers []*ffi.VerifierT) *FcCli {
 	c := &FcCli{}
 	c.urpc = urpc.MakeClient(host)
 	c.log = make([]*shared.MsgT, 0)

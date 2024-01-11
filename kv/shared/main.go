@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"fmt"
 	"github.com/tchajed/goose/machine"
 	"github.com/tchajed/marshal"
 )
@@ -29,8 +30,12 @@ type MsgT struct {
 	Op, K, V uint64
 }
 
+func (m MsgT) String() string {
+	return fmt.Sprintf("{Op: %v, K: %v, V: %v}", m.Op, m.K, m.V)
+}
+
 func NewMsgT(op, k, v uint64) *MsgT {
-    return &MsgT{Op: op, K: k, V: v}
+	return &MsgT{Op: op, K: k, V: v}
 }
 
 func (m *MsgT) Equals(o *MsgT) bool {
@@ -38,22 +43,22 @@ func (m *MsgT) Equals(o *MsgT) bool {
 }
 
 func (m *MsgT) Copy() *MsgT {
-    return &MsgT{Op: m.Op, K: m.K, V: m.V}
+	return &MsgT{Op: m.Op, K: m.K, V: m.V}
 }
 
 func (m *MsgT) Encode() []byte {
 	var b = make([]byte, 0)
-    b = marshal.WriteInt(b, m.Op)
+	b = marshal.WriteInt(b, m.Op)
 	b = marshal.WriteInt(b, m.K)
 	b = marshal.WriteInt(b, m.V)
 	return b
 }
 
 func DecodeMsgT(b []byte) (*MsgT, []byte) {
-    op, b2 := marshal.ReadInt(b)
-	k, b2 := marshal.ReadInt(b)
-	v, b2 := marshal.ReadInt(b)
-	return NewMsgT(op, k, v), b2
+	op, b := marshal.ReadInt(b)
+	k, b := marshal.ReadInt(b)
+	v, b := marshal.ReadInt(b)
+	return NewMsgT(op, k, v), b
 }
 
 // []*MsgT

@@ -8,38 +8,37 @@ import (
 )
 
 type Server struct {
-	log  []byte
-	lock *sync.Mutex
+	log []byte
+	mu  *sync.Mutex
 }
 
-func (s *Server) Put(m []byte) {
-	s.lock.Lock()
-	s.log = m
-	s.lock.Unlock()
+// Relies on client later calling Commit to unlock.
+func (s *Server) Prepare() []byte {
+	s.mu.Lock()
+	return s.log
 }
 
-func (s *Server) Get() []byte {
-	s.lock.Lock()
-	ret := s.log
-	s.lock.Unlock()
-	return ret
+// Relies on client first calling Prepare to lock.
+func (s *Server) Commit(newLog []byte) {
+	s.log = newLog
+	s.mu.Unlock()
 }
 
 func MakeServer() *Server {
-	return &Server{lock: new(sync.Mutex)}
+	return &Server{mu: new(sync.Mutex)}
 }
 
 func (s *Server) Start(me grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
-	handlers[shared.RpcPut] =
+	handlers[shared.RpcPrepare] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			s.Put(enc_args)
+			*enc_reply = s.Prepare()
 		}
 
-	handlers[shared.RpcGet] =
+	handlers[shared.RpcCommit] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			*enc_reply = s.Get()
+			s.Commit(enc_args)
 		}
 
 	urpc.MakeServer(handlers).Serve(me)

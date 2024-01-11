@@ -2,8 +2,8 @@ package kv
 
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
+	"github.com/mit-pdos/secure-chat/kv/ffi"
 	"github.com/mit-pdos/secure-chat/kv/shared"
-	"github.com/mit-pdos/secure-chat/kv/shim"
 )
 
 type KvCli struct {
@@ -12,23 +12,16 @@ type KvCli struct {
 	logNext uint64
 }
 
-func (c *KvCli) Put(k, v uint64) shared.ErrorT {
+func (c *KvCli) Put(k, v uint64) {
 	m := shared.NewMsgT(0, k, v)
-	log, err := c.fc.Put(m)
-	if err != shared.ErrNone {
-		return err
-	}
+	log := c.fc.Put(m)
 	c.injest(log)
-	return shared.ErrNone
 }
 
-func (c *KvCli) Get(k uint64) shared.ErrorT {
-	log, err := c.fc.Get()
-	if err != shared.ErrNone {
-		return err
-	}
+func (c *KvCli) Get(k uint64) uint64 {
+	log := c.fc.Get()
 	c.injest(log)
-	return shared.ErrNone
+	return c.kv[k]
 }
 
 func (c *KvCli) injest(log []*shared.MsgT) {
@@ -40,8 +33,9 @@ func (c *KvCli) injest(log []*shared.MsgT) {
 	}
 }
 
-func MakeKvCli(host grove_ffi.Address, signer *shim.SignerT, verifiers []*shim.VerifierT, myNum uint64) *KvCli {
+func MakeKvCli(host grove_ffi.Address, signer *ffi.SignerT, verifiers []*ffi.VerifierT, myNum uint64) *KvCli {
 	c := &KvCli{}
 	c.fc = MakeFcCli(host, myNum, signer, verifiers)
+	c.kv = make(map[uint64]uint64)
 	return c
 }

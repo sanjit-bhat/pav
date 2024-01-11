@@ -106,6 +106,10 @@ type SigDataT struct {
 	Hist *LogT
 }
 
+func NewSigDataT(msg *MsgT, hist *LogT) *SigDataT {
+	return &SigDataT{Msg: msg, Hist: hist}
+}
+
 func (s *SigDataT) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, s.Msg.Encode())
@@ -142,23 +146,68 @@ func (p *PutArgT) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, p.Sender)
 	b = marshal.WriteBytes(b, p.Sig)
+	b = marshal.WriteInt(b, uint64(len(p.SigData)))
 	b = marshal.WriteBytes(b, p.SigData)
 	return b
 }
 
 // Input comes from adv RPC, so need to validate it.
-func (p *PutArgT) Decode(b []byte) ErrorT {
+func (p *PutArgT) Decode(b []byte) ([]byte, ErrorT) {
 	if len(b) < 8 {
-		return ErrSome
+		return nil, ErrSome
 	}
 	sender, r2 := marshal.ReadInt(b)
 	if !(0 <= sender && sender < MaxSenders) {
-		return ErrSome
+		return nil, ErrSome
 	}
 	if uint64(len(r2)) < SigLen {
-		return ErrSome
+		return nil, ErrSome
 	}
-	sig, sigData := marshal.ReadBytes(r2, SigLen)
+	sig, r3 := marshal.ReadBytes(r2, SigLen)
+	if uint64(len(r3)) < 8 {
+		return nil, ErrSome
+	}
+	ln, r4 := marshal.ReadInt(r3)
+	if uint64(len(r4)) < ln {
+		return nil, ErrSome
+	}
+	sigData := r4[:ln]
+	r5 := r4[ln:]
 	p = NewPutArgT(sender, sig, sigData)
-	return ErrNone
+	return r5, ErrNone
+}
+
+// GetArgT
+
+type GetArgT struct {
+	Args []*PutArgT
+}
+
+func NewGetArgT(args []*PutArgT) *GetArgT {
+	return &GetArgT{Args: args}
+}
+
+func (l *GetArgT) Encode() []byte {
+	var b = make([]byte, 0)
+	b = marshal.WriteInt(b, uint64(len(l.Args)))
+	for _, v := range l.Args {
+		b = marshal.WriteBytes(b, v.Encode())
+	}
+	return b
+}
+
+func (l *GetArgT) Decode(b []byte) ([]byte, ErrorT) {
+	if uint64(len(b)) < 8 {
+		return nil, ErrSome
+	}
+	ln, b := marshal.ReadInt(b)
+	sl := make([]*PutArgT, ln)
+	for i := uint64(0); i < ln; i++ {
+		_, err := sl[i].Decode(b)
+		if err != ErrNone {
+			return nil, ErrSome
+		}
+	}
+	l = NewGetArgT(sl)
+	return b, ErrNone
 }
