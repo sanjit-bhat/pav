@@ -1,7 +1,7 @@
 package shared
 
 import (
-	"fmt"
+	"bytes"
 	"github.com/tchajed/goose/machine"
 	"github.com/tchajed/marshal"
 )
@@ -24,120 +24,146 @@ const (
 	SigLen uint64 = 69
 )
 
-// *MsgT
+// KeyValue
 
-type MsgT struct {
-	Op, K, V uint64
+type KeyValue struct {
+	K uint64
+	V []byte
 }
 
-func (m MsgT) String() string {
-	return fmt.Sprintf("{Op: %v, K: %v, V: %v}", m.Op, m.K, m.V)
+func (k *KeyValue) Equals(o *KeyValue) bool {
+	return k.K == o.K && bytes.Equal(k.V, o.V)
 }
 
-func NewMsgT(op, k, v uint64) *MsgT {
-	return &MsgT{Op: op, K: k, V: v}
-}
-
-func (m *MsgT) Equals(o *MsgT) bool {
-	return m.Op == o.Op && m.K == o.K && m.V == o.V
-}
-
-func (m *MsgT) Copy() *MsgT {
-	return &MsgT{Op: m.Op, K: m.K, V: m.V}
-}
-
-func (m *MsgT) Encode() []byte {
+func (k *KeyValue) Encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, m.Op)
-	b = marshal.WriteInt(b, m.K)
-	b = marshal.WriteInt(b, m.V)
+	b = marshal.WriteInt(b, k.K)
+	b = marshal.WriteInt(b, uint64(len(k.V)))
+	b = marshal.WriteBytes(b, k.V)
 	return b
 }
 
-func DecodeMsgT(b []byte) (*MsgT, []byte) {
+func (k *KeyValue) Decode(b []byte) []byte {
+	key, b := marshal.ReadInt(b)
+	l, b := marshal.ReadInt(b)
+	value, b := marshal.ReadBytes(b, l)
+	k.K = key
+	k.V = value
+	return b
+}
+
+// LogEntry
+
+type LogEntry struct {
+	Op   uint64
+	Data []byte
+}
+
+func (l *LogEntry) Equals(o *LogEntry) bool {
+	return l.Op == o.Op && bytes.Equal(l.Data, o.Data)
+}
+
+func (l *LogEntry) Encode() []byte {
+	var b = make([]byte, 0)
+	b = marshal.WriteInt(b, l.Op)
+	b = marshal.WriteInt(b, uint64(len(l.Data)))
+	b = marshal.WriteBytes(b, l.Data)
+	return b
+}
+
+func (l *LogEntry) Decode(b []byte) []byte {
 	op, b := marshal.ReadInt(b)
-	k, b := marshal.ReadInt(b)
-	v, b := marshal.ReadInt(b)
-	return NewMsgT(op, k, v), b
+	length, b := marshal.ReadInt(b)
+	data, b := marshal.ReadBytes(b, length)
+	l.Op = op
+	l.Data = data
+	return b
 }
 
-// []*MsgT
+// Log
 
-func CopyMsgTSlice(sl []*MsgT) []*MsgT {
-	var sl2 = make([]*MsgT, len(sl))
-	for i, v := range sl {
-		sl2[i] = v.Copy()
-	}
-	return sl2
+type Log struct {
+	Log []*LogEntry
 }
 
-func IsMsgTSlicePrefix(short, long []*MsgT) bool {
-	if len(long) < len(short) {
+func (short *Log) IsPrefix(long *Log) bool {
+	if len(long.Log) < len(short.Log) {
 		return false
 	}
 	var ret = true
-	for i, m := range short {
-		if !m.Equals(long[i]) {
+	for i, e := range short.Log {
+		if !e.Equals(long.Log[i]) {
 			ret = false
 		}
 	}
 	return ret
 }
 
-func EncodeMsgTSlice(sl []*MsgT) []byte {
+func (l *Log) GetData() [][]byte {
+	log := make([][]byte, 0)
+	for _, e := range l.Log {
+		if e.Op == OpPut {
+			log = append(log, e.Data)
+		}
+	}
+	return log
+}
+
+func (l *Log) Encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, uint64(len(sl)))
-	for _, v := range sl {
-		b = marshal.WriteBytes(b, v.Encode())
+	b = marshal.WriteInt(b, uint64(len(l.Log)))
+	for _, e := range l.Log {
+		b = marshal.WriteBytes(b, e.Encode())
 	}
 	return b
 }
 
-func DecodeMsgTSlice(b []byte) ([]*MsgT, []byte) {
-	var b2 = b
-	l, b2 := marshal.ReadInt(b2)
-	sl := make([]*MsgT, l)
-	for i := uint64(0); i < l; i++ {
-		sl[i], b2 = DecodeMsgT(b2)
+func (l *Log) Decode(b []byte) []byte {
+	length, b := marshal.ReadInt(b)
+	log := make([]*LogEntry, length)
+	for i := uint64(0); i < length; i++ {
+		b = log[i].Decode(b)
 	}
-	return sl, b2
+	l.Log = log
+	return b
 }
 
-// *PutArg
+// SignedLog
 
-type PutArg struct {
+type SignedLog struct {
 	Sender uint64
 	Sig    []byte
-	LogB   []byte
+	Log    *Log
 }
 
-func NewPutArg(sender uint64, sig, logB []byte) *PutArg {
-	return &PutArg{Sender: sender, Sig: sig, LogB: logB}
-}
-
-func (pa *PutArg) Encode() []byte {
+func (s *SignedLog) Encode() []byte {
 	// ECDSA_P256 gave diff len sigs, which complicates encoding.
 	// ED25519 should have const len sigs.
-	machine.Assume(uint64(len(pa.Sig)) == SigLen)
+	machine.Assume(uint64(len(s.Sig)) == SigLen)
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, pa.Sender)
-	b = marshal.WriteBytes(b, pa.Sig)
-	b = marshal.WriteBytes(b, pa.LogB)
+	b = marshal.WriteInt(b, s.Sender)
+	b = marshal.WriteBytes(b, s.Sig)
+	b = marshal.WriteBytes(b, s.Log.Encode())
 	return b
 }
 
 // Input comes from adv RPC, so need to validate it.
-func DecodePutArg(b []byte) (*PutArg, ErrorT) {
+func (s *SignedLog) Decode(b []byte) ErrorT {
 	if len(b) < 8 {
-		return nil, ErrSome
+		return ErrSome
 	}
-	sender, r2 := marshal.ReadInt(b)
+	sender, b := marshal.ReadInt(b)
 	if !(0 <= sender && sender < MaxUsers) {
-		return nil, ErrSome
+		return ErrSome
 	}
-	if uint64(len(r2)) < SigLen {
-		return nil, ErrSome
+	if uint64(len(b)) < SigLen {
+		return ErrSome
 	}
-	sig, logB := marshal.ReadBytes(r2, SigLen)
-	return NewPutArg(sender, sig, logB), ErrNone
+	sig, b := marshal.ReadBytes(b, SigLen)
+	log := &Log{}
+	log.Decode(b)
+	s.Sender = sender
+	s.Sig = sig
+	s.Log = log
+	return ErrNone
 }
