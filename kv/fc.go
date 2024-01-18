@@ -11,29 +11,28 @@ import (
 // FcCli only supports sequential calls to its methods.
 type FcCli struct {
 	urpc      *urpc.Client
-	log       []*shared.MsgT
+	log       *shared.Log
 	myNum     uint64
 	signer    *ffi.SignerT
 	verifiers []*ffi.VerifierT
 }
 
-func (c *FcCli) Put(m *shared.MsgT) []*shared.MsgT {
-	// Copy bc I don't want to deal with caller ownership transfer.
-	m2 := m.Copy()
-	m2.Op = shared.OpPut
-	return c.prepareCommit(m2)
+func (c *FcCli) Put(data []byte) [][]byte {
+	l := &shared.LogEntry{Op: shared.OpPut, Data: data}
+	return c.prepareCommit(l)
 }
 
-func (c *FcCli) Get() []*shared.MsgT {
-	m := shared.NewMsgT(shared.OpGet, 0, 0)
-	return c.prepareCommit(m)
+func (c *FcCli) Get() [][]byte {
+	empty := make([]byte, 0)
+	l := &shared.LogEntry{Op: shared.OpGet, Data: empty}
+	return c.prepareCommit(l)
 }
 
-func (c *FcCli) prepareCommit(m *shared.MsgT) []*shared.MsgT {
+func (c *FcCli) prepareCommit(e *shared.LogEntry) [][]byte {
 	c.prepare()
-	c.commit(m)
-	log := shared.CopyMsgTSlice(c.log)
-	return log
+	c.commit(e)
+	logB := c.log.GetData()
+	return logB
 }
 
 func (c *FcCli) prepare() {
@@ -43,45 +42,47 @@ func (c *FcCli) prepare() {
 
 	if len(r) == 0 {
 		// Init system with empty log.
-		machine.Assume(len(c.log) == 0)
+		machine.Assume(len(c.log.Log) == 0)
 		return
 	}
 
-	arg, err2 := shared.DecodePutArg(r)
+	sLog := &shared.SignedLog{}
+	err2 := sLog.Decode(r)
 	machine.Assume(err2 == shared.ErrNone)
 
-	pk := c.verifiers[arg.Sender]
-	err3 := pk.Verify(arg.Sig, arg.LogB)
+	pk := c.verifiers[sLog.Sender]
+	log := sLog.Log
+	logB := log.Encode()
+	err3 := pk.Verify(sLog.Sig, logB)
 	machine.Assume(err3 == shared.ErrNone)
 
-	log, _ := shared.DecodeMsgTSlice(arg.LogB)
-	isPrefix := shared.IsMsgTSlicePrefix(c.log, log)
+	isPrefix := c.log.IsPrefix(log)
 	machine.Assume(isPrefix)
 
 	c.log = log
 }
 
-func (c *FcCli) commit(m *shared.MsgT) {
-	log := shared.CopyMsgTSlice(c.log)
-	log2 := append(log, m)
-	log2B := shared.EncodeMsgTSlice(log2)
+func (c *FcCli) commit(e *shared.LogEntry) {
+	newLog := &shared.Log{Log: append(c.log.Log, e)}
+	newLogB := newLog.Encode()
 
-	sig, err1 := c.signer.Sign(log2B)
+	sig, err1 := c.signer.Sign(newLogB)
 	machine.Assume(err1 == shared.ErrNone)
 
-	pa := shared.NewPutArg(c.myNum, sig, log2B)
-	argB := pa.Encode()
+	sLog := &shared.SignedLog{Sender: c.myNum, Sig: sig, Log: newLog}
+	sLogB := sLog.Encode()
 
 	r := make([]byte, 0)
-	err2 := c.urpc.Call(shared.RpcCommit, argB, &r, 100)
+	err2 := c.urpc.Call(shared.RpcCommit, sLogB, &r, 100)
 	machine.Assume(err2 == urpc.ErrNone)
-	c.log = log2
+	c.log = newLog
 }
 
 func MakeFcCli(host grove_ffi.Address, myNum uint64, signer *ffi.SignerT, verifiers []*ffi.VerifierT) *FcCli {
 	c := &FcCli{}
 	c.urpc = urpc.MakeClient(host)
-	c.log = make([]*shared.MsgT, 0)
+	empty := make([]*shared.LogEntry, 0)
+	c.log = &shared.Log{Log: empty}
 	c.myNum = myNum
 	c.signer = signer
 	c.verifiers = verifiers

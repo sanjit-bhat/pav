@@ -59,24 +59,24 @@ type LogEntry struct {
 	Data []byte
 }
 
-func (l *LogEntry) Equals(o *LogEntry) bool {
-	return l.Op == o.Op && bytes.Equal(l.Data, o.Data)
+func (e *LogEntry) Equals(o *LogEntry) bool {
+	return e.Op == o.Op && bytes.Equal(e.Data, o.Data)
 }
 
-func (l *LogEntry) Encode() []byte {
+func (e *LogEntry) Encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, l.Op)
-	b = marshal.WriteInt(b, uint64(len(l.Data)))
-	b = marshal.WriteBytes(b, l.Data)
+	b = marshal.WriteInt(b, e.Op)
+	b = marshal.WriteInt(b, uint64(len(e.Data)))
+	b = marshal.WriteBytes(b, e.Data)
 	return b
 }
 
-func (l *LogEntry) Decode(b []byte) []byte {
+func (e *LogEntry) Decode(b []byte) []byte {
 	op, b := marshal.ReadInt(b)
 	length, b := marshal.ReadInt(b)
 	data, b := marshal.ReadBytes(b, length)
-	l.Op = op
-	l.Data = data
+	e.Op = op
+	e.Data = data
 	return b
 }
 
