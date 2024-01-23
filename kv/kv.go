@@ -1,9 +1,13 @@
 package kv
 
 import (
+	"fmt"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/secure-chat/kv/ffi"
 	"github.com/mit-pdos/secure-chat/kv/shared"
+	"log/slog"
+	"os"
+	"time"
 )
 
 // From the kv's standpoint, there is a log of only kv entries,
@@ -13,19 +17,32 @@ type KvCli struct {
 	fc      *FcCli
 	kv      map[uint64][]byte
 	logNext uint64
+	logger  *slog.Logger
+	logFile *os.File
 }
 
 func (c *KvCli) Put(k uint64, v []byte) {
 	kv := &shared.KeyValue{K: k, V: v}
 	kvB := kv.Encode()
+	start := time.Now()
 	log := c.fc.Put(kvB)
 	c.injest(log)
+	end := time.Now()
+	c.logger.Info("put", "key", k, "value", v, "start", start, "end", end)
 }
 
 func (c *KvCli) Get(k uint64) []byte {
+	start := time.Now()
 	log := c.fc.Get()
 	c.injest(log)
-	return c.kv[k]
+	end := time.Now()
+	ret := c.kv[k]
+	c.logger.Info("get", "key", k, "value", ret, "start", start, "end", end)
+	return ret
+}
+
+func (c *KvCli) Exit() {
+	c.logFile.Close()
 }
 
 func (c *KvCli) injest(log [][]byte) {
@@ -41,5 +58,11 @@ func MakeKvCli(host grove_ffi.Address, signer *ffi.SignerT, verifiers []*ffi.Ver
 	c := &KvCli{}
 	c.fc = MakeFcCli(host, myNum, signer, verifiers)
 	c.kv = make(map[uint64][]byte)
+	var err error
+	c.logFile, err = os.Create(fmt.Sprintf("cli%v.log", myNum))
+	if err != nil {
+		panic(err)
+	}
+	c.logger = slog.New(slog.NewJSONHandler(c.logFile, nil)).With("cli", myNum)
 	return c
 }

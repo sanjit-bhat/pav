@@ -65,16 +65,14 @@ func (c *FcCli) prepare() {
 func (c *FcCli) commit(e *shared.LogEntry) {
 	newLog := &shared.Log{Log: append(c.log.Log, e)}
 	newLogB := newLog.Encode()
-
-	sig, err1 := c.signer.Sign(newLogB)
-	machine.Assume(err1 == shared.ErrNone)
+	sig := c.signer.Sign(newLogB)
 
 	sLog := &shared.SignedLog{Sender: c.myNum, Sig: sig, Log: newLog}
 	sLogB := sLog.Encode()
 
 	r := make([]byte, 0)
-	err2 := c.urpc.Call(shared.RpcCommit, sLogB, &r, 100)
-	machine.Assume(err2 == urpc.ErrNone)
+	err1 := c.urpc.Call(shared.RpcCommit, sLogB, &r, 100)
+	machine.Assume(err1 == urpc.ErrNone)
 	c.log = newLog
 }
 

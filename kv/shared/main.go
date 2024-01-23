@@ -122,6 +122,7 @@ func (l *Log) Decode(b []byte) []byte {
 	length, b := marshal.ReadInt(b)
 	log := make([]*LogEntry, length)
 	for i := uint64(0); i < length; i++ {
+		log[i] = &LogEntry{}
 		b = log[i].Decode(b)
 	}
 	l.Log = log
