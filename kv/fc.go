@@ -8,6 +8,11 @@ import (
 	"github.com/tchajed/goose/machine"
 )
 
+const (
+	opGet uint64 = 1
+	opPut uint64 = 2
+)
+
 // FcCli only supports sequential calls to its methods.
 type FcCli struct {
 	urpc      *urpc.Client
@@ -18,21 +23,31 @@ type FcCli struct {
 }
 
 func (c *FcCli) Put(data []byte) [][]byte {
-	l := &shared.LogEntry{Op: shared.OpPut, Data: data}
+	l := &shared.LogEntry{Op: opPut, Data: data}
 	return c.prepareCommit(l)
 }
 
 func (c *FcCli) Get() [][]byte {
 	empty := make([]byte, 0)
-	l := &shared.LogEntry{Op: shared.OpGet, Data: empty}
+	l := &shared.LogEntry{Op: opGet, Data: empty}
 	return c.prepareCommit(l)
 }
 
 func (c *FcCli) prepareCommit(e *shared.LogEntry) [][]byte {
 	c.prepare()
 	c.commit(e)
-	logB := c.log.GetData()
+	logB := getData(c.log)
 	return logB
+}
+
+func getData(l *shared.Log) [][]byte {
+	log := make([][]byte, 0)
+	for _, e := range l.Log {
+		if e.Op == opPut {
+			log = append(log, e.Data)
+		}
+	}
+	return log
 }
 
 func (c *FcCli) prepare() {
@@ -50,6 +65,7 @@ func (c *FcCli) prepare() {
 	err2 := sLog.Decode(r)
 	machine.Assume(err2 == shared.ErrNone)
 
+	machine.Assume(sLog.Sender < uint64(len(c.verifiers)))
 	pk := c.verifiers[sLog.Sender]
 	log := sLog.Log
 	logB := log.Encode()

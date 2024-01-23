@@ -15,11 +15,6 @@ const (
 	// RPCs
 	RpcPrepare uint64 = 1
 	RpcCommit  uint64 = 2
-	// Ops
-	OpGet uint64 = 1
-	OpPut uint64 = 2
-	// Users
-	MaxUsers uint64 = 2
 	// Sig
 	SigLen uint64 = 69
 )
@@ -99,16 +94,6 @@ func (short *Log) IsPrefix(long *Log) bool {
 	return ret
 }
 
-func (l *Log) GetData() [][]byte {
-	log := make([][]byte, 0)
-	for _, e := range l.Log {
-		if e.Op == OpPut {
-			log = append(log, e.Data)
-		}
-	}
-	return log
-}
-
 func (l *Log) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, uint64(len(l.Log)))
@@ -154,9 +139,6 @@ func (s *SignedLog) Decode(b []byte) ErrorT {
 		return ErrSome
 	}
 	sender, b := marshal.ReadInt(b)
-	if !(0 <= sender && sender < MaxUsers) {
-		return ErrSome
-	}
 	if uint64(len(b)) < SigLen {
 		return ErrSome
 	}
