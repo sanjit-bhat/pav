@@ -18,7 +18,6 @@ type KvCli struct {
 	kv      map[uint64][]byte
 	logNext uint64
 	logger  *slog.Logger
-	logFile *os.File
 }
 
 func (c *KvCli) Put(k uint64, v []byte) {
@@ -41,10 +40,6 @@ func (c *KvCli) Get(k uint64) []byte {
 	return ret
 }
 
-func (c *KvCli) Exit() {
-	c.logFile.Close()
-}
-
 func (c *KvCli) injest(log [][]byte) {
 	for ; c.logNext < uint64(len(log)); c.logNext++ {
 		kvB := log[c.logNext]
@@ -59,10 +54,10 @@ func MakeKvCli(host grove_ffi.Address, signer *ffi.SignerT, verifiers []*ffi.Ver
 	c.fc = MakeFcCli(host, uid, signer, verifiers)
 	c.kv = make(map[uint64][]byte)
 	var err error
-	c.logFile, err = os.Create(fmt.Sprintf("cli%v.log", uid))
+    f, err := os.Create(fmt.Sprintf("logs/cli%v.log", uid))
 	if err != nil {
 		panic(err)
 	}
-	c.logger = slog.New(slog.NewJSONHandler(c.logFile, nil)).With("cli", uid)
+	c.logger = slog.New(slog.NewJSONHandler(f, nil)).With("cli", uid)
 	return c
 }
