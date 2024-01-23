@@ -54,15 +54,15 @@ func (c *KvCli) injest(log [][]byte) {
 	}
 }
 
-func MakeKvCli(host grove_ffi.Address, signer *ffi.SignerT, verifiers []*ffi.VerifierT, myNum uint64) *KvCli {
+func MakeKvCli(host grove_ffi.Address, signer *ffi.SignerT, verifiers []*ffi.VerifierT, uid uint64) *KvCli {
 	c := &KvCli{}
-	c.fc = MakeFcCli(host, myNum, signer, verifiers)
+	c.fc = MakeFcCli(host, uid, signer, verifiers)
 	c.kv = make(map[uint64][]byte)
 	var err error
-	c.logFile, err = os.Create(fmt.Sprintf("cli%v.log", myNum))
+	c.logFile, err = os.Create(fmt.Sprintf("cli%v.log", uid))
 	if err != nil {
 		panic(err)
 	}
-	c.logger = slog.New(slog.NewJSONHandler(c.logFile, nil)).With("cli", myNum)
+	c.logger = slog.New(slog.NewJSONHandler(c.logFile, nil)).With("cli", uid)
 	return c
 }

@@ -17,7 +17,7 @@ const (
 type FcCli struct {
 	urpc      *urpc.Client
 	log       *shared.Log
-	myNum     uint64
+	uid       uint64
 	signer    *ffi.SignerT
 	verifiers []*ffi.VerifierT
 }
@@ -38,16 +38,6 @@ func (c *FcCli) prepareCommit(e *shared.LogEntry) [][]byte {
 	c.commit(e)
 	logB := getData(c.log)
 	return logB
-}
-
-func getData(l *shared.Log) [][]byte {
-	log := make([][]byte, 0)
-	for _, e := range l.Log {
-		if e.Op == opPut {
-			log = append(log, e.Data)
-		}
-	}
-	return log
 }
 
 func (c *FcCli) prepare() {
@@ -83,7 +73,7 @@ func (c *FcCli) commit(e *shared.LogEntry) {
 	newLogB := newLog.Encode()
 	sig := c.signer.Sign(newLogB)
 
-	sLog := &shared.SignedLog{Sender: c.myNum, Sig: sig, Log: newLog}
+	sLog := &shared.SignedLog{Sender: c.uid, Sig: sig, Log: newLog}
 	sLogB := sLog.Encode()
 
 	r := make([]byte, 0)
@@ -92,12 +82,22 @@ func (c *FcCli) commit(e *shared.LogEntry) {
 	c.log = newLog
 }
 
-func MakeFcCli(host grove_ffi.Address, myNum uint64, signer *ffi.SignerT, verifiers []*ffi.VerifierT) *FcCli {
+func getData(l *shared.Log) [][]byte {
+	log := make([][]byte, 0)
+	for _, e := range l.Log {
+		if e.Op == opPut {
+			log = append(log, e.Data)
+		}
+	}
+	return log
+}
+
+func MakeFcCli(host grove_ffi.Address, uid uint64, signer *ffi.SignerT, verifiers []*ffi.VerifierT) *FcCli {
 	c := &FcCli{}
 	c.urpc = urpc.MakeClient(host)
 	empty := make([]*shared.LogEntry, 0)
 	c.log = &shared.Log{Log: empty}
-	c.myNum = myNum
+	c.uid = uid
 	c.signer = signer
 	c.verifiers = verifiers
 	return c
