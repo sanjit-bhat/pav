@@ -10,13 +10,15 @@ import (
 	"testing"
 )
 
-// Code based off of:
+// Code based on:
 // https://github.com/anishathalye/porcupine/blob/master/porcupine_test.go
 
 func TestPorc(t *testing.T) {
 	ops := parseAllLogs()
 	model := kvModel
-	porc.CheckOperations(model, ops)
+	if ok := porc.CheckOperations(model, ops); !ok {
+		t.Error("not linearizable")
+	}
 }
 
 type kvInput struct {
