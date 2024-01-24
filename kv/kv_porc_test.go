@@ -1,5 +1,8 @@
 package kv
 
+// Code based on:
+// https://github.com/anishathalye/porcupine/blob/master/porcupine_test.go
+
 import (
 	"encoding/json"
 	"fmt"
@@ -11,10 +14,8 @@ import (
 	"time"
 )
 
-// Code based on:
-// https://github.com/anishathalye/porcupine/blob/master/porcupine_test.go
-
 func TestPorc(t *testing.T) {
+    // Note: run kv_test.go:TestManyOps first to generate traces.
 	ops := parseAllLogs(t)
 	model := kvModel
 	res, info := porc.CheckOperationsVerbose(model, ops, time.Second)
