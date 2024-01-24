@@ -23,20 +23,25 @@ type KvCli struct {
 func (c *KvCli) Put(k uint64, v []byte) {
 	kv := &shared.KeyValue{K: k, V: v}
 	kvB := kv.Encode()
-	start := time.Now()
+	start := time.Now().UnixNano()
 	log := c.fc.Put(kvB)
 	c.injest(log)
-	end := time.Now()
+	end := time.Now().UnixNano()
 	c.logger.Info("put", "key", k, "value", v, "start", start, "end", end)
 }
 
 func (c *KvCli) Get(k uint64) []byte {
-	start := time.Now()
+	start := time.Now().UnixNano()
 	log := c.fc.Get()
 	c.injest(log)
-	end := time.Now()
-	ret := c.kv[k]
-	c.logger.Info("get", "key", k, "value", ret, "start", start, "end", end)
+	end := time.Now().UnixNano()
+    ret, ok := c.kv[k]
+    logVal := ret
+    if !ok {
+        // Want json parser to not have to deal with null vals.
+        logVal = []byte{}
+    }
+    c.logger.Info("get", "key", k, "value", logVal, "start", start, "end", end)
 	return ret
 }
 
@@ -49,15 +54,15 @@ func (c *KvCli) injest(log [][]byte) {
 	}
 }
 
-func MakeKvCli(host grove_ffi.Address, signer *ffi.SignerT, verifiers []*ffi.VerifierT, uid uint64) *KvCli {
+func MakeKvCli(host grove_ffi.Address, signer *ffi.SignerT, verifiers []*ffi.VerifierT, cid uint64) *KvCli {
 	c := &KvCli{}
-	c.fc = MakeFcCli(host, uid, signer, verifiers)
+	c.fc = MakeFcCli(host, cid, signer, verifiers)
 	c.kv = make(map[uint64][]byte)
 	var err error
-    f, err := os.Create(fmt.Sprintf("logs/cli%v.log", uid))
+    f, err := os.Create(fmt.Sprintf("logs/cli%v.log", cid))
 	if err != nil {
 		panic(err)
 	}
-	c.logger = slog.New(slog.NewJSONHandler(f, nil)).With("cli", uid)
+	c.logger = slog.New(slog.NewJSONHandler(f, nil))
 	return c
 }

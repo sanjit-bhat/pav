@@ -3,6 +3,7 @@ module github.com/mit-pdos/secure-chat
 go 1.20
 
 require (
+	github.com/anishathalye/porcupine v0.1.5
 	github.com/mit-pdos/gokv v0.0.0-20231019222008-8f340ff02c0f
 	github.com/tchajed/marshal v0.4.3
 	github.com/tink-crypto/tink-go/v2 v2.0.0

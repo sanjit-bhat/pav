@@ -12,10 +12,10 @@ import (
 )
 
 func TestBasic(t *testing.T) {
-	numUsers := 2
-	sks := make([]*ffi.SignerT, numUsers)
-	vks := make([]*ffi.VerifierT, numUsers)
-	for i := 0; i < numUsers; i++ {
+	numClients := 2
+	sks := make([]*ffi.SignerT, numClients)
+	vks := make([]*ffi.VerifierT, numClients)
+	for i := 0; i < numClients; i++ {
 		sks[i], vks[i] = ffi.MakeKeys()
 	}
 
@@ -62,18 +62,20 @@ func TestBasic(t *testing.T) {
 	}()
 
 	wg.Wait()
-	// TODO: will Go garbage collect the server thread here?
 }
 
-func TestPorcupine(t *testing.T) {
-	numUsers := 10
+func TestManyOps(t *testing.T) {
+    if testing.Short() {
+        t.Skip("skipping test in short mode")
+    }
+	numClients := 10
 	numKeys := 10
 	numVals := 10
 	numOps := 1000
 
-	sks := make([]*ffi.SignerT, numUsers)
-	vks := make([]*ffi.VerifierT, numUsers)
-	for i := 0; i < numUsers; i++ {
+	sks := make([]*ffi.SignerT, numClients)
+	vks := make([]*ffi.VerifierT, numClients)
+	for i := 0; i < numClients; i++ {
 		sks[i], vks[i] = ffi.MakeKeys()
 	}
 	vals := make([][]byte, numVals)
@@ -81,22 +83,23 @@ func TestPorcupine(t *testing.T) {
 		vals[i] = []byte(fmt.Sprintf("v%d", i))
 	}
 
+    // Note: Go doesn't garbage collect server from other test, so use a diff addr.
 	addr := grove_ffi.MakeAddress("0.0.0.0:6061")
 	serverStartup := time.Millisecond
 	s := ffi.MakeServer()
 	s.Start(addr)
 
 	var wg sync.WaitGroup
-	for i := 0; i < numUsers; i++ {
+	for i := 0; i < numClients; i++ {
 		wg.Add(1)
-		go func(uid int) {
+		go func(cid int) {
 			defer wg.Done()
 			time.Sleep(serverStartup)
-			c := MakeKvCli(addr, sks[uid], vks, uint64(uid))
+			c := MakeKvCli(addr, sks[cid], vks, uint64(cid))
 
 			for opIdx := 0; opIdx < numOps; opIdx++ {
 				if opIdx%100 == 0 {
-					fmt.Println("uid", uid, "opIdx", opIdx)
+					fmt.Println("cid", cid, "opIdx", opIdx)
 				}
 				k := uint64(rand.Intn(numKeys))
 				op := rand.Intn(2)
