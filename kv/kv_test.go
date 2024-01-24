@@ -99,7 +99,7 @@ func TestManyOps(t *testing.T) {
 
 			for opIdx := 0; opIdx < numOps; opIdx++ {
 				if opIdx%100 == 0 {
-					fmt.Println("cid", cid, "opIdx", opIdx)
+					t.Log("cid", cid, "opIdx", opIdx)
 				}
 				k := uint64(rand.Intn(numKeys))
 				op := rand.Intn(2)
