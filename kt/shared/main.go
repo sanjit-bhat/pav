@@ -11,6 +11,7 @@ const (
     ErrKeyCliNoKey ErrorT = 4
     ErrKeyCliRegPrefix ErrorT = 5
     ErrAudDoPrefix ErrorT = 6
+    ErrKeyCliRegNoExist ErrorT = 7
 	// Sig
 	SigLen uint64 = 69
 )

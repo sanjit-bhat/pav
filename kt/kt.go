@@ -53,16 +53,26 @@ func (small *keyLog) isPrefix(big *keyLog) bool {
 	return ans
 }
 
-func (l *keyLog) lookup(uname uint64) ([]byte, bool) {
-	ok := false
+func (l *keyLog) lookup(uname uint64) (uint64, []byte, bool) {
+	var idx uint64
 	var key []byte
-	for i := len(l.log) - 1; i >= 0; i-- {
+	var ok bool
+	for i := l.len() - 1; i >= 0; i-- {
 		if !ok && l.log[i].uname == uname {
-			ok = true
+			idx = uint64(i)
 			key = l.log[i].key
+			ok = true
 		}
 	}
-	return key, ok
+	return idx, key, ok
+}
+
+func (l *keyLog) len() int {
+	return len(l.log)
+}
+
+func (l *keyLog) append(uk *unameKey) {
+	l.log = append(l.log, uk)
 }
 
 // Key server.
@@ -78,7 +88,7 @@ func newKeyServ() *keyServ {
 
 func (ks *keyServ) appendLog(entry *unameKey) *keyLog {
 	ks.mu.Lock()
-	ks.log.log = append(ks.log.log, entry)
+	ks.log.append(entry)
 	outLog := ks.log.deepCopy()
 	ks.mu.Unlock()
 	return outLog
@@ -107,11 +117,10 @@ func (a *auditor) doAudit(newLog *keyLog) shared.ErrorT {
 	if !a.log.isPrefix(newLog) {
 		a.mu.Unlock()
 		return shared.ErrAudDoPrefix
-	} else {
-		a.log = newLog
-		a.mu.Unlock()
-		return shared.ErrNone
 	}
+	a.log = newLog
+	a.mu.Unlock()
+	return shared.ErrNone
 }
 
 func (a *auditor) getAudit() *keyLog {
@@ -133,36 +142,39 @@ func newKeyCli(serv *keyServ, adtrs []*auditor) *keyCli {
 	return &keyCli{log: newKeyLog(), serv: serv, adtrs: adtrs}
 }
 
-func (kc *keyCli) register(entry *unameKey) shared.ErrorT {
+func (kc *keyCli) register(entry *unameKey) (uint64, shared.ErrorT) {
 	newLog := kc.serv.appendLog(entry)
 	if !kc.log.isPrefix(newLog) {
-		return shared.ErrKeyCliRegPrefix
+		return 0, shared.ErrKeyCliRegPrefix
+	}
+	epoch, _, ok := newLog.lookup(entry.uname)
+	if !ok || epoch < uint64(kc.log.len()) {
+		return 0, shared.ErrKeyCliRegNoExist
 	}
 	kc.log = newLog
-	return shared.ErrNone
+	return epoch, shared.ErrNone
 }
 
-func (kc *keyCli) lookup(uname uint64) ([]byte, shared.ErrorT) {
+func (kc *keyCli) lookup(uname uint64) (uint64, []byte, shared.ErrorT) {
 	newLog := kc.serv.getLog()
 	if !kc.log.isPrefix(newLog) {
-		return nil, shared.ErrKeyCliLookupPrefix
+		return 0, nil, shared.ErrKeyCliLookupPrefix
 	}
 	kc.log = newLog
-	key, ok := kc.log.lookup(uname)
+	epoch, key, ok := kc.log.lookup(uname)
 	if !ok {
-		return nil, shared.ErrKeyCliNoKey
+		return 0, nil, shared.ErrKeyCliNoKey
 	}
-	return key, shared.ErrNone
+	return epoch, key, shared.ErrNone
 }
 
-func (kc *keyCli) audit(aId uint64) shared.ErrorT {
+func (kc *keyCli) audit(aId uint64) (uint64, shared.ErrorT) {
 	audLog := kc.adtrs[aId].getAudit()
-	// TODO: design decision isPrefix/isEqual and whether to store log for later.
 	if !kc.log.isPrefix(audLog) {
-		return shared.ErrKeyCliAuditPrefix
+		return 0, shared.ErrKeyCliAuditPrefix
 	}
 	kc.log = audLog
-	return shared.ErrNone
+	return uint64(kc.log.len()), shared.ErrNone
 }
 
 // Tests.
@@ -179,34 +191,36 @@ func testAuditPass() {
 	aliceKey := []byte("pubkey")
 	uk := &unameKey{uname: aliceUname, key: aliceKey}
 	var err shared.ErrorT
-	err = cReg.register(uk)
+	_, err = cReg.register(uk)
 	machine.Assume(err == shared.ErrNone)
 
 	newLog := kserv.getLog()
 	err = aud.doAudit(newLog)
 	machine.Assume(err == shared.ErrNone)
 
-	retKey1, err := cLook1.lookup(aliceUname)
+	epochL1, retKey1, err := cLook1.lookup(aliceUname)
 	machine.Assume(err == shared.ErrNone)
-	retKey2, err := cLook2.lookup(aliceUname)
-	machine.Assume(err == shared.ErrNone)
-
-	err = cLook1.audit(0)
-	machine.Assume(err == shared.ErrNone)
-	err = cLook2.audit(0)
+	epochL2, retKey2, err := cLook2.lookup(aliceUname)
 	machine.Assume(err == shared.ErrNone)
 
-	machine.Assert(bytes.Equal(retKey1, retKey2))
+	_, err = cLook1.audit(0)
+	machine.Assume(err == shared.ErrNone)
+	_, err = cLook2.audit(0)
+	machine.Assume(err == shared.ErrNone)
+	// Don't need to check audit epoch since we know it needs to cover epochs
+	// we've already seen.
+
+	if epochL1 == epochL2 {
+		machine.Assert(bytes.Equal(retKey1, retKey2))
+	}
 }
 
 func testAuditFail() {
-	aud1 := newAuditor()
-	aud2 := newAuditor()
-	adtrs := []*auditor{aud1, aud2}
+	aud := newAuditor()
+	adtrs := []*auditor{aud}
 
 	kserv1 := newKeyServ()
 	cReg1 := newKeyCli(kserv1, adtrs)
-	cLook1 := newKeyCli(kserv1, adtrs)
 
 	kserv2 := newKeyServ()
 	cReg2 := newKeyCli(kserv2, adtrs)
@@ -218,27 +232,18 @@ func testAuditFail() {
 	uk1 := &unameKey{uname: aliceUname, key: aliceKey1}
 	uk2 := &unameKey{uname: aliceUname, key: aliceKey2}
 	var err shared.ErrorT
-	err = cReg1.register(uk1)
+	_, err = cReg1.register(uk1)
 	machine.Assume(err == shared.ErrNone)
-	err = cReg2.register(uk2)
-	machine.Assume(err == shared.ErrNone)
-
-	newLog1 := kserv1.getLog()
-	err = aud1.doAudit(newLog1)
-	machine.Assume(err == shared.ErrNone)
-	newLog2 := kserv2.getLog()
-	err = aud2.doAudit(newLog2)
+	_, err = cReg2.register(uk2)
 	machine.Assume(err == shared.ErrNone)
 
-	retKey1, err := cLook1.lookup(aliceUname)
-	machine.Assume(err == shared.ErrNone)
-	retKey2, err := cLook2.lookup(aliceUname)
+	newLog := kserv1.getLog()
+	err = aud.doAudit(newLog)
 	machine.Assume(err == shared.ErrNone)
 
-	err = cLook1.audit(0)
+	_, _, err = cLook2.lookup(aliceUname)
 	machine.Assume(err == shared.ErrNone)
-	err = cLook2.audit(0)
+
+	_, err = cLook2.audit(0)
 	machine.Assert(err == shared.ErrKeyCliAuditPrefix)
-
-	machine.Assert(!bytes.Equal(retKey1, retKey2))
 }
