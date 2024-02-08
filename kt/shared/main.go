@@ -14,11 +14,9 @@ const (
 	ErrKeyCli_AuditPrefix    ErrorT = 2
 	ErrKeyCli_CheckLogPrefix ErrorT = 3
 	ErrKeyCli_CheckLogLookup ErrorT = 4
-	ErrKeyCli_RegPrefix      ErrorT = 5
-	ErrAud_DoPrefix          ErrorT = 6
-	ErrKeyCli_RegNoExist     ErrorT = 7
-	ErrUnameKey_Decode       ErrorT = 8
-	ErrKeyLog_Decode         ErrorT = 9
+	ErrKeyCli_RegNoExist     ErrorT = 5
+	ErrUnameKey_Decode       ErrorT = 6
+	ErrKeyLog_Decode         ErrorT = 7
 	// RPCs
 	RpcAppendLog uint64 = 1
 	RpcGetLog    uint64 = 2

@@ -91,7 +91,7 @@ func checkLog(in *checkLogIn) *checkLogOut {
 		return &checkLogOut{newLog: newLog, epoch: 0, key: nil, err: shared.ErrNone}
 	}
 
-	epoch, key, ok := in.currLog.Lookup(in.uname)
+	epoch, key, ok := newLog.Lookup(in.uname)
 	if !ok {
 		return errNewLogOut(shared.ErrKeyCli_CheckLogLookup)
 	}
