@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
+	"github.com/mit-pdos/secure-chat/kt/ffi"
 	"github.com/mit-pdos/secure-chat/kt/shared"
 	"github.com/tchajed/goose/machine"
 	"sync"
@@ -11,16 +12,16 @@ import (
 
 // Key server.
 
-type KeyServ struct {
-	log *shared.KeyLog
+type keyServ struct {
 	mu  *sync.Mutex
+	log *shared.KeyLog
 }
 
-func NewKeyServ() *KeyServ {
-	return &KeyServ{log: shared.NewKeyLog(), mu: new(sync.Mutex)}
+func newKeyServ() *keyServ {
+	return &keyServ{mu: new(sync.Mutex), log: shared.NewKeyLog()}
 }
 
-func (ks *KeyServ) appendLog(entry *shared.UnameKey) *shared.KeyLog {
+func (ks *keyServ) appendLog(entry *shared.UnameKey) *shared.KeyLog {
 	ks.mu.Lock()
 	ks.log.Append(entry)
 	outLog := ks.log.DeepCopy()
@@ -28,14 +29,14 @@ func (ks *KeyServ) appendLog(entry *shared.UnameKey) *shared.KeyLog {
 	return outLog
 }
 
-func (ks *KeyServ) getLog() *shared.KeyLog {
+func (ks *keyServ) getLog() *shared.KeyLog {
 	ks.mu.Lock()
 	outLog := ks.log.DeepCopy()
 	ks.mu.Unlock()
 	return outLog
 }
 
-func (ks *KeyServ) Start(me grove_ffi.Address) {
+func (ks *keyServ) start(me grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
 	handlers[shared.RpcAppendLog] =
@@ -101,15 +102,16 @@ func checkLog(in *checkLogIn) *checkLogOut {
 // Auditor.
 
 type auditor struct {
+	mu   *sync.Mutex
 	log  *shared.KeyLog
 	serv *urpc.Client
-	mu   *sync.Mutex
+	key  *ffi.SignerT
 }
 
-func newAuditor(servAddr grove_ffi.Address) *auditor {
+func newAuditor(servAddr grove_ffi.Address, key *ffi.SignerT) *auditor {
 	l := shared.NewKeyLog()
 	c := urpc.MakeClient(servAddr)
-	return &auditor{log: l, serv: c, mu: new(sync.Mutex)}
+	return &auditor{mu: new(sync.Mutex), log: l, serv: c, key: key}
 }
 
 func (a *auditor) doAudit() shared.ErrorT {
@@ -130,25 +132,49 @@ func (a *auditor) doAudit() shared.ErrorT {
 	return shared.ErrNone
 }
 
-func (a *auditor) getAudit() *shared.KeyLog {
+func (a *auditor) getAudit() *shared.SigLog {
 	a.mu.Lock()
 	logCopy := a.log.DeepCopy()
+	logB := logCopy.Encode()
+	sig := a.key.Sign(logB)
 	a.mu.Unlock()
-	return logCopy
+	return shared.NewSigLog(sig, logCopy)
+}
+
+func (a *auditor) start(me grove_ffi.Address) {
+	handlers := make(map[uint64]func([]byte, *[]byte))
+
+	handlers[shared.RpcDoAudit] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			err := a.doAudit()
+			machine.Assume(err == shared.ErrNone)
+		}
+
+	handlers[shared.RpcGetAudit] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			*enc_reply = a.getAudit().Encode()
+		}
+
+	urpc.MakeServer(handlers).Serve(me)
 }
 
 // Key client.
 
 type keyCli struct {
-	log   *shared.KeyLog
-	serv  *urpc.Client
-	adtrs []*auditor
+	log      *shared.KeyLog
+	serv     *urpc.Client
+	adtrs    []*urpc.Client
+	adtrKeys []*ffi.VerifierT
 }
 
-func newKeyCli(host grove_ffi.Address, adtrs []*auditor) *keyCli {
+func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrKeys []*ffi.VerifierT) *keyCli {
 	l := shared.NewKeyLog()
-	c := urpc.MakeClient(host)
-	return &keyCli{log: l, serv: c, adtrs: adtrs}
+	servC := urpc.MakeClient(serv)
+	adtrsC := make([]*urpc.Client, len(adtrs))
+	for i := 0; i < len(adtrs); i++ {
+		adtrsC[i] = urpc.MakeClient(adtrs[i])
+	}
+	return &keyCli{log: l, serv: servC, adtrs: adtrsC, adtrKeys: adtrKeys}
 }
 
 func (kc *keyCli) register(entry *shared.UnameKey) (uint64, shared.ErrorT) {
@@ -184,11 +210,27 @@ func (kc *keyCli) lookup(uname uint64) (uint64, []byte, shared.ErrorT) {
 }
 
 func (kc *keyCli) audit(aId uint64) (uint64, shared.ErrorT) {
-	audLog := kc.adtrs[aId].getAudit()
-	if !kc.log.IsPrefix(audLog) {
+	sigLogB := make([]byte, 0)
+	err1 := kc.adtrs[aId].Call(shared.RpcGetAudit, nil, &sigLogB, 100)
+	machine.Assume(err1 == urpc.ErrNone)
+
+	sigLog := new(shared.SigLog)
+	_, err2 := sigLog.Decode(sigLogB)
+	if err2 != shared.ErrNone {
+		return 0, err2
+	}
+
+	logB := sigLog.Log.Encode()
+	err3 := kc.adtrKeys[aId].Verify(sigLog.Sig, logB)
+	if err3 != shared.ErrNone {
+		return 0, err3
+	}
+
+	if !kc.log.IsPrefix(sigLog.Log) {
 		return 0, shared.ErrKeyCli_AuditPrefix
 	}
-	kc.log = audLog
+	kc.log = sigLog.Log
+
 	return uint64(kc.log.Len()), shared.ErrNone
 }
 
@@ -196,12 +238,26 @@ func (kc *keyCli) audit(aId uint64) (uint64, shared.ErrorT) {
 
 // Two clients lookup the same uname, talk to the same honest auditor,
 // and assert that their returned keys are the same.
-func testAuditPass(servAddr grove_ffi.Address) {
-	aud := newAuditor(servAddr)
-	adtrs := []*auditor{aud}
-	cReg := newKeyCli(servAddr, adtrs)
-	cLook1 := newKeyCli(servAddr, adtrs)
-	cLook2 := newKeyCli(servAddr, adtrs)
+func testAuditPass() {
+	servAddr := grove_ffi.MakeAddress("0.0.0.0:6060")
+	go func() {
+		s := newKeyServ()
+		s.start(servAddr)
+	}()
+	machine.Sleep(1_000_000)
+
+	audSigner, audVerifier := ffi.MakeKeys()
+	audAddr := grove_ffi.MakeAddress("0.0.0.0:6061")
+	go func() {
+		a := newAuditor(servAddr, audSigner)
+		a.start(audAddr)
+	}()
+
+	adtrs := []grove_ffi.Address{audAddr}
+	adtrKeys := []*ffi.VerifierT{audVerifier}
+	cReg := newKeyCli(servAddr, adtrs, adtrKeys)
+	cLook1 := newKeyCli(servAddr, adtrs, adtrKeys)
+	cLook2 := newKeyCli(servAddr, adtrs, adtrKeys)
 
 	aliceUname := uint64(42)
 	aliceKey := []byte("pubkey")
@@ -209,8 +265,10 @@ func testAuditPass(servAddr grove_ffi.Address) {
 	_, err1 := cReg.register(uk)
 	machine.Assume(err1 == shared.ErrNone)
 
-	err2 := aud.doAudit()
-	machine.Assume(err2 == shared.ErrNone)
+	audC := urpc.MakeClient(audAddr)
+	emptyB := make([]byte, 0)
+	err2 := audC.Call(shared.RpcDoAudit, nil, &emptyB, 100)
+	machine.Assume(err2 == urpc.ErrNone)
 
 	epochL1, retKey1, err := cLook1.lookup(aliceUname)
 	machine.Assume(err == shared.ErrNone)
@@ -232,12 +290,31 @@ func testAuditPass(servAddr grove_ffi.Address) {
 // An auditor sees writes from a server. A user's lookup goes to
 // a different server, but the user later contacts the auditor.
 // The user's audit should return an error.
-func testAuditFail(servAddrs []grove_ffi.Address) {
-	aud := newAuditor(servAddrs[0])
-	adtrs := []*auditor{aud}
-	cReg1 := newKeyCli(servAddrs[0], adtrs)
-	cReg2 := newKeyCli(servAddrs[1], adtrs)
-	cLook2 := newKeyCli(servAddrs[1], adtrs)
+func testAuditFail() {
+	servAddr1 := grove_ffi.MakeAddress("0.0.0.0:6060")
+	servAddr2 := grove_ffi.MakeAddress("0.0.0.0:6061")
+	go func() {
+		s := newKeyServ()
+		s.start(servAddr1)
+	}()
+	go func() {
+		s := newKeyServ()
+		s.start(servAddr2)
+	}()
+	machine.Sleep(1_000_000)
+
+	audSigner, audVerifier := ffi.MakeKeys()
+	audAddr := grove_ffi.MakeAddress("0.0.0.0:6062")
+	go func() {
+		a := newAuditor(servAddr1, audSigner)
+		a.start(audAddr)
+	}()
+
+	adtrs := []grove_ffi.Address{audAddr}
+	adtrKeys := []*ffi.VerifierT{audVerifier}
+	cReg1 := newKeyCli(servAddr1, adtrs, adtrKeys)
+	cReg2 := newKeyCli(servAddr2, adtrs, adtrKeys)
+	cLook2 := newKeyCli(servAddr2, adtrs, adtrKeys)
 
 	aliceUname := uint64(42)
 	aliceKey1 := []byte("pubkey1")
@@ -250,8 +327,10 @@ func testAuditFail(servAddrs []grove_ffi.Address) {
 	_, err = cReg2.register(uk2)
 	machine.Assume(err == shared.ErrNone)
 
-	err1 := aud.doAudit()
-	machine.Assume(err1 == shared.ErrNone)
+	audC := urpc.MakeClient(audAddr)
+	emptyB := make([]byte, 0)
+	err2 := audC.Call(shared.RpcDoAudit, nil, &emptyB, 100)
+	machine.Assume(err2 == urpc.ErrNone)
 
 	_, _, err = cLook2.lookup(aliceUname)
 	machine.Assume(err == shared.ErrNone)

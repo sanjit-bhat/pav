@@ -2,6 +2,7 @@ package shared
 
 import (
 	"bytes"
+	"github.com/tchajed/goose/machine"
 	"github.com/tchajed/marshal"
 )
 
@@ -17,9 +18,13 @@ const (
 	ErrKeyCli_RegNoExist     ErrorT = 5
 	ErrUnameKey_Decode       ErrorT = 6
 	ErrKeyLog_Decode         ErrorT = 7
+	ErrSigLog_Decode         ErrorT = 8
+	ErrVerify                ErrorT = 9
 	// RPCs
 	RpcAppendLog uint64 = 1
 	RpcGetLog    uint64 = 2
+	RpcDoAudit   uint64 = 3
+	RpcGetAudit  uint64 = 4
 	// Sig
 	SigLen uint64 = 69
 )
@@ -142,4 +147,36 @@ func (l *KeyLog) Decode(b []byte) ([]byte, ErrorT) {
 	}
 	l.log = log
 	return b, err
+}
+
+type SigLog struct {
+	Sig []byte
+	Log *KeyLog
+}
+
+func NewSigLog(sig []byte, log *KeyLog) *SigLog {
+	return &SigLog{Sig: sig, Log: log}
+}
+
+func (l *SigLog) Encode() []byte {
+	var b = make([]byte, 0)
+	machine.Assert(uint64(len(l.Sig)) == SigLen)
+	b = marshal.WriteBytes(b, l.Sig)
+	b = marshal.WriteBytes(b, l.Log.Encode())
+	return b
+}
+
+func (l *SigLog) Decode(b []byte) ([]byte, ErrorT) {
+	if uint64(len(b)) < SigLen {
+		return nil, ErrSigLog_Decode
+	}
+	sig, b := marshal.ReadBytes(b, SigLen)
+	log := new(KeyLog)
+	b, err := log.Decode(b)
+	if err != ErrNone {
+		return nil, err
+	}
+	l.Sig = sig
+	l.Log = log
+	return b, ErrNone
 }
