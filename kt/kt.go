@@ -42,7 +42,8 @@ func (ks *keyServ) start(me grove_ffi.Address) {
 	handlers[shared.RpcAppendLog] =
 		func(enc_args []byte, enc_reply *[]byte) {
 			entry := new(shared.UnameKey)
-			if _, err := entry.Decode(enc_args); err != shared.ErrNone {
+			_, err := entry.Decode(enc_args)
+			if err != shared.ErrNone {
 				return
 			}
 			*enc_reply = ks.appendLog(entry).Encode()
@@ -171,8 +172,8 @@ func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrKeys []*ff
 	l := shared.NewKeyLog()
 	servC := urpc.MakeClient(serv)
 	adtrsC := make([]*urpc.Client, len(adtrs))
-	for i := 0; i < len(adtrs); i++ {
-		adtrsC[i] = urpc.MakeClient(adtrs[i])
+	for i, addr := range adtrs {
+		adtrsC[i] = urpc.MakeClient(addr)
 	}
 	return &keyCli{log: l, serv: servC, adtrs: adtrsC, adtrKeys: adtrKeys}
 }
@@ -188,7 +189,7 @@ func (kc *keyCli) register(entry *shared.UnameKey) (uint64, shared.ErrorT) {
 	if out.err != shared.ErrNone {
 		return 0, out.err
 	}
-	if out.epoch < uint64(in.currLog.Len()) {
+	if out.epoch < in.currLog.Len() {
 		return 0, shared.ErrKeyCli_RegNoExist
 	}
 	kc.log = out.newLog
@@ -231,7 +232,7 @@ func (kc *keyCli) audit(aId uint64) (uint64, shared.ErrorT) {
 	}
 	kc.log = sigLog.Log
 
-	return uint64(kc.log.Len()), shared.ErrNone
+	return kc.log.Len(), shared.ErrNone
 }
 
 // Tests.
@@ -275,10 +276,10 @@ func testAuditPass() {
 	epochL2, retKey2, err := cLook2.lookup(aliceUname)
 	machine.Assume(err == shared.ErrNone)
 
-	_, err = cLook1.audit(0)
-	machine.Assume(err == shared.ErrNone)
-	_, err = cLook2.audit(0)
-	machine.Assume(err == shared.ErrNone)
+	_, err3 := cLook1.audit(0)
+	machine.Assume(err3 == shared.ErrNone)
+	_, err4 := cLook2.audit(0)
+	machine.Assume(err4 == shared.ErrNone)
 	// Don't need to check audit epoch since we know it needs to cover epochs
 	// we've already seen.
 
@@ -321,20 +322,19 @@ func testAuditFail() {
 	aliceKey2 := []byte("pubkey2")
 	uk1 := &shared.UnameKey{Uname: aliceUname, Key: aliceKey1}
 	uk2 := &shared.UnameKey{Uname: aliceUname, Key: aliceKey2}
-	var err shared.ErrorT
-	_, err = cReg1.register(uk1)
-	machine.Assume(err == shared.ErrNone)
-	_, err = cReg2.register(uk2)
-	machine.Assume(err == shared.ErrNone)
+	_, err1 := cReg1.register(uk1)
+	machine.Assume(err1 == shared.ErrNone)
+	_, err2 := cReg2.register(uk2)
+	machine.Assume(err2 == shared.ErrNone)
 
 	audC := urpc.MakeClient(audAddr)
 	emptyB := make([]byte, 0)
-	err2 := audC.Call(shared.RpcDoAudit, nil, &emptyB, 100)
-	machine.Assume(err2 == urpc.ErrNone)
+	err3 := audC.Call(shared.RpcDoAudit, nil, &emptyB, 100)
+	machine.Assume(err3 == urpc.ErrNone)
 
-	_, _, err = cLook2.lookup(aliceUname)
-	machine.Assume(err == shared.ErrNone)
+	_, _, err4 := cLook2.lookup(aliceUname)
+	machine.Assume(err4 == shared.ErrNone)
 
-	_, err = cLook2.audit(0)
-	machine.Assert(err == shared.ErrKeyCli_AuditPrefix)
+	_, err5 := cLook2.audit(0)
+	machine.Assert(err5 == shared.ErrKeyCli_AuditPrefix)
 }

@@ -79,7 +79,7 @@ func NewKeyLog() *KeyLog {
 }
 
 func (l *KeyLog) DeepCopy() *KeyLog {
-	newLog := make([]*UnameKey, 0, len(l.log))
+	var newLog = make([]*UnameKey, 0, l.Len())
 	for _, entry := range l.log {
 		newLog = append(newLog, entry.DeepCopy())
 	}
@@ -87,12 +87,12 @@ func (l *KeyLog) DeepCopy() *KeyLog {
 }
 
 func (small *KeyLog) IsPrefix(big *KeyLog) bool {
-	if len(big.log) < len(small.log) {
+	if big.Len() < small.Len() {
 		return false
 	}
-	ans := true
-	for i := 0; i < len(small.log); i++ {
-		if !small.log[i].IsEqual(big.log[i]) {
+    var ans = true
+	for i, log := range small.log {
+		if !log.IsEqual(big.log[i]) {
 			ans = false
 		}
 	}
@@ -103,18 +103,18 @@ func (l *KeyLog) Lookup(uname uint64) (uint64, []byte, bool) {
 	var idx uint64
 	var key []byte
 	var ok bool
-	for i := l.Len() - 1; i >= 0; i-- {
-		if !ok && l.log[i].Uname == uname {
-			idx = uint64(i)
-			key = l.log[i].Key
-			ok = true
-		}
-	}
+    for i, entry := range l.log {
+        if entry.Uname == uname {
+            idx = uint64(i)
+            key = entry.Key
+            ok = true
+        }
+    }
 	return idx, key, ok
 }
 
-func (l *KeyLog) Len() int {
-	return len(l.log)
+func (l *KeyLog) Len() uint64 {
+	return uint64(len(l.log))
 }
 
 func (l *KeyLog) Append(uk *UnameKey) {
@@ -123,14 +123,15 @@ func (l *KeyLog) Append(uk *UnameKey) {
 
 func (l *KeyLog) Encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, uint64(l.Len()))
-	for i := 0; i < l.Len(); i++ {
-		b = marshal.WriteBytes(b, l.log[i].Encode())
-	}
+	b = marshal.WriteInt(b, l.Len())
+    for _, entry := range l.log {
+        b = marshal.WriteBytes(b, entry.Encode())
+    }
 	return b
 }
 
-func (l *KeyLog) Decode(b []byte) ([]byte, ErrorT) {
+func (l *KeyLog) Decode(b2 []byte) ([]byte, ErrorT) {
+    var b = b2
 	if len(b) < 8 {
 		return nil, ErrKeyLog_Decode
 	}
