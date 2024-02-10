@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/kt/ffi"
+	kt_ffi "github.com/mit-pdos/secure-chat/kt/ffi"
 	"github.com/mit-pdos/secure-chat/kt/shared"
 	"github.com/tchajed/goose/machine"
 	"sync"
@@ -106,10 +106,10 @@ type auditor struct {
 	mu   *sync.Mutex
 	log  *shared.KeyLog
 	serv *urpc.Client
-	key  *ffi.SignerT
+	key  *kt_ffi.SignerT
 }
 
-func newAuditor(servAddr grove_ffi.Address, key *ffi.SignerT) *auditor {
+func newAuditor(servAddr grove_ffi.Address, key *kt_ffi.SignerT) *auditor {
 	l := shared.NewKeyLog()
 	c := urpc.MakeClient(servAddr)
 	return &auditor{mu: new(sync.Mutex), log: l, serv: c, key: key}
@@ -165,10 +165,10 @@ type keyCli struct {
 	log      *shared.KeyLog
 	serv     *urpc.Client
 	adtrs    []*urpc.Client
-	adtrKeys []*ffi.VerifierT
+	adtrKeys []*kt_ffi.VerifierT
 }
 
-func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrKeys []*ffi.VerifierT) *keyCli {
+func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrKeys []*kt_ffi.VerifierT) *keyCli {
 	l := shared.NewKeyLog()
 	servC := urpc.MakeClient(serv)
 	adtrsC := make([]*urpc.Client, len(adtrs))
@@ -247,15 +247,16 @@ func testAuditPass() {
 	}()
 	machine.Sleep(1_000_000)
 
-	audSigner, audVerifier := ffi.MakeKeys()
+	audSigner, audVerifier := kt_ffi.MakeKeys()
 	audAddr := grove_ffi.MakeAddress("0.0.0.0:6061")
 	go func() {
 		a := newAuditor(servAddr, audSigner)
 		a.start(audAddr)
 	}()
+	machine.Sleep(1_000_000)
 
 	adtrs := []grove_ffi.Address{audAddr}
-	adtrKeys := []*ffi.VerifierT{audVerifier}
+	adtrKeys := []*kt_ffi.VerifierT{audVerifier}
 	cReg := newKeyCli(servAddr, adtrs, adtrKeys)
 	cLook1 := newKeyCli(servAddr, adtrs, adtrKeys)
 	cLook2 := newKeyCli(servAddr, adtrs, adtrKeys)
@@ -304,15 +305,16 @@ func testAuditFail() {
 	}()
 	machine.Sleep(1_000_000)
 
-	audSigner, audVerifier := ffi.MakeKeys()
+	audSigner, audVerifier := kt_ffi.MakeKeys()
 	audAddr := grove_ffi.MakeAddress("0.0.0.0:6062")
 	go func() {
 		a := newAuditor(servAddr1, audSigner)
 		a.start(audAddr)
 	}()
+	machine.Sleep(1_000_000)
 
 	adtrs := []grove_ffi.Address{audAddr}
-	adtrKeys := []*ffi.VerifierT{audVerifier}
+	adtrKeys := []*kt_ffi.VerifierT{audVerifier}
 	cReg1 := newKeyCli(servAddr1, adtrs, adtrKeys)
 	cReg2 := newKeyCli(servAddr2, adtrs, adtrKeys)
 	cLook2 := newKeyCli(servAddr2, adtrs, adtrKeys)
