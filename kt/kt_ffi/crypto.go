@@ -1,4 +1,4 @@
-package ffi
+package kt_ffi
 
 import (
 	"github.com/mit-pdos/secure-chat/kt/shared"

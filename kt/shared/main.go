@@ -1,7 +1,6 @@
 package shared
 
 import (
-	"bytes"
 	"github.com/tchajed/goose/machine"
 	"github.com/tchajed/marshal"
 )
@@ -29,6 +28,19 @@ const (
 	SigLen uint64 = 69
 )
 
+func BytesEqual(b1 []byte, b2 []byte) bool {
+	if len(b1) != len(b2) {
+		return false
+	}
+	var ans = true
+	for i, b := range b1 {
+		if b != b2[i] {
+			ans = false
+		}
+	}
+	return ans
+}
+
 type UnameKey struct {
 	Uname uint64
 	Key   []byte
@@ -41,7 +53,7 @@ func (uk *UnameKey) DeepCopy() *UnameKey {
 }
 
 func (uk1 *UnameKey) IsEqual(uk2 *UnameKey) bool {
-	return uk1.Uname == uk2.Uname && bytes.Equal(uk1.Key, uk2.Key)
+	return uk1.Uname == uk2.Uname && BytesEqual(uk1.Key, uk2.Key)
 }
 
 func (uk *UnameKey) Encode() []byte {

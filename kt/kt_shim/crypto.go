@@ -1,4 +1,4 @@
-package shim
+package kt_shim
 
 import (
 	"github.com/mit-pdos/secure-chat/kt/shared"
