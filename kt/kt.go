@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	kt_ffi "github.com/mit-pdos/secure-chat/kt/ffi"
 	"github.com/mit-pdos/secure-chat/kt/shared"
+	kt_ffi "github.com/mit-pdos/secure-chat/kt/shim"
 	"github.com/tchajed/goose/machine"
 	"sync"
 )

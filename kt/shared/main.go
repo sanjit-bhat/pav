@@ -90,7 +90,7 @@ func (small *KeyLog) IsPrefix(big *KeyLog) bool {
 	if big.Len() < small.Len() {
 		return false
 	}
-    var ans = true
+	var ans = true
 	for i, log := range small.log {
 		if !log.IsEqual(big.log[i]) {
 			ans = false
@@ -103,13 +103,13 @@ func (l *KeyLog) Lookup(uname uint64) (uint64, []byte, bool) {
 	var idx uint64
 	var key []byte
 	var ok bool
-    for i, entry := range l.log {
-        if entry.Uname == uname {
-            idx = uint64(i)
-            key = entry.Key
-            ok = true
-        }
-    }
+	for i, entry := range l.log {
+		if entry.Uname == uname {
+			idx = uint64(i)
+			key = entry.Key
+			ok = true
+		}
+	}
 	return idx, key, ok
 }
 
@@ -124,14 +124,14 @@ func (l *KeyLog) Append(uk *UnameKey) {
 func (l *KeyLog) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, l.Len())
-    for _, entry := range l.log {
-        b = marshal.WriteBytes(b, entry.Encode())
-    }
+	for _, entry := range l.log {
+		b = marshal.WriteBytes(b, entry.Encode())
+	}
 	return b
 }
 
 func (l *KeyLog) Decode(b2 []byte) ([]byte, ErrorT) {
-    var b = b2
+	var b = b2
 	if len(b) < 8 {
 		return nil, ErrKeyLog_Decode
 	}
