@@ -3,7 +3,7 @@ package full2
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/full2/fc_ffi"
+	"github.com/mit-pdos/secure-chat/full2/fc_ffi_shim"
 	"github.com/mit-pdos/secure-chat/full2/shared"
 	"github.com/tchajed/goose/machine"
 )
@@ -13,8 +13,8 @@ type Clerk struct {
 	cli       *urpc.Client
 	log       []*shared.MsgT
 	myNum     uint64
-	signer    *fc_ffi.SignerT
-	verifiers []*fc_ffi.VerifierT
+	signer    *fc_ffi_shim.SignerT
+	verifiers []*fc_ffi_shim.VerifierT
 }
 
 func (c *Clerk) Put(m *shared.MsgT) {
@@ -62,7 +62,7 @@ func (c *Clerk) Get() ([]*shared.MsgT, shared.ErrorT) {
 	return log, shared.ErrNone
 }
 
-func MakeClerk(host grove_ffi.Address, myNum uint64, signer *fc_ffi.SignerT, verifiers []*fc_ffi.VerifierT) *Clerk {
+func MakeClerk(host grove_ffi.Address, myNum uint64, signer *fc_ffi_shim.SignerT, verifiers []*fc_ffi_shim.VerifierT) *Clerk {
 	c := &Clerk{}
 	c.cli = urpc.MakeClient(host)
 	c.log = make([]*shared.MsgT, 0)

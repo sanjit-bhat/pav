@@ -2,7 +2,7 @@ package full2
 
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
-	"github.com/mit-pdos/secure-chat/full2/fc_ffi"
+	"github.com/mit-pdos/secure-chat/full2/fc_ffi_shim"
 	"github.com/mit-pdos/secure-chat/full2/shared"
 	"github.com/tchajed/goose/machine"
 )
@@ -35,7 +35,7 @@ func (a *Alice) Two() *shared.MsgT {
 	return nil
 }
 
-func MakeAlice(host grove_ffi.Address, signer *fc_ffi.SignerT, verifiers []*fc_ffi.VerifierT) *Alice {
+func MakeAlice(host grove_ffi.Address, signer *fc_ffi_shim.SignerT, verifiers []*fc_ffi_shim.VerifierT) *Alice {
 	a := &Alice{}
 	a.ck = MakeClerk(host, shared.AliceNum, signer, verifiers)
 	a.a_msg = &shared.MsgT{Body: shared.AliceMsg}
@@ -61,7 +61,7 @@ func (b *Bob) One() *shared.MsgT {
 	return nil
 }
 
-func MakeBob(host grove_ffi.Address, signer *fc_ffi.SignerT, verifiers []*fc_ffi.VerifierT) *Bob {
+func MakeBob(host grove_ffi.Address, signer *fc_ffi_shim.SignerT, verifiers []*fc_ffi_shim.VerifierT) *Bob {
 	b := &Bob{}
 	b.ck = MakeClerk(host, shared.BobNum, signer, verifiers)
 	b.a_msg = &shared.MsgT{Body: shared.AliceMsg}
