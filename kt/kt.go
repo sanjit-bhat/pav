@@ -3,8 +3,8 @@ package kt
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/kt/shared"
 	"github.com/mit-pdos/secure-chat/kt/kt_shim"
+	"github.com/mit-pdos/secure-chat/kt/shared"
 	"github.com/tchajed/goose/machine"
 	"sync"
 )
@@ -138,7 +138,7 @@ func (a *auditor) getAudit() *shared.SigLog {
 	logB := logCopy.Encode()
 	sig := a.key.Sign(logB)
 	a.mu.Unlock()
-	return shared.NewSigLog(sig, logCopy)
+	return &shared.SigLog{Sig: sig, Log: logCopy}
 }
 
 func (a *auditor) start(me grove_ffi.Address) {
@@ -238,8 +238,7 @@ func (kc *keyCli) audit(aId uint64) (uint64, shared.ErrorT) {
 
 // Two clients lookup the same uname, talk to the same honest auditor,
 // and assert that their returned keys are the same.
-func testAuditPass() {
-	servAddr := grove_ffi.MakeAddress("0.0.0.0:6060")
+func testAuditPass(servAddr, audAddr grove_ffi.Address) {
 	go func() {
 		s := newKeyServ()
 		s.start(servAddr)
@@ -247,7 +246,6 @@ func testAuditPass() {
 	machine.Sleep(1_000_000)
 
 	audSigner, audVerifier := kt_shim.MakeKeys()
-	audAddr := grove_ffi.MakeAddress("0.0.0.0:6061")
 	go func() {
 		a := newAuditor(servAddr, audSigner)
 		a.start(audAddr)
@@ -291,9 +289,7 @@ func testAuditPass() {
 // An auditor sees writes from a server. A user's lookup goes to
 // a different server, but the user later contacts the auditor.
 // The user's audit should return an error.
-func testAuditFail() {
-	servAddr1 := grove_ffi.MakeAddress("0.0.0.0:6060")
-	servAddr2 := grove_ffi.MakeAddress("0.0.0.0:6061")
+func testAuditFail(servAddr1, servAddr2, audAddr grove_ffi.Address) {
 	go func() {
 		s := newKeyServ()
 		s.start(servAddr1)
@@ -305,7 +301,6 @@ func testAuditFail() {
 	machine.Sleep(1_000_000)
 
 	audSigner, audVerifier := kt_shim.MakeKeys()
-	audAddr := grove_ffi.MakeAddress("0.0.0.0:6062")
 	go func() {
 		a := newAuditor(servAddr1, audSigner)
 		a.start(audAddr)

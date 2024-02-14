@@ -167,10 +167,6 @@ type SigLog struct {
 	Log *KeyLog
 }
 
-func NewSigLog(sig []byte, log *KeyLog) *SigLog {
-	return &SigLog{Sig: sig, Log: log}
-}
-
 func (l *SigLog) Encode() []byte {
 	var b = make([]byte, 0)
 	machine.Assert(uint64(len(l.Sig)) == SigLen)
