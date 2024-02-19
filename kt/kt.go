@@ -210,9 +210,9 @@ func (kc *keyCli) lookup(uname uint64) (uint64, []byte, shared.ErrorT) {
 	return out.epoch, out.key, shared.ErrNone
 }
 
-func (kc *keyCli) audit(audId uint64) (uint64, shared.ErrorT) {
+func (kc *keyCli) audit(adtrId uint64) (uint64, shared.ErrorT) {
 	sigLogB := make([]byte, 0)
-	err1 := kc.adtrs[audId].Call(shared.RpcGetAudit, nil, &sigLogB, 100)
+	err1 := kc.adtrs[adtrId].Call(shared.RpcGetAudit, nil, &sigLogB, 100)
 	machine.Assume(err1 == urpc.ErrNone)
 
 	sigLog := new(shared.SigLog)
@@ -222,7 +222,7 @@ func (kc *keyCli) audit(audId uint64) (uint64, shared.ErrorT) {
 	}
 
 	logB := sigLog.Log.Encode()
-	err3 := kc.adtrKeys[audId].Verify(sigLog.Sig, logB)
+	err3 := kc.adtrKeys[adtrId].Verify(sigLog.Sig, logB)
 	if err3 != shared.ErrNone {
 		return 0, err3
 	}
@@ -239,22 +239,22 @@ func (kc *keyCli) audit(audId uint64) (uint64, shared.ErrorT) {
 
 // Two clients lookup the same uname, talk to the same honest auditor,
 // and assert that their returned keys are the same.
-func testAuditPass(servAddr, audAddr grove_ffi.Address) {
+func testAuditPass(servAddr, adtrAddr grove_ffi.Address) {
 	go func() {
 		s := newKeyServ()
 		s.start(servAddr)
 	}()
 	machine.Sleep(1_000_000)
 
-	audSigner, audVerifier := kt_shim.MakeKeys()
+	adtrSigner, adtrVerifier := kt_shim.MakeKeys()
 	go func() {
-		a := newAuditor(servAddr, audSigner)
-		a.start(audAddr)
+		a := newAuditor(servAddr, adtrSigner)
+		a.start(adtrAddr)
 	}()
 	machine.Sleep(1_000_000)
 
-	adtrs := []grove_ffi.Address{audAddr}
-	adtrKeys := []*kt_shim.VerifierT{audVerifier}
+	adtrs := []grove_ffi.Address{adtrAddr}
+	adtrKeys := []*kt_shim.VerifierT{adtrVerifier}
 	cReg := newKeyCli(servAddr, adtrs, adtrKeys)
 	cLook1 := newKeyCli(servAddr, adtrs, adtrKeys)
 	cLook2 := newKeyCli(servAddr, adtrs, adtrKeys)
@@ -265,9 +265,9 @@ func testAuditPass(servAddr, audAddr grove_ffi.Address) {
 	_, err1 := cReg.register(uk)
 	machine.Assume(err1 == shared.ErrNone)
 
-	audC := urpc.MakeClient(audAddr)
+	adtrCli := urpc.MakeClient(adtrAddr)
 	emptyB := make([]byte, 0)
-	err2 := audC.Call(shared.RpcDoAudit, nil, &emptyB, 100)
+	err2 := adtrCli.Call(shared.RpcDoAudit, nil, &emptyB, 100)
 	machine.Assume(err2 == urpc.ErrNone)
 
 	epochL1, retKey1, err := cLook1.lookup(aliceUname)
@@ -290,7 +290,7 @@ func testAuditPass(servAddr, audAddr grove_ffi.Address) {
 // An auditor sees writes from a server. A user's lookup goes to
 // a different server, but the user later contacts the auditor.
 // The user's audit should return an error.
-func testAuditFail(servAddr1, servAddr2, audAddr grove_ffi.Address) {
+func testAuditFail(servAddr1, servAddr2, adtrAddr grove_ffi.Address) {
 	go func() {
 		s := newKeyServ()
 		s.start(servAddr1)
@@ -301,15 +301,15 @@ func testAuditFail(servAddr1, servAddr2, audAddr grove_ffi.Address) {
 	}()
 	machine.Sleep(1_000_000)
 
-	audSigner, audVerifier := kt_shim.MakeKeys()
+	adtrSigner, adtrVerifier := kt_shim.MakeKeys()
 	go func() {
-		a := newAuditor(servAddr1, audSigner)
-		a.start(audAddr)
+		a := newAuditor(servAddr1, adtrSigner)
+		a.start(adtrAddr)
 	}()
 	machine.Sleep(1_000_000)
 
-	adtrs := []grove_ffi.Address{audAddr}
-	adtrKeys := []*kt_shim.VerifierT{audVerifier}
+	adtrs := []grove_ffi.Address{adtrAddr}
+	adtrKeys := []*kt_shim.VerifierT{adtrVerifier}
 	cReg1 := newKeyCli(servAddr1, adtrs, adtrKeys)
 	cReg2 := newKeyCli(servAddr2, adtrs, adtrKeys)
 	cLook2 := newKeyCli(servAddr2, adtrs, adtrKeys)
@@ -324,9 +324,9 @@ func testAuditFail(servAddr1, servAddr2, audAddr grove_ffi.Address) {
 	_, err2 := cReg2.register(uk2)
 	machine.Assume(err2 == shared.ErrNone)
 
-	audC := urpc.MakeClient(audAddr)
+	adtrCli := urpc.MakeClient(adtrAddr)
 	emptyB := make([]byte, 0)
-	err3 := audC.Call(shared.RpcDoAudit, nil, &emptyB, 100)
+	err3 := adtrCli.Call(shared.RpcDoAudit, nil, &emptyB, 100)
 	machine.Assume(err3 == urpc.ErrNone)
 
 	_, _, err4 := cLook2.lookup(aliceUname)
