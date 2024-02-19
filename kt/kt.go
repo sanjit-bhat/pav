@@ -188,6 +188,7 @@ func (kc *keyCli) register(entry *shared.UnameKey) (uint64, shared.ErrorT) {
 	if out.err != shared.ErrNone {
 		return 0, out.err
 	}
+	// For pre-existing uname's, ensure our new register happened.
 	if out.epoch < in.currLog.Len() {
 		return 0, shared.ErrKeyCli_RegNoExist
 	}
@@ -209,9 +210,9 @@ func (kc *keyCli) lookup(uname uint64) (uint64, []byte, shared.ErrorT) {
 	return out.epoch, out.key, shared.ErrNone
 }
 
-func (kc *keyCli) audit(aId uint64) (uint64, shared.ErrorT) {
+func (kc *keyCli) audit(audId uint64) (uint64, shared.ErrorT) {
 	sigLogB := make([]byte, 0)
-	err1 := kc.adtrs[aId].Call(shared.RpcGetAudit, nil, &sigLogB, 100)
+	err1 := kc.adtrs[audId].Call(shared.RpcGetAudit, nil, &sigLogB, 100)
 	machine.Assume(err1 == urpc.ErrNone)
 
 	sigLog := new(shared.SigLog)
@@ -221,7 +222,7 @@ func (kc *keyCli) audit(aId uint64) (uint64, shared.ErrorT) {
 	}
 
 	logB := sigLog.Log.Encode()
-	err3 := kc.adtrKeys[aId].Verify(sigLog.Sig, logB)
+	err3 := kc.adtrKeys[audId].Verify(sigLog.Sig, logB)
 	if err3 != shared.ErrNone {
 		return 0, err3
 	}
