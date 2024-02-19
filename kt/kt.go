@@ -105,13 +105,13 @@ type auditor struct {
 	mu   *sync.Mutex
 	log  *shared.KeyLog
 	serv *urpc.Client
-	key  *kt_shim.SignerT
+	sk   *kt_shim.SignerT
 }
 
 func newAuditor(servAddr grove_ffi.Address, key *kt_shim.SignerT) *auditor {
 	l := shared.NewKeyLog()
 	c := urpc.MakeClient(servAddr)
-	return &auditor{mu: new(sync.Mutex), log: l, serv: c, key: key}
+	return &auditor{mu: new(sync.Mutex), log: l, serv: c, sk: key}
 }
 
 func (a *auditor) doAudit() shared.ErrorT {
@@ -136,7 +136,7 @@ func (a *auditor) getAudit() *shared.SigLog {
 	a.mu.Lock()
 	logCopy := a.log.DeepCopy()
 	logB := logCopy.Encode()
-	sig := a.key.Sign(logB)
+	sig := a.sk.Sign(logB)
 	a.mu.Unlock()
 	return &shared.SigLog{Sig: sig, Log: logCopy}
 }
@@ -161,10 +161,10 @@ func (a *auditor) start(me grove_ffi.Address) {
 // Key client.
 
 type keyCli struct {
-	log      *shared.KeyLog
-	serv     *urpc.Client
-	adtrs    []*urpc.Client
-	adtrKeys []*kt_shim.VerifierT
+	log     *shared.KeyLog
+	serv    *urpc.Client
+	adtrs   []*urpc.Client
+	adtrVks []*kt_shim.VerifierT
 }
 
 func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrKeys []*kt_shim.VerifierT) *keyCli {
@@ -174,7 +174,7 @@ func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrKeys []*kt
 	for i, addr := range adtrs {
 		adtrsC[i] = urpc.MakeClient(addr)
 	}
-	return &keyCli{log: l, serv: servC, adtrs: adtrsC, adtrKeys: adtrKeys}
+	return &keyCli{log: l, serv: servC, adtrs: adtrsC, adtrVks: adtrKeys}
 }
 
 func (kc *keyCli) register(entry *shared.UnameKey) (uint64, shared.ErrorT) {
@@ -222,7 +222,7 @@ func (kc *keyCli) audit(adtrId uint64) (uint64, shared.ErrorT) {
 	}
 
 	logB := sigLog.Log.Encode()
-	err3 := kc.adtrKeys[adtrId].Verify(sigLog.Sig, logB)
+	err3 := kc.adtrVks[adtrId].Verify(sigLog.Sig, logB)
 	if err3 != shared.ErrNone {
 		return 0, err3
 	}
