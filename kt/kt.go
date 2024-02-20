@@ -108,10 +108,10 @@ type auditor struct {
 	sk   *kt_shim.SignerT
 }
 
-func newAuditor(servAddr grove_ffi.Address, key *kt_shim.SignerT) *auditor {
+func newAuditor(servAddr grove_ffi.Address, sk *kt_shim.SignerT) *auditor {
 	l := shared.NewKeyLog()
 	c := urpc.MakeClient(servAddr)
-	return &auditor{mu: new(sync.Mutex), log: l, serv: c, sk: key}
+	return &auditor{mu: new(sync.Mutex), log: l, serv: c, sk: sk}
 }
 
 func (a *auditor) doAudit() shared.ErrorT {
@@ -167,14 +167,14 @@ type keyCli struct {
 	adtrVks []*kt_shim.VerifierT
 }
 
-func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrKeys []*kt_shim.VerifierT) *keyCli {
+func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrVks []*kt_shim.VerifierT) *keyCli {
 	l := shared.NewKeyLog()
 	servC := urpc.MakeClient(serv)
 	adtrsC := make([]*urpc.Client, len(adtrs))
 	for i, addr := range adtrs {
 		adtrsC[i] = urpc.MakeClient(addr)
 	}
-	return &keyCli{log: l, serv: servC, adtrs: adtrsC, adtrVks: adtrKeys}
+	return &keyCli{log: l, serv: servC, adtrs: adtrsC, adtrVks: adtrVks}
 }
 
 func (kc *keyCli) register(entry *shared.UnameKey) (uint64, shared.ErrorT) {
@@ -254,10 +254,10 @@ func testAuditPass(servAddr, adtrAddr grove_ffi.Address) {
 	machine.Sleep(1_000_000)
 
 	adtrs := []grove_ffi.Address{adtrAddr}
-	adtrKeys := []*kt_shim.VerifierT{adtrVerifier}
-	cReg := newKeyCli(servAddr, adtrs, adtrKeys)
-	cLook1 := newKeyCli(servAddr, adtrs, adtrKeys)
-	cLook2 := newKeyCli(servAddr, adtrs, adtrKeys)
+	adtrVks := []*kt_shim.VerifierT{adtrVerifier}
+	cReg := newKeyCli(servAddr, adtrs, adtrVks)
+	cLook1 := newKeyCli(servAddr, adtrs, adtrVks)
+	cLook2 := newKeyCli(servAddr, adtrs, adtrVks)
 
 	aliceUname := uint64(42)
 	aliceKey := []byte("pubkey")
@@ -309,10 +309,10 @@ func testAuditFail(servAddr1, servAddr2, adtrAddr grove_ffi.Address) {
 	machine.Sleep(1_000_000)
 
 	adtrs := []grove_ffi.Address{adtrAddr}
-	adtrKeys := []*kt_shim.VerifierT{adtrVerifier}
-	cReg1 := newKeyCli(servAddr1, adtrs, adtrKeys)
-	cReg2 := newKeyCli(servAddr2, adtrs, adtrKeys)
-	cLook2 := newKeyCli(servAddr2, adtrs, adtrKeys)
+	adtrVks := []*kt_shim.VerifierT{adtrVerifier}
+	cReg1 := newKeyCli(servAddr1, adtrs, adtrVks)
+	cReg2 := newKeyCli(servAddr2, adtrs, adtrVks)
+	cLook2 := newKeyCli(servAddr2, adtrs, adtrVks)
 
 	aliceUname := uint64(42)
 	aliceKey1 := []byte("pubkey1")
