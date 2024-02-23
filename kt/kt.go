@@ -20,7 +20,7 @@ func newKeyServ() *keyServ {
 	return &keyServ{mu: new(sync.Mutex), log: shared.NewKeyLog()}
 }
 
-func (ks *keyServ) appendLog(entry *shared.UnameKey) *shared.KeyLog {
+func (ks *keyServ) put(entry *shared.UnameKey) *shared.KeyLog {
 	ks.mu.Lock()
 	ks.log.Append(entry)
 	outLog := ks.log.DeepCopy()
@@ -28,7 +28,7 @@ func (ks *keyServ) appendLog(entry *shared.UnameKey) *shared.KeyLog {
 	return outLog
 }
 
-func (ks *keyServ) getLog() *shared.KeyLog {
+func (ks *keyServ) get() *shared.KeyLog {
 	ks.mu.Lock()
 	outLog := ks.log.DeepCopy()
 	ks.mu.Unlock()
@@ -38,19 +38,19 @@ func (ks *keyServ) getLog() *shared.KeyLog {
 func (ks *keyServ) start(me grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
-	handlers[shared.RpcAppendLog] =
+	handlers[shared.RpcKeyServ_Put] =
 		func(enc_args []byte, enc_reply *[]byte) {
 			entry := new(shared.UnameKey)
 			_, err := entry.Decode(enc_args)
 			if err != shared.ErrNone {
 				return
 			}
-			*enc_reply = ks.appendLog(entry).Encode()
+			*enc_reply = ks.put(entry).Encode()
 		}
 
-	handlers[shared.RpcGetLog] =
+	handlers[shared.RpcKeyServ_Get] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			*enc_reply = ks.getLog().Encode()
+			*enc_reply = ks.get().Encode()
 		}
 
 	urpc.MakeServer(handlers).Serve(me)
@@ -58,81 +58,46 @@ func (ks *keyServ) start(me grove_ffi.Address) {
 
 // Shared checks.
 
-type checkLogIn struct {
-	currLog  *shared.KeyLog
-	newLogB  []byte
-	uname    uint64
-	doLookup bool
-}
-
-type checkLogOut struct {
-	newLog *shared.KeyLog
-	epoch  uint64
-	key    []byte
-	err    shared.ErrorT
-}
-
-func errNewLogOut(err shared.ErrorT) *checkLogOut {
-	return &checkLogOut{newLog: nil, epoch: 0, key: nil, err: err}
-}
-
-// Decode RPC ret, check log prefix, check key lookup.
-func checkLog(in *checkLogIn) *checkLogOut {
+func injestNewLog(currLog *shared.KeyLog, newLogB []byte) (*shared.KeyLog, shared.ErrorT) {
 	newLog := new(shared.KeyLog)
-	_, err1 := newLog.Decode(in.newLogB)
+	_, err1 := newLog.Decode(newLogB)
 	if err1 != shared.ErrNone {
-		return errNewLogOut(err1)
+		return nil, err1
 	}
 
-	if !in.currLog.IsPrefix(newLog) {
-		return errNewLogOut(shared.ErrKeyCli_CheckLogPrefix)
+	if !currLog.IsPrefix(newLog) {
+		return nil, shared.ErrInjestNewLog_Prefix
 	}
-
-	if !in.doLookup {
-		return &checkLogOut{newLog: newLog, epoch: 0, key: nil, err: shared.ErrNone}
-	}
-
-	epoch, key, ok := newLog.Lookup(in.uname)
-	if !ok {
-		return errNewLogOut(shared.ErrKeyCli_CheckLogLookup)
-	}
-	return &checkLogOut{newLog: newLog, epoch: epoch, key: key, err: shared.ErrNone}
+	return newLog, shared.ErrNone
 }
 
 // Auditor.
 
 type auditor struct {
-	mu   *sync.Mutex
-	log  *shared.KeyLog
-	serv *urpc.Client
-	sk   *kt_shim.SignerT
+	mu  *sync.Mutex
+	log *shared.KeyLog
+	sk  *kt_shim.SignerT
 }
 
-func newAuditor(servAddr grove_ffi.Address, sk *kt_shim.SignerT) *auditor {
+func newAuditor(sk *kt_shim.SignerT) *auditor {
 	l := shared.NewKeyLog()
-	c := urpc.MakeClient(servAddr)
-	return &auditor{mu: new(sync.Mutex), log: l, serv: c, sk: sk}
+	return &auditor{mu: new(sync.Mutex), log: l, sk: sk}
 }
 
-func (a *auditor) doAudit() shared.ErrorT {
+func (a *auditor) update(newLogB []byte) shared.ErrorT {
 	a.mu.Lock()
-	newLogB := make([]byte, 0)
-	err1 := a.serv.Call(shared.RpcGetLog, nil, &newLogB, 100)
-	machine.Assume(err1 == urpc.ErrNone)
-
-	in := &checkLogIn{currLog: a.log, newLogB: newLogB, uname: 0, doLookup: false}
-	out := checkLog(in)
-	if out.err != shared.ErrNone {
+	newLog, err1 := injestNewLog(a.log, newLogB)
+	if err1 != shared.ErrNone {
 		a.mu.Unlock()
-		return out.err
+		return err1
 	}
 
-	a.log = out.newLog
+	a.log = newLog
 	a.mu.Unlock()
 	return shared.ErrNone
 }
 
-func (a *auditor) getAudit() *shared.SigLog {
+func (a *auditor) get() *shared.SigLog {
 	a.mu.Lock()
 	logCopy := a.log.DeepCopy()
 	logB := logCopy.Encode()
@@ -144,15 +109,15 @@ func (a *auditor) getAudit() *shared.SigLog {
 func (a *auditor) start(me grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
-	handlers[shared.RpcDoAudit] =
+	handlers[shared.RpcAdtr_Update] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			err := a.doAudit()
+			err := a.update(enc_args)
 			machine.Assume(err == shared.ErrNone)
 		}
 
-	handlers[shared.RpcGetAudit] =
+	handlers[shared.RpcAdtr_Get] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			*enc_reply = a.getAudit().Encode()
+			*enc_reply = a.get().Encode()
 		}
 
 	urpc.MakeServer(handlers).Serve(me)
@@ -180,110 +145,164 @@ func newKeyCli(serv grove_ffi.Address, adtrs []grove_ffi.Address, adtrVks []*kt_
 func (kc *keyCli) register(entry *shared.UnameKey) (uint64, shared.ErrorT) {
 	entryB := entry.Encode()
 	newLogB := make([]byte, 0)
-	err1 := kc.serv.Call(shared.RpcAppendLog, entryB, &newLogB, 100)
+	err1 := kc.serv.Call(shared.RpcKeyServ_Put, entryB, &newLogB, 100)
 	machine.Assume(err1 == urpc.ErrNone)
 
-	in := &checkLogIn{currLog: kc.log, newLogB: newLogB, uname: entry.Uname, doLookup: true}
-	out := checkLog(in)
-	if out.err != shared.ErrNone {
-		return 0, out.err
+	newLog, err2 := injestNewLog(kc.log, newLogB)
+	if err2 != shared.ErrNone {
+		return 0, err2
 	}
-	// For pre-existing uname's, ensure our new register happened.
-	if out.epoch < in.currLog.Len() {
+	epoch, key, ok := newLog.Lookup(entry.Uname)
+	if !ok || !shared.BytesEqual(key, entry.Key) {
 		return 0, shared.ErrKeyCli_RegNoExist
 	}
-	kc.log = out.newLog
-	return out.epoch, shared.ErrNone
+
+	kc.log = newLog
+	return epoch, shared.ErrNone
 }
 
 func (kc *keyCli) lookup(uname uint64) (uint64, []byte, shared.ErrorT) {
 	newLogB := make([]byte, 0)
-	err1 := kc.serv.Call(shared.RpcGetLog, nil, &newLogB, 100)
+	err1 := kc.serv.Call(shared.RpcKeyServ_Get, nil, &newLogB, 100)
 	machine.Assume(err1 == urpc.ErrNone)
 
-	in := &checkLogIn{currLog: kc.log, newLogB: newLogB, uname: uname, doLookup: true}
-	out := checkLog(in)
-	if out.err != shared.ErrNone {
-		return 0, nil, out.err
+	newLog, err2 := injestNewLog(kc.log, newLogB)
+	if err2 != shared.ErrNone {
+		return 0, nil, err2
 	}
-	kc.log = out.newLog
-	return out.epoch, out.key, shared.ErrNone
+	epoch, key, ok := newLog.Lookup(uname)
+	if !ok {
+		return 0, nil, shared.ErrKeyCli_LookNoExist
+	}
+
+	kc.log = newLog
+	return epoch, key, shared.ErrNone
 }
 
 func (kc *keyCli) audit(adtrId uint64) (uint64, shared.ErrorT) {
-	sigLogB := make([]byte, 0)
-	err1 := kc.adtrs[adtrId].Call(shared.RpcGetAudit, nil, &sigLogB, 100)
+	adtrSigB := make([]byte, 0)
+	err1 := kc.adtrs[adtrId].Call(shared.RpcAdtr_Get, nil, &adtrSigB, 100)
 	machine.Assume(err1 == urpc.ErrNone)
 
-	sigLog := new(shared.SigLog)
-	_, err2 := sigLog.Decode(sigLogB)
+	adtrSig := new(shared.SigLog)
+	_, err2 := adtrSig.Decode(adtrSigB)
 	if err2 != shared.ErrNone {
 		return 0, err2
 	}
 
-	logB := sigLog.Log.Encode()
-	err3 := kc.adtrVks[adtrId].Verify(sigLog.Sig, logB)
+	adtrLogB := adtrSig.Log.Encode()
+	err3 := kc.adtrVks[adtrId].Verify(adtrSig.Sig, adtrLogB)
 	if err3 != shared.ErrNone {
 		return 0, err3
 	}
+	adtrLog := adtrSig.Log
 
-	if !kc.log.IsPrefix(sigLog.Log) {
-		return 0, shared.ErrKeyCli_AuditPrefix
+	if kc.log.IsPrefix(adtrLog) {
+		return kc.log.Len(), shared.ErrNone
 	}
-	kc.log = sigLog.Log
+	if adtrLog.IsPrefix(kc.log) {
+		return adtrLog.Len(), shared.ErrNone
+	}
 
-	return kc.log.Len(), shared.ErrNone
+	return 0, shared.ErrKeyCli_AuditPrefix
 }
 
 // Tests.
 
-// Two clients lookup the same uname, talk to the same honest auditor,
-// and assert that their returned keys are the same.
-func testAuditPass(servAddr, adtrAddr grove_ffi.Address) {
+// Two clients lookup the same uname, talk to some auditor servers
+// (at least one honest), and assert that their returned keys are the same.
+func testAuditPass(servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address) {
+	// Start the server.
 	go func() {
 		s := newKeyServ()
 		s.start(servAddr)
 	}()
 	machine.Sleep(1_000_000)
 
-	adtrSigner, adtrVerifier := kt_shim.MakeKeys()
+	// Make auditor keys.
+	badSk0, badVk0 := kt_shim.MakeKeys()
+	goodSk0, goodVk0 := kt_shim.MakeKeys()
+	badSk1, badVk1 := kt_shim.MakeKeys()
+	var adtrVks []*kt_shim.VerifierT
+	adtrVks = append(adtrVks, badVk0)
+	adtrVks = append(adtrVks, goodVk0)
+	adtrVks = append(adtrVks, badVk1)
+
+	// Start the auditors.
 	go func() {
-		a := newAuditor(servAddr, adtrSigner)
-		a.start(adtrAddr)
+		a := newAuditor(badSk0)
+		a.start(adtrAddrs[0])
+	}()
+	go func() {
+		a := newAuditor(goodSk0)
+		a.start(adtrAddrs[1])
+	}()
+	go func() {
+		a := newAuditor(badSk1)
+		a.start(adtrAddrs[2])
 	}()
 	machine.Sleep(1_000_000)
 
-	adtrs := []grove_ffi.Address{adtrAddr}
-	adtrVks := []*kt_shim.VerifierT{adtrVerifier}
-	cReg := newKeyCli(servAddr, adtrs, adtrVks)
-	cLook1 := newKeyCli(servAddr, adtrs, adtrVks)
-	cLook2 := newKeyCli(servAddr, adtrs, adtrVks)
+	// Start the clients.
+	cReg := newKeyCli(servAddr, adtrAddrs, adtrVks)
+	cLook0 := newKeyCli(servAddr, adtrAddrs, adtrVks)
+	cLook1 := newKeyCli(servAddr, adtrAddrs, adtrVks)
 
-	aliceUname := uint64(42)
-	aliceKey := []byte("pubkey")
-	uk := &shared.UnameKey{Uname: aliceUname, Key: aliceKey}
-	_, err1 := cReg.register(uk)
+	// Register a key.
+	uname0 := uint64(42)
+	key0 := []byte("key0")
+	uk := &shared.UnameKey{Uname: uname0, Key: key0}
+	_, err0 := cReg.register(uk)
+	machine.Assume(err0 == shared.ErrNone)
+
+	// Lookup that uname.
+	epoch0, retKey0, err1 := cLook0.lookup(uname0)
 	machine.Assume(err1 == shared.ErrNone)
+	epoch1, retKey1, err2 := cLook1.lookup(uname0)
+	machine.Assume(err2 == shared.ErrNone)
 
-	adtrCli := urpc.MakeClient(adtrAddr)
+	// Start the auditors.
+	badAdtr0Cli := urpc.MakeClient(adtrAddrs[0])
+	goodAdtr0Cli := urpc.MakeClient(adtrAddrs[1])
+	badAdtr1Cli := urpc.MakeClient(adtrAddrs[2])
+
+	// Update the bad auditors.
+	uname1 := uint64(43)
+	key1 := []byte("key1")
+	badEntry := &shared.UnameKey{Uname: uname1, Key: key1}
+	badLog := shared.NewKeyLog()
+	badLog.Append(badEntry)
+	badLogB := badLog.Encode()
 	emptyB := make([]byte, 0)
-	err2 := adtrCli.Call(shared.RpcDoAudit, nil, &emptyB, 100)
-	machine.Assume(err2 == urpc.ErrNone)
+	err3 := badAdtr0Cli.Call(shared.RpcAdtr_Update, badLogB, &emptyB, 100)
+	machine.Assume(err3 == urpc.ErrNone)
+	err4 := badAdtr1Cli.Call(shared.RpcAdtr_Update, badLogB, &emptyB, 100)
+	machine.Assume(err4 == urpc.ErrNone)
 
-	epochL1, retKey1, err := cLook1.lookup(aliceUname)
-	machine.Assume(err == shared.ErrNone)
-	epochL2, retKey2, err := cLook2.lookup(aliceUname)
-	machine.Assume(err == shared.ErrNone)
+	// Update the good auditor.
+	goodEntry := &shared.UnameKey{Uname: uname0, Key: key0}
+	goodLog := shared.NewKeyLog()
+	goodLog.Append(goodEntry)
+	goodLogB := goodLog.Encode()
+	err5 := goodAdtr0Cli.Call(shared.RpcAdtr_Update, goodLogB, &emptyB, 100)
+	machine.Assume(err5 == urpc.ErrNone)
 
-	_, err3 := cLook1.audit(0)
-	machine.Assume(err3 == shared.ErrNone)
-	_, err4 := cLook2.audit(0)
-	machine.Assume(err4 == shared.ErrNone)
-	// Don't need to check audit epoch since we know it needs to cover epochs
-	// we've already seen.
+	// Contact auditors.
+	// A dishonest auditor can give us anything, we don't trust it.
+	// But we call it here to show we can handle its output without panic'ing.
+	cLook0.audit(0)
+	auditEpoch0, err6 := cLook0.audit(1)
+	// Could do a more fine-grained check like
+	// "if the sig passed, assert no other err".
+	machine.Assume(err6 == shared.ErrNone)
 
-	if epochL1 == epochL2 {
-		machine.Assert(shared.BytesEqual(retKey1, retKey2))
+	cLook1.audit(2)
+	auditEpoch1, err7 := cLook1.audit(1)
+	machine.Assume(err7 == shared.ErrNone)
+
+	// Big assert.
+	if epoch0 == epoch1 && epoch0 <= auditEpoch0 && epoch0 <= auditEpoch1 {
+		machine.Assert(shared.BytesEqual(retKey0, retKey1))
 	}
 }
 
@@ -303,13 +322,15 @@ func testAuditFail(servAddr1, servAddr2, adtrAddr grove_ffi.Address) {
 
 	adtrSigner, adtrVerifier := kt_shim.MakeKeys()
 	go func() {
-		a := newAuditor(servAddr1, adtrSigner)
+		a := newAuditor(adtrSigner)
 		a.start(adtrAddr)
 	}()
 	machine.Sleep(1_000_000)
 
-	adtrs := []grove_ffi.Address{adtrAddr}
-	adtrVks := []*kt_shim.VerifierT{adtrVerifier}
+	var adtrs []grove_ffi.Address
+	adtrs = append(adtrs, adtrAddr)
+	var adtrVks []*kt_shim.VerifierT
+	adtrVks = append(adtrVks, adtrVerifier)
 	cReg1 := newKeyCli(servAddr1, adtrs, adtrVks)
 	cReg2 := newKeyCli(servAddr2, adtrs, adtrVks)
 	cLook2 := newKeyCli(servAddr2, adtrs, adtrVks)
@@ -325,8 +346,11 @@ func testAuditFail(servAddr1, servAddr2, adtrAddr grove_ffi.Address) {
 	machine.Assume(err2 == shared.ErrNone)
 
 	adtrCli := urpc.MakeClient(adtrAddr)
+	goodLog := shared.NewKeyLog()
+	goodLog.Append(uk1)
+	goodLogB := goodLog.Encode()
 	emptyB := make([]byte, 0)
-	err3 := adtrCli.Call(shared.RpcDoAudit, nil, &emptyB, 100)
+	err3 := adtrCli.Call(shared.RpcAdtr_Update, goodLogB, &emptyB, 100)
 	machine.Assume(err3 == urpc.ErrNone)
 
 	_, _, err4 := cLook2.lookup(aliceUname)

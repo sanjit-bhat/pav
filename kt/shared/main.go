@@ -9,21 +9,21 @@ type ErrorT = uint64
 
 const (
 	// Errors
-	ErrNone                  ErrorT = 0
-	ErrSome                  ErrorT = 1
-	ErrKeyCli_AuditPrefix    ErrorT = 2
-	ErrKeyCli_CheckLogPrefix ErrorT = 3
-	ErrKeyCli_CheckLogLookup ErrorT = 4
-	ErrKeyCli_RegNoExist     ErrorT = 5
-	ErrUnameKey_Decode       ErrorT = 6
-	ErrKeyLog_Decode         ErrorT = 7
-	ErrSigLog_Decode         ErrorT = 8
-	ErrVerify                ErrorT = 9
+	ErrNone                ErrorT = 0
+	ErrGeneric             ErrorT = 1
+	ErrVerify              ErrorT = 2
+	ErrUnameKey_Decode     ErrorT = 3
+	ErrKeyLog_Decode       ErrorT = 4
+	ErrSigLog_Decode       ErrorT = 5
+	ErrInjestNewLog_Prefix ErrorT = 6
+	ErrKeyCli_RegNoExist   ErrorT = 7
+	ErrKeyCli_LookNoExist  ErrorT = 8
+	ErrKeyCli_AuditPrefix  ErrorT = 9
 	// RPCs
-	RpcAppendLog uint64 = 1
-	RpcGetLog    uint64 = 2
-	RpcDoAudit   uint64 = 3
-	RpcGetAudit  uint64 = 4
+	RpcKeyServ_Put uint64 = 1
+	RpcKeyServ_Get uint64 = 2
+	RpcAdtr_Update uint64 = 3
+	RpcAdtr_Get    uint64 = 4
 	// Sig
 	SigLen uint64 = 69
 )
