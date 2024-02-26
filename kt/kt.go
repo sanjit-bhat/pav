@@ -251,8 +251,8 @@ func testAuditPass(servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address) {
 	// Register a key.
 	uname0 := uint64(42)
 	key0 := []byte("key0")
-	uk := &shared.UnameKey{Uname: uname0, Key: key0}
-	_, err0 := cReg.register(uk)
+	goodEntry := &shared.UnameKey{Uname: uname0, Key: key0}
+	_, err0 := cReg.register(goodEntry)
 	machine.Assume(err0 == shared.ErrNone)
 
 	// Lookup that uname.
@@ -262,9 +262,9 @@ func testAuditPass(servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address) {
 	machine.Assume(err2 == shared.ErrNone)
 
 	// Start the auditors.
-	badAdtr0Cli := urpc.MakeClient(adtrAddrs[0])
-	goodAdtr0Cli := urpc.MakeClient(adtrAddrs[1])
-	badAdtr1Cli := urpc.MakeClient(adtrAddrs[2])
+	badAdtr0 := urpc.MakeClient(adtrAddrs[0])
+	goodAdtr0 := urpc.MakeClient(adtrAddrs[1])
+	badAdtr1 := urpc.MakeClient(adtrAddrs[2])
 
 	// Update the bad auditors.
 	uname1 := uint64(43)
@@ -274,34 +274,33 @@ func testAuditPass(servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address) {
 	badLog.Append(badEntry)
 	badLogB := badLog.Encode()
 	emptyB := make([]byte, 0)
-	err3 := badAdtr0Cli.Call(shared.RpcAdtr_Update, badLogB, &emptyB, 100)
+	err3 := badAdtr0.Call(shared.RpcAdtr_Update, badLogB, &emptyB, 100)
 	machine.Assume(err3 == urpc.ErrNone)
-	err4 := badAdtr1Cli.Call(shared.RpcAdtr_Update, badLogB, &emptyB, 100)
+	err4 := badAdtr1.Call(shared.RpcAdtr_Update, badLogB, &emptyB, 100)
 	machine.Assume(err4 == urpc.ErrNone)
 
 	// Update the good auditor.
-	goodEntry := &shared.UnameKey{Uname: uname0, Key: key0}
 	goodLog := shared.NewKeyLog()
 	goodLog.Append(goodEntry)
 	goodLogB := goodLog.Encode()
-	err5 := goodAdtr0Cli.Call(shared.RpcAdtr_Update, goodLogB, &emptyB, 100)
+	err5 := goodAdtr0.Call(shared.RpcAdtr_Update, goodLogB, &emptyB, 100)
 	machine.Assume(err5 == urpc.ErrNone)
 
 	// Contact auditors.
 	// A dishonest auditor can give us anything, we don't trust it.
 	// But we call it here to show we can handle its output without panic'ing.
-	cLook0.audit(0)
+	_, _ = cLook0.audit(0)
 	auditEpoch0, err6 := cLook0.audit(1)
 	// Could do a more fine-grained check like
 	// "if the sig passed, assert no other err".
 	machine.Assume(err6 == shared.ErrNone)
 
-	cLook1.audit(2)
+	_, _ = cLook1.audit(2)
 	auditEpoch1, err7 := cLook1.audit(1)
 	machine.Assume(err7 == shared.ErrNone)
 
 	// Big assert.
-	if epoch0 == epoch1 && epoch0 <= auditEpoch0 && epoch0 <= auditEpoch1 {
+	if epoch0 == epoch1 && epoch0 <= auditEpoch0 && epoch1 <= auditEpoch1 {
 		machine.Assert(shared.BytesEqual(retKey0, retKey1))
 	}
 }
