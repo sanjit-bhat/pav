@@ -18,69 +18,87 @@ Ops:
 Get proofs of membership and non-membership for specific keys.
 */
 
-const (
-    ErrNone uint64 = 0
-    ErrGet_NotFound uint64 = 1
+import (
+	"bytes"
 )
+
+const (
+	ErrNone         uint64 = 0
+	ErrGet_NotFound uint64 = 1
+	ErrPut_BadLen   uint64 = 2
+	ErrGet_BadLen   uint64 = 3
+)
+
+type Id struct {
+	Path []byte
+}
+
+const DigestLen = 32
+
+func NewId() *Id {
+	return &Id{Path: make([]byte, DigestLen)}
+}
 
 type Val struct {
 	Data []byte
+}
+
+func (v1 *Val) Equals(v2 *Val) bool {
+	return bytes.Equal(v1.Data, v2.Data)
 }
 
 type Node struct {
 	Val      *Val
 	Children []*Node
 }
-const BYTE_POS = 64
+
+const ByteSlots = 64
 
 func NewNode() *Node {
-	return &Node{Val: nil, Children: make([]*Node, BYTE_POS)}
+	return &Node{Val: nil, Children: make([]*Node, ByteSlots)}
 }
 
 type Tree struct {
 	Root *Node
 }
 
-func NewMTree() *Tree {
+func NewTree() *Tree {
 	return &Tree{Root: NewNode()}
 }
 
-type Id struct {
-	Path []byte
-}
-const DIGEST_LEN = 32
-
-func NewId() *Id {
-	return &Id{Path: make([]byte, DIGEST_LEN)}
-}
-
-func (t *Tree) Put(id *Id, v *Val) {
-	currNode := t.Root
-    for pathIdx := 0; pathIdx < DIGEST_LEN; pathIdx++ {
-        pos := id.Path[pathIdx]
-        child := currNode.Children[pos]
-        if child == nil {
-            child := NewNode()
-            currNode.Children[pos] = child
-        }
-        currNode = child
+func (t *Tree) Put(id *Id, v *Val) uint64 {
+	if len(id.Path) != DigestLen {
+		return ErrPut_BadLen
 	}
-    currNode.Val = v
+	currNode := t.Root
+	for pathIdx := 0; pathIdx < DigestLen; pathIdx++ {
+		pos := id.Path[pathIdx]
+		if currNode.Children[pos] == nil {
+			currNode.Children[pos] = NewNode()
+		}
+		currNode = currNode.Children[pos]
+	}
+	currNode.Val = v
+	return ErrNone
 }
 
 func (t *Tree) Get(id *Id) (*Val, uint64) {
-    currNode := t.Root
-    found := true
-    for pathIdx := 0; pathIdx < DIGEST_LEN; pathIdx++ {
-        pos := id.Path[pathIdx]
-        currNode = currNode.Children[pos]
-        if currNode == nil {
-            found = false
-            break
-        }
+	if len(id.Path) != DigestLen {
+		return nil, ErrGet_BadLen
 	}
-    if !found {
-        return nil, ErrGet_NotFound
-    }
-    return currNode.Val, ErrNone
+	currNode := t.Root
+	found := true
+	for pathIdx := 0; pathIdx < DigestLen; pathIdx++ {
+		pos := id.Path[pathIdx]
+		currNode = currNode.Children[pos]
+		if currNode == nil {
+			found = false
+			break
+		}
+	}
+	if !found {
+		return nil, ErrGet_NotFound
+	}
+	return currNode.Val, ErrNone
 }
+
