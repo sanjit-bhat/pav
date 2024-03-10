@@ -31,13 +31,13 @@ func (l *AuthLog) Put(e *Entry) *InclusionProof {
 
 // Assuming InclusionProof talks about id-value,
 // so don't need to return that by itself.
-func (l *AuthLog) Get() *InclusionProof {
+func (l *AuthLog) Get(uname) *InclusionProof {
 	panic("todo")
 }
 
 // Will special case certain values, e.g.,
 // a 0 end might mean "up until latest epoch".
-func (l *AuthLog) GetHist(start, end EpochNum) []*InclusionProof {
+func (l *AuthLog) GetHist(uname, start, end EpochNum) []*InclusionProof {
 	panic("todo")
 }
 
