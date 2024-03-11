@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestOne(t *testing.T) {
+func TestOnePut(t *testing.T) {
 	tr := NewTree()
 
 	path0 := make([]byte, DigestLen)
@@ -16,18 +16,18 @@ func TestOne(t *testing.T) {
 	data0[2] = 1
 	val0 := &Val{Data: data0}
 	proof0, err0 := tr.Put(id0, val0)
-	machine.Assume(err0 == ErrNone)
+	machine.Assert(err0 == ErrNone)
 	err1 := proof0.Check()
-	machine.Assume(err1 == ErrNone)
+	machine.Assert(err1 == ErrNone)
 
 	proof1, err2 := tr.Get(id0)
-	machine.Assume(err2 == ErrNone)
+	machine.Assert(err2 == ErrNone)
 	err3 := proof1.Check()
-	machine.Assume(err3 == ErrNone)
+	machine.Assert(err3 == ErrNone)
 	machine.Assert(bytes.Equal(val0.Data, proof1.Val.Data))
 }
 
-func TestTwo(t *testing.T) {
+func TestTwoPut(t *testing.T) {
 	tr := NewTree()
 
 	path0 := HashOne([]byte("path0"))
@@ -35,27 +35,27 @@ func TestTwo(t *testing.T) {
 	data0 := []byte("data0")
 	val0 := &Val{Data: data0}
 	proof0, err0 := tr.Put(id0, val0)
-	machine.Assume(err0 == ErrNone)
+	machine.Assert(err0 == ErrNone)
 	err1 := proof0.Check()
-	machine.Assume(err1 == ErrNone)
+	machine.Assert(err1 == ErrNone)
 
 	path1 := HashOne([]byte("path1"))
 	id1 := &Id{Path: path1}
 	data1 := []byte("data1")
 	val1 := &Val{Data: data1}
 	proof1, err2 := tr.Put(id1, val1)
-	machine.Assume(err2 == ErrNone)
+	machine.Assert(err2 == ErrNone)
 	err3 := proof1.Check()
-	machine.Assume(err3 == ErrNone)
+	machine.Assert(err3 == ErrNone)
 
 	proof2, err4 := tr.Get(id0)
-	machine.Assume(err4 == ErrNone)
+	machine.Assert(err4 == ErrNone)
 	err5 := proof2.Check()
-	machine.Assume(err5 == ErrNone)
+	machine.Assert(err5 == ErrNone)
 	proof3, err6 := tr.Get(id1)
-	machine.Assume(err6 == ErrNone)
+	machine.Assert(err6 == ErrNone)
 	err7 := proof3.Check()
-	machine.Assume(err7 == ErrNone)
+	machine.Assert(err7 == ErrNone)
 
 	machine.Assert(bytes.Equal(val0.Data, proof2.Val.Data))
 	machine.Assert(bytes.Equal(val1.Data, proof3.Val.Data))
@@ -69,30 +69,77 @@ func TestOverwrite(t *testing.T) {
 	data0 := []byte("data0")
 	val0 := &Val{Data: data0}
 	proof0, err0 := tr.Put(id0, val0)
-	machine.Assume(err0 == ErrNone)
+	machine.Assert(err0 == ErrNone)
 	err1 := proof0.Check()
-	machine.Assume(err1 == ErrNone)
+	machine.Assert(err1 == ErrNone)
 
 	data1 := []byte("data1")
 	val1 := &Val{Data: data1}
 	proof1, err2 := tr.Put(id0, val1)
-	machine.Assume(err2 == ErrNone)
+	machine.Assert(err2 == ErrNone)
 	err3 := proof1.Check()
-	machine.Assume(err3 == ErrNone)
+	machine.Assert(err3 == ErrNone)
 
 	proof2, err4 := tr.Get(id0)
-	machine.Assume(err4 == ErrNone)
+	machine.Assert(err4 == ErrNone)
 	err5 := proof2.Check()
-	machine.Assume(err5 == ErrNone)
+	machine.Assert(err5 == ErrNone)
 	machine.Assert(bytes.Equal(val1.Data, proof2.Val.Data))
 }
 
-/*
+func TestGetNotFound(t *testing.T) {
+	tr := NewTree()
+
+	path0 := make([]byte, DigestLen)
+	path0[0] = 1
+	path0[1] = 1
+	id0 := &Id{Path: path0}
+	data0 := []byte("data0")
+	val0 := &Val{Data: data0}
+	proof0, err0 := tr.Put(id0, val0)
+	machine.Assert(err0 == ErrNone)
+	err1 := proof0.Check()
+	machine.Assert(err1 == ErrNone)
+
+	path1 := make([]byte, DigestLen)
+	path1[0] = 1
+	path1[1] = 2
+	path1[2] = 1
+	id1 := &Id{Path: path1}
+	_, err2 := tr.Get(id1)
+	machine.Assert(err2 != ErrNone)
+}
+
+func TestNonmembership(t *testing.T) {
+	tr := NewTree()
+
+	path0 := make([]byte, DigestLen)
+	path0[0] = 1
+	path0[1] = 1
+	id0 := &Id{Path: path0}
+	data0 := []byte("data0")
+	val0 := &Val{Data: data0}
+	proof0, err0 := tr.Put(id0, val0)
+	machine.Assert(err0 == ErrNone)
+	err1 := proof0.Check()
+	machine.Assert(err1 == ErrNone)
+
+	path1 := make([]byte, DigestLen)
+	path1[0] = 1
+	path1[1] = 2
+	path1[2] = 1
+	id1 := &Id{Path: path1}
+	proof1, err2 := tr.GetNil(id1)
+	machine.Assert(err2 == ErrNone)
+	err3 := proof1.Check()
+	machine.Assert(err3 == ErrNone)
+}
+
 // Don't want proof(id, val, root) and proof(id, val', root)
 // to exist at the same time.
 // This could happen if, e.g., nil children weren't factored into their
 // parent's hash.
-func TestBadNilProof(t *testing.T) {
+func TestAttackNilConfusion(t *testing.T) {
 	tr := NewTree()
 
 	path0 := make([]byte, DigestLen)
@@ -101,29 +148,22 @@ func TestBadNilProof(t *testing.T) {
 	data0 := []byte("data0")
 	val0 := &Val{Data: data0}
 	proof0, err0 := tr.Put(id0, val0)
-	machine.Assume(err0 == ErrNone)
+	machine.Assert(err0 == ErrNone)
 
-    // Original proof0 checks out.
+	// Original proof0 checks out.
 	err1 := proof0.Check()
-	machine.Assume(err1 == ErrNone)
+	machine.Assert(err1 == ErrNone)
 
-    // Construct non-membership proof foir that same Path.
-    proof1 := &NonmembershipProof {
-        Path: 
-    }
-    tmp := proof0.ChildDigests[0][1]
-    proof0.ChildDigests[0][1] = proof0.ChildDigests[0][2]
-    proof0.ChildDigests[0][2] = tmp
-    proof0.Val = 
-
-    // Modified 
-
-	proof1, err2 := tr.Get(id0)
-	machine.Assume(err2 == ErrNone)
-	err3 := proof1.Check()
-	machine.Assume(err3 == ErrNone)
-	machine.Assert(val0.Equals(proof1.Val))
+	// Construct non-membership proof for that same path.
+	childDigests := proof0.ChildDigests[:1]
+	tmp := childDigests[0][1]
+	childDigests[0][1] = childDigests[0][0]
+	childDigests[0][0] = tmp
+	proof1 := &NonmembProof{
+		Path:         path0[:1],
+		RootDigest:   proof0.RootDigest,
+		ChildDigests: childDigests,
+	}
+	err2 := proof1.Check()
+	machine.Assert(err2 == ErrPathProof)
 }
-*/
-
-// TODO: Test non-membership.

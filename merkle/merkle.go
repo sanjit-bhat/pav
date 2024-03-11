@@ -231,7 +231,7 @@ func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
 	found := true
-	for pathIdx := 0; pathIdx < DigestLen && !found; pathIdx++ {
+	for pathIdx := 0; pathIdx < DigestLen && found; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id.Path[pathIdx]
 		if currNode.Children[pos] == nil {
