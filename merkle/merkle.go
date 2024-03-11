@@ -1,38 +1,33 @@
 package merkle
 
-/*
-Requirements:
-What should the paths down the tree be?
-A byte array, for the most general thing.
-Max len can be 32 bytes, the output size of the blake hash func,
-used by AKD.
-Could also specialize to a uname or something,
-which might be a u64 (8 bytes).
-But then when add in epoch, gets more complicated.
-It's easiest to just do a hash value.
-
-Make value at node be another byte arr.
-Ops:
-1) Put
-2) Get
-Get proofs of membership and non-membership for specific keys.
-*/
-
 import (
 	"bytes"
 	"fmt"
-	//"github.com/tchajed/goose/machine"
 	"github.com/zeebo/blake3"
 )
 
 const (
-	ErrNone          uint64 = 0
-	ErrGet_NotFound  uint64 = 1
-	ErrPut_BadLen    uint64 = 2
-	ErrGet_BadLen    uint64 = 3
-	ErrMembProof_Bad uint64 = 4
-	DigestLen               = 2
+	ErrNone         uint64 = 0
+	ErrGet_NotFound uint64 = 1
+	ErrPut_BadInput uint64 = 2
+	ErrGet_BadLen   uint64 = 3
+	ErrPathProof    uint64 = 4
+	// The output length of our hash function.
+	DigestLen = 32
+	// Each node's number of children.
+	// Branch on a byte, and 2 ** 8 (bits in byte) = 256.
+	ChildLen = 256
 )
+
+func HashOne(d []byte) []byte {
+	hasher := blake3.New()
+	hasher.Write(d)
+	return hasher.Sum(nil)[:DigestLen]
+}
+
+func HashSum(h *blake3.Hasher) []byte {
+	return h.Sum(nil)[:DigestLen]
+}
 
 type Id struct {
 	Path []byte
@@ -42,59 +37,53 @@ type Val struct {
 	Data []byte
 }
 
-func (v1 *Val) Equals(v2 *Val) bool {
-	return bytes.Equal(v1.Data, v2.Data)
-}
-
 type Node struct {
 	Val      *Val
-	Digest   []byte
+	digest   []byte
 	Children []*Node
 }
 
-const ByteSlots = 2
-
 func NewNode() *Node {
-	// TODO: init digest?
-    d := HashOne(nil)
-	c := make([]*Node, ByteSlots)
-	return &Node{Val: nil, Digest: d, Children: c}
+	d := HashOne(nil)
+	c := make([]*Node, ChildLen)
+	return &Node{Val: nil, digest: d, Children: c}
 }
 
-type MembershipProof struct {
+func (n *Node) Digest() []byte {
+	if n == nil {
+		return HashOne(nil)
+	}
+	return n.digest
+}
+
+type PathProof struct {
 	Path         []byte
-	Val          *Val
+	ValDigest    []byte
 	RootDigest   []byte
 	ChildDigests [][][]byte
 }
 
-func HashOne(d []byte) []byte {
-	hasher := blake3.New()
-	hasher.Write(d)
-	return hasher.Sum(nil)[:DigestLen]
-}
+func (p *PathProof) Check() uint64 {
+	if len(p.Path) != len(p.ChildDigests) {
+		return ErrPathProof
+	}
+	proofLen := len(p.Path)
 
-func HashSlice(h *blake3.Hasher) []byte {
-	return h.Sum(nil)[:DigestLen]
-}
-
-func (p *MembershipProof) Check() uint64 {
-	hBott := HashOne(p.Val.Data)
-	posBott := p.Path[DigestLen-1]
-	if !bytes.Equal(hBott, p.ChildDigests[DigestLen-1][posBott]) {
-		return ErrMembProof_Bad
+	posBott := p.Path[proofLen-1]
+	if !bytes.Equal(p.ValDigest, p.ChildDigests[proofLen-1][posBott]) {
+		return ErrPathProof
 	}
 
 	err := ErrNone
-	for pathIdx := DigestLen - 1; pathIdx >= 1; pathIdx-- {
+	for pathIdx := proofLen - 1; pathIdx >= 1; pathIdx-- {
 		h := blake3.New()
 		for _, childHash := range p.ChildDigests[pathIdx] {
 			h.Write(childHash)
 		}
 		prevIdx := pathIdx - 1
 		pos := p.Path[prevIdx]
-		if !bytes.Equal(HashSlice(h), p.ChildDigests[prevIdx][pos]) {
-			err = ErrMembProof_Bad
+		if !bytes.Equal(HashSum(h), p.ChildDigests[prevIdx][pos]) {
+			err = ErrPathProof
 		}
 	}
 	if err != ErrNone {
@@ -105,25 +94,60 @@ func (p *MembershipProof) Check() uint64 {
 	for _, childHash := range p.ChildDigests[0] {
 		hTop.Write(childHash)
 	}
-	if !bytes.Equal(HashSlice(hTop), p.RootDigest) {
-		return ErrMembProof_Bad
+	if !bytes.Equal(HashSum(hTop), p.RootDigest) {
+		return ErrPathProof
 	}
 	return ErrNone
 }
 
-// Assumes child hashes are already up-to-date.
+// User checks that proof.Path is prefix of their desired Path.
+type NonmembershipProof struct {
+	Path         []byte
+	RootDigest   []byte
+	ChildDigests [][][]byte
+}
+
+func (p *NonmembershipProof) Check() uint64 {
+	pathProof := &PathProof{
+		Path:         p.Path,
+		ValDigest:    HashOne(nil),
+		RootDigest:   p.RootDigest,
+		ChildDigests: p.ChildDigests,
+	}
+	return pathProof.Check()
+}
+
+type MembershipProof struct {
+	Path         []byte
+	Val          *Val
+	RootDigest   []byte
+	ChildDigests [][][]byte
+}
+
+func (p *MembershipProof) Check() uint64 {
+	if p.Val.Data == nil {
+		return ErrPathProof
+	}
+	pathProof := &PathProof{
+		Path:         p.Path,
+		ValDigest:    HashOne(p.Val.Data),
+		RootDigest:   p.RootDigest,
+		ChildDigests: p.ChildDigests,
+	}
+	return pathProof.Check()
+}
+
+// Assumes recursive child hashes are already up-to-date.
 func (n *Node) UpdateHash() {
 	h := blake3.New()
-	// TODO: need to deal with nil vals in more principled way.
 	if n.Val != nil {
 		h.Write(n.Val.Data)
-	}
-	for _, child := range n.Children {
-		if child != nil {
-			h.Write(child.Digest)
+	} else {
+		for _, child := range n.Children {
+			h.Write(child.Digest())
 		}
 	}
-	n.Digest = HashSlice(h)
+	n.digest = HashSum(h)
 }
 
 type Tree struct {
@@ -135,47 +159,45 @@ func NewTree() *Tree {
 }
 
 func (t *Tree) Print() {
-    qCurr := make([]*Node, 0)
-    qCurr = append(qCurr, t.Root)
-    qNext := make([]*Node, 0)
-    for len(qCurr) > 0 {
-        for len(qCurr) > 0 {
-            top := qCurr[0]
-            qCurr = qCurr[1:]
+	qCurr := make([]*Node, 0)
+	qCurr = append(qCurr, t.Root)
+	qNext := make([]*Node, 0)
+	for len(qCurr) > 0 {
+		for len(qCurr) > 0 {
+			top := qCurr[0]
+			qCurr = qCurr[1:]
 
-            if top == nil {
-                fmt.Print("nil | ")
-                continue
-            } else if top.Val != nil {
-                fmt.Print(top.Digest, top.Val.Data, " | ")
-            } else {
-                fmt.Print(top.Digest, " | ")
-            }
+			if top == nil {
+				fmt.Print("nil | ")
+				continue
+			} else if top.Val != nil {
+				fmt.Print(top.Digest(), top.Val.Data, " | ")
+			} else {
+				fmt.Print(top.Digest(), " | ")
+			}
 
-            for _, child := range top.Children {
-                qNext = append(qNext, child)
-            }
-        }
-        qCurr = qNext
-        qNext = nil
-        fmt.Println()
-    }
+			for _, child := range top.Children {
+				qNext = append(qNext, child)
+			}
+		}
+		qCurr = qNext
+		qNext = nil
+		fmt.Println()
+	}
 }
 
 func GetMembProof(nodePath []*Node, id *Id) *MembershipProof {
 	proof := &MembershipProof{}
 	proof.Path = id.Path
 	proof.Val = nodePath[DigestLen].Val
-	proof.RootDigest = nodePath[0].Digest
+	proof.RootDigest = nodePath[0].Digest()
 	proof.ChildDigests = make([][][]byte, DigestLen)
 	for pathIdx := 0; pathIdx < DigestLen; pathIdx++ {
-		proofChildren := make([][]byte, ByteSlots)
+		proofChildren := make([][]byte, ChildLen)
 		treeChildren := nodePath[pathIdx].Children
 		proof.ChildDigests[pathIdx] = proofChildren
-		for childIdx := 0; childIdx < ByteSlots; childIdx++ {
-			if treeChildren[childIdx] != nil {
-				proofChildren[childIdx] = treeChildren[childIdx].Digest
-			}
+		for childIdx := 0; childIdx < ChildLen; childIdx++ {
+			proofChildren[childIdx] = treeChildren[childIdx].Digest()
 		}
 	}
 	return proof
@@ -183,7 +205,10 @@ func GetMembProof(nodePath []*Node, id *Id) *MembershipProof {
 
 func (t *Tree) Put(id *Id, v *Val) (*MembershipProof, uint64) {
 	if len(id.Path) != DigestLen {
-		return nil, ErrPut_BadLen
+		return nil, ErrPut_BadInput
+	}
+	if v.Data == nil {
+		return nil, ErrPut_BadInput
 	}
 
 	nodePath := make([]*Node, DigestLen+1)
@@ -203,7 +228,6 @@ func (t *Tree) Put(id *Id, v *Val) (*MembershipProof, uint64) {
 		nodePath[pathIdx].UpdateHash()
 	}
 
-    t.Print()
 	return GetMembProof(nodePath, id), ErrNone
 }
 
