@@ -29,6 +29,12 @@ func HashSum(h *blake3.Hasher) []byte {
 	return h.Sum(nil)[:DigestLen]
 }
 
+func CopyByteSlice(b1 []byte) []byte {
+	b2 := make([]byte, len(b1))
+	copy(b2, b1)
+	return b2
+}
+
 type Id struct {
 	Path []byte
 }
@@ -65,7 +71,7 @@ type PathProof struct {
 	ChildDigests [][][]byte
 }
 
-type MembershipProof struct {
+type MembProof struct {
 	Path         []byte
 	Val          *Val
 	RootDigest   []byte
@@ -73,7 +79,7 @@ type MembershipProof struct {
 }
 
 // User checks that proof.Path is prefix of their desired Path.
-type NonmembershipProof struct {
+type NonmembProof struct {
 	Path         []byte
 	RootDigest   []byte
 	ChildDigests [][][]byte
@@ -116,7 +122,7 @@ func (p *PathProof) Check() uint64 {
 	return ErrNone
 }
 
-func (p *MembershipProof) Check() uint64 {
+func (p *MembProof) Check() uint64 {
 	if p.Val.Data == nil {
 		return ErrPathProof
 	}
@@ -129,7 +135,7 @@ func (p *MembershipProof) Check() uint64 {
 	return pathProof.Check()
 }
 
-func (p *NonmembershipProof) Check() uint64 {
+func (p *NonmembProof) Check() uint64 {
 	pathProof := &PathProof{
 		Path:         p.Path,
 		ValDigest:    HashOne(nil),
@@ -188,53 +194,70 @@ func (t *Tree) Print() {
 	}
 }
 
-func GetMembProof(nodePath []*Node, id *Id) *MembershipProof {
-	proof := &MembershipProof{}
-	proof.Path = id.Path
-	proof.Val = nodePath[DigestLen].Val
-	proof.RootDigest = nodePath[0].Digest()
-	proof.ChildDigests = make([][][]byte, DigestLen)
-	for pathIdx := 0; pathIdx < DigestLen; pathIdx++ {
-		proofChildren := make([][]byte, ChildLen)
+func CopyChildDigests(nodePath []*Node, copyLen int) [][][]byte {
+	childDigests := make([][][]byte, copyLen)
+	for pathIdx := 0; pathIdx < copyLen; pathIdx++ {
 		treeChildren := nodePath[pathIdx].Children
-		proof.ChildDigests[pathIdx] = proofChildren
+		proofChildren := make([][]byte, ChildLen)
+		childDigests[pathIdx] = proofChildren
+
 		for childIdx := 0; childIdx < ChildLen; childIdx++ {
-			proofChildren[childIdx] = treeChildren[childIdx].Digest()
+			proofChildren[childIdx] = CopyByteSlice(treeChildren[childIdx].Digest())
 		}
 	}
+	return childDigests
+}
+
+func GetMembProof(nodePath []*Node, id *Id) *MembProof {
+	proof := &MembProof{}
+	proof.Path = CopyByteSlice(id.Path)
+	proof.Val = &Val{}
+	proof.Val.Data = CopyByteSlice(nodePath[DigestLen].Val.Data)
+	proof.RootDigest = CopyByteSlice(nodePath[0].Digest())
+	proof.ChildDigests = CopyChildDigests(nodePath, DigestLen)
+	return proof
+}
+
+func GetNonmembProof(nodePath []*Node, id *Id) *NonmembProof {
+	proof := &NonmembProof{}
+	prefixLen := len(nodePath)
+	proof.Path = CopyByteSlice(id.Path[:prefixLen])
+	proof.RootDigest = CopyByteSlice(nodePath[0].Digest())
+	proof.ChildDigests = CopyChildDigests(nodePath, prefixLen)
 	return proof
 }
 
 func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
-	nodePath := make([]*Node, DigestLen+1)
-	nodePath[0] = t.Root
+	var nodePath []*Node
+	nodePath = append(nodePath, t.Root)
 	found := true
 	for pathIdx := 0; pathIdx < DigestLen && !found; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id.Path[pathIdx]
 		if currNode.Children[pos] == nil {
 			found = false
+		} else {
+			nodePath = append(nodePath, currNode.Children[pos])
 		}
-		nodePath[pathIdx+1] = currNode.Children[pos]
 	}
 	return nodePath, found
 }
 
 func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
-	nodePath := make([]*Node, DigestLen+1)
-	nodePath[0] = t.Root
+	var nodePath []*Node
+	nodePath = append(nodePath, t.Root)
 	for pathIdx := 0; pathIdx < DigestLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id.Path[pathIdx]
 		if currNode.Children[pos] == nil {
 			currNode.Children[pos] = NewNode()
 		}
-		nodePath[pathIdx+1] = currNode.Children[pos]
+		nodePath = append(nodePath, currNode.Children[pos])
 	}
 	return nodePath
 }
 
-func (t *Tree) Put(id *Id, v *Val) (*MembershipProof, uint64) {
+func (t *Tree) Put(id *Id, v *Val) (*MembProof, uint64) {
 	if len(id.Path) != DigestLen {
 		return nil, ErrBadInput
 	}
@@ -250,8 +273,7 @@ func (t *Tree) Put(id *Id, v *Val) (*MembershipProof, uint64) {
 	return GetMembProof(nodePath, id), ErrNone
 }
 
-// TODO: add non-membership proof as well.
-func (t *Tree) Get(id *Id) (*MembershipProof, uint64) {
+func (t *Tree) Get(id *Id) (*MembProof, uint64) {
 	if len(id.Path) != DigestLen {
 		return nil, ErrBadInput
 	}
@@ -263,7 +285,7 @@ func (t *Tree) Get(id *Id) (*MembershipProof, uint64) {
 	return GetMembProof(nodePath, id), ErrNone
 }
 
-func (t *Tree) GetNil(id *Id) (*NonmembershipProof, uint64) {
+func (t *Tree) GetNil(id *Id) (*NonmembProof, uint64) {
 	if len(id.Path) != DigestLen {
 		return nil, ErrBadInput
 	}
@@ -272,4 +294,5 @@ func (t *Tree) GetNil(id *Id) (*NonmembershipProof, uint64) {
 	if found {
 		return nil, ErrFound
 	}
+	return GetNonmembProof(nodePath, id), ErrNone
 }
