@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	ErrNone         uint64 = 0
-	ErrGet_NotFound uint64 = 1
-	ErrPut_BadInput uint64 = 2
-	ErrGet_BadLen   uint64 = 3
-	ErrPathProof    uint64 = 4
+	ErrNone      uint64 = 0
+	ErrFound     uint64 = 1
+	ErrNotFound  uint64 = 2
+	ErrBadInput  uint64 = 3
+	ErrPathProof uint64 = 4
 	// The output length of our hash function.
 	DigestLen = 32
 	// Each node's number of children.
@@ -56,9 +56,25 @@ func (n *Node) Digest() []byte {
 	return n.digest
 }
 
+// General proof object.
+// Binds a path down the tree to a digest.
 type PathProof struct {
 	Path         []byte
 	ValDigest    []byte
+	RootDigest   []byte
+	ChildDigests [][][]byte
+}
+
+type MembershipProof struct {
+	Path         []byte
+	Val          *Val
+	RootDigest   []byte
+	ChildDigests [][][]byte
+}
+
+// User checks that proof.Path is prefix of their desired Path.
+type NonmembershipProof struct {
+	Path         []byte
 	RootDigest   []byte
 	ChildDigests [][][]byte
 }
@@ -100,30 +116,6 @@ func (p *PathProof) Check() uint64 {
 	return ErrNone
 }
 
-// User checks that proof.Path is prefix of their desired Path.
-type NonmembershipProof struct {
-	Path         []byte
-	RootDigest   []byte
-	ChildDigests [][][]byte
-}
-
-func (p *NonmembershipProof) Check() uint64 {
-	pathProof := &PathProof{
-		Path:         p.Path,
-		ValDigest:    HashOne(nil),
-		RootDigest:   p.RootDigest,
-		ChildDigests: p.ChildDigests,
-	}
-	return pathProof.Check()
-}
-
-type MembershipProof struct {
-	Path         []byte
-	Val          *Val
-	RootDigest   []byte
-	ChildDigests [][][]byte
-}
-
 func (p *MembershipProof) Check() uint64 {
 	if p.Val.Data == nil {
 		return ErrPathProof
@@ -131,6 +123,16 @@ func (p *MembershipProof) Check() uint64 {
 	pathProof := &PathProof{
 		Path:         p.Path,
 		ValDigest:    HashOne(p.Val.Data),
+		RootDigest:   p.RootDigest,
+		ChildDigests: p.ChildDigests,
+	}
+	return pathProof.Check()
+}
+
+func (p *NonmembershipProof) Check() uint64 {
+	pathProof := &PathProof{
+		Path:         p.Path,
+		ValDigest:    HashOne(nil),
 		RootDigest:   p.RootDigest,
 		ChildDigests: p.ChildDigests,
 	}
@@ -203,14 +205,22 @@ func GetMembProof(nodePath []*Node, id *Id) *MembershipProof {
 	return proof
 }
 
-func (t *Tree) Put(id *Id, v *Val) (*MembershipProof, uint64) {
-	if len(id.Path) != DigestLen {
-		return nil, ErrPut_BadInput
+func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
+	nodePath := make([]*Node, DigestLen+1)
+	nodePath[0] = t.Root
+	found := true
+	for pathIdx := 0; pathIdx < DigestLen && !found; pathIdx++ {
+		currNode := nodePath[pathIdx]
+		pos := id.Path[pathIdx]
+		if currNode.Children[pos] == nil {
+			found = false
+		}
+		nodePath[pathIdx+1] = currNode.Children[pos]
 	}
-	if v.Data == nil {
-		return nil, ErrPut_BadInput
-	}
+	return nodePath, found
+}
 
+func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
 	nodePath := make([]*Node, DigestLen+1)
 	nodePath[0] = t.Root
 	for pathIdx := 0; pathIdx < DigestLen; pathIdx++ {
@@ -221,37 +231,45 @@ func (t *Tree) Put(id *Id, v *Val) (*MembershipProof, uint64) {
 		}
 		nodePath[pathIdx+1] = currNode.Children[pos]
 	}
+	return nodePath
+}
 
+func (t *Tree) Put(id *Id, v *Val) (*MembershipProof, uint64) {
+	if len(id.Path) != DigestLen {
+		return nil, ErrBadInput
+	}
+	if v.Data == nil {
+		return nil, ErrBadInput
+	}
+
+	nodePath := t.WalkTreeAddLinks(id)
 	nodePath[DigestLen].Val = v
-
 	for pathIdx := DigestLen; pathIdx >= 0; pathIdx-- {
 		nodePath[pathIdx].UpdateHash()
 	}
-
 	return GetMembProof(nodePath, id), ErrNone
 }
 
+// TODO: add non-membership proof as well.
 func (t *Tree) Get(id *Id) (*MembershipProof, uint64) {
 	if len(id.Path) != DigestLen {
-		return nil, ErrGet_BadLen
+		return nil, ErrBadInput
 	}
 
-	nodePath := make([]*Node, DigestLen+1)
-	nodePath[0] = t.Root
-	found := true
-	for pathIdx := 0; pathIdx < DigestLen; pathIdx++ {
-		currNode := nodePath[pathIdx]
-		pos := id.Path[pathIdx]
-		if currNode.Children[pos] == nil {
-			found = false
-			break
-		}
-		nodePath[pathIdx+1] = currNode.Children[pos]
-	}
-
+	nodePath, found := t.WalkTree(id)
 	if !found {
-		return nil, ErrGet_NotFound
+		return nil, ErrNotFound
+	}
+	return GetMembProof(nodePath, id), ErrNone
+}
+
+func (t *Tree) GetNil(id *Id) (*NonmembershipProof, uint64) {
+	if len(id.Path) != DigestLen {
+		return nil, ErrBadInput
 	}
 
-	return GetMembProof(nodePath, id), ErrNone
+	nodePath, found := t.WalkTree(id)
+	if found {
+		return nil, ErrFound
+	}
 }
