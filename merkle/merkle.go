@@ -1,7 +1,6 @@
 package merkle
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/mit-pdos/secure-chat/merkle/merkle_shim"
 )
@@ -62,6 +61,19 @@ func CopySlice(b1 []byte) []byte {
 	return b2
 }
 
+func BytesEqual(b1, b2 []byte) bool {
+	if len(b1) != len(b2) {
+		return false
+	}
+	var isEq = true
+	for i, b := range b1 {
+		if b != b2[i] {
+			isEq = false
+		}
+	}
+	return isEq
+}
+
 // "keys" of the tree.
 // We use "Id" to differentiate this from the public keys that could be stored
 // in the tree.
@@ -117,7 +129,7 @@ type NonmembProof struct {
 func (p *PathProof) Check() uint64 {
 	proofLen := uint64(len(p.Id.B))
 	posBott := p.Id.B[proofLen-1]
-	if !bytes.Equal(p.NodeHash, p.ChildHashes[proofLen-1][posBott]) {
+	if !BytesEqual(p.NodeHash, p.ChildHashes[proofLen-1][posBott]) {
 		return ErrPathProof
 	}
 
@@ -126,7 +138,7 @@ func (p *PathProof) Check() uint64 {
 		hChildren := HashSlice2D(p.ChildHashes[pathIdx])
 		prevIdx := pathIdx - 1
 		pos := p.Id.B[prevIdx]
-		if !bytes.Equal(hChildren, p.ChildHashes[prevIdx][pos]) {
+		if !BytesEqual(hChildren, p.ChildHashes[prevIdx][pos]) {
 			err = ErrPathProof
 		}
 	}
@@ -135,7 +147,7 @@ func (p *PathProof) Check() uint64 {
 	}
 
 	digest := HashSlice2D(p.ChildHashes[0])
-	if !bytes.Equal(digest, p.Digest.B) {
+	if !BytesEqual(digest, p.Digest.B) {
 		return ErrPathProof
 	}
 	return ErrNone
