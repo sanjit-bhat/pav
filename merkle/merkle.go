@@ -12,9 +12,9 @@ const (
 	ErrNotFound  uint64 = 2
 	ErrBadInput  uint64 = 3
 	ErrPathProof uint64 = 4
-	HashLen             = 32
+	HashLen      uint64 = 32
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
-	NumChildren = 256
+	NumChildren uint64 = 256
 )
 
 func HashOne(d []byte) []byte {
@@ -102,13 +102,13 @@ type NonmembProof struct {
 }
 
 func (p *PathProof) Check() uint64 {
-	proofLen := len(p.Id.B)
+	proofLen := uint64(len(p.Id.B))
 	posBott := p.Id.B[proofLen-1]
 	if !bytes.Equal(p.NodeHash, p.ChildHashes[proofLen-1][posBott]) {
 		return ErrPathProof
 	}
 
-	err := ErrNone
+	var err = ErrNone
 	for pathIdx := proofLen - 1; pathIdx >= 1; pathIdx-- {
 		hChildren := HashSlice2D(p.ChildHashes[pathIdx])
 		prevIdx := pathIdx - 1
@@ -129,10 +129,10 @@ func (p *PathProof) Check() uint64 {
 }
 
 func (p *MembProof) Check(id *Id, val *Val, digest *Digest) uint64 {
-	if len(id.B) != HashLen {
+	if uint64(len(id.B)) != HashLen {
 		return ErrBadInput
 	}
-	if len(p.ChildHashes) != HashLen {
+	if uint64(len(p.ChildHashes)) != HashLen {
 		return ErrBadInput
 	}
 	pathProof := &PathProof{
@@ -145,7 +145,7 @@ func (p *MembProof) Check(id *Id, val *Val, digest *Digest) uint64 {
 }
 
 func (p *NonmembProof) Check(id *Id, digest *Digest) uint64 {
-	if HashLen <= len(p.ChildHashes) {
+	if HashLen <= uint64(len(p.ChildHashes)) {
 		return ErrBadInput
 	}
 	idPref := &Id{B: CopySlice(id.B)[:len(p.ChildHashes)]}
@@ -176,9 +176,9 @@ func NewTree() *Tree {
 }
 
 func (t *Tree) Print() {
-	qCurr := make([]*Node, 0)
+	var qCurr []*Node
+	var qNext []*Node
 	qCurr = append(qCurr, t.Root)
-	qNext := make([]*Node, 0)
 	for len(qCurr) > 0 {
 		for len(qCurr) > 0 {
 			top := qCurr[0]
@@ -186,15 +186,16 @@ func (t *Tree) Print() {
 
 			if top == nil {
 				fmt.Print("nil | ")
-				continue
-			} else if top.Val != nil {
-				fmt.Print(top.Hash(), top.Val.B, " | ")
 			} else {
-				fmt.Print(top.Hash(), " | ")
-			}
+				if top.Val != nil {
+					fmt.Print(top.Hash(), top.Val.B, " | ")
+				} else {
+					fmt.Print(top.Hash(), " | ")
+				}
 
-			for _, child := range top.Children {
-				qNext = append(qNext, child)
+				for _, child := range top.Children {
+					qNext = append(qNext, child)
+				}
 			}
 		}
 		qCurr = qNext
@@ -205,12 +206,12 @@ func (t *Tree) Print() {
 
 func GetChildHashes(nodePath []*Node) [][][]byte {
 	childHashes := make([][][]byte, len(nodePath))
-	for pathIdx := 0; pathIdx < len(nodePath); pathIdx++ {
+	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath)); pathIdx++ {
 		treeChildren := nodePath[pathIdx].Children
 		proofChildren := make([][]byte, NumChildren)
 		childHashes[pathIdx] = proofChildren
 
-		for childIdx := 0; childIdx < NumChildren; childIdx++ {
+		for childIdx := uint64(0); childIdx < NumChildren; childIdx++ {
 			proofChildren[childIdx] = CopySlice(treeChildren[childIdx].Hash())
 		}
 	}
@@ -220,8 +221,8 @@ func GetChildHashes(nodePath []*Node) [][][]byte {
 func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
-	found := true
-	for pathIdx := 0; pathIdx < HashLen && found; pathIdx++ {
+	var found = true
+	for pathIdx := uint64(0); pathIdx < HashLen && found; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id.B[pathIdx]
 		if currNode.Children[pos] == nil {
@@ -236,7 +237,7 @@ func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
 func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
-	for pathIdx := 0; pathIdx < HashLen; pathIdx++ {
+	for pathIdx := uint64(0); pathIdx < HashLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id.B[pathIdx]
 		if currNode.Children[pos] == nil {
@@ -248,7 +249,7 @@ func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
 }
 
 func (t *Tree) Put(id *Id, v *Val) (*Digest, *MembProof, uint64) {
-	if len(id.B) != HashLen {
+	if uint64(len(id.B)) != HashLen {
 		return nil, nil, ErrBadInput
 	}
 
@@ -264,7 +265,7 @@ func (t *Tree) Put(id *Id, v *Val) (*Digest, *MembProof, uint64) {
 }
 
 func (t *Tree) Get(id *Id) (*Val, *Digest, *MembProof, uint64) {
-	if len(id.B) != HashLen {
+	if uint64(len(id.B)) != HashLen {
 		return nil, nil, nil, ErrBadInput
 	}
 
@@ -280,7 +281,7 @@ func (t *Tree) Get(id *Id) (*Val, *Digest, *MembProof, uint64) {
 }
 
 func (t *Tree) GetNil(id *Id) (*Digest, *NonmembProof, uint64) {
-	if len(id.B) != HashLen {
+	if uint64(len(id.B)) != HashLen {
 		return nil, nil, ErrBadInput
 	}
 
