@@ -1,8 +1,8 @@
 package merkle
 
 import (
-	"fmt"
 	"github.com/mit-pdos/secure-chat/merkle/merkle_shim"
+	"log"
 )
 
 const (
@@ -210,12 +210,12 @@ func (t *Tree) Print() {
 			qCurr = qCurr[1:]
 
 			if top == nil {
-				fmt.Print("nil | ")
+				log.Print("nil | ")
 			} else {
 				if top.Val != nil {
-					fmt.Print(top.Hash(), top.Val.B, " | ")
+					log.Print(top.Hash(), top.Val.B, " | ")
 				} else {
-					fmt.Print(top.Hash(), " | ")
+					log.Print(top.Hash(), " | ")
 				}
 
 				for _, child := range top.Children {
@@ -225,7 +225,7 @@ func (t *Tree) Print() {
 		}
 		qCurr = qNext
 		qNext = nil
-		fmt.Println()
+		log.Println()
 	}
 }
 
