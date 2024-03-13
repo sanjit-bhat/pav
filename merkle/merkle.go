@@ -3,7 +3,7 @@ package merkle
 import (
 	"bytes"
 	"fmt"
-	"github.com/zeebo/blake3"
+	"github.com/mit-pdos/secure-chat/merkle/merkle_shim"
 )
 
 const (
@@ -17,30 +17,42 @@ const (
 	NumChildren uint64 = 256
 )
 
-func HashOne(d []byte) []byte {
-	hasher := blake3.New()
-	hasher.Write(d)
-	return hasher.Sum(nil)[:HashLen]
+type Hasher struct {
+	B []byte
 }
 
-func HashSum(h *blake3.Hasher) []byte {
-	return h.Sum(nil)[:HashLen]
+func NewHasher() *Hasher {
+	return &Hasher{}
+}
+
+func (h *Hasher) Write(b []byte) {
+	for _, b := range b {
+		h.B = append(h.B, b)
+	}
+}
+
+func (h *Hasher) Sum(b []byte) []byte {
+	hash := merkle_shim.Hash(h.B)
+	for _, by := range hash {
+		b = append(b, by)
+	}
+	return b
 }
 
 func HashSlice2D(b1 [][]byte) []byte {
-	h := blake3.New()
+	h := NewHasher()
 	for _, b2 := range b1 {
 		h.Write(b2)
 	}
-	return HashSum(h)
+	return h.Sum(nil)
 }
 
 func HashNodes(nodeSl []*Node) []byte {
-	h := blake3.New()
+	h := NewHasher()
 	for _, n := range nodeSl {
 		h.Write(n.Hash())
 	}
-	return HashSum(h)
+	return h.Sum(nil)
 }
 
 func CopySlice(b1 []byte) []byte {
@@ -68,14 +80,14 @@ type Node struct {
 }
 
 func NewNode() *Node {
-	d := HashOne(nil)
+	d := merkle_shim.Hash(nil)
 	c := make([]*Node, NumChildren)
 	return &Node{Val: nil, hash: d, Children: c}
 }
 
 func (n *Node) Hash() []byte {
 	if n == nil {
-		return HashOne(nil)
+		return merkle_shim.Hash(nil)
 	}
 	return n.hash
 }
@@ -137,7 +149,7 @@ func (p *MembProof) Check(id *Id, val *Val, digest *Digest) uint64 {
 	}
 	pathProof := &PathProof{
 		Id:          id,
-		NodeHash:    HashOne(val.B),
+		NodeHash:    merkle_shim.Hash(val.B),
 		Digest:      digest,
 		ChildHashes: p.ChildHashes,
 	}
@@ -151,7 +163,7 @@ func (p *NonmembProof) Check(id *Id, digest *Digest) uint64 {
 	idPref := &Id{B: CopySlice(id.B)[:len(p.ChildHashes)]}
 	pathProof := &PathProof{
 		Id:          idPref,
-		NodeHash:    HashOne(nil),
+		NodeHash:    merkle_shim.Hash(nil),
 		Digest:      digest,
 		ChildHashes: p.ChildHashes,
 	}
@@ -161,7 +173,7 @@ func (p *NonmembProof) Check(id *Id, digest *Digest) uint64 {
 // Assumes recursive child hashes are already up-to-date.
 func (n *Node) UpdateHash() {
 	if n.Val != nil {
-		n.hash = HashOne(n.Val.B)
+		n.hash = merkle_shim.Hash(n.Val.B)
 	} else {
 		n.hash = HashNodes(n.Children)
 	}
@@ -255,8 +267,9 @@ func (t *Tree) Put(id *Id, v *Val) (*Digest, *MembProof, uint64) {
 
 	nodePath := t.WalkTreeAddLinks(id)
 	nodePath[HashLen].Val = v
-	for pathIdx := HashLen; pathIdx >= 0; pathIdx-- {
-		nodePath[pathIdx].UpdateHash()
+	// +1/-1 offsets for Goosable uint64 loop var.
+	for pathIdx := HashLen + 1; pathIdx >= 1; pathIdx-- {
+		nodePath[pathIdx-1].UpdateHash()
 	}
 
 	digest := &Digest{B: CopySlice(nodePath[0].Hash())}

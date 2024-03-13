@@ -2,6 +2,7 @@ package merkle
 
 import (
 	"bytes"
+	"github.com/mit-pdos/secure-chat/merkle/merkle_ffi"
 	"github.com/tchajed/goose/machine"
 	"testing"
 )
@@ -30,7 +31,7 @@ func TestOnePut(t *testing.T) {
 func TestTwoPut(t *testing.T) {
 	tr := NewTree()
 
-	path0 := HashOne([]byte("path0"))
+	path0 := merkle_ffi.Hash([]byte("path0"))
 	id0 := &Id{B: path0}
 	data0 := []byte("data0")
 	val0 := &Val{B: data0}
@@ -39,7 +40,7 @@ func TestTwoPut(t *testing.T) {
 	err1 := proof0.Check(id0, val0, digest0)
 	machine.Assert(err1 == ErrNone)
 
-	path1 := HashOne([]byte("path1"))
+	path1 := merkle_ffi.Hash([]byte("path1"))
 	id1 := &Id{B: path1}
 	data1 := []byte("data1")
 	val1 := &Val{B: data1}
@@ -64,7 +65,7 @@ func TestTwoPut(t *testing.T) {
 func TestOverwrite(t *testing.T) {
 	tr := NewTree()
 
-	path0 := HashOne([]byte("path0"))
+	path0 := merkle_ffi.Hash([]byte("path0"))
 	id0 := &Id{B: path0}
 	data0 := []byte("data0")
 	val0 := &Val{B: data0}
