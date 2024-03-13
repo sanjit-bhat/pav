@@ -32,17 +32,18 @@ func (h *Hasher) Write(b []byte) {
 }
 
 func (h *Hasher) Sum(b []byte) []byte {
+	var b1 = b
 	hash := merkle_shim.Hash(h.B)
-	for _, by := range hash {
-		b = append(b, by)
+	for _, byt := range hash {
+		b1 = append(b, byt)
 	}
-	return b
+	return b1
 }
 
-func HashSlice2D(b1 [][]byte) []byte {
+func HashSlice2D(b [][]byte) []byte {
 	h := NewHasher()
-	for _, b2 := range b1 {
-		h.Write(b2)
+	for _, b1 := range b {
+		h.Write(b1)
 	}
 	return h.Sum(nil)
 }
