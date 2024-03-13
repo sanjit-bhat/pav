@@ -29,18 +29,38 @@ func HashSum(h *blake3.Hasher) []byte {
 	return h.Sum(nil)[:DigestLen]
 }
 
-func CopyByteSlice(b1 []byte) []byte {
+func HashSlice2D(b [][]byte) []byte {
+	h := blake3.New()
+	for _, bSub := range b {
+		h.Write(bSub)
+	}
+	return HashSum(h)
+}
+
+func HashNodes(nodeSl []*Node) []byte {
+	h := blake3.New()
+	for _, n := range nodeSl {
+		h.Write(n.Digest())
+	}
+	return HashSum(h)
+}
+
+func CopySlice(b1 []byte) []byte {
 	b2 := make([]byte, len(b1))
 	copy(b2, b1)
 	return b2
 }
 
+// "keys" of the tree.
+// We use Id to differentiate this from the public keys that could be stored
+// in the tree.
 type Id struct {
-	Path []byte
+	B []byte
 }
 
+// "vals" of the tree.
 type Val struct {
-	Data []byte
+	B []byte
 }
 
 type Node struct {
@@ -62,49 +82,40 @@ func (n *Node) Digest() []byte {
 	return n.digest
 }
 
+type RootDigest struct {
+	B []byte
+}
+
 // General proof object.
-// Binds a path down the tree to a digest.
+// Binds an id down the tree to a digest.
 type PathProof struct {
-	Path         []byte
+	Id           *Id
 	ValDigest    []byte
-	RootDigest   []byte
+	Root         *RootDigest
 	ChildDigests [][][]byte
 }
 
 type MembProof struct {
-	Path         []byte
-	Val          *Val
-	RootDigest   []byte
 	ChildDigests [][][]byte
 }
 
-// User checks that proof.Path is prefix of their desired Path.
 type NonmembProof struct {
-	Path         []byte
-	RootDigest   []byte
 	ChildDigests [][][]byte
 }
 
 func (p *PathProof) Check() uint64 {
-	if len(p.Path) != len(p.ChildDigests) {
-		return ErrPathProof
-	}
-	proofLen := len(p.Path)
-
-	posBott := p.Path[proofLen-1]
+	proofLen := len(p.Id.B)
+	posBott := p.Id.B[proofLen-1]
 	if !bytes.Equal(p.ValDigest, p.ChildDigests[proofLen-1][posBott]) {
 		return ErrPathProof
 	}
 
 	err := ErrNone
 	for pathIdx := proofLen - 1; pathIdx >= 1; pathIdx-- {
-		h := blake3.New()
-		for _, childHash := range p.ChildDigests[pathIdx] {
-			h.Write(childHash)
-		}
+		hChildren := HashSlice2D(p.ChildDigests[pathIdx])
 		prevIdx := pathIdx - 1
-		pos := p.Path[prevIdx]
-		if !bytes.Equal(HashSum(h), p.ChildDigests[prevIdx][pos]) {
+		pos := p.Id.B[prevIdx]
+		if !bytes.Equal(hChildren, p.ChildDigests[prevIdx][pos]) {
 			err = ErrPathProof
 		}
 	}
@@ -112,34 +123,38 @@ func (p *PathProof) Check() uint64 {
 		return err
 	}
 
-	hTop := blake3.New()
-	for _, childHash := range p.ChildDigests[0] {
-		hTop.Write(childHash)
-	}
-	if !bytes.Equal(HashSum(hTop), p.RootDigest) {
+	hRoot := HashSlice2D(p.ChildDigests[0])
+	if !bytes.Equal(hRoot, p.Root.B) {
 		return ErrPathProof
 	}
 	return ErrNone
 }
 
-func (p *MembProof) Check() uint64 {
-	if p.Val.Data == nil {
-		return ErrPathProof
+func (p *MembProof) Check(id *Id, val *Val, root *RootDigest) uint64 {
+	if len(id.B) != DigestLen {
+		return ErrBadInput
+	}
+	if len(p.ChildDigests) != DigestLen {
+		return ErrBadInput
 	}
 	pathProof := &PathProof{
-		Path:         p.Path,
-		ValDigest:    HashOne(p.Val.Data),
-		RootDigest:   p.RootDigest,
+		Id:           id,
+		ValDigest:    HashOne(val.B),
+		Root:         root,
 		ChildDigests: p.ChildDigests,
 	}
 	return pathProof.Check()
 }
 
-func (p *NonmembProof) Check() uint64 {
+func (p *NonmembProof) Check(id *Id, root *RootDigest) uint64 {
+	if DigestLen <= len(p.ChildDigests) {
+		return ErrBadInput
+	}
+	id.B = id.B[:len(p.ChildDigests)]
 	pathProof := &PathProof{
-		Path:         p.Path,
+		Id:           id,
 		ValDigest:    HashOne(nil),
-		RootDigest:   p.RootDigest,
+		Root:         root,
 		ChildDigests: p.ChildDigests,
 	}
 	return pathProof.Check()
@@ -147,15 +162,11 @@ func (p *NonmembProof) Check() uint64 {
 
 // Assumes recursive child hashes are already up-to-date.
 func (n *Node) UpdateHash() {
-	h := blake3.New()
 	if n.Val != nil {
-		h.Write(n.Val.Data)
+		n.digest = HashOne(n.Val.B)
 	} else {
-		for _, child := range n.Children {
-			h.Write(child.Digest())
-		}
+		n.digest = HashNodes(n.Children)
 	}
-	n.digest = HashSum(h)
 }
 
 type Tree struct {
@@ -179,7 +190,7 @@ func (t *Tree) Print() {
 				fmt.Print("nil | ")
 				continue
 			} else if top.Val != nil {
-				fmt.Print(top.Digest(), top.Val.Data, " | ")
+				fmt.Print(top.Digest(), top.Val.B, " | ")
 			} else {
 				fmt.Print(top.Digest(), " | ")
 			}
@@ -194,37 +205,18 @@ func (t *Tree) Print() {
 	}
 }
 
-func CopyChildDigests(nodePath []*Node, copyLen int) [][][]byte {
-	childDigests := make([][][]byte, copyLen)
-	for pathIdx := 0; pathIdx < copyLen; pathIdx++ {
+func GetChildDigests(nodePath []*Node) [][][]byte {
+	childDigests := make([][][]byte, len(nodePath))
+	for pathIdx := 0; pathIdx < len(nodePath); pathIdx++ {
 		treeChildren := nodePath[pathIdx].Children
 		proofChildren := make([][]byte, ChildLen)
 		childDigests[pathIdx] = proofChildren
 
 		for childIdx := 0; childIdx < ChildLen; childIdx++ {
-			proofChildren[childIdx] = CopyByteSlice(treeChildren[childIdx].Digest())
+			proofChildren[childIdx] = CopySlice(treeChildren[childIdx].Digest())
 		}
 	}
 	return childDigests
-}
-
-func GetMembProof(nodePath []*Node, id *Id) *MembProof {
-	proof := &MembProof{}
-	proof.Path = CopyByteSlice(id.Path)
-	proof.Val = &Val{}
-	proof.Val.Data = CopyByteSlice(nodePath[DigestLen].Val.Data)
-	proof.RootDigest = CopyByteSlice(nodePath[0].Digest())
-	proof.ChildDigests = CopyChildDigests(nodePath, DigestLen)
-	return proof
-}
-
-func GetNonmembProof(nodePath []*Node, id *Id) *NonmembProof {
-	proof := &NonmembProof{}
-	prefixLen := len(nodePath)
-	proof.Path = CopyByteSlice(id.Path[:prefixLen])
-	proof.RootDigest = CopyByteSlice(nodePath[0].Digest())
-	proof.ChildDigests = CopyChildDigests(nodePath, prefixLen)
-	return proof
 }
 
 func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
@@ -233,7 +225,7 @@ func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
 	found := true
 	for pathIdx := 0; pathIdx < DigestLen && found; pathIdx++ {
 		currNode := nodePath[pathIdx]
-		pos := id.Path[pathIdx]
+		pos := id.B[pathIdx]
 		if currNode.Children[pos] == nil {
 			found = false
 		} else {
@@ -248,7 +240,7 @@ func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
 	nodePath = append(nodePath, t.Root)
 	for pathIdx := 0; pathIdx < DigestLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
-		pos := id.Path[pathIdx]
+		pos := id.B[pathIdx]
 		if currNode.Children[pos] == nil {
 			currNode.Children[pos] = NewNode()
 		}
@@ -257,12 +249,9 @@ func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
 	return nodePath
 }
 
-func (t *Tree) Put(id *Id, v *Val) (*MembProof, uint64) {
-	if len(id.Path) != DigestLen {
-		return nil, ErrBadInput
-	}
-	if v.Data == nil {
-		return nil, ErrBadInput
+func (t *Tree) Put(id *Id, v *Val) (*RootDigest, *MembProof, uint64) {
+	if len(id.B) != DigestLen {
+		return nil, nil, ErrBadInput
 	}
 
 	nodePath := t.WalkTreeAddLinks(id)
@@ -270,29 +259,39 @@ func (t *Tree) Put(id *Id, v *Val) (*MembProof, uint64) {
 	for pathIdx := DigestLen; pathIdx >= 0; pathIdx-- {
 		nodePath[pathIdx].UpdateHash()
 	}
-	return GetMembProof(nodePath, id), ErrNone
+
+	root := &RootDigest{B: CopySlice(nodePath[0].Digest())}
+	proof := &MembProof{ChildDigests: GetChildDigests(nodePath[:DigestLen])}
+	return root, proof, ErrNone
 }
 
-func (t *Tree) Get(id *Id) (*MembProof, uint64) {
-	if len(id.Path) != DigestLen {
-		return nil, ErrBadInput
+func (t *Tree) Get(id *Id) (*Val, *RootDigest, *MembProof, uint64) {
+	if len(id.B) != DigestLen {
+		return nil, nil, nil, ErrBadInput
 	}
 
 	nodePath, found := t.WalkTree(id)
 	if !found {
-		return nil, ErrNotFound
+		return nil, nil, nil, ErrNotFound
 	}
-	return GetMembProof(nodePath, id), ErrNone
+
+	val := &Val{B: CopySlice(nodePath[DigestLen].Val.B)}
+	root := &RootDigest{B: CopySlice(nodePath[0].Digest())}
+	proof := &MembProof{ChildDigests: GetChildDigests(nodePath[:DigestLen])}
+	return val, root, proof, ErrNone
 }
 
-func (t *Tree) GetNil(id *Id) (*NonmembProof, uint64) {
-	if len(id.Path) != DigestLen {
-		return nil, ErrBadInput
+func (t *Tree) GetNil(id *Id) (*RootDigest, *NonmembProof, uint64) {
+	if len(id.B) != DigestLen {
+		return nil, nil, ErrBadInput
 	}
 
 	nodePath, found := t.WalkTree(id)
 	if found {
-		return nil, ErrFound
+		return nil, nil, ErrFound
 	}
-	return GetNonmembProof(nodePath, id), ErrNone
+
+	root := &RootDigest{B: CopySlice(nodePath[0].Digest())}
+	proof := &NonmembProof{ChildDigests: GetChildDigests(nodePath)}
+	return root, proof, ErrNone
 }
