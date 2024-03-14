@@ -173,6 +173,10 @@ func (p *NonmembProof) Check(id *Id, digest *Digest) uint64 {
 	if HashLen <= uint64(len(p.ChildHashes)) {
 		return ErrBadInput
 	}
+	// After slicing (which panics if id is too small),
+	// id will have the same len as p.ChildHashes.
+	// It now corresponds to the prefix path down the tree that contains
+	// the nil value.
 	idPref := &Id{B: CopySlice(id.B)[:len(p.ChildHashes)]}
 	pathProof := &PathProof{
 		Id:          idPref,
