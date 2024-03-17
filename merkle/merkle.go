@@ -92,17 +92,17 @@ type Node struct {
 	Children []*Node
 }
 
-func NewNode() *Node {
-	d := merkle_shim.Hash(nil)
-	c := make([]*Node, NumChildren)
-	return &Node{Val: nil, hash: d, Children: c}
-}
-
 func (n *Node) Hash() []byte {
 	if n == nil {
 		return merkle_shim.Hash(nil)
 	}
 	return n.hash
+}
+
+func NewGenericNode() *Node {
+	var v *Val
+	c := make([]*Node, NumChildren)
+	return &Node{Val: v, hash: nil, Children: c}
 }
 
 type Digest struct {
@@ -188,10 +188,12 @@ func (p *NonmembProof) Check(id *Id, digest *Digest) uint64 {
 }
 
 // Assumes recursive child hashes are already up-to-date.
-func (n *Node) UpdateHash() {
-	if n.Val != nil {
+func (n *Node) UpdateHash(depth uint64) {
+	if depth == HashLen {
+		// Leaf node.
 		n.hash = merkle_shim.Hash(n.Val.B)
 	} else {
+		// Interior node.
 		n.hash = HashNodes(n.Children)
 	}
 }
@@ -201,7 +203,10 @@ type Tree struct {
 }
 
 func NewTree() *Tree {
-	return &Tree{Root: NewNode()}
+	n := &Node{}
+	n.Children = make([]*Node, NumChildren)
+	n.UpdateHash(0)
+	return &Tree{Root: n}
 }
 
 func (t *Tree) Print() {
@@ -270,7 +275,7 @@ func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
 		currNode := nodePath[pathIdx]
 		pos := id.B[pathIdx]
 		if currNode.Children[pos] == nil {
-			currNode.Children[pos] = NewNode()
+			currNode.Children[pos] = NewGenericNode()
 		}
 		nodePath = append(nodePath, currNode.Children[pos])
 	}
@@ -286,7 +291,7 @@ func (t *Tree) Put(id *Id, v *Val) (*Digest, *MembProof, uint64) {
 	nodePath[HashLen].Val = v
 	// +1/-1 offsets for Goosable uint64 loop var.
 	for pathIdx := HashLen + 1; pathIdx >= 1; pathIdx-- {
-		nodePath[pathIdx-1].UpdateHash()
+		nodePath[pathIdx-1].UpdateHash(pathIdx - 1)
 	}
 
 	digest := &Digest{B: CopySlice(nodePath[0].Hash())}
