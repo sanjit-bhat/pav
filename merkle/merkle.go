@@ -99,10 +99,21 @@ func (n *Node) Hash() []byte {
 	return n.hash
 }
 
+// These nodes are neither interior nodes nor leaf nodes.
+// They'll be specialized after adding them to the tree.
 func NewGenericNode() *Node {
 	var v *Val
 	c := make([]*Node, NumChildren)
 	return &Node{Val: v, hash: nil, Children: c}
+}
+
+func (n *Node) UpdateLeafHash() {
+	n.hash = merkle_shim.Hash(n.Val.B)
+}
+
+// Assumes recursive child hashes are already up-to-date.
+func (n *Node) UpdateInteriorHash() {
+	n.hash = HashNodes(n.Children)
 }
 
 type Digest struct {
@@ -187,17 +198,6 @@ func (p *NonmembProof) Check(id *Id, digest *Digest) uint64 {
 	return pathProof.Check()
 }
 
-// Assumes recursive child hashes are already up-to-date.
-func (n *Node) UpdateHash(depth uint64) {
-	if depth == HashLen {
-		// Leaf node.
-		n.hash = merkle_shim.Hash(n.Val.B)
-	} else {
-		// Interior node.
-		n.hash = HashNodes(n.Children)
-	}
-}
-
 type Tree struct {
 	Root *Node
 }
@@ -205,7 +205,7 @@ type Tree struct {
 func NewTree() *Tree {
 	n := &Node{}
 	n.Children = make([]*Node, NumChildren)
-	n.UpdateHash(0)
+	n.UpdateInteriorHash()
 	return &Tree{Root: n}
 }
 
@@ -289,9 +289,10 @@ func (t *Tree) Put(id *Id, v *Val) (*Digest, *MembProof, uint64) {
 
 	nodePath := t.WalkTreeAddLinks(id)
 	nodePath[HashLen].Val = v
+	nodePath[HashLen].UpdateLeafHash()
 	// +1/-1 offsets for Goosable uint64 loop var.
-	for pathIdx := HashLen + 1; pathIdx >= 1; pathIdx-- {
-		nodePath[pathIdx-1].UpdateHash(pathIdx - 1)
+	for pathIdx := HashLen; pathIdx >= 1; pathIdx-- {
+		nodePath[pathIdx-1].UpdateInteriorHash()
 	}
 
 	digest := &Digest{B: CopySlice(nodePath[0].Hash())}
