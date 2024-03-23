@@ -9,11 +9,11 @@ import (
 
 func TestHasher(t *testing.T) {
 	str := []byte("hello")
-	var h1 Hasher
-	h1.Write(str)
-	hash1 := h1.Sum(nil)
-	var h2 Hasher
-	hash2 := h2.Sum(nil)
+	var hr1 Hasher
+	hr1.Write(str)
+	hash1 := hr1.Sum(nil)
+	var hr2 Hasher
+	hash2 := hr2.Sum(nil)
 	hash3 := merkle_ffi.Hash(str)
 	hash4 := merkle_ffi.Hash(nil)
 
@@ -140,7 +140,7 @@ func TestNonmembership(t *testing.T) {
 // to exist at the same time.
 // This could happen if, e.g., nil children weren't factored into their
 // parent's hash.
-func TestAttackNilConfusion(t *testing.T) {
+func TestAttackChildEmptyHashing(t *testing.T) {
 	tr := NewTree()
 
 	id0 := make([]byte, HashLen)
@@ -149,15 +149,36 @@ func TestAttackNilConfusion(t *testing.T) {
 	digest0, proof0, err0 := tr.Put(id0, val0)
 	machine.Assert(err0 == ErrNone)
 
-	// Original proof0 checks out.
 	err1 := proof0.Check(id0, val0, digest0)
 	machine.Assert(err1 == ErrNone)
 
-	// Construct non-membership proof for that same path.
+	// Construct non-membership proof for that same path,
+	// by swapping actual child ([0][1]) with a nil child ([0][0]).
 	proof1 := NonmembProof(proof0[:1])
 	tmp := proof1[0][1]
 	proof1[0][1] = proof1[0][0]
 	proof1[0][0] = tmp
 	err2 := proof1.Check(id0, digest0)
+	machine.Assert(err2 == ErrPathProof)
+}
+
+// We had a bug where Hash(nil val) = Hash(empty node).
+// This attack exploits the bug to prove membership of a nil
+// value at some empty node in the tree.
+func TestAttackPutNilEmptyNode(t *testing.T) {
+	tr := NewTree()
+
+	id0 := merkle_ffi.Hash([]byte("id0"))
+	digest0, proof0, err0 := tr.Put(id0, nil)
+	machine.Assert(err0 == ErrNone)
+
+	err1 := proof0.Check(id0, nil, digest0)
+	machine.Assert(err1 == ErrNone)
+
+	id1 := CopySlice(id0)
+	// Create some different id.
+	id1[HashLen-1] ^= 255
+
+	err2 := proof0.Check(id1, nil, digest0)
 	machine.Assert(err2 == ErrPathProof)
 }
