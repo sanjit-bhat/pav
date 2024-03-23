@@ -5,6 +5,11 @@ import (
 	"log"
 )
 
+/*
+TODO:
+there's currently a hash collision bw Hash(emptyNode) and Hash(nilLeaf).
+*/
+
 const (
 	ErrNone      uint64 = 0
 	ErrFound     uint64 = 1
@@ -16,31 +21,25 @@ const (
 	NumChildren uint64 = 256
 )
 
-type Hasher struct {
-	B []byte
-}
-
-func NewHasher() *Hasher {
-	return &Hasher{}
-}
+type Hasher []byte
 
 func (h *Hasher) Write(b []byte) {
 	for _, b := range b {
-		h.B = append(h.B, b)
+		*h = append(*h, b)
 	}
 }
 
-func (h *Hasher) Sum(b []byte) []byte {
+func (h Hasher) Sum(b []byte) []byte {
 	var b1 = b
-	hash := merkle_shim.Hash(h.B)
+	hash := merkle_shim.Hash(h)
 	for _, byt := range hash {
-		b1 = append(b, byt)
+		b1 = append(b1, byt)
 	}
 	return b1
 }
 
 func HashSlice2D(b [][]byte) []byte {
-	h := NewHasher()
+	var h Hasher
 	for _, b1 := range b {
 		h.Write(b1)
 	}
@@ -48,7 +47,7 @@ func HashSlice2D(b [][]byte) []byte {
 }
 
 func HashNodes(nodeSl []*Node) []byte {
-	h := NewHasher()
+	var h Hasher
 	for _, n := range nodeSl {
 		h.Write(n.Hash())
 	}
@@ -75,19 +74,15 @@ func BytesEqual(b1, b2 []byte) bool {
 }
 
 // "keys" of the tree.
-// We use "Id" to differentiate this from the public keys that could be stored
-// in the tree.
-type Id struct {
-	B []byte
-}
+// We use term "Id" to differentiate this from the public keys that could be
+// stored in the tree.
+type Id []byte
 
 // "vals" of the tree.
-type Val struct {
-	B []byte
-}
+type Val []byte
 
 type Node struct {
-	Val      *Val
+	Val      Val
 	hash     []byte
 	Children []*Node
 }
@@ -102,13 +97,13 @@ func (n *Node) Hash() []byte {
 // These nodes are neither interior nodes nor leaf nodes.
 // They'll be specialized after adding them to the tree.
 func NewGenericNode() *Node {
-	var v *Val
+	var v Val
 	c := make([]*Node, NumChildren)
 	return &Node{Val: v, hash: nil, Children: c}
 }
 
 func (n *Node) UpdateLeafHash() {
-	n.hash = merkle_shim.Hash(n.Val.B)
+	n.hash = merkle_shim.Hash(n.Val)
 }
 
 // Assumes recursive child hashes are already up-to-date.
@@ -116,30 +111,24 @@ func (n *Node) UpdateInteriorHash() {
 	n.hash = HashNodes(n.Children)
 }
 
-type Digest struct {
-	B []byte
-}
+type Digest []byte
 
 // General proof object.
 // Binds an id down the tree to a particular node hash.
 type PathProof struct {
-	Id          *Id
+	Id          Id
 	NodeHash    []byte
-	Digest      *Digest
+	Digest      Digest
 	ChildHashes [][][]byte
 }
 
-type MembProof struct {
-	ChildHashes [][][]byte
-}
+type MembProof [][][]byte
 
-type NonmembProof struct {
-	ChildHashes [][][]byte
-}
+type NonmembProof [][][]byte
 
 func (p *PathProof) Check() uint64 {
-	proofLen := uint64(len(p.Id.B))
-	posBott := p.Id.B[proofLen-1]
+	proofLen := uint64(len(p.Id))
+	posBott := p.Id[proofLen-1]
 	if !BytesEqual(p.NodeHash, p.ChildHashes[proofLen-1][posBott]) {
 		return ErrPathProof
 	}
@@ -148,7 +137,7 @@ func (p *PathProof) Check() uint64 {
 	for pathIdx := proofLen - 1; pathIdx >= 1; pathIdx-- {
 		hChildren := HashSlice2D(p.ChildHashes[pathIdx])
 		prevIdx := pathIdx - 1
-		pos := p.Id.B[prevIdx]
+		pos := p.Id[prevIdx]
 		if !BytesEqual(hChildren, p.ChildHashes[prevIdx][pos]) {
 			err = ErrPathProof
 		}
@@ -158,46 +147,50 @@ func (p *PathProof) Check() uint64 {
 	}
 
 	digest := HashSlice2D(p.ChildHashes[0])
-	if !BytesEqual(digest, p.Digest.B) {
+	if !BytesEqual(digest, p.Digest) {
 		return ErrPathProof
 	}
 	return ErrNone
 }
 
-func (p *MembProof) Check(id *Id, val *Val, digest *Digest) uint64 {
-	if uint64(len(id.B)) != HashLen {
+func (p MembProof) Check(id Id, val Val, digest Digest) uint64 {
+	if uint64(len(id)) != HashLen {
 		return ErrBadInput
 	}
-	if uint64(len(p.ChildHashes)) != HashLen {
+	if uint64(len(p)) != HashLen {
 		return ErrBadInput
 	}
 	pathProof := &PathProof{
 		Id:          id,
-		NodeHash:    merkle_shim.Hash(val.B),
+		NodeHash:    merkle_shim.Hash(val),
 		Digest:      digest,
-		ChildHashes: p.ChildHashes,
+		ChildHashes: p,
 	}
 	return pathProof.Check()
 }
 
-func (p *NonmembProof) Check(id *Id, digest *Digest) uint64 {
-	if HashLen <= uint64(len(p.ChildHashes)) {
+func (p NonmembProof) Check(id Id, digest Digest) uint64 {
+	if HashLen <= uint64(len(p)) {
 		return ErrBadInput
 	}
-	// After slicing (which panics if id is too small),
-	// id will have the same len as p.ChildHashes.
+	// After slicing, id will have same len as p.ChildHashes.
 	// It now corresponds to the prefix path down the tree that contains
 	// the nil value.
-	idPref := &Id{B: CopySlice(id.B)[:len(p.ChildHashes)]}
+	if len(id) < len(p) {
+		return ErrBadInput
+	}
+	idPref := CopySlice(id)[:len(p)]
 	pathProof := &PathProof{
 		Id:          idPref,
 		NodeHash:    merkle_shim.Hash(nil),
 		Digest:      digest,
-		ChildHashes: p.ChildHashes,
+		ChildHashes: p,
 	}
 	return pathProof.Check()
 }
 
+// Having a separate Tree type makes the API more clear compared to if it
+// was just a Node.
 type Tree struct {
 	Root *Node
 }
@@ -222,7 +215,7 @@ func (t *Tree) Print() {
 				log.Print("nil | ")
 			} else {
 				if top.Val != nil {
-					log.Print(top.Hash(), top.Val.B, " | ")
+					log.Print(top.Hash(), top.Val, " | ")
 				} else {
 					log.Print(top.Hash(), " | ")
 				}
@@ -252,13 +245,13 @@ func GetChildHashes(nodePath []*Node) [][][]byte {
 	return childHashes
 }
 
-func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
+func (t *Tree) WalkTree(id Id) ([]*Node, bool) {
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
 	var found = true
 	for pathIdx := uint64(0); pathIdx < HashLen && found; pathIdx++ {
 		currNode := nodePath[pathIdx]
-		pos := id.B[pathIdx]
+		pos := id[pathIdx]
 		if currNode.Children[pos] == nil {
 			found = false
 		} else {
@@ -268,12 +261,12 @@ func (t *Tree) WalkTree(id *Id) ([]*Node, bool) {
 	return nodePath, found
 }
 
-func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
+func (t *Tree) WalkTreeAddLinks(id Id) []*Node {
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
 	for pathIdx := uint64(0); pathIdx < HashLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
-		pos := id.B[pathIdx]
+		pos := id[pathIdx]
 		if currNode.Children[pos] == nil {
 			currNode.Children[pos] = NewGenericNode()
 		}
@@ -282,8 +275,8 @@ func (t *Tree) WalkTreeAddLinks(id *Id) []*Node {
 	return nodePath
 }
 
-func (t *Tree) Put(id *Id, v *Val) (*Digest, *MembProof, uint64) {
-	if uint64(len(id.B)) != HashLen {
+func (t *Tree) Put(id Id, v Val) (Digest, MembProof, uint64) {
+	if uint64(len(id)) != HashLen {
 		return nil, nil, ErrBadInput
 	}
 
@@ -295,13 +288,13 @@ func (t *Tree) Put(id *Id, v *Val) (*Digest, *MembProof, uint64) {
 		nodePath[pathIdx-1].UpdateInteriorHash()
 	}
 
-	digest := &Digest{B: CopySlice(nodePath[0].Hash())}
-	proof := &MembProof{ChildHashes: GetChildHashes(nodePath[:HashLen])}
+	digest := CopySlice(nodePath[0].Hash())
+	proof := GetChildHashes(nodePath[:HashLen])
 	return digest, proof, ErrNone
 }
 
-func (t *Tree) Get(id *Id) (*Val, *Digest, *MembProof, uint64) {
-	if uint64(len(id.B)) != HashLen {
+func (t *Tree) Get(id Id) (Val, Digest, MembProof, uint64) {
+	if uint64(len(id)) != HashLen {
 		return nil, nil, nil, ErrBadInput
 	}
 
@@ -310,14 +303,14 @@ func (t *Tree) Get(id *Id) (*Val, *Digest, *MembProof, uint64) {
 		return nil, nil, nil, ErrNotFound
 	}
 
-	val := &Val{B: CopySlice(nodePath[HashLen].Val.B)}
-	digest := &Digest{B: CopySlice(nodePath[0].Hash())}
-	proof := &MembProof{ChildHashes: GetChildHashes(nodePath[:HashLen])}
+	val := CopySlice(nodePath[HashLen].Val)
+	digest := CopySlice(nodePath[0].Hash())
+	proof := GetChildHashes(nodePath[:HashLen])
 	return val, digest, proof, ErrNone
 }
 
-func (t *Tree) GetNil(id *Id) (*Digest, *NonmembProof, uint64) {
-	if uint64(len(id.B)) != HashLen {
+func (t *Tree) GetNil(id Id) (Digest, NonmembProof, uint64) {
+	if uint64(len(id)) != HashLen {
 		return nil, nil, ErrBadInput
 	}
 
@@ -326,7 +319,7 @@ func (t *Tree) GetNil(id *Id) (*Digest, *NonmembProof, uint64) {
 		return nil, nil, ErrFound
 	}
 
-	digest := &Digest{B: CopySlice(nodePath[0].Hash())}
-	proof := &NonmembProof{ChildHashes: GetChildHashes(nodePath)}
+	digest := CopySlice(nodePath[0].Hash())
+	proof := GetChildHashes(nodePath)
 	return digest, proof, ErrNone
 }
