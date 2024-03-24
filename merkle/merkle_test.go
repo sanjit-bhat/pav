@@ -20,10 +20,11 @@ func TestHasher(t *testing.T) {
 	machine.Assert(bytes.Equal(hash1, hash3))
 	machine.Assert(bytes.Equal(hash2, hash4))
 	machine.Assert(!bytes.Equal(hash1, hash2))
+	machine.Assert(uint64(len(hash2)) == HashLen)
 }
 
 func TestOnePut(t *testing.T) {
-	tr := NewTree()
+	tr := &Tree{}
 
 	id0 := make([]byte, HashLen)
 	id0[0] = 1
@@ -42,7 +43,7 @@ func TestOnePut(t *testing.T) {
 }
 
 func TestTwoPut(t *testing.T) {
-	tr := NewTree()
+	tr := &Tree{}
 
 	id0 := merkle_ffi.Hash([]byte("id0"))
 	val0 := []byte("val0")
@@ -72,7 +73,7 @@ func TestTwoPut(t *testing.T) {
 }
 
 func TestOverwrite(t *testing.T) {
-	tr := NewTree()
+	tr := &Tree{}
 
 	id0 := merkle_ffi.Hash([]byte("id0"))
 	val0 := []byte("val0")
@@ -95,7 +96,7 @@ func TestOverwrite(t *testing.T) {
 }
 
 func TestGetNotFound(t *testing.T) {
-	tr := NewTree()
+	tr := &Tree{}
 
 	id0 := make([]byte, HashLen)
 	id0[0] = 1
@@ -115,7 +116,7 @@ func TestGetNotFound(t *testing.T) {
 }
 
 func TestNonmembership(t *testing.T) {
-	tr := NewTree()
+	tr := &Tree{}
 
 	id0 := make([]byte, HashLen)
 	id0[0] = 1
@@ -136,12 +137,40 @@ func TestNonmembership(t *testing.T) {
 	machine.Assert(err3 == ErrNone)
 }
 
+func TestNonmembershipEmpty(t *testing.T) {
+	tr := &Tree{}
+
+	id0 := make([]byte, HashLen)
+	digest0, proof0, err0 := tr.GetNil(id0)
+	machine.Assert(err0 == ErrNone)
+	err1 := proof0.Check(id0, digest0)
+	machine.Assert(err1 == ErrNone)
+}
+
+func TestNonmembershipBottom(t *testing.T) {
+	tr := &Tree{}
+
+	id0 := make([]byte, HashLen)
+	val0 := []byte("val0")
+	digest0, proof0, err0 := tr.Put(id0, val0)
+	machine.Assert(err0 == ErrNone)
+	err1 := proof0.Check(id0, val0, digest0)
+	machine.Assert(err1 == ErrNone)
+
+	id1 := make([]byte, HashLen)
+	id1[HashLen-1] = 1
+	digest1, proof1, err2 := tr.GetNil(id1)
+	machine.Assert(err2 == ErrNone)
+	err3 := proof1.Check(id1, digest1)
+	machine.Assert(err3 == ErrNone)
+}
+
 // Don't want proof(id, val, digest) and proof(id, val', digest)
 // to exist at the same time.
 // This could happen if, e.g., nil children weren't factored into their
 // parent's hash.
 func TestAttackChildEmptyHashing(t *testing.T) {
-	tr := NewTree()
+	tr := &Tree{}
 
 	id0 := make([]byte, HashLen)
 	id0[0] = 1
@@ -166,7 +195,7 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 // This attack exploits the bug to prove membership of a nil
 // value at some empty node in the tree.
 func TestAttackPutNilEmptyNode(t *testing.T) {
-	tr := NewTree()
+	tr := &Tree{}
 
 	id0 := merkle_ffi.Hash([]byte("id0"))
 	digest0, proof0, err0 := tr.Put(id0, nil)

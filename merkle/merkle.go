@@ -5,11 +5,6 @@ import (
 	"log"
 )
 
-/*
-TODO:
-there's currently a hash collision bw Hash(emptyNode) and Hash(nilLeaf).
-*/
-
 const (
 	ErrNone      uint64 = 0
 	ErrFound     uint64 = 1
@@ -18,7 +13,10 @@ const (
 	ErrPathProof uint64 = 4
 	HashLen      uint64 = 32
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
-	NumChildren uint64 = 256
+	NumChildren    uint64 = 256
+	EmptyNodeId    byte   = 0
+	LeafNodeId     byte   = 1
+	InteriorNodeId byte   = 2
 )
 
 type Hasher []byte
@@ -46,14 +44,6 @@ func HashSlice2D(b [][]byte) []byte {
 	return h.Sum(nil)
 }
 
-func HashNodes(nodeSl []*Node) []byte {
-	var h Hasher
-	for _, n := range nodeSl {
-		h.Write(n.Hash())
-	}
-	return h.Sum(nil)
-}
-
 func CopySlice(b1 []byte) []byte {
 	b2 := make([]byte, len(b1))
 	copy(b2, b1)
@@ -65,8 +55,8 @@ func BytesEqual(b1, b2 []byte) bool {
 		return false
 	}
 	var isEq = true
-	for i, b := range b1 {
-		if b != b2[i] {
+	for i := uint64(0); i < uint64(len(b1)) && isEq; i++ {
+		if b1[i] != b2[i] {
 			isEq = false
 		}
 	}
@@ -78,7 +68,7 @@ func BytesEqual(b1, b2 []byte) bool {
 // stored in the tree.
 type Id []byte
 
-// "vals" of the tree.
+// "values" of the tree.
 type Val []byte
 
 type Node struct {
@@ -89,9 +79,27 @@ type Node struct {
 
 func (n *Node) Hash() []byte {
 	if n == nil {
-		return merkle_shim.Hash(nil)
+		// Empty node.
+		return merkle_shim.Hash([]byte{EmptyNodeId})
 	}
 	return n.hash
+}
+
+func (n *Node) UpdateLeafHash() {
+	var h Hasher
+	h.Write(n.Val)
+	h.Write([]byte{LeafNodeId})
+	n.hash = h.Sum(nil)
+}
+
+// Assumes recursive child hashes are already up-to-date.
+func (n *Node) UpdateInteriorHash() {
+	var h Hasher
+	for _, n := range n.Children {
+		h.Write(n.Hash())
+	}
+	h.Write([]byte{InteriorNodeId})
+	n.hash = h.Sum(nil)
 }
 
 // These nodes are neither interior nodes nor leaf nodes.
@@ -100,15 +108,6 @@ func NewGenericNode() *Node {
 	var v Val
 	c := make([]*Node, NumChildren)
 	return &Node{Val: v, hash: nil, Children: c}
-}
-
-func (n *Node) UpdateLeafHash() {
-	n.hash = merkle_shim.Hash(n.Val)
-}
-
-// Assumes recursive child hashes are already up-to-date.
-func (n *Node) UpdateInteriorHash() {
-	n.hash = HashNodes(n.Children)
 }
 
 type Digest []byte
@@ -126,19 +125,44 @@ type MembProof [][][]byte
 
 type NonmembProof [][][]byte
 
+// TODO: rename to something better.
+// TODO: not sure whether this re-use of the interior hash methods
+// will actually help me.
+func ProofInteriorHash(childHashes [][]byte) []byte {
+	n := NewGenericNode()
+	for i := uint64(0); i < NumChildren; i++ {
+		child := &Node{}
+		child.hash = childHashes[i]
+		n.Children[i] = child
+	}
+	n.UpdateInteriorHash()
+	return n.Hash()
+}
+
 func (p *PathProof) Check() uint64 {
 	proofLen := uint64(len(p.Id))
+	if proofLen == 0 {
+		// Tree was empty node.
+		if BytesEqual(p.NodeHash, p.Digest) {
+			return ErrNone
+		} else {
+			return ErrPathProof
+		}
+	}
+
+	// Check tree bottom.
 	posBott := p.Id[proofLen-1]
 	if !BytesEqual(p.NodeHash, p.ChildHashes[proofLen-1][posBott]) {
 		return ErrPathProof
 	}
 
+	// Check tree interior.
 	var err = ErrNone
 	for pathIdx := proofLen - 1; pathIdx >= 1; pathIdx-- {
-		hChildren := HashSlice2D(p.ChildHashes[pathIdx])
+		interiorHash := ProofInteriorHash(p.ChildHashes[pathIdx])
 		prevIdx := pathIdx - 1
 		pos := p.Id[prevIdx]
-		if !BytesEqual(hChildren, p.ChildHashes[prevIdx][pos]) {
+		if !BytesEqual(interiorHash, p.ChildHashes[prevIdx][pos]) {
 			err = ErrPathProof
 		}
 	}
@@ -146,7 +170,8 @@ func (p *PathProof) Check() uint64 {
 		return err
 	}
 
-	digest := HashSlice2D(p.ChildHashes[0])
+	// Check tree top.
+	digest := ProofInteriorHash(p.ChildHashes[0])
 	if !BytesEqual(digest, p.Digest) {
 		return ErrPathProof
 	}
@@ -160,9 +185,11 @@ func (p MembProof) Check(id Id, val Val, digest Digest) uint64 {
 	if uint64(len(p)) != HashLen {
 		return ErrBadInput
 	}
+	leaf := &Node{Val: val}
+	leaf.UpdateLeafHash()
 	pathProof := &PathProof{
 		Id:          id,
-		NodeHash:    merkle_shim.Hash(val),
+		NodeHash:    leaf.Hash(),
 		Digest:      digest,
 		ChildHashes: p,
 	}
@@ -170,19 +197,21 @@ func (p MembProof) Check(id Id, val Val, digest Digest) uint64 {
 }
 
 func (p NonmembProof) Check(id Id, digest Digest) uint64 {
-	if HashLen <= uint64(len(p)) {
+	// An empty node can appear at any depth down the tree.
+	if HashLen < uint64(len(p)) {
 		return ErrBadInput
 	}
 	// After slicing, id will have same len as p.ChildHashes.
 	// It now corresponds to the prefix path down the tree that contains
-	// the nil value.
+	// the empty node.
 	if len(id) < len(p) {
 		return ErrBadInput
 	}
 	idPref := CopySlice(id)[:len(p)]
+	var empty *Node = nil
 	pathProof := &PathProof{
 		Id:          idPref,
-		NodeHash:    merkle_shim.Hash(nil),
+		NodeHash:    empty.Hash(),
 		Digest:      digest,
 		ChildHashes: p,
 	}
@@ -193,13 +222,6 @@ func (p NonmembProof) Check(id Id, digest Digest) uint64 {
 // was just a Node.
 type Tree struct {
 	Root *Node
-}
-
-func NewTree() *Tree {
-	n := &Node{}
-	n.Children = make([]*Node, NumChildren)
-	n.UpdateInteriorHash()
-	return &Tree{Root: n}
 }
 
 func (t *Tree) Print() {
@@ -245,23 +267,33 @@ func GetChildHashes(nodePath []*Node) [][][]byte {
 	return childHashes
 }
 
-func (t *Tree) WalkTree(id Id) ([]*Node, bool) {
+// Get the maximal path corresponding to Id.
+// If the full path to a leaf node doesn't exist,
+// return the partial path that ends in an empty node,
+// and set found to true.
+func (t *Tree) GetPath(id Id) ([]*Node, bool) {
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
+	if t.Root == nil {
+		return nodePath, false
+	}
 	var found = true
 	for pathIdx := uint64(0); pathIdx < HashLen && found; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
-		if currNode.Children[pos] == nil {
+		nextNode := currNode.Children[pos]
+		nodePath = append(nodePath, nextNode)
+		if nextNode == nil {
 			found = false
-		} else {
-			nodePath = append(nodePath, currNode.Children[pos])
 		}
 	}
 	return nodePath, found
 }
 
-func (t *Tree) WalkTreeAddLinks(id Id) []*Node {
+func (t *Tree) GetPathAddNodes(id Id) []*Node {
+	if t.Root == nil {
+		t.Root = NewGenericNode()
+	}
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
 	for pathIdx := uint64(0); pathIdx < HashLen; pathIdx++ {
@@ -280,7 +312,7 @@ func (t *Tree) Put(id Id, v Val) (Digest, MembProof, uint64) {
 		return nil, nil, ErrBadInput
 	}
 
-	nodePath := t.WalkTreeAddLinks(id)
+	nodePath := t.GetPathAddNodes(id)
 	nodePath[HashLen].Val = v
 	nodePath[HashLen].UpdateLeafHash()
 	// +1/-1 offsets for Goosable uint64 loop var.
@@ -298,7 +330,7 @@ func (t *Tree) Get(id Id) (Val, Digest, MembProof, uint64) {
 		return nil, nil, nil, ErrBadInput
 	}
 
-	nodePath, found := t.WalkTree(id)
+	nodePath, found := t.GetPath(id)
 	if !found {
 		return nil, nil, nil, ErrNotFound
 	}
@@ -314,12 +346,13 @@ func (t *Tree) GetNil(id Id) (Digest, NonmembProof, uint64) {
 		return nil, nil, ErrBadInput
 	}
 
-	nodePath, found := t.WalkTree(id)
+	nodePath, found := t.GetPath(id)
 	if found {
 		return nil, nil, ErrFound
 	}
 
 	digest := CopySlice(nodePath[0].Hash())
-	proof := GetChildHashes(nodePath)
+	// For incomplete paths, nodePath ends in nil.
+	proof := GetChildHashes(nodePath[:len(nodePath)-1])
 	return digest, proof, ErrNone
 }
