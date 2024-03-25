@@ -19,15 +19,17 @@ const (
 	InteriorNodeId byte   = 2
 )
 
-type Hasher []byte
+type Hasher = []byte
 
-func (h *Hasher) Write(b []byte) {
+// Goose doesn't support non-struct types that well, so until that exists,
+// use type aliases and non-method funcs.
+func HasherWrite(h *Hasher, b []byte) {
 	for _, b := range b {
 		*h = append(*h, b)
 	}
 }
 
-func (h Hasher) Sum(b []byte) []byte {
+func HasherSum(h Hasher, b []byte) []byte {
 	var b1 = b
 	hash := merkle_shim.Hash(h)
 	for _, byt := range hash {
@@ -39,9 +41,9 @@ func (h Hasher) Sum(b []byte) []byte {
 func HashSlice2D(b [][]byte) []byte {
 	var h Hasher
 	for _, b1 := range b {
-		h.Write(b1)
+		HasherWrite(&h, b1)
 	}
-	return h.Sum(nil)
+	return HasherSum(h, nil)
 }
 
 func CopySlice(b1 []byte) []byte {
@@ -66,10 +68,10 @@ func BytesEqual(b1, b2 []byte) bool {
 // "keys" of the tree.
 // We use term "Id" to differentiate this from the public keys that could be
 // stored in the tree.
-type Id []byte
+type Id = []byte
 
 // "values" of the tree.
-type Val []byte
+type Val = []byte
 
 type Node struct {
 	Val      Val
@@ -87,19 +89,19 @@ func (n *Node) Hash() []byte {
 
 func (n *Node) UpdateLeafHash() {
 	var h Hasher
-	h.Write(n.Val)
-	h.Write([]byte{LeafNodeId})
-	n.hash = h.Sum(nil)
+	HasherWrite(&h, n.Val)
+	HasherWrite(&h, []byte{LeafNodeId})
+	n.hash = HasherSum(h, nil)
 }
 
 // Assumes recursive child hashes are already up-to-date.
 func (n *Node) UpdateInteriorHash() {
 	var h Hasher
 	for _, n := range n.Children {
-		h.Write(n.Hash())
+		HasherWrite(&h, n.Hash())
 	}
-	h.Write([]byte{InteriorNodeId})
-	n.hash = h.Sum(nil)
+	HasherWrite(&h, []byte{InteriorNodeId})
+	n.hash = HasherSum(h, nil)
 }
 
 // These nodes are neither interior nodes nor leaf nodes.
@@ -110,7 +112,7 @@ func NewGenericNode() *Node {
 	return &Node{Val: v, hash: nil, Children: c}
 }
 
-type Digest []byte
+type Digest = []byte
 
 // General proof object.
 // Binds an id down the tree to a particular node hash.
@@ -121,9 +123,9 @@ type PathProof struct {
 	ChildHashes [][][]byte
 }
 
-type MembProof [][][]byte
+type MembProof = [][][]byte
 
-type NonmembProof [][][]byte
+type NonmembProof = [][][]byte
 
 // TODO: rename to something better.
 // TODO: not sure whether this re-use of the interior hash methods
@@ -178,7 +180,7 @@ func (p *PathProof) Check() uint64 {
 	return ErrNone
 }
 
-func (p MembProof) Check(id Id, val Val, digest Digest) uint64 {
+func MembProofCheck(p MembProof, id Id, val Val, digest Digest) uint64 {
 	if uint64(len(id)) != HashLen {
 		return ErrBadInput
 	}
@@ -196,7 +198,7 @@ func (p MembProof) Check(id Id, val Val, digest Digest) uint64 {
 	return pathProof.Check()
 }
 
-func (p NonmembProof) Check(id Id, digest Digest) uint64 {
+func NonmembProofCheck(p NonmembProof, id Id, digest Digest) uint64 {
 	// An empty node can appear at any depth down the tree.
 	if HashLen < uint64(len(p)) {
 		return ErrBadInput
@@ -208,7 +210,7 @@ func (p NonmembProof) Check(id Id, digest Digest) uint64 {
 		return ErrBadInput
 	}
 	idPref := CopySlice(id)[:len(p)]
-	var empty *Node = nil
+	var empty *Node
 	pathProof := &PathProof{
 		Id:          idPref,
 		NodeHash:    empty.Hash(),
