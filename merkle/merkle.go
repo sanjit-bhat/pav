@@ -1,6 +1,7 @@
 package merkle
 
 import (
+	"github.com/goose-lang/std"
 	"github.com/mit-pdos/secure-chat/merkle/merkle_shim"
 	"log"
 )
@@ -50,19 +51,6 @@ func CopySlice(b1 []byte) []byte {
 	b2 := make([]byte, len(b1))
 	copy(b2, b1)
 	return b2
-}
-
-func BytesEqual(b1, b2 []byte) bool {
-	if len(b1) != len(b2) {
-		return false
-	}
-	var isEq = true
-	for i := uint64(0); i < uint64(len(b1)) && isEq; i++ {
-		if b1[i] != b2[i] {
-			isEq = false
-		}
-	}
-	return isEq
 }
 
 // "keys" of the tree.
@@ -145,8 +133,13 @@ func (p *PathProof) Check() uint64 {
 	proofLen := uint64(len(p.Id))
 	if proofLen == 0 {
 		// Tree was empty node.
-		if BytesEqual(p.NodeHash, p.Digest) {
-			return ErrNone
+		var empty *Node
+		if std.BytesEqual(p.NodeHash, p.Digest) {
+			if std.BytesEqual(p.NodeHash, empty.Hash()) {
+				return ErrNone
+			} else {
+				return ErrPathProof
+			}
 		} else {
 			return ErrPathProof
 		}
@@ -154,7 +147,7 @@ func (p *PathProof) Check() uint64 {
 
 	// Check tree bottom.
 	posBott := p.Id[proofLen-1]
-	if !BytesEqual(p.NodeHash, p.ChildHashes[proofLen-1][posBott]) {
+	if !std.BytesEqual(p.NodeHash, p.ChildHashes[proofLen-1][posBott]) {
 		return ErrPathProof
 	}
 
@@ -164,7 +157,7 @@ func (p *PathProof) Check() uint64 {
 		interiorHash := ProofInteriorHash(p.ChildHashes[pathIdx])
 		prevIdx := pathIdx - 1
 		pos := p.Id[prevIdx]
-		if !BytesEqual(interiorHash, p.ChildHashes[prevIdx][pos]) {
+		if !std.BytesEqual(interiorHash, p.ChildHashes[prevIdx][pos]) {
 			err = ErrPathProof
 		}
 	}
@@ -174,17 +167,17 @@ func (p *PathProof) Check() uint64 {
 
 	// Check tree top.
 	digest := ProofInteriorHash(p.ChildHashes[0])
-	if !BytesEqual(digest, p.Digest) {
+	if !std.BytesEqual(digest, p.Digest) {
 		return ErrPathProof
 	}
 	return ErrNone
 }
 
-func MembProofCheck(p MembProof, id Id, val Val, digest Digest) uint64 {
+func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) uint64 {
 	if uint64(len(id)) != HashLen {
 		return ErrBadInput
 	}
-	if uint64(len(p)) != HashLen {
+	if uint64(len(proof)) != HashLen {
 		return ErrBadInput
 	}
 	leaf := &Node{Val: val}
@@ -193,29 +186,29 @@ func MembProofCheck(p MembProof, id Id, val Val, digest Digest) uint64 {
 		Id:          id,
 		NodeHash:    leaf.Hash(),
 		Digest:      digest,
-		ChildHashes: p,
+		ChildHashes: proof,
 	}
 	return pathProof.Check()
 }
 
-func NonmembProofCheck(p NonmembProof, id Id, digest Digest) uint64 {
+func NonmembProofCheck(proof NonmembProof, id Id, digest Digest) uint64 {
 	// An empty node can appear at any depth down the tree.
-	if HashLen < uint64(len(p)) {
+	if HashLen < uint64(len(proof)) {
 		return ErrBadInput
 	}
 	// After slicing, id will have same len as p.ChildHashes.
 	// It now corresponds to the prefix path down the tree that contains
 	// the empty node.
-	if len(id) < len(p) {
+	if len(id) < len(proof) {
 		return ErrBadInput
 	}
-	idPref := CopySlice(id)[:len(p)]
+	idPref := CopySlice(id)[:len(proof)]
 	var empty *Node
 	pathProof := &PathProof{
 		Id:          idPref,
 		NodeHash:    empty.Hash(),
 		Digest:      digest,
-		ChildHashes: p,
+		ChildHashes: proof,
 	}
 	return pathProof.Check()
 }
