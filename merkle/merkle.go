@@ -2,7 +2,7 @@ package merkle
 
 import (
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/secure-chat/merkle/merkle_shim"
+	"github.com/mit-pdos/secure-chat/merkle/merkle_ffi"
 	"log"
 )
 
@@ -32,19 +32,11 @@ func HasherWrite(h *Hasher, b []byte) {
 
 func HasherSum(h Hasher, b []byte) []byte {
 	var b1 = b
-	hash := merkle_shim.Hash(h)
+	hash := merkle_ffi.Hash(h)
 	for _, byt := range hash {
 		b1 = append(b1, byt)
 	}
 	return b1
-}
-
-func HashSlice2D(b [][]byte) []byte {
-	var h Hasher
-	for _, b1 := range b {
-		HasherWrite(&h, b1)
-	}
-	return HasherSum(h, nil)
 }
 
 func CopySlice(b1 []byte) []byte {
@@ -70,7 +62,7 @@ type Node struct {
 func (n *Node) Hash() []byte {
 	if n == nil {
 		// Empty node.
-		return merkle_shim.Hash([]byte{EmptyNodeId})
+		return merkle_ffi.Hash([]byte{EmptyNodeId})
 	}
 	return n.hash
 }
@@ -115,49 +107,13 @@ type MembProof = [][][]byte
 
 type NonmembProof = [][][]byte
 
-// TODO: rename to something better.
-// TODO: not sure whether this re-use of the interior hash methods
-// will actually help me.
-func ProofInteriorHash(childHashes [][]byte) []byte {
-	n := NewGenericNode()
-	for i := uint64(0); i < NumChildren; i++ {
-		child := &Node{}
-		child.hash = childHashes[i]
-		n.Children[i] = child
-	}
-	n.UpdateInteriorHash()
-	return n.Hash()
-}
-
 func (p *PathProof) Check() uint64 {
-	proofLen := uint64(len(p.Id))
-	if proofLen == 0 {
-		// Tree was empty node.
-		var empty *Node
-		if std.BytesEqual(p.NodeHash, p.Digest) {
-			if std.BytesEqual(p.NodeHash, empty.Hash()) {
-				return ErrNone
-			} else {
-				return ErrPathProof
-			}
-		} else {
-			return ErrPathProof
-		}
-	}
-
-	// Check tree bottom.
-	posBott := p.Id[proofLen-1]
-	if !std.BytesEqual(p.NodeHash, p.ChildHashes[proofLen-1][posBott]) {
-		return ErrPathProof
-	}
-
-	// Check tree interior.
+	var currHash []byte = p.NodeHash
+	proofLen := len(p.ChildHashes)
 	var err = ErrNone
-	for pathIdx := proofLen - 1; pathIdx >= 1; pathIdx-- {
-		interiorHash := ProofInteriorHash(p.ChildHashes[pathIdx])
-		prevIdx := pathIdx - 1
-		pos := p.Id[prevIdx]
-		if !std.BytesEqual(interiorHash, p.ChildHashes[prevIdx][pos]) {
+
+	for _, children := range p.ChildHashes {
+		if uint64(len(children)) != NumChildren-1 {
 			err = ErrPathProof
 		}
 	}
@@ -165,9 +121,25 @@ func (p *PathProof) Check() uint64 {
 		return err
 	}
 
-	// Check tree top.
-	digest := ProofInteriorHash(p.ChildHashes[0])
-	if !std.BytesEqual(digest, p.Digest) {
+	// +1/-1 offsets for Goosable uint64 loop var.
+	for pathIdx := proofLen; pathIdx >= 1; pathIdx-- {
+		pos := uint64(p.Id[pathIdx-1])
+		children := p.ChildHashes[pathIdx-1]
+		var hr Hasher
+
+		for beforeIdx := uint64(0); beforeIdx < pos; beforeIdx++ {
+			HasherWrite(&hr, children[beforeIdx])
+		}
+		HasherWrite(&hr, currHash)
+		for afterIdx := pos; afterIdx < NumChildren-1; afterIdx++ {
+			HasherWrite(&hr, children[afterIdx])
+		}
+		HasherWrite(&hr, []byte{InteriorNodeId})
+
+		currHash = HasherSum(hr, nil)
+	}
+
+	if !std.BytesEqual(currHash, p.Digest) {
 		return ErrPathProof
 	}
 	return ErrNone
@@ -180,11 +152,12 @@ func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) uint64 {
 	if uint64(len(proof)) != HashLen {
 		return ErrBadInput
 	}
-	leaf := &Node{Val: val}
-	leaf.UpdateLeafHash()
+	var hr Hasher
+	HasherWrite(&hr, val)
+	HasherWrite(&hr, []byte{LeafNodeId})
 	pathProof := &PathProof{
 		Id:          id,
-		NodeHash:    leaf.Hash(),
+		NodeHash:    HasherSum(hr, nil),
 		Digest:      digest,
 		ChildHashes: proof,
 	}
@@ -203,10 +176,11 @@ func NonmembProofCheck(proof NonmembProof, id Id, digest Digest) uint64 {
 		return ErrBadInput
 	}
 	idPref := CopySlice(id)[:len(proof)]
-	var empty *Node
+	var hr Hasher
+	HasherWrite(&hr, []byte{EmptyNodeId})
 	pathProof := &PathProof{
 		Id:          idPref,
-		NodeHash:    empty.Hash(),
+		NodeHash:    HasherSum(hr, nil),
 		Digest:      digest,
 		ChildHashes: proof,
 	}
@@ -248,15 +222,19 @@ func (t *Tree) Print() {
 	}
 }
 
-func GetChildHashes(nodePath []*Node) [][][]byte {
-	childHashes := make([][][]byte, len(nodePath))
-	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath)); pathIdx++ {
-		treeChildren := nodePath[pathIdx].Children
-		proofChildren := make([][]byte, NumChildren)
+func GetChildHashes(nodePath []*Node, id Id) [][][]byte {
+	childHashes := make([][][]byte, len(nodePath)-1)
+	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath))-1; pathIdx++ {
+		children := nodePath[pathIdx].Children
+		pos := id[pathIdx]
+		proofChildren := make([][]byte, NumChildren-1)
 		childHashes[pathIdx] = proofChildren
 
-		for childIdx := uint64(0); childIdx < NumChildren; childIdx++ {
-			proofChildren[childIdx] = CopySlice(treeChildren[childIdx].Hash())
+		for beforeIdx := uint64(0); beforeIdx < uint64(pos); beforeIdx++ {
+			proofChildren[beforeIdx] = CopySlice(children[beforeIdx].Hash())
+		}
+		for afterIdx := uint64(pos) + 1; afterIdx < NumChildren; afterIdx++ {
+			proofChildren[afterIdx-1] = CopySlice(children[afterIdx].Hash())
 		}
 	}
 	return childHashes
@@ -316,7 +294,7 @@ func (t *Tree) Put(id Id, v Val) (Digest, MembProof, uint64) {
 	}
 
 	digest := CopySlice(nodePath[0].Hash())
-	proof := GetChildHashes(nodePath[:HashLen])
+	proof := GetChildHashes(nodePath, id)
 	return digest, proof, ErrNone
 }
 
@@ -332,7 +310,7 @@ func (t *Tree) Get(id Id) (Val, Digest, MembProof, uint64) {
 
 	val := CopySlice(nodePath[HashLen].Val)
 	digest := CopySlice(nodePath[0].Hash())
-	proof := GetChildHashes(nodePath[:HashLen])
+	proof := GetChildHashes(nodePath, id)
 	return val, digest, proof, ErrNone
 }
 
@@ -347,7 +325,6 @@ func (t *Tree) GetNil(id Id) (Digest, NonmembProof, uint64) {
 	}
 
 	digest := CopySlice(nodePath[0].Hash())
-	// For incomplete paths, nodePath ends in nil.
-	proof := GetChildHashes(nodePath[:len(nodePath)-1])
+	proof := GetChildHashes(nodePath, id)
 	return digest, proof, ErrNone
 }
