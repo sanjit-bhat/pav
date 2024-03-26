@@ -2,7 +2,7 @@ package merkle
 
 import (
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/secure-chat/merkle/merkle_ffi"
+	"github.com/mit-pdos/secure-chat/merkle/merkle_shim"
 	"log"
 )
 
@@ -32,7 +32,7 @@ func HasherWrite(h *Hasher, b []byte) {
 
 func HasherSum(h Hasher, b []byte) []byte {
 	var b1 = b
-	hash := merkle_ffi.Hash(h)
+	hash := merkle_shim.Hash(h)
 	for _, byt := range hash {
 		b1 = append(b1, byt)
 	}
@@ -62,7 +62,7 @@ type Node struct {
 func (n *Node) Hash() []byte {
 	if n == nil {
 		// Empty node.
-		return merkle_ffi.Hash([]byte{EmptyNodeId})
+		return merkle_shim.Hash([]byte{EmptyNodeId})
 	}
 	return n.hash
 }
