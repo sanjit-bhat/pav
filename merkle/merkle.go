@@ -122,7 +122,7 @@ func (p *PathProof) Check() uint64 {
 	}
 
 	// +1/-1 offsets for Goosable uint64 loop var.
-	for pathIdx := proofLen; pathIdx >= 1; pathIdx-- {
+	for pathIdx := uint64(proofLen); pathIdx >= 1; pathIdx-- {
 		pos := uint64(p.Id[pathIdx-1])
 		children := p.ChildHashes[pathIdx-1]
 		var hr Hasher
