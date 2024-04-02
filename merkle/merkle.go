@@ -108,10 +108,7 @@ type MembProof = [][][]byte
 type NonmembProof = [][][]byte
 
 func (p *PathProof) Check() uint64 {
-	var currHash []byte = p.NodeHash
-	proofLen := len(p.ChildHashes)
 	var err = ErrNone
-
 	for _, children := range p.ChildHashes {
 		if uint64(len(children)) != NumChildren-1 {
 			err = ErrPathProof
@@ -121,10 +118,13 @@ func (p *PathProof) Check() uint64 {
 		return err
 	}
 
-	// +1/-1 offsets for Goosable uint64 loop var.
-	for pathIdx := uint64(proofLen); pathIdx >= 1; pathIdx-- {
-		pos := uint64(p.Id[pathIdx-1])
-		children := p.ChildHashes[pathIdx-1]
+	var currHash []byte = p.NodeHash
+	// Goose doesn't support general loops, so re-write this way.
+	proofLen := uint64(len(p.ChildHashes))
+	for idx := uint64(0); idx < proofLen; idx++ {
+		pathIdx := proofLen - 1 - idx
+		pos := uint64(p.Id[pathIdx])
+		children := p.ChildHashes[pathIdx]
 		var hr Hasher
 
 		for beforeIdx := uint64(0); beforeIdx < pos; beforeIdx++ {
@@ -146,6 +146,7 @@ func (p *PathProof) Check() uint64 {
 }
 
 func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) uint64 {
+	// TODO: are these checks necessary?
 	if uint64(len(id)) != HashLen {
 		return ErrBadInput
 	}
