@@ -24,9 +24,15 @@ type Hasher = []byte
 
 // Goose doesn't support non-struct types that well, so until that exists,
 // use type aliases and non-method funcs.
-func HasherWrite(h *Hasher, b []byte) {
-	for _, b := range b {
+func HasherWrite(h *Hasher, data []byte) {
+	for _, b := range data {
 		*h = append(*h, b)
+	}
+}
+
+func HasherWriteSl(h *Hasher, data [][]byte) {
+	for _, hash := range data {
+		HasherWrite(h, hash)
 	}
 }
 
@@ -107,38 +113,49 @@ type MembProof = [][][]byte
 
 type NonmembProof = [][][]byte
 
+func IsValidHashSl(data [][]byte) bool {
+	var ok = true
+	for _, hash := range data {
+		if uint64(len(hash)) != HashLen {
+			ok = false
+		}
+	}
+	return ok
+}
+
 func (p *PathProof) Check() uint64 {
 	var err = ErrNone
-	for _, children := range p.ChildHashes {
+	var currHash []byte = p.NodeHash
+	proofLen := uint64(len(p.ChildHashes))
+	// Goose doesn't support general loops, so re-write this way.
+	// TODO: try writing with general loop syntax.
+	var loopIdx = uint64(0)
+	for ; loopIdx < proofLen; loopIdx++ {
+		pathIdx := proofLen - 1 - loopIdx
+		children := p.ChildHashes[pathIdx]
 		if uint64(len(children)) != NumChildren-1 {
 			err = ErrPathProof
+			continue
 		}
-	}
-	if err != ErrNone {
-		return err
-	}
-
-	var currHash []byte = p.NodeHash
-	// Goose doesn't support general loops, so re-write this way.
-	proofLen := uint64(len(p.ChildHashes))
-	for idx := uint64(0); idx < proofLen; idx++ {
-		pathIdx := proofLen - 1 - idx
+		if !IsValidHashSl(children) {
+			err = ErrPathProof
+			continue
+		}
 		pos := uint64(p.Id[pathIdx])
-		children := p.ChildHashes[pathIdx]
+		before := children[:pos]
+		after := children[pos:]
+
 		var hr Hasher
-
-		for beforeIdx := uint64(0); beforeIdx < pos; beforeIdx++ {
-			HasherWrite(&hr, children[beforeIdx])
-		}
+		HasherWriteSl(&hr, before)
 		HasherWrite(&hr, currHash)
-		for afterIdx := pos; afterIdx < NumChildren-1; afterIdx++ {
-			HasherWrite(&hr, children[afterIdx])
-		}
+		HasherWriteSl(&hr, after)
 		HasherWrite(&hr, []byte{InteriorNodeId})
-
 		currHash = HasherSum(hr, nil)
 	}
 
+	if err != ErrNone {
+		return ErrPathProof
+	}
 	if !std.BytesEqual(currHash, p.Digest) {
 		return ErrPathProof
 	}
