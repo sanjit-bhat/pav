@@ -2,22 +2,27 @@ package merkle
 
 import (
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/secure-chat/cryptoHelper"
-	"github.com/mit-pdos/secure-chat/cryptoShim"
+	"github.com/mit-pdos/secure-chat/crypto/helpers"
+	"github.com/mit-pdos/secure-chat/crypto/shim"
 	"log"
 )
 
+type ErrorT = uint64
+type ProofT = bool
+
 const (
-	ErrNone      uint64 = 0
-	ErrFound     uint64 = 1
-	ErrNotFound  uint64 = 2
-	ErrBadInput  uint64 = 3
-	ErrPathProof uint64 = 4
+	ErrNone      ErrorT = 0
+	ErrFound     ErrorT = 1
+	ErrNotFound  ErrorT = 2
+	ErrBadInput  ErrorT = 3
+	ErrPathProof ErrorT = 4
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
 	NumChildren    uint64 = 256
 	EmptyNodeId    byte   = 0
 	LeafNodeId     byte   = 1
 	InteriorNodeId byte   = 2
+	NonmembProofT         = false
+	MembProofT            = true
 )
 
 func CopySlice(b1 []byte) []byte {
@@ -44,7 +49,7 @@ type Node struct {
 func (n *Node) Hash() []byte {
 	if n == nil {
 		// Empty node.
-		return cryptoShim.Hash([]byte{EmptyNodeId})
+		return shim.Hash([]byte{EmptyNodeId})
 	}
 	return n.hash
 }
@@ -65,20 +70,20 @@ func (n *Node) DeepCopy() *Node {
 }
 
 func (n *Node) UpdateLeafHash() {
-	var h cryptoHelper.Hasher
-	cryptoHelper.HasherWrite(&h, n.Val)
-	cryptoHelper.HasherWrite(&h, []byte{LeafNodeId})
-	n.hash = cryptoHelper.HasherSum(h, nil)
+	var h helpers.Hasher
+	helpers.HasherWrite(&h, n.Val)
+	helpers.HasherWrite(&h, []byte{LeafNodeId})
+	n.hash = helpers.HasherSum(h, nil)
 }
 
 // Assumes recursive child hashes are already up-to-date.
 func (n *Node) UpdateInteriorHash() {
-	var h cryptoHelper.Hasher
+	var h helpers.Hasher
 	for _, n := range n.Children {
-		cryptoHelper.HasherWrite(&h, n.Hash())
+		helpers.HasherWrite(&h, n.Hash())
 	}
-	cryptoHelper.HasherWrite(&h, []byte{InteriorNodeId})
-	n.hash = cryptoHelper.HasherSum(h, nil)
+	helpers.HasherWrite(&h, []byte{InteriorNodeId})
+	n.hash = helpers.HasherSum(h, nil)
 }
 
 // This node doesn't satisfy the invariant for any logical node.
@@ -103,17 +108,19 @@ type MembProof = [][][]byte
 
 type NonmembProof = [][][]byte
 
+type GenProof = [][][]byte
+
 func IsValidHashSl(data [][]byte) bool {
 	var ok = true
 	for _, hash := range data {
-		if uint64(len(hash)) != cryptoShim.HashLen {
+		if uint64(len(hash)) != shim.HashLen {
 			ok = false
 		}
 	}
 	return ok
 }
 
-func (p *PathProof) Check() uint64 {
+func (p *PathProof) Check() ErrorT {
 	var err = ErrNone
 	var currHash []byte = p.NodeHash
 	proofLen := uint64(len(p.ChildHashes))
@@ -135,12 +142,12 @@ func (p *PathProof) Check() uint64 {
 		before := children[:pos]
 		after := children[pos:]
 
-		var hr cryptoHelper.Hasher
-		cryptoHelper.HasherWriteSl(&hr, before)
-		cryptoHelper.HasherWrite(&hr, currHash)
-		cryptoHelper.HasherWriteSl(&hr, after)
-		cryptoHelper.HasherWrite(&hr, []byte{InteriorNodeId})
-		currHash = cryptoHelper.HasherSum(hr, nil)
+		var hr helpers.Hasher
+		helpers.HasherWriteSl(&hr, before)
+		helpers.HasherWrite(&hr, currHash)
+		helpers.HasherWriteSl(&hr, after)
+		helpers.HasherWrite(&hr, []byte{InteriorNodeId})
+		currHash = helpers.HasherSum(hr, nil)
 	}
 
 	if err != ErrNone {
@@ -152,29 +159,66 @@ func (p *PathProof) Check() uint64 {
 	return ErrNone
 }
 
-func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) uint64 {
-	// TODO: are these checks necessary?
-	if uint64(len(id)) != cryptoShim.HashLen {
+func getLeafNodeHash(val Val) []byte {
+	var hr helpers.Hasher
+	helpers.HasherWrite(&hr, val)
+	helpers.HasherWrite(&hr, []byte{LeafNodeId})
+	return helpers.HasherSum(hr, nil)
+}
+
+func getEmptyNodeHash() []byte {
+	return shim.Hash([]byte{EmptyNodeId})
+}
+
+func CheckProofTotal(proofT ProofT, proof GenProof, id Id, val Val, digest Digest) ErrorT {
+	if uint64(len(proof)) > shim.HashLen {
 		return ErrBadInput
 	}
-	if uint64(len(proof)) != cryptoShim.HashLen {
+	if len(id) < len(proof) {
 		return ErrBadInput
 	}
-	var hr cryptoHelper.Hasher
-	cryptoHelper.HasherWrite(&hr, val)
-	cryptoHelper.HasherWrite(&hr, []byte{LeafNodeId})
+	// For NonmembProof, have original id, so slice it down
+	// to same sz as path.
+	idPref := id[:len(proof)]
+	var nodeHash []byte
+	if proofT == MembProofT {
+		nodeHash = getLeafNodeHash(val)
+	} else {
+		nodeHash = getEmptyNodeHash()
+	}
+
 	pathProof := &PathProof{
-		Id:          id,
-		NodeHash:    cryptoHelper.HasherSum(hr, nil),
+		Id:          idPref,
+		NodeHash:    nodeHash,
 		Digest:      digest,
 		ChildHashes: proof,
 	}
 	return pathProof.Check()
 }
 
-func NonmembProofCheck(proof NonmembProof, id Id, digest Digest) uint64 {
+func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) ErrorT {
+	// TODO: are these checks necessary?
+	if uint64(len(id)) != shim.HashLen {
+		return ErrBadInput
+	}
+	if uint64(len(proof)) != shim.HashLen {
+		return ErrBadInput
+	}
+	var hr helpers.Hasher
+	helpers.HasherWrite(&hr, val)
+	helpers.HasherWrite(&hr, []byte{LeafNodeId})
+	pathProof := &PathProof{
+		Id:          id,
+		NodeHash:    helpers.HasherSum(hr, nil),
+		Digest:      digest,
+		ChildHashes: proof,
+	}
+	return pathProof.Check()
+}
+
+func NonmembProofCheck(proof NonmembProof, id Id, digest Digest) ErrorT {
 	// An empty node can appear at any depth down the tree.
-	if cryptoShim.HashLen < uint64(len(proof)) {
+	if shim.HashLen < uint64(len(proof)) {
 		return ErrBadInput
 	}
 	// After slicing, id will have same len as p.ChildHashes.
@@ -184,11 +228,11 @@ func NonmembProofCheck(proof NonmembProof, id Id, digest Digest) uint64 {
 		return ErrBadInput
 	}
 	idPref := CopySlice(id)[:len(proof)]
-	var hr cryptoHelper.Hasher
-	cryptoHelper.HasherWrite(&hr, []byte{EmptyNodeId})
+	var hr helpers.Hasher
+	helpers.HasherWrite(&hr, []byte{EmptyNodeId})
 	pathProof := &PathProof{
 		Id:          idPref,
-		NodeHash:    cryptoHelper.HasherSum(hr, nil),
+		NodeHash:    helpers.HasherSum(hr, nil),
 		Digest:      digest,
 		ChildHashes: proof,
 	}
@@ -234,6 +278,10 @@ func (t *Tree) Print() {
 	}
 }
 
+func (t *Tree) Digest() Digest {
+	return t.Root.Hash()
+}
+
 func GetChildHashes(nodePath []*Node, id Id) [][][]byte {
 	childHashes := make([][][]byte, len(nodePath)-1)
 	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath))-1; pathIdx++ {
@@ -263,7 +311,7 @@ func (t *Tree) GetPath(id Id) ([]*Node, bool) {
 		return nodePath, false
 	}
 	var found = true
-	for pathIdx := uint64(0); pathIdx < cryptoShim.HashLen && found; pathIdx++ {
+	for pathIdx := uint64(0); pathIdx < shim.HashLen && found; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
 		nextNode := currNode.Children[pos]
@@ -281,7 +329,7 @@ func (t *Tree) GetPathAddNodes(id Id) []*Node {
 	}
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
-	for pathIdx := uint64(0); pathIdx < cryptoShim.HashLen; pathIdx++ {
+	for pathIdx := uint64(0); pathIdx < shim.HashLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
 		if currNode.Children[pos] == nil {
@@ -292,16 +340,16 @@ func (t *Tree) GetPathAddNodes(id Id) []*Node {
 	return nodePath
 }
 
-func (t *Tree) Put(id Id, v Val) (Digest, MembProof, uint64) {
-	if uint64(len(id)) != cryptoShim.HashLen {
+func (t *Tree) Put(id Id, val Val) (Digest, MembProof, ErrorT) {
+	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, ErrBadInput
 	}
 
 	nodePath := t.GetPathAddNodes(id)
-	nodePath[cryptoShim.HashLen].Val = v
-	nodePath[cryptoShim.HashLen].UpdateLeafHash()
+	nodePath[shim.HashLen].Val = val
+	nodePath[shim.HashLen].UpdateLeafHash()
 	// +1/-1 offsets for Goosable uint64 loop var.
-	for pathIdx := cryptoShim.HashLen; pathIdx >= 1; pathIdx-- {
+	for pathIdx := shim.HashLen; pathIdx >= 1; pathIdx-- {
 		nodePath[pathIdx-1].UpdateInteriorHash()
 	}
 
@@ -310,8 +358,26 @@ func (t *Tree) Put(id Id, v Val) (Digest, MembProof, uint64) {
 	return digest, proof, ErrNone
 }
 
-func (t *Tree) Get(id Id) (Val, Digest, MembProof, uint64) {
-	if uint64(len(id)) != cryptoShim.HashLen {
+func (t *Tree) GetTotal(id Id) (Val, Digest, ProofT, GenProof, ErrorT) {
+	if uint64(len(id)) != shim.HashLen {
+		return nil, nil, false, nil, ErrBadInput
+	}
+	nodePath, found := t.GetPath(id)
+	if !found {
+		return nil, nil, false, nil, ErrNotFound
+	}
+
+	digest := CopySlice(nodePath[0].Hash())
+	proof := GetChildHashes(nodePath, id)
+	if nodePath[uint64(len(nodePath))-1] == nil {
+		return nil, digest, NonmembProofT, proof, ErrNone
+	}
+	val := CopySlice(nodePath[shim.HashLen].Val)
+	return val, digest, MembProofT, proof, ErrNone
+}
+
+func (t *Tree) Get(id Id) (Val, Digest, MembProof, ErrorT) {
+	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, nil, ErrBadInput
 	}
 
@@ -320,14 +386,14 @@ func (t *Tree) Get(id Id) (Val, Digest, MembProof, uint64) {
 		return nil, nil, nil, ErrNotFound
 	}
 
-	val := CopySlice(nodePath[cryptoShim.HashLen].Val)
+	val := CopySlice(nodePath[shim.HashLen].Val)
 	digest := CopySlice(nodePath[0].Hash())
 	proof := GetChildHashes(nodePath, id)
 	return val, digest, proof, ErrNone
 }
 
-func (t *Tree) GetNil(id Id) (Digest, NonmembProof, uint64) {
-	if uint64(len(id)) != cryptoShim.HashLen {
+func (t *Tree) GetNil(id Id) (Digest, NonmembProof, ErrorT) {
+	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, ErrBadInput
 	}
 

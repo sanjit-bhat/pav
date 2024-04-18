@@ -1,4 +1,4 @@
-package cryptoFFI
+package ffi
 
 import (
 	"bytes"
@@ -32,6 +32,9 @@ func TestVerifyTrue(t *testing.T) {
 	sk, vk := MakeKeys()
 	sig := Sign(sk, d)
 	if !Verify(vk, d, sig) {
+		t.Fatal()
+	}
+	if uint64(len(sig)) != SigLen {
 		t.Fatal()
 	}
 }

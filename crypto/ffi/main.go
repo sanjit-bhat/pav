@@ -1,4 +1,4 @@
-package cryptoFFI
+package ffi
 
 import (
 	"crypto/ed25519"
@@ -8,6 +8,7 @@ import (
 
 const (
 	HashLen uint64 = 32
+	SigLen  uint64 = 64
 )
 
 // Hashing.
