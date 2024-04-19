@@ -6,6 +6,8 @@ import (
 	"log"
 )
 
+type Sig = []byte
+
 const (
 	HashLen uint64 = 32
 	SigLen  uint64 = 64
@@ -32,10 +34,10 @@ func MakeKeys() (SignerT, VerifierT) {
 	return SignerT(priv), VerifierT(pub)
 }
 
-func Sign(sk SignerT, data []byte) []byte {
+func Sign(sk SignerT, data []byte) Sig {
 	return ed25519.Sign(sk, data)
 }
 
-func Verify(vk VerifierT, data, sig []byte) bool {
+func Verify(vk VerifierT, data, sig Sig) bool {
 	return ed25519.Verify(vk, data, sig)
 }

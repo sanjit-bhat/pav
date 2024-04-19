@@ -5,13 +5,10 @@ import (
 	"github.com/mit-pdos/secure-chat/crypto/helpers"
 	"github.com/mit-pdos/secure-chat/crypto/shim"
 	"github.com/mit-pdos/secure-chat/merkle"
-	//"github.com/tchajed/goose/machine"
 	"sync"
 )
 
 // Key server.
-
-type Link = []byte
 
 type KeyServ struct {
 	Mu     *sync.Mutex
@@ -23,94 +20,83 @@ type KeyServ struct {
 func NewKeyServ() *KeyServ {
 	s := &KeyServ{}
 	s.Mu = new(sync.Mutex)
+	s.NextTr = &merkle.Tree{}
 	return s
+}
+
+func CalcNextLink(prevLink Link, data []byte) Link {
+	var hr helpers.Hasher
+	helpers.HasherWrite(&hr, data)
+	helpers.HasherWrite(&hr, prevLink)
+	newLink := helpers.HasherSum(hr, nil)
+	return newLink
+}
+
+func ExtendChain(chain *[]Link, data []byte) {
+	oldChain := *chain
+	var prevLink Link
+	chainLen := uint64(len(oldChain))
+	if chainLen > 0 {
+		prevLink = oldChain[chainLen-1]
+	}
+	newLink := CalcNextLink(prevLink, data)
+	*chain = append(oldChain, newLink)
 }
 
 func (s *KeyServ) UpdateEpoch() {
 	s.Mu.Lock()
-	var hr helpers.Hasher
-	if uint64(len(s.Chain)) > 0 {
-		lastLink := s.Chain[uint64(len(s.Chain))-1]
-		helpers.HasherWrite(&hr, lastLink)
-	}
-	helpers.HasherWrite(&hr, s.NextTr.Digest())
-	newLink := helpers.HasherSum(hr, nil)
-
-	s.Chain = append(s.Chain, newLink)
-	s.Trees = append(s.Trees, s.NextTr)
-	s.NextTr = s.NextTr.DeepCopy()
+	nextTr := s.NextTr
+	dig := nextTr.Digest()
+	ExtendChain(&s.Chain, dig)
+	s.Trees = append(s.Trees, nextTr)
+	s.NextTr = nextTr.DeepCopy()
 	s.Mu.Unlock()
 }
 
-// toEpoch exclusive.
-func (s *KeyServ) GetDigestsRange(fromEpoch, toEpoch uint64) []merkle.Digest {
-	var digs []merkle.Digest
-	var i uint64 = fromEpoch
-	for ; i < uint64(len(s.Trees)) && i < toEpoch; i++ {
-		tr := s.Trees[i]
-		digs = append(digs, tr.Digest())
-	}
-	return digs
-}
-
-func (s *KeyServ) GetDigestsFrom(fromEpoch uint64) []merkle.Digest {
-	return s.GetDigestsRange(fromEpoch, uint64(len(s.Trees)))
-}
-
-func (s *KeyServ) GetDigests(fromEpoch uint64) []merkle.Digest {
+func (s *KeyServ) Put(id merkle.Id, val merkle.Val) (Epoch, Error) {
 	s.Mu.Lock()
-	digs := s.GetDigestsFrom(fromEpoch)
+	nextEpoch := uint64(len(s.Trees))
+	_, _, err := s.NextTr.Put(id, val)
 	s.Mu.Unlock()
-	return digs
+	return nextEpoch, err
 }
 
-func (s *KeyServ) GetProofs(id merkle.Id, fromEpoch, toEpoch uint64) ([]merkle.ProofT, []merkle.GenProof, ErrorT) {
-	var proofTs []merkle.ProofT
-	var proofs []merkle.GenProof
-	var err merkle.ErrorT
-	var i uint64 = fromEpoch
-	for ; i < toEpoch && i < uint64(len(s.Trees)); i++ {
-		tr := s.Trees[i]
-		proofT, _, _, proof, err2 := tr.GetTotal(id)
-		if err2 != merkle.ErrNone {
-			err = err2
-			continue
-		}
-		proofTs = append(proofTs, proofT)
-		proofs = append(proofs, proof)
-	}
-	return proofTs, proofs, err
-}
-
-func (s *KeyServ) Put(id merkle.Id, val merkle.Val, fromEpoch uint64) ([]merkle.Digest, []merkle.GenProof, ErrorT) {
+func (s *KeyServ) GetIdAtEpoch(id merkle.Id, epoch Epoch) (merkle.Val, merkle.Digest, merkle.ProofTy, merkle.GenProof, Error) {
 	s.Mu.Lock()
-	digs := s.GetDigestsFrom(fromEpoch)
-	_, proofs, err0 := s.GetProofs(id, fromEpoch, uint64(len(s.Trees)))
-	if err0 != ErrNone {
+	if epoch >= uint64(len(s.Trees)) {
 		s.Mu.Unlock()
-		return nil, nil, err0
+		return nil, nil, false, nil, ErrSome
 	}
-	_, _, err1 := s.NextTr.Put(id, val)
+	tr := s.Trees[epoch]
+	val, dig, proofT, proof, err := tr.GetTotal(id)
 	s.Mu.Unlock()
-	return digs, proofs, err1
+	return val, dig, proofT, proof, err
 }
 
-func (s *KeyServ) GetId(id merkle.Id, fromEpoch uint64) ([]merkle.Digest, merkle.ProofT, merkle.Val, merkle.GenProof, ErrorT) {
+func (s *KeyServ) GetIdLatest(id merkle.Id) (Epoch, merkle.Val, merkle.Digest, merkle.ProofTy, merkle.GenProof, Error) {
 	s.Mu.Lock()
-	digs := s.GetDigestsFrom(fromEpoch)
-	tr := s.Trees[uint64(len(s.Trees))-1]
-	proofT, val, _, proof, err := tr.GetTotal(id)
+	numEpochs := uint64(len(s.Trees))
+	if numEpochs == 0 {
+		s.Mu.Unlock()
+		return 0, nil, nil, false, nil, ErrSome
+	}
+	lastEpoch := numEpochs - 1
+	tr := s.Trees[lastEpoch]
+	val, dig, proofT, proof, err := tr.GetTotal(id)
 	s.Mu.Unlock()
-	return digs, proofT, val, proof, err
+	return lastEpoch, val, dig, proofT, proof, err
 }
 
-// toEpoch exists because I imagine this being a more retrospective op.
-func (s *KeyServ) GetIdHist(id merkle.Id, fromEpoch, toEpoch uint64) ([]merkle.Digest, []merkle.GenProof, ErrorT) {
+func (s *KeyServ) GetDigest(epoch Epoch) (merkle.Digest, Error) {
 	s.Mu.Lock()
-	digs := s.GetDigestsRange(fromEpoch, toEpoch)
-	_, proofs, err := s.GetProofs(id, fromEpoch, toEpoch)
+	if epoch >= uint64(len(s.Trees)) {
+		s.Mu.Unlock()
+		return nil, ErrSome
+	}
+	tr := s.Trees[epoch]
+	dig := tr.Digest()
 	s.Mu.Unlock()
-	return digs, proofs, err
+	return dig, ErrNone
 }
 
 // Auditor.
@@ -125,138 +111,184 @@ func NewAuditor(sk shim.SignerT) *Auditor {
 	return &Auditor{Mu: new(sync.Mutex), Sk: sk, Chain: nil}
 }
 
-// fromEpoch is when the digs start.
-func (a *Auditor) Update(fromEpoch uint64, digs []merkle.Digest) ErrorT {
+func (a *Auditor) Update(dig merkle.Digest) {
 	a.Mu.Lock()
-	chainLen := uint64(len(a.Chain))
-	digsLen := uint64(len(digs))
-	// Are the digests in range of our chain and enough to extend it?
-	if fromEpoch > chainLen {
-		a.Mu.Unlock()
-		return ErrSome
-	}
-	if fromEpoch+digsLen <= chainLen {
-		a.Mu.Unlock()
-		return ErrSome
-	}
-	digsNew := digs[chainLen-fromEpoch:]
-
-	for _, dig := range digsNew {
-		chainLenNew := uint64(len(a.Chain))
-		var hr helpers.Hasher
-		if chainLenNew > 0 {
-			lastLink := a.Chain[chainLenNew-1]
-			helpers.HasherWrite(&hr, lastLink)
-		}
-		helpers.HasherWrite(&hr, dig)
-		newLink := helpers.HasherSum(hr, nil)
-		a.Chain = append(a.Chain, newLink)
-	}
+	ExtendChain(&a.Chain, dig)
 	a.Mu.Unlock()
-	return ErrNone
 }
 
-func (a *Auditor) GetLink(epoch uint64) (Link, ErrorT) {
+// TODO: signing is a bit funky right now, since it's written w/o RPCs.
+func (a *Auditor) GetLink(epoch Epoch) (Link, shim.Sig, Error) {
 	a.Mu.Lock()
 	if epoch >= uint64(len(a.Chain)) {
 		a.Mu.Unlock()
-		return nil, ErrSome
+		return nil, nil, ErrSome
 	}
 	link := a.Chain[epoch]
+	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
+	sig := shim.Sign(a.Sk, encB)
 	a.Mu.Unlock()
-	return link, ErrNone
+	return link, sig, ErrNone
 }
 
 // Key client.
 
 type KeyCli struct {
-	Adtrs         []*Auditor
-	AdtrVks       []shim.VerifierT
-	Digs          []merkle.Digest
-	Id            merkle.Id
-	LastLink      Link
-	CurrVal       merkle.Val
-	CurrValSet    bool
-	NextSelfAudit uint64
-	Serv          *KeyServ
+	Adtrs     []*Auditor
+	AdtrVks   []shim.VerifierT
+	Digs      map[Epoch]merkle.Digest
+	Id        merkle.Id
+	Serv      *KeyServ
+	ValEpochs []Epoch
+	Vals      []merkle.Val
 }
 
 func NewKeyCli(id merkle.Id, serv *KeyServ, adtrs []*Auditor, adtrVks []shim.VerifierT) *KeyCli {
-	return &KeyCli{Adtrs: adtrs, AdtrVks: adtrVks, Digs: nil, Id: id,
-		LastLink: nil, CurrVal: nil, CurrValSet: false,
-		NextSelfAudit: 0, Serv: serv}
+	c := &KeyCli{}
+	c.Adtrs = adtrs
+	c.AdtrVks = adtrVks
+	c.Digs = make(map[Epoch]merkle.Digest)
+	c.Id = id
+	c.Serv = serv
+	return c
 }
 
-func batchCheckProofs(proofT merkle.ProofT, id merkle.Id, val merkle.Val, digs []merkle.Digest, proofs []merkle.GenProof) ErrorT {
-	digsLen := uint64(len(digs))
-	proofsLen := uint64(len(proofs))
-	if digsLen != proofsLen {
-		return ErrSome
+// TODO: what happens if client calls Put twice in an epoch?
+func (c *KeyCli) Put(val merkle.Val) Error {
+	epoch, err := c.Serv.Put(c.Id, val)
+	if err != ErrNone {
+		return err
 	}
-
-	var err0 ErrorT
-	var i uint64
-	for ; i < digsLen; i++ {
-		dig := digs[i]
-		proof := proofs[i]
-		err1 := merkle.CheckProofTotal(proofT, proof, id, val, dig)
-		if err1 != ErrNone {
-			err0 = err1
-		}
-	}
-	return err0
-}
-
-func (c *KeyCli) Put(val merkle.Val) ErrorT {
-	nextSelfAudit := c.NextSelfAudit
-	digs, proofs, err0 := c.Serv.Put(c.Id, val, nextSelfAudit)
-	if err0 != ErrNone {
-		return err0
-	}
-
-	// Check proofs.
-	var proofT merkle.ProofT = merkle.NonmembProofT
-	if c.CurrValSet {
-		proofT = merkle.MembProofT
-	}
-	err1 := batchCheckProofs(proofT, c.Id, c.CurrVal, digs, proofs)
-	if err1 != ErrNone {
-		return err1
-	}
-
-	// Check old digs match up with prior and update new digs.
-	nextEpoch := uint64(len(c.Digs))
-	cutoff := nextEpoch - nextSelfAudit
-	oldDigs := digs[:cutoff]
-	newDigs := digs[cutoff:]
-
-	var err2 ErrorT
-	for loopIdx, servDig := range oldDigs {
-		digIdx := uint64(loopIdx) + nextSelfAudit
-		ourDig := c.Digs[digIdx]
-		if !std.BytesEqual(servDig, ourDig) {
-			err2 = ErrSome
-		}
-	}
-	if err2 != ErrNone {
-		return err2
-	}
-
-	var newLink Link = c.LastLink
-	for _, dig := range newDigs {
-		c.Digs = append(c.Digs, dig)
-		var hr helpers.Hasher
-		helpers.HasherWrite(&hr, newLink)
-		helpers.HasherWrite(&hr, dig)
-		newLink = helpers.HasherSum(hr, nil)
-	}
-
-	// Update curr vals.
-	c.CurrVal = val
-	c.CurrValSet = true
-	c.NextSelfAudit = uint64(len(c.Digs))
-
+	c.ValEpochs = append(c.ValEpochs, epoch)
+	c.Vals = append(c.Vals, val)
 	return ErrNone
+}
+
+func (c *KeyCli) Get(id merkle.Id) (merkle.Val, Error) {
+	epoch, val, dig, proofTy, proof, err0 := c.Serv.GetIdLatest(id)
+	if err0 != ErrNone {
+		return nil, err0
+	}
+
+	err1 := merkle.CheckProofTotal(proofTy, proof, id, val, dig)
+	if err1 != ErrNone {
+		return nil, err1
+	}
+
+	// If we don't have dig, add it. Otherwise, compare against what we have.
+	origDig, ok := c.Digs[epoch]
+	if ok {
+		if !std.BytesEqual(origDig, dig) {
+			return nil, ErrSome
+		}
+	} else {
+		c.Digs[epoch] = dig
+	}
+	return val, ErrNone
+}
+
+/*
+Note: potential attack.
+Key serv refuses to fill in a hole, even though we have bigger digests.
+*/
+
+// Verified through Epoch idx in retval.
+func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
+	var link Link
+	var epoch uint64
+	var stop bool
+	for !stop {
+		var dig merkle.Digest
+		dig, ok0 := c.Digs[epoch]
+		if !ok0 {
+			newDig, err0 := c.Serv.GetDigest(epoch)
+			if err0 != ErrNone {
+				stop = true
+				continue
+			}
+			c.Digs[epoch] = newDig
+			dig = newDig
+		}
+		link = CalcNextLink(link, dig)
+		epoch++
+	}
+	if epoch == 0 {
+		return 0, ErrSome
+	}
+
+	adtr := c.Adtrs[adtrId]
+	adtrVk := c.AdtrVks[adtrId]
+	adtrLink, sig, err1 := adtr.GetLink(epoch)
+	if err1 != ErrNone {
+		return 0, err1
+	}
+
+	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
+	ok1 := shim.Verify(adtrVk, encB, sig)
+	if !ok1 {
+		return 0, ErrSome
+	}
+	if !std.BytesEqual(link, adtrLink) {
+		return 0, ErrSome
+	}
+
+	return epoch, ErrNone
+}
+
+// TODO: this is a client's keycli. where's the api for getting their own key?
+
+// Verified through Epoch idx in retval.
+func (c *KeyCli) SelfAudit() (Epoch, Error) {
+	id := c.Id
+	numVals := uint64(len(c.Vals))
+	var valIdx uint64
+	var epoch Epoch
+	var stop bool
+	for !stop {
+		// Might be at the next val.
+		if valIdx != numVals {
+			epochChange := c.ValEpochs[valIdx]
+			if epoch == epochChange {
+				valIdx++
+			}
+		}
+		var expProofTy merkle.ProofTy
+		var expVal merkle.Val
+		// Might be before we even put a val.
+		if valIdx != 0 {
+			expProofTy = merkle.MembProofTy
+			expVal = c.Vals[valIdx-1]
+		}
+
+		_, dig, proofTy, proof, err0 := c.Serv.GetIdAtEpoch(id, epoch)
+		if err0 != ErrNone {
+			stop = true
+			continue
+		}
+		if proofTy != expProofTy {
+			stop = true
+			continue
+		}
+		err1 := merkle.CheckProofTotal(proofTy, proof, id, expVal, dig)
+		if err1 != ErrNone {
+			stop = true
+			continue
+		}
+		// Might not have the dig stored already.
+		origDig, ok0 := c.Digs[epoch]
+		if !ok0 {
+			c.Digs[epoch] = dig
+		} else if !std.BytesEqual(dig, origDig) {
+			stop = true
+			continue
+		}
+		epoch++
+	}
+
+	if epoch == 0 {
+		return 0, ErrSome
+	}
+	return epoch - 1, ErrNone
 }
 
 /*

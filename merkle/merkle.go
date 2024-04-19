@@ -7,22 +7,22 @@ import (
 	"log"
 )
 
-type ErrorT = uint64
-type ProofT = bool
+type Error = uint64
+type ProofTy = bool
 
 const (
-	ErrNone      ErrorT = 0
-	ErrFound     ErrorT = 1
-	ErrNotFound  ErrorT = 2
-	ErrBadInput  ErrorT = 3
-	ErrPathProof ErrorT = 4
+	ErrNone      Error = 0
+	ErrFound     Error = 1
+	ErrNotFound  Error = 2
+	ErrBadInput  Error = 3
+	ErrPathProof Error = 4
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
 	NumChildren    uint64 = 256
 	EmptyNodeId    byte   = 0
 	LeafNodeId     byte   = 1
 	InteriorNodeId byte   = 2
-	NonmembProofT         = false
-	MembProofT            = true
+	NonmembProofTy        = false
+	MembProofTy           = true
 )
 
 func CopySlice(b1 []byte) []byte {
@@ -120,7 +120,7 @@ func IsValidHashSl(data [][]byte) bool {
 	return ok
 }
 
-func (p *PathProof) Check() ErrorT {
+func (p *PathProof) Check() Error {
 	var err = ErrNone
 	var currHash []byte = p.NodeHash
 	proofLen := uint64(len(p.ChildHashes))
@@ -170,7 +170,7 @@ func getEmptyNodeHash() []byte {
 	return shim.Hash([]byte{EmptyNodeId})
 }
 
-func CheckProofTotal(proofT ProofT, proof GenProof, id Id, val Val, digest Digest) ErrorT {
+func CheckProofTotal(proofTy ProofTy, proof GenProof, id Id, val Val, digest Digest) Error {
 	if uint64(len(proof)) > shim.HashLen {
 		return ErrBadInput
 	}
@@ -181,7 +181,7 @@ func CheckProofTotal(proofT ProofT, proof GenProof, id Id, val Val, digest Diges
 	// to same sz as path.
 	idPref := id[:len(proof)]
 	var nodeHash []byte
-	if proofT == MembProofT {
+	if proofTy == MembProofTy {
 		nodeHash = getLeafNodeHash(val)
 	} else {
 		nodeHash = getEmptyNodeHash()
@@ -196,7 +196,7 @@ func CheckProofTotal(proofT ProofT, proof GenProof, id Id, val Val, digest Diges
 	return pathProof.Check()
 }
 
-func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) ErrorT {
+func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) Error {
 	// TODO: are these checks necessary?
 	if uint64(len(id)) != shim.HashLen {
 		return ErrBadInput
@@ -216,7 +216,7 @@ func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) ErrorT {
 	return pathProof.Check()
 }
 
-func NonmembProofCheck(proof NonmembProof, id Id, digest Digest) ErrorT {
+func NonmembProofCheck(proof NonmembProof, id Id, digest Digest) Error {
 	// An empty node can appear at any depth down the tree.
 	if shim.HashLen < uint64(len(proof)) {
 		return ErrBadInput
@@ -340,7 +340,7 @@ func (t *Tree) GetPathAddNodes(id Id) []*Node {
 	return nodePath
 }
 
-func (t *Tree) Put(id Id, val Val) (Digest, MembProof, ErrorT) {
+func (t *Tree) Put(id Id, val Val) (Digest, MembProof, Error) {
 	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, ErrBadInput
 	}
@@ -358,7 +358,7 @@ func (t *Tree) Put(id Id, val Val) (Digest, MembProof, ErrorT) {
 	return digest, proof, ErrNone
 }
 
-func (t *Tree) GetTotal(id Id) (Val, Digest, ProofT, GenProof, ErrorT) {
+func (t *Tree) GetTotal(id Id) (Val, Digest, ProofTy, GenProof, Error) {
 	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, false, nil, ErrBadInput
 	}
@@ -370,13 +370,13 @@ func (t *Tree) GetTotal(id Id) (Val, Digest, ProofT, GenProof, ErrorT) {
 	digest := CopySlice(nodePath[0].Hash())
 	proof := GetChildHashes(nodePath, id)
 	if nodePath[uint64(len(nodePath))-1] == nil {
-		return nil, digest, NonmembProofT, proof, ErrNone
+		return nil, digest, NonmembProofTy, proof, ErrNone
 	}
 	val := CopySlice(nodePath[shim.HashLen].Val)
-	return val, digest, MembProofT, proof, ErrNone
+	return val, digest, MembProofTy, proof, ErrNone
 }
 
-func (t *Tree) Get(id Id) (Val, Digest, MembProof, ErrorT) {
+func (t *Tree) Get(id Id) (Val, Digest, MembProof, Error) {
 	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, nil, ErrBadInput
 	}
@@ -392,7 +392,7 @@ func (t *Tree) Get(id Id) (Val, Digest, MembProof, ErrorT) {
 	return val, digest, proof, ErrNone
 }
 
-func (t *Tree) GetNil(id Id) (Digest, NonmembProof, ErrorT) {
+func (t *Tree) GetNil(id Id) (Digest, NonmembProof, Error) {
 	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, ErrBadInput
 	}

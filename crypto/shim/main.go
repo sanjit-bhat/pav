@@ -1,5 +1,7 @@
 package shim
 
+type Sig = []byte
+
 const (
 	HashLen uint64 = 32
 	SigLen  uint64 = 64
@@ -21,10 +23,10 @@ func MakeKeys() (SignerT, VerifierT) {
 	panic("shim")
 }
 
-func Sign(sk SignerT, data []byte) []byte {
+func Sign(sk SignerT, data []byte) Sig {
 	panic("shim")
 }
 
-func Verify(vk VerifierT, data, sig []byte) bool {
+func Verify(vk VerifierT, data, sig Sig) bool {
 	panic("shim")
 }
