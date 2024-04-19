@@ -2,6 +2,8 @@ package ktMerkle
 
 import (
 	"github.com/goose-lang/std"
+	"github.com/mit-pdos/gokv/grove_ffi"
+	"github.com/mit-pdos/gokv/urpc"
 	"github.com/mit-pdos/secure-chat/crypto/helpers"
 	"github.com/mit-pdos/secure-chat/crypto/shim"
 	"github.com/mit-pdos/secure-chat/merkle"
@@ -99,6 +101,75 @@ func (s *KeyServ) GetDigest(epoch Epoch) (merkle.Digest, Error) {
 	return dig, ErrNone
 }
 
+func (s *KeyServ) Start(addr grove_ffi.Address) {
+	handlers := make(map[uint64]func([]byte, *[]byte))
+
+	handlers[RpcKeyServUpdateEpoch] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			s.UpdateEpoch()
+		}
+
+	handlers[RpcKeyServPut] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			args := &PutArg{}
+			_, err0 := args.Decode(enc_args)
+			if err0 != ErrNone {
+				*enc_reply = (&PutReply{Epoch: 0, Error: err0}).Encode()
+				return
+			}
+			epoch, err1 := s.Put(args.Id, args.Val)
+			*enc_reply = (&PutReply{Epoch: epoch, Error: err1}).Encode()
+		}
+
+	handlers[RpcKeyServGetIdAtEpoch] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			args := &GetIdAtEpochArg{}
+			_, err0 := args.Decode(enc_args)
+			if err0 != ErrNone {
+				reply := &GetIdAtEpochReply{}
+				reply.Error = ErrSome
+				*enc_reply = reply.Encode()
+				return
+			}
+			val, dig, proofTy, proof, err1 := s.GetIdAtEpoch(args.Id, args.Epoch)
+			*enc_reply = (&GetIdAtEpochReply{
+				Val: val, Digest: dig, ProofTy: proofTy, Proof: proof,
+				Error: err1}).Encode()
+		}
+
+	handlers[RpcKeyServGetIdLatest] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			args := &GetIdLatestArg{}
+			_, err0 := args.Decode(enc_args)
+			if err0 != ErrNone {
+				reply := &GetIdLatestReply{}
+				reply.Error = ErrSome
+				*enc_reply = reply.Encode()
+				return
+			}
+			epoch, val, dig, proofTy, proof, err1 := s.GetIdLatest(args.Id)
+			*enc_reply = (&GetIdLatestReply{
+				Epoch: epoch, Val: val, Digest: dig, ProofTy: proofTy,
+				Proof: proof, Error: err1}).Encode()
+		}
+
+	handlers[RpcKeyServGetDigest] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			args := &GetDigestArg{}
+			_, err0 := args.Decode(enc_args)
+			if err0 != ErrNone {
+				reply := &GetDigestReply{}
+				reply.Error = ErrSome
+				*enc_reply = reply.Encode()
+				return
+			}
+			dig, err1 := s.GetDigest(args.Epoch)
+			*enc_reply = (&GetDigestReply{Digest: dig, Error: err1}).Encode()
+		}
+
+	urpc.MakeServer(handlers).Serve(addr)
+}
+
 // Auditor.
 
 type Auditor struct {
@@ -129,6 +200,40 @@ func (a *Auditor) GetLink(epoch Epoch) (Link, shim.Sig, Error) {
 	sig := shim.Sign(a.Sk, encB)
 	a.Mu.Unlock()
 	return link, sig, ErrNone
+}
+
+func (a *Auditor) Start(addr grove_ffi.Address) {
+	handlers := make(map[uint64]func([]byte, *[]byte))
+
+	handlers[RpcAuditorUpdate] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			args := &UpdateArg{}
+			_, err0 := args.Decode(enc_args)
+			if err0 != ErrNone {
+				reply := &UpdateReply{}
+				reply.Error = ErrSome
+				*enc_reply = reply.Encode()
+				return
+			}
+			a.Update(args.Digest)
+			*enc_reply = (&UpdateReply{Error: ErrNone}).Encode()
+		}
+
+	handlers[RpcAuditorGetLink] =
+		func(enc_args []byte, enc_reply *[]byte) {
+			args := &GetLinkArg{}
+			_, err0 := args.Decode(enc_args)
+			if err0 != ErrNone {
+				reply := &GetLinkReply{}
+				reply.Error = ErrSome
+				*enc_reply = reply.Encode()
+				return
+			}
+			link, sig, err1 := a.GetLink(args.Epoch)
+			*enc_reply = (&GetLinkReply{Link: link, Sig: sig, Error: err1}).Encode()
+		}
+
+	urpc.MakeServer(handlers).Serve(addr)
 }
 
 // Key client.
@@ -235,7 +340,10 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 	return epoch, ErrNone
 }
 
-// TODO: this is a client's keycli. where's the api for getting their own key?
+/* TODO: this is a client's keycli. where's the api for getting their own key?
+(for which they already know it's expected val)
+they could do a get and later self audit.
+*/
 
 // Verified through Epoch idx in retval.
 func (c *KeyCli) SelfAudit() (Epoch, Error) {
@@ -245,7 +353,7 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 	var epoch Epoch
 	var stop bool
 	for !stop {
-		// Might be at the next val.
+		// Check if we hit val at the next epoch.
 		if valIdx != numVals {
 			epochChange := c.ValEpochs[valIdx]
 			if epoch == epochChange {
@@ -254,7 +362,7 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 		}
 		var expProofTy merkle.ProofTy
 		var expVal merkle.Val
-		// Might be before we even put a val.
+		// Check if we're before we even put a val.
 		if valIdx != 0 {
 			expProofTy = merkle.MembProofTy
 			expVal = c.Vals[valIdx-1]
@@ -274,7 +382,7 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 			stop = true
 			continue
 		}
-		// Might not have the dig stored already.
+		// Store the dig if we don't already have it.
 		origDig, ok0 := c.Digs[epoch]
 		if !ok0 {
 			c.Digs[epoch] = dig
