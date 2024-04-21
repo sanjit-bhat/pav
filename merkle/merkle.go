@@ -2,9 +2,8 @@ package merkle
 
 import (
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/secure-chat/crypto/helpers"
 	"github.com/mit-pdos/secure-chat/crypto/shim"
-	"log"
+	"github.com/mit-pdos/secure-chat/crypto/helpers"
 )
 
 type Error = uint64
@@ -104,11 +103,7 @@ type PathProof struct {
 	ChildHashes [][][]byte
 }
 
-type MembProof = [][][]byte
-
-type NonmembProof = [][][]byte
-
-type GenProof = [][][]byte
+type Proof = [][][]byte
 
 func IsValidHashSl(data [][]byte) bool {
 	var ok = true
@@ -170,7 +165,7 @@ func getEmptyNodeHash() []byte {
 	return shim.Hash([]byte{EmptyNodeId})
 }
 
-func CheckProofTotal(proofTy ProofTy, proof GenProof, id Id, val Val, digest Digest) Error {
+func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) Error {
 	if uint64(len(proof)) > shim.HashLen {
 		return ErrBadInput
 	}
@@ -196,49 +191,6 @@ func CheckProofTotal(proofTy ProofTy, proof GenProof, id Id, val Val, digest Dig
 	return pathProof.Check()
 }
 
-func MembProofCheck(proof MembProof, id Id, val Val, digest Digest) Error {
-	// TODO: are these checks necessary?
-	if uint64(len(id)) != shim.HashLen {
-		return ErrBadInput
-	}
-	if uint64(len(proof)) != shim.HashLen {
-		return ErrBadInput
-	}
-	var hr helpers.Hasher
-	helpers.HasherWrite(&hr, val)
-	helpers.HasherWrite(&hr, []byte{LeafNodeId})
-	pathProof := &PathProof{
-		Id:          id,
-		NodeHash:    helpers.HasherSum(hr, nil),
-		Digest:      digest,
-		ChildHashes: proof,
-	}
-	return pathProof.Check()
-}
-
-func NonmembProofCheck(proof NonmembProof, id Id, digest Digest) Error {
-	// An empty node can appear at any depth down the tree.
-	if shim.HashLen < uint64(len(proof)) {
-		return ErrBadInput
-	}
-	// After slicing, id will have same len as p.ChildHashes.
-	// It now corresponds to the prefix path down the tree that contains
-	// the empty node.
-	if len(id) < len(proof) {
-		return ErrBadInput
-	}
-	idPref := CopySlice(id)[:len(proof)]
-	var hr helpers.Hasher
-	helpers.HasherWrite(&hr, []byte{EmptyNodeId})
-	pathProof := &PathProof{
-		Id:          idPref,
-		NodeHash:    helpers.HasherSum(hr, nil),
-		Digest:      digest,
-		ChildHashes: proof,
-	}
-	return pathProof.Check()
-}
-
 // Having a separate Tree type makes the API more clear compared to if it
 // was just a Node.
 type Tree struct {
@@ -249,37 +201,14 @@ func (t *Tree) DeepCopy() *Tree {
 	return &Tree{Root: t.Root.DeepCopy()}
 }
 
-func (t *Tree) Print() {
-	var qCurr []*Node
-	var qNext []*Node
-	qCurr = append(qCurr, t.Root)
-	for len(qCurr) > 0 {
-		for len(qCurr) > 0 {
-			top := qCurr[0]
-			qCurr = qCurr[1:]
-
-			if top == nil {
-				log.Print("nil | ")
-			} else {
-				if top.Val != nil {
-					log.Print(top.Hash(), top.Val, " | ")
-				} else {
-					log.Print(top.Hash(), " | ")
-				}
-
-				for _, child := range top.Children {
-					qNext = append(qNext, child)
-				}
-			}
-		}
-		qCurr = qNext
-		qNext = nil
-		log.Println()
-	}
-}
-
 func (t *Tree) Digest() Digest {
 	return t.Root.Hash()
+}
+
+func AppendNode2D(dst *[][]byte, src []*Node) {
+	for _, sl := range src {
+		*dst = append(*dst, CopySlice(sl.Hash()))
+	}
 }
 
 func GetChildHashes(nodePath []*Node, id Id) [][][]byte {
@@ -287,40 +216,34 @@ func GetChildHashes(nodePath []*Node, id Id) [][][]byte {
 	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath))-1; pathIdx++ {
 		children := nodePath[pathIdx].Children
 		pos := id[pathIdx]
-		proofChildren := make([][]byte, NumChildren-1)
+		var proofChildren [][]byte
+		AppendNode2D(&proofChildren, children[:pos])
+		AppendNode2D(&proofChildren, children[pos+1:])
 		childHashes[pathIdx] = proofChildren
-
-		for beforeIdx := uint64(0); beforeIdx < uint64(pos); beforeIdx++ {
-			proofChildren[beforeIdx] = CopySlice(children[beforeIdx].Hash())
-		}
-		for afterIdx := uint64(pos) + 1; afterIdx < NumChildren; afterIdx++ {
-			proofChildren[afterIdx-1] = CopySlice(children[afterIdx].Hash())
-		}
 	}
 	return childHashes
 }
 
 // Get the maximal path corresponding to Id.
 // If the full path to a leaf node doesn't exist,
-// return the partial path that ends in an empty node,
-// and set found to true.
-func (t *Tree) GetPath(id Id) ([]*Node, bool) {
+// return the partial path that ends in an empty node.
+func (t *Tree) GetPath(id Id) []*Node {
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
 	if t.Root == nil {
-		return nodePath, false
+		return nodePath
 	}
-	var found = true
-	for pathIdx := uint64(0); pathIdx < shim.HashLen && found; pathIdx++ {
+	var stop = false
+	for pathIdx := uint64(0); pathIdx < shim.HashLen && !stop; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
 		nextNode := currNode.Children[pos]
 		nodePath = append(nodePath, nextNode)
 		if nextNode == nil {
-			found = false
+			stop = true
 		}
 	}
-	return nodePath, found
+	return nodePath
 }
 
 func (t *Tree) GetPathAddNodes(id Id) []*Node {
@@ -340,7 +263,7 @@ func (t *Tree) GetPathAddNodes(id Id) []*Node {
 	return nodePath
 }
 
-func (t *Tree) Put(id Id, val Val) (Digest, MembProof, Error) {
+func (t *Tree) Put(id Id, val Val) (Digest, Proof, Error) {
 	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, ErrBadInput
 	}
@@ -358,51 +281,20 @@ func (t *Tree) Put(id Id, val Val) (Digest, MembProof, Error) {
 	return digest, proof, ErrNone
 }
 
-func (t *Tree) GetTotal(id Id) (Val, Digest, ProofTy, GenProof, Error) {
+// Return ProofTy vs. having sep funcs bc regardless, would want a proof.
+func (t *Tree) Get(id Id) (Val, Digest, ProofTy, Proof, Error) {
 	if uint64(len(id)) != shim.HashLen {
 		return nil, nil, false, nil, ErrBadInput
 	}
-	nodePath, found := t.GetPath(id)
-	if !found {
-		return nil, nil, false, nil, ErrNotFound
-	}
+	nodePath := t.GetPath(id)
+	lastNode := nodePath[uint64(len(nodePath))-1]
 
 	digest := CopySlice(nodePath[0].Hash())
 	proof := GetChildHashes(nodePath, id)
-	if nodePath[uint64(len(nodePath))-1] == nil {
+	if lastNode == nil {
 		return nil, digest, NonmembProofTy, proof, ErrNone
+	} else {
+		val := CopySlice(lastNode.Val)
+		return val, digest, MembProofTy, proof, ErrNone
 	}
-	val := CopySlice(nodePath[shim.HashLen].Val)
-	return val, digest, MembProofTy, proof, ErrNone
-}
-
-func (t *Tree) Get(id Id) (Val, Digest, MembProof, Error) {
-	if uint64(len(id)) != shim.HashLen {
-		return nil, nil, nil, ErrBadInput
-	}
-
-	nodePath, found := t.GetPath(id)
-	if !found {
-		return nil, nil, nil, ErrNotFound
-	}
-
-	val := CopySlice(nodePath[shim.HashLen].Val)
-	digest := CopySlice(nodePath[0].Hash())
-	proof := GetChildHashes(nodePath, id)
-	return val, digest, proof, ErrNone
-}
-
-func (t *Tree) GetNil(id Id) (Digest, NonmembProof, Error) {
-	if uint64(len(id)) != shim.HashLen {
-		return nil, nil, ErrBadInput
-	}
-
-	nodePath, found := t.GetPath(id)
-	if found {
-		return nil, nil, ErrFound
-	}
-
-	digest := CopySlice(nodePath[0].Hash())
-	proof := GetChildHashes(nodePath, id)
-	return digest, proof, ErrNone
 }

@@ -43,30 +43,36 @@ func PutCheck(t *testing.T, tr *Tree, id Id, val Val) {
 	if err != ErrNone {
 		t.Fatal()
 	}
-	err = MembProofCheck(proof, id, val, digest)
+	err = CheckProof(MembProofTy, proof, id, val, digest)
 	if err != ErrNone {
 		t.Fatal()
 	}
 }
 
-func GetCheck(t *testing.T, tr *Tree, id Id) Val {
-	val, digest, proof, err := tr.Get(id)
+func GetMembCheck(t *testing.T, tr *Tree, id Id) Val {
+	val, digest, proofTy, proof, err := tr.Get(id)
 	if err != ErrNone {
 		t.Fatal()
 	}
-	err = MembProofCheck(proof, id, val, digest)
+	if proofTy != MembProofTy {
+		t.Fatal()
+	}
+	err = CheckProof(MembProofTy, proof, id, val, digest)
 	if err != ErrNone {
 		t.Fatal()
 	}
 	return val
 }
 
-func GetNilCheck(t *testing.T, tr *Tree, id Id) {
-	digest, proof, err := tr.GetNil(id)
+func GetNonmembCheck(t *testing.T, tr *Tree, id Id) {
+	_, digest, proofTy, proof, err := tr.Get(id)
 	if err != ErrNone {
 		t.Fatal()
 	}
-	err = NonmembProofCheck(proof, id, digest)
+	if proofTy != NonmembProofTy {
+		t.Fatal()
+	}
+	err = CheckProof(NonmembProofTy, proof, id, nil, digest)
 	if err != ErrNone {
 		t.Fatal()
 	}
@@ -78,7 +84,7 @@ func TestOnePut(t *testing.T) {
 
 	tr := &Tree{}
 	PutCheck(t, tr, id0, val0)
-	val1 := GetCheck(t, tr, id0)
+	val1 := GetMembCheck(t, tr, id0)
 	if !bytes.Equal(val0, val1) {
 		t.Fatal()
 	}
@@ -93,8 +99,8 @@ func TestTwoPut(t *testing.T) {
 	tr := &Tree{}
 	PutCheck(t, tr, id0, val0)
 	PutCheck(t, tr, id1, val1)
-	val2 := GetCheck(t, tr, id0)
-	val3 := GetCheck(t, tr, id1)
+	val2 := GetMembCheck(t, tr, id0)
+	val3 := GetMembCheck(t, tr, id1)
 	if !bytes.Equal(val0, val2) {
 		t.Fatal()
 	}
@@ -111,7 +117,7 @@ func TestOverwrite(t *testing.T) {
 	tr := &Tree{}
 	PutCheck(t, tr, id0, val0)
 	PutCheck(t, tr, id0, val1)
-	val2 := GetCheck(t, tr, id0)
+	val2 := GetMembCheck(t, tr, id0)
 	if !bytes.Equal(val1, val2) {
 		t.Fatal()
 	}
@@ -125,21 +131,13 @@ func TestGetNil(t *testing.T) {
 
 	tr := &Tree{}
 	PutCheck(t, tr, id0, val0)
-	_, _, _, err := tr.Get(id1)
-	if err == ErrNone {
-		t.Fatal()
-	}
-	GetNilCheck(t, tr, id1)
+	GetNonmembCheck(t, tr, id1)
 }
 
 func TestGetNilEmpty(t *testing.T) {
 	id0 := make([]byte, ffi.HashLen)
 	tr := &Tree{}
-	_, _, _, err := tr.Get(id0)
-	if err == ErrNone {
-		t.Fatal()
-	}
-	GetNilCheck(t, tr, id0)
+	GetNonmembCheck(t, tr, id0)
 }
 
 func TestGetNilBottom(t *testing.T) {
@@ -150,11 +148,7 @@ func TestGetNilBottom(t *testing.T) {
 
 	tr := &Tree{}
 	PutCheck(t, tr, id0, val0)
-	_, _, _, err := tr.Get(id1)
-	if err == ErrNone {
-		t.Fatal()
-	}
-	GetNilCheck(t, tr, id1)
+	GetNonmembCheck(t, tr, id1)
 }
 
 // Don't want proof(id, val, digest) and proof(id, val', digest)
@@ -170,7 +164,7 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 	if err != ErrNone {
 		t.Fatal()
 	}
-	err = MembProofCheck(proof0, id0, val0, digest0)
+	err = CheckProof(MembProofTy, proof0, id0, val0, digest0)
 	if err != ErrNone {
 		t.Fatal()
 	}
@@ -181,7 +175,7 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 	tmp := proof1[0][0]
 	proof1[0][0] = proof1[0][1]
 	proof1[0][1] = tmp
-	err = NonmembProofCheck(proof1, id0, digest0)
+	err = CheckProof(NonmembProofTy, proof1, id0, nil, digest0)
 	if err != ErrPathProof {
 		t.Fatal()
 	}
@@ -202,12 +196,12 @@ func TestAttackPutNilEmptyNode(t *testing.T) {
 	if err != ErrNone {
 		t.Fatal()
 	}
-	err = MembProofCheck(proof0, id0, nil, digest0)
+	err = CheckProof(MembProofTy, proof0, id0, nil, digest0)
 	if err != ErrNone {
 		t.Fatal()
 	}
 
-	err = MembProofCheck(proof0, id1, nil, digest0)
+	err = CheckProof(MembProofTy, proof0, id1, nil, digest0)
 	if err != ErrPathProof {
 		t.Fatal()
 	}
