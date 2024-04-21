@@ -4,8 +4,8 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
+	"github.com/mit-pdos/secure-chat/crypto/ffi"
 	"github.com/mit-pdos/secure-chat/crypto/helpers"
-	"github.com/mit-pdos/secure-chat/crypto/shim"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"sync"
 )
@@ -22,7 +22,10 @@ type KeyServ struct {
 func NewKeyServ() *KeyServ {
 	s := &KeyServ{}
 	s.Mu = new(sync.Mutex)
+	emptyTr := &merkle.Tree{}
+	s.Trees = []*merkle.Tree{emptyTr}
 	s.NextTr = &merkle.Tree{}
+	s.Chain = []Link{emptyTr.Digest()}
 	return s
 }
 
@@ -63,28 +66,23 @@ func (s *KeyServ) Put(id merkle.Id, val merkle.Val) (Epoch, Error) {
 	return nextEpoch, err
 }
 
-func (s *KeyServ) GetIdAtEpoch(id merkle.Id, epoch Epoch) (merkle.Val, merkle.Digest, merkle.ProofTy, merkle.GenProof, Error) {
+func (s *KeyServ) GetIdAtEpoch(id merkle.Id, epoch Epoch) (merkle.Val, merkle.Digest, merkle.ProofTy, merkle.Proof, Error) {
 	s.Mu.Lock()
 	if epoch >= uint64(len(s.Trees)) {
 		s.Mu.Unlock()
 		return nil, nil, false, nil, ErrSome
 	}
 	tr := s.Trees[epoch]
-	val, dig, proofT, proof, err := tr.GetTotal(id)
+	val, dig, proofT, proof, err := tr.Get(id)
 	s.Mu.Unlock()
 	return val, dig, proofT, proof, err
 }
 
-func (s *KeyServ) GetIdLatest(id merkle.Id) (Epoch, merkle.Val, merkle.Digest, merkle.ProofTy, merkle.GenProof, Error) {
+func (s *KeyServ) GetIdLatest(id merkle.Id) (Epoch, merkle.Val, merkle.Digest, merkle.ProofTy, merkle.Proof, Error) {
 	s.Mu.Lock()
-	numEpochs := uint64(len(s.Trees))
-	if numEpochs == 0 {
-		s.Mu.Unlock()
-		return 0, nil, nil, false, nil, ErrSome
-	}
-	lastEpoch := numEpochs - 1
+	lastEpoch := uint64(len(s.Trees)) - 1
 	tr := s.Trees[lastEpoch]
-	val, dig, proofT, proof, err := tr.GetTotal(id)
+	val, dig, proofT, proof, err := tr.Get(id)
 	s.Mu.Unlock()
 	return lastEpoch, val, dig, proofT, proof, err
 }
@@ -174,11 +172,11 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 
 type Auditor struct {
 	Mu    *sync.Mutex
-	Sk    shim.SignerT
+	Sk    ffi.SignerT
 	Chain []Link
 }
 
-func NewAuditor(sk shim.SignerT) *Auditor {
+func NewAuditor(sk ffi.SignerT) *Auditor {
 	return &Auditor{Mu: new(sync.Mutex), Sk: sk, Chain: nil}
 }
 
@@ -188,8 +186,7 @@ func (a *Auditor) Update(dig merkle.Digest) {
 	a.Mu.Unlock()
 }
 
-// TODO: signing is a bit funky right now, since it's written w/o RPCs.
-func (a *Auditor) GetLink(epoch Epoch) (Link, shim.Sig, Error) {
+func (a *Auditor) GetLink(epoch Epoch) (Link, ffi.Sig, Error) {
 	a.Mu.Lock()
 	if epoch >= uint64(len(a.Chain)) {
 		a.Mu.Unlock()
@@ -197,7 +194,7 @@ func (a *Auditor) GetLink(epoch Epoch) (Link, shim.Sig, Error) {
 	}
 	link := a.Chain[epoch]
 	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	sig := shim.Sign(a.Sk, encB)
+	sig := ffi.Sign(a.Sk, encB)
 	a.Mu.Unlock()
 	return link, sig, ErrNone
 }
@@ -239,28 +236,32 @@ func (a *Auditor) Start(addr grove_ffi.Address) {
 // Key client.
 
 type KeyCli struct {
-	Adtrs     []*Auditor
-	AdtrVks   []shim.VerifierT
+	Adtrs     []*urpc.Client
+	AdtrVks   []ffi.VerifierT
 	Digs      map[Epoch]merkle.Digest
 	Id        merkle.Id
-	Serv      *KeyServ
+	Serv      *urpc.Client
 	ValEpochs []Epoch
 	Vals      []merkle.Val
 }
 
-func NewKeyCli(id merkle.Id, serv *KeyServ, adtrs []*Auditor, adtrVks []shim.VerifierT) *KeyCli {
+func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []ffi.VerifierT) *KeyCli {
 	c := &KeyCli{}
+	c.Serv = urpc.MakeClient(servAddr)
+	var adtrs []*urpc.Client
+	for _, addr := range adtrAddrs {
+		adtrs = append(adtrs, urpc.MakeClient(addr))
+	}
 	c.Adtrs = adtrs
 	c.AdtrVks = adtrVks
 	c.Digs = make(map[Epoch]merkle.Digest)
 	c.Id = id
-	c.Serv = serv
 	return c
 }
 
 // TODO: what happens if client calls Put twice in an epoch?
 func (c *KeyCli) Put(val merkle.Val) Error {
-	epoch, err := c.Serv.Put(c.Id, val)
+	epoch, err := CallPut(c.Serv, c.Id, val)
 	if err != ErrNone {
 		return err
 	}
@@ -270,12 +271,12 @@ func (c *KeyCli) Put(val merkle.Val) Error {
 }
 
 func (c *KeyCli) Get(id merkle.Id) (merkle.Val, Error) {
-	epoch, val, dig, proofTy, proof, err0 := c.Serv.GetIdLatest(id)
+	epoch, val, dig, proofTy, proof, err0 := CallGetIdLatest(c.Serv, id)
 	if err0 != ErrNone {
 		return nil, err0
 	}
 
-	err1 := merkle.CheckProofTotal(proofTy, proof, id, val, dig)
+	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
 	if err1 != ErrNone {
 		return nil, err1
 	}
@@ -292,13 +293,10 @@ func (c *KeyCli) Get(id merkle.Id) (merkle.Val, Error) {
 	return val, ErrNone
 }
 
-/*
-Note: potential attack.
-Key serv refuses to fill in a hole, even though we have bigger digests.
-*/
-
-// Verified through Epoch idx in retval.
+// Audited through Epoch idx in retval.
 func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
+	// Note: potential attack.
+	// Key serv refuses to fill in a hole, even though we have bigger digests.
 	var link Link
 	var epoch uint64
 	var stop bool
@@ -306,7 +304,7 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 		var dig merkle.Digest
 		dig, ok0 := c.Digs[epoch]
 		if !ok0 {
-			newDig, err0 := c.Serv.GetDigest(epoch)
+			newDig, err0 := CallGetDigest(c.Serv, epoch)
 			if err0 != ErrNone {
 				stop = true
 				continue
@@ -323,13 +321,13 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 
 	adtr := c.Adtrs[adtrId]
 	adtrVk := c.AdtrVks[adtrId]
-	adtrLink, sig, err1 := adtr.GetLink(epoch)
+	adtrLink, sig, err1 := CallGetLink(adtr, epoch)
 	if err1 != ErrNone {
 		return 0, err1
 	}
 
 	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	ok1 := shim.Verify(adtrVk, encB, sig)
+	ok1 := ffi.Verify(adtrVk, encB, sig)
 	if !ok1 {
 		return 0, ErrSome
 	}
@@ -340,12 +338,7 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 	return epoch, ErrNone
 }
 
-/* TODO: this is a client's keycli. where's the api for getting their own key?
-(for which they already know it's expected val)
-they could do a get and later self audit.
-*/
-
-// Verified through Epoch idx in retval.
+// Audited through Epoch idx in retval.
 func (c *KeyCli) SelfAudit() (Epoch, Error) {
 	id := c.Id
 	numVals := uint64(len(c.Vals))
@@ -368,7 +361,7 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 			expVal = c.Vals[valIdx-1]
 		}
 
-		_, dig, proofTy, proof, err0 := c.Serv.GetIdAtEpoch(id, epoch)
+		_, dig, proofTy, proof, err0 := CallGetIdAtEpoch(c.Serv, id, epoch)
 		if err0 != ErrNone {
 			stop = true
 			continue
@@ -377,7 +370,7 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 			stop = true
 			continue
 		}
-		err1 := merkle.CheckProofTotal(proofTy, proof, id, expVal, dig)
+		err1 := merkle.CheckProof(proofTy, proof, id, expVal, dig)
 		if err1 != ErrNone {
 			stop = true
 			continue
@@ -398,103 +391,3 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 	}
 	return epoch - 1, ErrNone
 }
-
-/*
-// Tests.
-
-// Two clients lookup the same uname, talk to some auditor servers
-// (at least one honest), and assert that their returned keys are the same.
-func testAuditPass(servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address) {
-	// Start the server.
-	go func() {
-		s := NewKeyServ()
-		s.start(servAddr)
-	}()
-	machine.Sleep(1_000_000)
-
-	// Make auditor keys.
-	badSk0, badVk0 := kt_shim.MakeKeys()
-	goodSk0, goodVk0 := kt_shim.MakeKeys()
-	badSk1, badVk1 := kt_shim.MakeKeys()
-	var adtrVks []*kt_shim.VerifierT
-	adtrVks = append(adtrVks, badVk0)
-	adtrVks = append(adtrVks, goodVk0)
-	adtrVks = append(adtrVks, badVk1)
-
-	// Start the auditors.
-	go func() {
-		a := newAuditor(badSk0)
-		a.start(adtrAddrs[0])
-	}()
-	go func() {
-		a := newAuditor(goodSk0)
-		a.start(adtrAddrs[1])
-	}()
-	go func() {
-		a := newAuditor(badSk1)
-		a.start(adtrAddrs[2])
-	}()
-	machine.Sleep(1_000_000)
-
-	// Start the clients.
-	cReg := newKeyCli(servAddr, adtrAddrs, adtrVks)
-	cLook0 := newKeyCli(servAddr, adtrAddrs, adtrVks)
-	cLook1 := newKeyCli(servAddr, adtrAddrs, adtrVks)
-
-	// Register a key.
-	uname0 := uint64(42)
-	key0 := []byte("key0")
-	goodEntry := &shared.UnameKey{Uname: uname0, Key: key0}
-	_, err0 := cReg.register(goodEntry)
-	machine.Assume(err0 == shared.ErrNone)
-
-	// Lookup that uname.
-	epoch0, retKey0, err1 := cLook0.lookup(uname0)
-	machine.Assume(err1 == shared.ErrNone)
-	epoch1, retKey1, err2 := cLook1.lookup(uname0)
-	machine.Assume(err2 == shared.ErrNone)
-
-	// Start the auditors.
-	badAdtr0 := urpc.MakeClient(adtrAddrs[0])
-	goodAdtr0 := urpc.MakeClient(adtrAddrs[1])
-	badAdtr1 := urpc.MakeClient(adtrAddrs[2])
-
-	// Update the bad auditors.
-	uname1 := uint64(43)
-	key1 := []byte("key1")
-	badEntry := &shared.UnameKey{Uname: uname1, Key: key1}
-	badLog := shared.NewKeyLog()
-	badLog.Append(badEntry)
-	badLogB := badLog.Encode()
-	emptyB := make([]byte, 0)
-	err3 := badAdtr0.Call(shared.RpcAdtr_Update, badLogB, &emptyB, 100)
-	machine.Assume(err3 == urpc.ErrNone)
-	err4 := badAdtr1.Call(shared.RpcAdtr_Update, badLogB, &emptyB, 100)
-	machine.Assume(err4 == urpc.ErrNone)
-
-	// Update the good auditor.
-	goodLog := shared.NewKeyLog()
-	goodLog.Append(goodEntry)
-	goodLogB := goodLog.Encode()
-	err5 := goodAdtr0.Call(shared.RpcAdtr_Update, goodLogB, &emptyB, 100)
-	machine.Assume(err5 == urpc.ErrNone)
-
-	// Contact auditors.
-	// A dishonest auditor can give us anything, we don't trust it.
-	// But we call it here to show we can handle its output without panic'ing.
-	_, _ = cLook0.audit(0)
-	auditEpoch0, err6 := cLook0.audit(1)
-	// Could do a more fine-grained check like
-	// "if the sig passed, assert no other err".
-	machine.Assume(err6 == shared.ErrNone)
-
-	_, _ = cLook1.audit(2)
-	auditEpoch1, err7 := cLook1.audit(1)
-	machine.Assume(err7 == shared.ErrNone)
-
-	// Big assert.
-	if epoch0 == epoch1 && epoch0 <= auditEpoch0 && epoch1 <= auditEpoch1 {
-		machine.Assert(shared.BytesEqual(retKey0, retKey1))
-	}
-}
-*/

@@ -230,7 +230,7 @@ func (o *PutReply) Decode(b []byte) ([]byte, Error) {
 
 func CallPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (Epoch, Error) {
 	argB := (&PutArg{Id: id, Val: val}).Encode()
-	var replyB []byte
+    replyB := make([]byte, 0)
 	err0 := cli.Call(RpcKeyServPut, argB, &replyB, 100)
 	if err0 != ErrNone {
 		return 0, err0
@@ -318,7 +318,7 @@ func (o *GetIdAtEpochReply) Decode(b []byte) ([]byte, Error) {
 
 func CallGetIdAtEpoch(cli *urpc.Client, id merkle.Id, epoch Epoch) (merkle.Val, merkle.Digest, merkle.ProofTy, merkle.Proof, Error) {
 	argB := (&GetIdAtEpochArg{Id: id, Epoch: epoch}).Encode()
-	var replyB []byte
+    replyB := make([]byte, 0)
 	err0 := cli.Call(RpcKeyServGetIdAtEpoch, argB, &replyB, 100)
 	if err0 != ErrNone {
 		return nil, nil, false, nil, err0
@@ -406,7 +406,7 @@ func (o *GetIdLatestReply) Decode(b []byte) ([]byte, Error) {
 
 func CallGetIdLatest(cli *urpc.Client, id merkle.Id) (Epoch, merkle.Val, merkle.Digest, merkle.ProofTy, merkle.Proof, Error) {
 	argB := (&GetIdLatestArg{Id: id}).Encode()
-	var replyB []byte
+    replyB := make([]byte, 0)
 	err0 := cli.Call(RpcKeyServGetIdLatest, argB, &replyB, 100)
 	if err0 != ErrNone {
 		return 0, nil, nil, false, nil, err0
@@ -466,7 +466,7 @@ func (o *GetDigestReply) Decode(b []byte) ([]byte, Error) {
 
 func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, Error) {
 	argB := (&GetDigestArg{Epoch: epoch}).Encode()
-	var replyB []byte
+    replyB := make([]byte, 0)
 	err0 := cli.Call(RpcKeyServGetDigest, argB, &replyB, 100)
 	if err0 != ErrNone {
 		return nil, err0
@@ -529,7 +529,7 @@ func (o *GetLinkArg) Encode() []byte {
 
 func CallUpdate(cli *urpc.Client, dig merkle.Digest) Error {
 	argB := (&UpdateArg{Digest: dig}).Encode()
-	var replyB []byte
+    replyB := make([]byte, 0)
 	err0 := cli.Call(RpcAuditorUpdate, argB, &replyB, 100)
 	if err0 != ErrNone {
 		return err0
@@ -586,7 +586,7 @@ func (o *GetLinkReply) Decode(b []byte) ([]byte, Error) {
 
 func CallGetLink(cli *urpc.Client, epoch Epoch) (Link, ffi.Sig, Error) {
 	argB := (&GetLinkArg{Epoch: epoch}).Encode()
-	var replyB []byte
+    replyB := make([]byte, 0)
 	err0 := cli.Call(RpcAuditorGetLink, argB, &replyB, 100)
 	if err0 != ErrNone {
 		return nil, nil, err0

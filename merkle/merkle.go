@@ -2,7 +2,7 @@ package merkle
 
 import (
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/secure-chat/crypto/shim"
+	"github.com/mit-pdos/secure-chat/crypto/ffi"
 	"github.com/mit-pdos/secure-chat/crypto/helpers"
 )
 
@@ -48,7 +48,7 @@ type Node struct {
 func (n *Node) Hash() []byte {
 	if n == nil {
 		// Empty node.
-		return shim.Hash([]byte{EmptyNodeId})
+		return ffi.Hash([]byte{EmptyNodeId})
 	}
 	return n.hash
 }
@@ -108,7 +108,7 @@ type Proof = [][][]byte
 func IsValidHashSl(data [][]byte) bool {
 	var ok = true
 	for _, hash := range data {
-		if uint64(len(hash)) != shim.HashLen {
+		if uint64(len(hash)) != ffi.HashLen {
 			ok = false
 		}
 	}
@@ -162,11 +162,11 @@ func getLeafNodeHash(val Val) []byte {
 }
 
 func getEmptyNodeHash() []byte {
-	return shim.Hash([]byte{EmptyNodeId})
+	return ffi.Hash([]byte{EmptyNodeId})
 }
 
 func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) Error {
-	if uint64(len(proof)) > shim.HashLen {
+	if uint64(len(proof)) > ffi.HashLen {
 		return ErrBadInput
 	}
 	if len(id) < len(proof) {
@@ -234,7 +234,7 @@ func (t *Tree) GetPath(id Id) []*Node {
 		return nodePath
 	}
 	var stop = false
-	for pathIdx := uint64(0); pathIdx < shim.HashLen && !stop; pathIdx++ {
+	for pathIdx := uint64(0); pathIdx < ffi.HashLen && !stop; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
 		nextNode := currNode.Children[pos]
@@ -252,7 +252,7 @@ func (t *Tree) GetPathAddNodes(id Id) []*Node {
 	}
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
-	for pathIdx := uint64(0); pathIdx < shim.HashLen; pathIdx++ {
+	for pathIdx := uint64(0); pathIdx < ffi.HashLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
 		if currNode.Children[pos] == nil {
@@ -264,15 +264,15 @@ func (t *Tree) GetPathAddNodes(id Id) []*Node {
 }
 
 func (t *Tree) Put(id Id, val Val) (Digest, Proof, Error) {
-	if uint64(len(id)) != shim.HashLen {
+	if uint64(len(id)) != ffi.HashLen {
 		return nil, nil, ErrBadInput
 	}
 
 	nodePath := t.GetPathAddNodes(id)
-	nodePath[shim.HashLen].Val = val
-	nodePath[shim.HashLen].UpdateLeafHash()
+	nodePath[ffi.HashLen].Val = val
+	nodePath[ffi.HashLen].UpdateLeafHash()
 	// +1/-1 offsets for Goosable uint64 loop var.
-	for pathIdx := shim.HashLen; pathIdx >= 1; pathIdx-- {
+	for pathIdx := ffi.HashLen; pathIdx >= 1; pathIdx-- {
 		nodePath[pathIdx-1].UpdateInteriorHash()
 	}
 
@@ -283,7 +283,7 @@ func (t *Tree) Put(id Id, val Val) (Digest, Proof, Error) {
 
 // Return ProofTy vs. having sep funcs bc regardless, would want a proof.
 func (t *Tree) Get(id Id) (Val, Digest, ProofTy, Proof, Error) {
-	if uint64(len(id)) != shim.HashLen {
+	if uint64(len(id)) != ffi.HashLen {
 		return nil, nil, false, nil, ErrBadInput
 	}
 	nodePath := t.GetPath(id)
