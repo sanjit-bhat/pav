@@ -1,7 +1,8 @@
 package ktMerkle
 
 import (
-	"github.com/mit-pdos/secure-chat/crypto/shim"
+	"github.com/mit-pdos/gokv/urpc"
+	"github.com/mit-pdos/secure-chat/crypto/ffi"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"github.com/tchajed/marshal"
 )
@@ -166,7 +167,7 @@ func (o *EpochHash) Decode(b []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	hash, b, err := SafeReadBytes(b, shim.HashLen)
+	hash, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -188,7 +189,7 @@ func (o *PutArg) Encode() []byte {
 }
 
 func (o *PutArg) Decode(b []byte) ([]byte, Error) {
-	id, b, err := SafeReadBytes(b, shim.HashLen)
+	id, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -227,6 +228,21 @@ func (o *PutReply) Decode(b []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
+func CallPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (Epoch, Error) {
+	argB := (&PutArg{Id: id, Val: val}).Encode()
+	var replyB []byte
+	err0 := cli.Call(RpcKeyServPut, argB, &replyB, 100)
+	if err0 != ErrNone {
+		return 0, err0
+	}
+	reply := &PutReply{}
+	_, err1 := reply.Decode(replyB)
+	if err1 != ErrNone {
+		return 0, err1
+	}
+	return reply.Epoch, reply.Error
+}
+
 type GetIdAtEpochArg struct {
 	Id    merkle.Id
 	Epoch Epoch
@@ -240,7 +256,7 @@ func (o *GetIdAtEpochArg) Encode() []byte {
 }
 
 func (o *GetIdAtEpochArg) Decode(b []byte) ([]byte, Error) {
-	id, b, err := SafeReadBytes(b, shim.HashLen)
+	id, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -254,10 +270,10 @@ func (o *GetIdAtEpochArg) Decode(b []byte) ([]byte, Error) {
 }
 
 type GetIdAtEpochReply struct {
-	Val     []byte
-	Digest  []byte
-	ProofTy bool
-	Proof   merkle.GenProof
+	Val     merkle.Val
+	Digest  merkle.Digest
+	ProofTy merkle.ProofTy
+	Proof   merkle.Proof
 	Error   Error
 }
 
@@ -276,7 +292,7 @@ func (o *GetIdAtEpochReply) Decode(b []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	digest, b, err := SafeReadBytes(b, shim.HashLen)
+	digest, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -300,6 +316,21 @@ func (o *GetIdAtEpochReply) Decode(b []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
+func CallGetIdAtEpoch(cli *urpc.Client, id merkle.Id, epoch Epoch) (merkle.Val, merkle.Digest, merkle.ProofTy, merkle.Proof, Error) {
+	argB := (&GetIdAtEpochArg{Id: id, Epoch: epoch}).Encode()
+	var replyB []byte
+	err0 := cli.Call(RpcKeyServGetIdAtEpoch, argB, &replyB, 100)
+	if err0 != ErrNone {
+		return nil, nil, false, nil, err0
+	}
+	reply := &GetIdAtEpochReply{}
+	_, err1 := reply.Decode(replyB)
+	if err1 != ErrNone {
+		return nil, nil, false, nil, err1
+	}
+	return reply.Val, reply.Digest, reply.ProofTy, reply.Proof, reply.Error
+}
+
 type GetIdLatestArg struct {
 	Id merkle.Id
 }
@@ -311,7 +342,7 @@ func (o *GetIdLatestArg) Encode() []byte {
 }
 
 func (o *GetIdLatestArg) Decode(b []byte) ([]byte, Error) {
-	id, b, err := SafeReadBytes(b, shim.HashLen)
+	id, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -321,10 +352,10 @@ func (o *GetIdLatestArg) Decode(b []byte) ([]byte, Error) {
 
 type GetIdLatestReply struct {
 	Epoch   Epoch
-	Val     []byte
-	Digest  []byte
-	ProofTy bool
-	Proof   merkle.GenProof
+	Val     merkle.Val
+	Digest  merkle.Digest
+	ProofTy merkle.ProofTy
+	Proof   merkle.Proof
 	Error   Error
 }
 
@@ -348,7 +379,7 @@ func (o *GetIdLatestReply) Decode(b []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	digest, b, err := SafeReadBytes(b, shim.HashLen)
+	digest, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -371,6 +402,21 @@ func (o *GetIdLatestReply) Decode(b []byte) ([]byte, Error) {
 	o.Proof = proof
 	o.Error = error
 	return b, ErrNone
+}
+
+func CallGetIdLatest(cli *urpc.Client, id merkle.Id) (Epoch, merkle.Val, merkle.Digest, merkle.ProofTy, merkle.Proof, Error) {
+	argB := (&GetIdLatestArg{Id: id}).Encode()
+	var replyB []byte
+	err0 := cli.Call(RpcKeyServGetIdLatest, argB, &replyB, 100)
+	if err0 != ErrNone {
+		return 0, nil, nil, false, nil, err0
+	}
+	reply := &GetIdLatestReply{}
+	_, err1 := reply.Decode(replyB)
+	if err1 != ErrNone {
+		return 0, nil, nil, false, nil, err1
+	}
+	return reply.Epoch, reply.Val, reply.Digest, reply.ProofTy, reply.Proof, reply.Error
 }
 
 type GetDigestArg struct {
@@ -405,7 +451,7 @@ func (o *GetDigestReply) Encode() []byte {
 }
 
 func (o *GetDigestReply) Decode(b []byte) ([]byte, Error) {
-	digest, b, err := SafeReadBytes(b, shim.HashLen)
+	digest, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -416,6 +462,21 @@ func (o *GetDigestReply) Decode(b []byte) ([]byte, Error) {
 	o.Digest = digest
 	o.Error = error
 	return b, ErrNone
+}
+
+func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, Error) {
+	argB := (&GetDigestArg{Epoch: epoch}).Encode()
+	var replyB []byte
+	err0 := cli.Call(RpcKeyServGetDigest, argB, &replyB, 100)
+	if err0 != ErrNone {
+		return nil, err0
+	}
+	reply := &GetDigestReply{}
+	_, err1 := reply.Decode(replyB)
+	if err1 != ErrNone {
+		return nil, err1
+	}
+	return reply.Digest, reply.Error
 }
 
 type UpdateArg struct {
@@ -429,7 +490,7 @@ func (o *UpdateArg) Encode() []byte {
 }
 
 func (o *UpdateArg) Decode(b []byte) ([]byte, Error) {
-	digest, b, err := SafeReadBytes(b, shim.HashLen)
+	digest, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -466,6 +527,21 @@ func (o *GetLinkArg) Encode() []byte {
 	return b
 }
 
+func CallUpdate(cli *urpc.Client, dig merkle.Digest) Error {
+	argB := (&UpdateArg{Digest: dig}).Encode()
+	var replyB []byte
+	err0 := cli.Call(RpcAuditorUpdate, argB, &replyB, 100)
+	if err0 != ErrNone {
+		return err0
+	}
+	reply := &UpdateReply{}
+	_, err1 := reply.Decode(replyB)
+	if err1 != ErrNone {
+		return err1
+	}
+	return reply.Error
+}
+
 func (o *GetLinkArg) Decode(b []byte) ([]byte, Error) {
 	epoch, b, err := SafeReadInt(b)
 	if err != ErrNone {
@@ -477,7 +553,7 @@ func (o *GetLinkArg) Decode(b []byte) ([]byte, Error) {
 
 type GetLinkReply struct {
 	Link  Link
-	Sig   shim.Sig
+	Sig   ffi.Sig
 	Error Error
 }
 
@@ -490,11 +566,11 @@ func (o *GetLinkReply) Encode() []byte {
 }
 
 func (o *GetLinkReply) Decode(b []byte) ([]byte, Error) {
-	link, b, err := SafeReadBytes(b, shim.HashLen)
+	link, b, err := SafeReadBytes(b, ffi.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, shim.SigLen)
+	sig, b, err := SafeReadBytes(b, ffi.SigLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -506,4 +582,19 @@ func (o *GetLinkReply) Decode(b []byte) ([]byte, Error) {
 	o.Sig = sig
 	o.Error = error
 	return b, ErrNone
+}
+
+func CallGetLink(cli *urpc.Client, epoch Epoch) (Link, ffi.Sig, Error) {
+	argB := (&GetLinkArg{Epoch: epoch}).Encode()
+	var replyB []byte
+	err0 := cli.Call(RpcAuditorGetLink, argB, &replyB, 100)
+	if err0 != ErrNone {
+		return nil, nil, err0
+	}
+	reply := &GetLinkReply{}
+	_, err1 := reply.Decode(replyB)
+	if err1 != ErrNone {
+		return nil, nil, err1
+	}
+	return reply.Link, reply.Sig, reply.Error
 }
