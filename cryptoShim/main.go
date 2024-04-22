@@ -15,9 +15,9 @@ func Hash(data []byte) []byte {
 
 // Signatures.
 
-type SignerT = struct{}
+type SignerT struct{}
 
-type VerifierT = struct{}
+type VerifierT struct{}
 
 func MakeKeys() (SignerT, VerifierT) {
 	panic("shim")

@@ -16,12 +16,12 @@ const (
 	ErrBadInput  Error = 3
 	ErrPathProof Error = 4
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
-	NumChildren    uint64 = 256
-	EmptyNodeId    byte   = 0
-	LeafNodeId     byte   = 1
-	InteriorNodeId byte   = 2
-	NonmembProofTy        = false
-	MembProofTy           = true
+	NumChildren    uint64  = 256
+	EmptyNodeId    byte    = 0
+	LeafNodeId     byte    = 1
+	InteriorNodeId byte    = 2
+	NonmembProofTy ProofTy = false
+	MembProofTy    ProofTy = true
 )
 
 func CopySlice(b1 []byte) []byte {
@@ -281,10 +281,21 @@ func (t *Tree) Put(id Id, val Val) (Digest, Proof, Error) {
 	return digest, proof, ErrNone
 }
 
+// Goose doesn't support returning more than 4 vars.
+type GetReply struct {
+	Val     Val
+	Digest  Digest
+	ProofTy ProofTy
+	Proof   Proof
+	Error   Error
+}
+
 // Return ProofTy vs. having sep funcs bc regardless, would want a proof.
-func (t *Tree) Get(id Id) (Val, Digest, ProofTy, Proof, Error) {
+func (t *Tree) Get(id Id) *GetReply {
+	errReply := &GetReply{}
 	if uint64(len(id)) != cryptoShim.HashLen {
-		return nil, nil, false, nil, ErrBadInput
+		errReply.Error = ErrBadInput
+		return errReply
 	}
 	nodePath := t.GetPath(id)
 	lastNode := nodePath[uint64(len(nodePath))-1]
@@ -292,9 +303,11 @@ func (t *Tree) Get(id Id) (Val, Digest, ProofTy, Proof, Error) {
 	digest := CopySlice(nodePath[0].Hash())
 	proof := GetChildHashes(nodePath, id)
 	if lastNode == nil {
-		return nil, digest, NonmembProofTy, proof, ErrNone
+		return &GetReply{Val: nil, Digest: digest, ProofTy: NonmembProofTy,
+			Proof: proof, Error: ErrNone}
 	} else {
 		val := CopySlice(lastNode.Val)
-		return val, digest, MembProofTy, proof, ErrNone
+		return &GetReply{Val: val, Digest: digest, ProofTy: MembProofTy,
+			Proof: proof, Error: ErrNone}
 	}
 }

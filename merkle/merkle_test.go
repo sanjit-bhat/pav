@@ -50,29 +50,29 @@ func PutCheck(t *testing.T, tr *Tree, id Id, val Val) {
 }
 
 func GetMembCheck(t *testing.T, tr *Tree, id Id) Val {
-	val, digest, proofTy, proof, err := tr.Get(id)
+	reply := tr.Get(id)
+	if reply.Error != ErrNone {
+		t.Fatal()
+	}
+	if reply.ProofTy != MembProofTy {
+		t.Fatal()
+	}
+	err := CheckProof(MembProofTy, reply.Proof, id, reply.Val, reply.Digest)
 	if err != ErrNone {
 		t.Fatal()
 	}
-	if proofTy != MembProofTy {
-		t.Fatal()
-	}
-	err = CheckProof(MembProofTy, proof, id, val, digest)
-	if err != ErrNone {
-		t.Fatal()
-	}
-	return val
+	return reply.Val
 }
 
 func GetNonmembCheck(t *testing.T, tr *Tree, id Id) {
-	_, digest, proofTy, proof, err := tr.Get(id)
-	if err != ErrNone {
+	reply := tr.Get(id)
+	if reply.Error != ErrNone {
 		t.Fatal()
 	}
-	if proofTy != NonmembProofTy {
+	if reply.ProofTy != NonmembProofTy {
 		t.Fatal()
 	}
-	err = CheckProof(NonmembProofTy, proof, id, nil, digest)
+	err := CheckProof(NonmembProofTy, reply.Proof, id, nil, reply.Digest)
 	if err != ErrNone {
 		t.Fatal()
 	}

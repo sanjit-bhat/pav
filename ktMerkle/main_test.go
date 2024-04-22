@@ -21,31 +21,31 @@ func TestBasicServ(t *testing.T) {
 		t.Fatal()
 	}
 
-	_, _, dig0, _, proof, err := s.GetIdLatest(id)
-	if err != ErrNone {
+	reply0 := s.GetIdLatest(id)
+	if reply0.Error != ErrNone {
 		t.Fatal()
 	}
-	err = merkle.CheckProof(merkle.NonmembProofTy, proof, id, nil, dig0)
+	err = merkle.CheckProof(merkle.NonmembProofTy, reply0.Proof, id, nil, reply0.Digest)
 	if err != ErrNone {
 		t.Fatal()
 	}
 
 	s.UpdateEpoch()
 
-	_, _, dig0, _, proof, err = s.GetIdLatest(id)
-	if err != ErrNone {
+	reply0 = s.GetIdLatest(id)
+	if reply0.Error != ErrNone {
 		t.Fatal()
 	}
-	err = merkle.CheckProof(merkle.MembProofTy, proof, id, val, dig0)
+	err = merkle.CheckProof(merkle.MembProofTy, reply0.Proof, id, val, reply0.Digest)
 	if err != ErrNone {
 		t.Fatal()
 	}
 
-	_, dig0, _, proof, err = s.GetIdAtEpoch(id, 1)
-	if err != ErrNone {
+	reply1 := s.GetIdAtEpoch(id, 1)
+	if reply1.Error != ErrNone {
 		t.Fatal()
 	}
-	err = merkle.CheckProof(merkle.MembProofTy, proof, id, val, dig0)
+	err = merkle.CheckProof(merkle.MembProofTy, reply1.Proof, id, val, reply1.Digest)
 	if err != ErrNone {
 		t.Fatal()
 	}
@@ -54,7 +54,7 @@ func TestBasicServ(t *testing.T) {
 	if err != ErrNone {
 		t.Fatal()
 	}
-	if !bytes.Equal(dig0, dig1) {
+	if !bytes.Equal(reply0.Digest, dig1) {
 		t.Fatal()
 	}
 }

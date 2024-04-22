@@ -4,8 +4,8 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoFFI"
 	"github.com/mit-pdos/secure-chat/cryptoHelpers"
+	"github.com/mit-pdos/secure-chat/cryptoShim"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"sync"
 )
@@ -66,25 +66,29 @@ func (s *KeyServ) Put(id merkle.Id, val merkle.Val) (Epoch, Error) {
 	return nextEpoch, err
 }
 
-func (s *KeyServ) GetIdAtEpoch(id merkle.Id, epoch Epoch) (merkle.Val, merkle.Digest, merkle.ProofTy, merkle.Proof, Error) {
+func (s *KeyServ) GetIdAtEpoch(id merkle.Id, epoch Epoch) *GetIdAtEpochReply {
+	errReply := &GetIdAtEpochReply{}
 	s.Mu.Lock()
 	if epoch >= uint64(len(s.Trees)) {
 		s.Mu.Unlock()
-		return nil, nil, false, nil, ErrSome
+		errReply.Error = ErrSome
+		return errReply
 	}
 	tr := s.Trees[epoch]
-	val, dig, proofT, proof, err := tr.Get(id)
+	reply := tr.Get(id)
 	s.Mu.Unlock()
-	return val, dig, proofT, proof, err
+	return &GetIdAtEpochReply{Val: reply.Val, Digest: reply.Digest,
+		ProofTy: reply.ProofTy, Proof: reply.Proof, Error: reply.Error}
 }
 
-func (s *KeyServ) GetIdLatest(id merkle.Id) (Epoch, merkle.Val, merkle.Digest, merkle.ProofTy, merkle.Proof, Error) {
+func (s *KeyServ) GetIdLatest(id merkle.Id) *GetIdLatestReply {
 	s.Mu.Lock()
 	lastEpoch := uint64(len(s.Trees)) - 1
 	tr := s.Trees[lastEpoch]
-	val, dig, proofT, proof, err := tr.Get(id)
+	reply := tr.Get(id)
 	s.Mu.Unlock()
-	return lastEpoch, val, dig, proofT, proof, err
+	return &GetIdLatestReply{Epoch: lastEpoch, Val: reply.Val, Digest: reply.Digest,
+		ProofTy: reply.ProofTy, Proof: reply.Proof, Error: reply.Error}
 }
 
 func (s *KeyServ) GetDigest(epoch Epoch) (merkle.Digest, Error) {
@@ -129,10 +133,8 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 				*enc_reply = reply.Encode()
 				return
 			}
-			val, dig, proofTy, proof, err1 := s.GetIdAtEpoch(args.Id, args.Epoch)
-			*enc_reply = (&GetIdAtEpochReply{
-				Val: val, Digest: dig, ProofTy: proofTy, Proof: proof,
-				Error: err1}).Encode()
+			reply := s.GetIdAtEpoch(args.Id, args.Epoch)
+			*enc_reply = reply.Encode()
 		}
 
 	handlers[RpcKeyServGetIdLatest] =
@@ -145,10 +147,8 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 				*enc_reply = reply.Encode()
 				return
 			}
-			epoch, val, dig, proofTy, proof, err1 := s.GetIdLatest(args.Id)
-			*enc_reply = (&GetIdLatestReply{
-				Epoch: epoch, Val: val, Digest: dig, ProofTy: proofTy,
-				Proof: proof, Error: err1}).Encode()
+			reply := s.GetIdLatest(args.Id)
+			*enc_reply = reply.Encode()
 		}
 
 	handlers[RpcKeyServGetDigest] =
@@ -172,11 +172,11 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 
 type Auditor struct {
 	Mu    *sync.Mutex
-	Sk    cryptoFFI.SignerT
+	Sk    cryptoShim.SignerT
 	Chain []Link
 }
 
-func NewAuditor(sk cryptoFFI.SignerT) *Auditor {
+func NewAuditor(sk cryptoShim.SignerT) *Auditor {
 	return &Auditor{Mu: new(sync.Mutex), Sk: sk, Chain: nil}
 }
 
@@ -186,7 +186,7 @@ func (a *Auditor) Update(dig merkle.Digest) {
 	a.Mu.Unlock()
 }
 
-func (a *Auditor) GetLink(epoch Epoch) (Link, cryptoFFI.Sig, Error) {
+func (a *Auditor) GetLink(epoch Epoch) (Link, cryptoShim.Sig, Error) {
 	a.Mu.Lock()
 	if epoch >= uint64(len(a.Chain)) {
 		a.Mu.Unlock()
@@ -194,7 +194,7 @@ func (a *Auditor) GetLink(epoch Epoch) (Link, cryptoFFI.Sig, Error) {
 	}
 	link := a.Chain[epoch]
 	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	sig := cryptoFFI.Sign(a.Sk, encB)
+	sig := cryptoShim.Sign(a.Sk, encB)
 	a.Mu.Unlock()
 	return link, sig, ErrNone
 }
@@ -237,7 +237,7 @@ func (a *Auditor) Start(addr grove_ffi.Address) {
 
 type KeyCli struct {
 	Adtrs     []*urpc.Client
-	AdtrVks   []cryptoFFI.VerifierT
+	AdtrVks   []cryptoShim.VerifierT
 	Digs      map[Epoch]merkle.Digest
 	Id        merkle.Id
 	Serv      *urpc.Client
@@ -245,7 +245,7 @@ type KeyCli struct {
 	Vals      []merkle.Val
 }
 
-func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []cryptoFFI.VerifierT) *KeyCli {
+func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []cryptoShim.VerifierT) *KeyCli {
 	c := &KeyCli{}
 	c.Serv = urpc.MakeClient(servAddr)
 	var adtrs []*urpc.Client
@@ -271,26 +271,31 @@ func (c *KeyCli) Put(val merkle.Val) Error {
 }
 
 func (c *KeyCli) Get(id merkle.Id) (merkle.Val, Error) {
-	epoch, val, dig, proofTy, proof, err0 := CallGetIdLatest(c.Serv, id)
+	reply := CallGetIdLatest(c.Serv, id)
+	epoch := reply.Epoch
+	val := reply.Val
+	dig := reply.Digest
+	err0 := reply.Error
 	if err0 != ErrNone {
 		return nil, err0
 	}
 
-	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
+	err1 := merkle.CheckProof(reply.ProofTy, reply.Proof, id, val, dig)
 	if err1 != ErrNone {
 		return nil, err1
 	}
 
 	// If we don't have dig, add it. Otherwise, compare against what we have.
 	origDig, ok := c.Digs[epoch]
+	var err2 Error
 	if ok {
 		if !std.BytesEqual(origDig, dig) {
-			return nil, ErrSome
+			err2 = ErrSome
 		}
 	} else {
 		c.Digs[epoch] = dig
 	}
-	return val, ErrNone
+	return val, err2
 }
 
 // Audited through Epoch idx in retval.
@@ -300,6 +305,7 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 	var link Link
 	var epoch uint64
 	var stop bool
+	// Loop written in weird way bc Goose doesn't support continue in nested Ifs.
 	for !stop {
 		var dig merkle.Digest
 		dig, ok0 := c.Digs[epoch]
@@ -307,13 +313,15 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 			newDig, err0 := CallGetDigest(c.Serv, epoch)
 			if err0 != ErrNone {
 				stop = true
-				continue
+			} else {
+				c.Digs[epoch] = newDig
+				dig = newDig
 			}
-			c.Digs[epoch] = newDig
-			dig = newDig
 		}
-		link = CalcNextLink(link, dig)
-		epoch++
+		if !stop {
+			link = CalcNextLink(link, dig)
+			epoch++
+		}
 	}
 	if epoch == 0 {
 		return 0, ErrSome
@@ -328,7 +336,7 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 	}
 
 	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	ok1 := cryptoFFI.Verify(adtrVk, encB, sig)
+	ok1 := cryptoShim.Verify(adtrVk, encB, sig)
 	if !ok1 {
 		return 0, ErrSome
 	}
@@ -362,16 +370,18 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 			expVal = c.Vals[valIdx-1]
 		}
 
-		_, dig, proofTy, proof, err0 := CallGetIdAtEpoch(c.Serv, id, epoch)
+		reply := CallGetIdAtEpoch(c.Serv, id, epoch)
+		dig := reply.Digest
+		err0 := reply.Error
 		if err0 != ErrNone {
 			stop = true
 			continue
 		}
-		if proofTy != expProofTy {
+		if reply.ProofTy != expProofTy {
 			stop = true
 			continue
 		}
-		err1 := merkle.CheckProof(proofTy, proof, id, expVal, dig)
+		err1 := merkle.CheckProof(reply.ProofTy, reply.Proof, id, expVal, dig)
 		if err1 != ErrNone {
 			stop = true
 			continue
@@ -382,9 +392,10 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 			c.Digs[epoch] = dig
 		} else if !std.BytesEqual(dig, origDig) {
 			stop = true
-			continue
 		}
-		epoch++
+		if !stop {
+			epoch++
+		}
 	}
 	if epoch == 0 {
 		return 0, ErrSome
