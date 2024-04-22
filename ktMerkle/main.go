@@ -4,8 +4,8 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/crypto/ffi"
-	"github.com/mit-pdos/secure-chat/crypto/helpers"
+	"github.com/mit-pdos/secure-chat/cryptoFFI"
+	"github.com/mit-pdos/secure-chat/cryptoHelpers"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"sync"
 )
@@ -30,10 +30,10 @@ func NewKeyServ() *KeyServ {
 }
 
 func CalcNextLink(prevLink Link, data []byte) Link {
-	var hr helpers.Hasher
-	helpers.HasherWrite(&hr, data)
-	helpers.HasherWrite(&hr, prevLink)
-	newLink := helpers.HasherSum(hr, nil)
+	var hr cryptoHelpers.Hasher
+	cryptoHelpers.HasherWrite(&hr, data)
+	cryptoHelpers.HasherWrite(&hr, prevLink)
+	newLink := cryptoHelpers.HasherSum(hr, nil)
 	return newLink
 }
 
@@ -172,11 +172,11 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 
 type Auditor struct {
 	Mu    *sync.Mutex
-	Sk    ffi.SignerT
+	Sk    cryptoFFI.SignerT
 	Chain []Link
 }
 
-func NewAuditor(sk ffi.SignerT) *Auditor {
+func NewAuditor(sk cryptoFFI.SignerT) *Auditor {
 	return &Auditor{Mu: new(sync.Mutex), Sk: sk, Chain: nil}
 }
 
@@ -186,7 +186,7 @@ func (a *Auditor) Update(dig merkle.Digest) {
 	a.Mu.Unlock()
 }
 
-func (a *Auditor) GetLink(epoch Epoch) (Link, ffi.Sig, Error) {
+func (a *Auditor) GetLink(epoch Epoch) (Link, cryptoFFI.Sig, Error) {
 	a.Mu.Lock()
 	if epoch >= uint64(len(a.Chain)) {
 		a.Mu.Unlock()
@@ -194,7 +194,7 @@ func (a *Auditor) GetLink(epoch Epoch) (Link, ffi.Sig, Error) {
 	}
 	link := a.Chain[epoch]
 	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	sig := ffi.Sign(a.Sk, encB)
+	sig := cryptoFFI.Sign(a.Sk, encB)
 	a.Mu.Unlock()
 	return link, sig, ErrNone
 }
@@ -237,7 +237,7 @@ func (a *Auditor) Start(addr grove_ffi.Address) {
 
 type KeyCli struct {
 	Adtrs     []*urpc.Client
-	AdtrVks   []ffi.VerifierT
+	AdtrVks   []cryptoFFI.VerifierT
 	Digs      map[Epoch]merkle.Digest
 	Id        merkle.Id
 	Serv      *urpc.Client
@@ -245,7 +245,7 @@ type KeyCli struct {
 	Vals      []merkle.Val
 }
 
-func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []ffi.VerifierT) *KeyCli {
+func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []cryptoFFI.VerifierT) *KeyCli {
 	c := &KeyCli{}
 	c.Serv = urpc.MakeClient(servAddr)
 	var adtrs []*urpc.Client
@@ -328,7 +328,7 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 	}
 
 	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	ok1 := ffi.Verify(adtrVk, encB, sig)
+	ok1 := cryptoFFI.Verify(adtrVk, encB, sig)
 	if !ok1 {
 		return 0, ErrSome
 	}

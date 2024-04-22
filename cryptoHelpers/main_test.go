@@ -1,8 +1,8 @@
-package helpers
+package cryptoHelpers
 
 import (
 	"bytes"
-	"github.com/mit-pdos/secure-chat/crypto/ffi"
+	"github.com/mit-pdos/secure-chat/cryptoShim"
 	"testing"
 )
 
@@ -13,8 +13,8 @@ func TestHasher(t *testing.T) {
 	hash1 := HasherSum(hr1, nil)
 	var hr2 Hasher
 	hash2 := HasherSum(hr2, nil)
-	hash3 := ffi.Hash(str)
-	hash4 := ffi.Hash(nil)
+	hash3 := cryptoShim.Hash(str)
+	hash4 := cryptoShim.Hash(nil)
 
 	if !bytes.Equal(hash1, hash3) {
 		t.Fatal()
@@ -25,7 +25,7 @@ func TestHasher(t *testing.T) {
 	if bytes.Equal(hash1, hash2) {
 		t.Fatal()
 	}
-	if uint64(len(hash2)) != ffi.HashLen {
+	if uint64(len(hash2)) != cryptoShim.HashLen {
 		t.Fatal()
 	}
 }

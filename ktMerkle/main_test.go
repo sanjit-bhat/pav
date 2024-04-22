@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/crypto/ffi"
+	"github.com/mit-pdos/secure-chat/cryptoFFI"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"sync"
 	"testing"
@@ -14,7 +14,7 @@ import (
 
 func TestBasicServ(t *testing.T) {
 	s := NewKeyServ()
-	id := ffi.Hash([]byte("id"))
+	id := cryptoFFI.Hash([]byte("id"))
 	val := []byte("val")
 	_, err := s.Put(id, val)
 	if err != ErrNone {
@@ -78,8 +78,8 @@ func TestBasicAll(t *testing.T) {
 		s.Start(servAddr)
 	}()
 
-	sk, vk := ffi.MakeKeys()
-	adtrVks := []ffi.VerifierT{vk}
+	sk, vk := cryptoFFI.MakeKeys()
+	adtrVks := []cryptoFFI.VerifierT{vk}
 	adtrAddr := MakeUniqueAddr()
 	adtrAddrs := []grove_ffi.Address{adtrAddr}
 	go func() {
@@ -98,7 +98,7 @@ func TestBasicAll(t *testing.T) {
 		t.Fatal()
 	}
 
-	aliceId := ffi.Hash([]byte("alice"))
+	aliceId := cryptoFFI.Hash([]byte("alice"))
 	alice := NewKeyCli(aliceId, servAddr, adtrAddrs, adtrVks)
 	val0 := []byte("val0")
 	err = alice.Put(val0)

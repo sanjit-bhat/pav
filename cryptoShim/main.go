@@ -1,4 +1,4 @@
-package shim
+package cryptoShim
 
 type Sig = []byte
 

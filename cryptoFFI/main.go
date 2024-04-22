@@ -1,4 +1,4 @@
-package ffi
+package cryptoFFI
 
 import (
 	"crypto/ed25519"
