@@ -160,6 +160,16 @@ func TestBasicAll(t *testing.T) {
 	}
 
 	bob := NewKeyCli(nil, servAddr, adtrAddrs, adtrVks)
+	epoch, val2, err := bob.Get(aliceId)
+	if err != ErrNone {
+		t.Fatal()
+	}
+	if epoch != expMaxEpoch {
+		t.Fatal(epoch)
+	}
+	if !bytes.Equal(val1, val2) {
+		t.Fatal(val1, val2)
+	}
 	epoch, err = bob.Audit(0)
 	if err != ErrNone {
 		t.Fatal()
@@ -167,4 +177,10 @@ func TestBasicAll(t *testing.T) {
 	if epoch != expMaxEpoch {
 		t.Fatal(epoch)
 	}
+}
+
+func TestAgreement(t *testing.T) {
+	servAddr := MakeUniqueAddr()
+	adtrAddr := MakeUniqueAddr()
+	testAgreement(servAddr, adtrAddr)
 }
