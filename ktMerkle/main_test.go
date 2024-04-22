@@ -92,7 +92,7 @@ func TestBasicAll(t *testing.T) {
 	adtrCli := urpc.MakeClient(adtrAddr)
 
 	// Create hist with [None, val0, val0, val1, val1].
-    emptyReplyB := make([]byte, 0)
+	emptyReplyB := make([]byte, 0)
 	err := servCli.Call(RpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
 	if err != ErrNone {
 		t.Fatal()
@@ -134,7 +134,7 @@ func TestBasicAll(t *testing.T) {
 	if err != ErrNone {
 		t.Fatal()
 	}
-	expMaxEpoch := uint64(4)
+	expMaxEpoch := uint64(5)
 	if epoch != expMaxEpoch {
 		t.Fatal(epoch)
 	}

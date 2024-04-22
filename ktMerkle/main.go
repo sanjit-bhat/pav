@@ -318,6 +318,7 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 	if epoch == 0 {
 		return 0, ErrSome
 	}
+	epoch--
 
 	adtr := c.Adtrs[adtrId]
 	adtrVk := c.AdtrVks[adtrId]
@@ -385,9 +386,9 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 		}
 		epoch++
 	}
-
 	if epoch == 0 {
 		return 0, ErrSome
 	}
-	return epoch - 1, ErrNone
+	epoch--
+	return epoch, ErrNone
 }
