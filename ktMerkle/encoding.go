@@ -25,12 +25,6 @@ const (
 	RpcAuditorGetLink      uint64 = 2
 )
 
-func CopySlice(b0 []byte) []byte {
-	b1 := make([]byte, len(b0))
-	copy(b1, b0)
-	return b1
-}
-
 func SafeReadInt(b0 []byte) (uint64, []byte, Error) {
 	var b = b0
 	if uint64(len(b0)) < 8 {

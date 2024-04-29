@@ -24,12 +24,6 @@ const (
 	MembProofTy    ProofTy = true
 )
 
-func CopySlice(b1 []byte) []byte {
-	b2 := make([]byte, len(b1))
-	copy(b2, b1)
-	return b2
-}
-
 // "keys" of the tree.
 // We use term "Id" to differentiate this from the public keys that could be
 // stored in the tree.
@@ -58,8 +52,8 @@ func (n *Node) DeepCopy() *Node {
 		return nil
 	}
 	var n2 = &Node{}
-	n2.Val = CopySlice(n.Val)
-	n2.hash = CopySlice(n.hash)
+	n2.Val = std.BytesClone(n.Val)
+	n2.hash = std.BytesClone(n.hash)
 	children := make([]*Node, len(n.Children))
 	for i, c := range n.Children {
 		children[i] = c.DeepCopy()
@@ -207,7 +201,7 @@ func (t *Tree) Digest() Digest {
 
 func AppendNode2D(dst *[][]byte, src []*Node) {
 	for _, sl := range src {
-		*dst = append(*dst, CopySlice(sl.Hash()))
+		*dst = append(*dst, std.BytesClone(sl.Hash()))
 	}
 }
 
@@ -276,7 +270,7 @@ func (t *Tree) Put(id Id, val Val) (Digest, Proof, Error) {
 		nodePath[pathIdx-1].UpdateInteriorHash()
 	}
 
-	digest := CopySlice(nodePath[0].Hash())
+	digest := std.BytesClone(nodePath[0].Hash())
 	proof := GetChildHashes(nodePath, id)
 	return digest, proof, ErrNone
 }
@@ -300,13 +294,13 @@ func (t *Tree) Get(id Id) *GetReply {
 	nodePath := t.GetPath(id)
 	lastNode := nodePath[uint64(len(nodePath))-1]
 
-	digest := CopySlice(nodePath[0].Hash())
+	digest := std.BytesClone(nodePath[0].Hash())
 	proof := GetChildHashes(nodePath, id)
 	if lastNode == nil {
 		return &GetReply{Val: nil, Digest: digest, ProofTy: NonmembProofTy,
 			Proof: proof, Error: ErrNone}
 	} else {
-		val := CopySlice(lastNode.Val)
+		val := std.BytesClone(lastNode.Val)
 		return &GetReply{Val: val, Digest: digest, ProofTy: MembProofTy,
 			Proof: proof, Error: ErrNone}
 	}
