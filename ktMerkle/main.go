@@ -181,10 +181,15 @@ func NewAuditor(sk cryptoShim.SignerT) *Auditor {
 	return &Auditor{Mu: new(sync.Mutex), Sk: sk, Chain: nil}
 }
 
-func (a *Auditor) Update(dig merkle.Digest) {
+func (a *Auditor) Update(epoch Epoch, dig merkle.Digest) Error {
 	a.Mu.Lock()
+	if epoch != uint64(len(a.Chain)) {
+		a.Mu.Unlock()
+		return ErrSome
+	}
 	ExtendChain(&a.Chain, dig)
 	a.Mu.Unlock()
+	return ErrNone
 }
 
 func (a *Auditor) GetLink(epoch Epoch) (Link, cryptoShim.Sig, Error) {
@@ -213,8 +218,8 @@ func (a *Auditor) Start(addr grove_ffi.Address) {
 				*enc_reply = reply.Encode()
 				return
 			}
-			a.Update(args.Digest)
-			*enc_reply = (&UpdateReply{Error: ErrNone}).Encode()
+			err1 := a.Update(args.Epoch, args.Digest)
+			*enc_reply = (&UpdateReply{Error: err1}).Encode()
 		}
 
 	handlers[RpcAuditorGetLink] =
@@ -405,6 +410,28 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 	return epoch, ErrNone
 }
 
+func UpdateAdtrDigs(servCli, adtrCli *urpc.Client) (Epoch, Error) {
+	var err Error
+	var epoch uint64 = 0
+	for {
+		dig, err0 := CallGetDigest(servCli, epoch)
+		if err0 != ErrNone {
+			break
+		}
+		err1 := CallUpdate(adtrCli, epoch, dig)
+		if err1 != ErrNone {
+			err = ErrSome
+			break
+		}
+		epoch++
+	}
+	if err != ErrNone || epoch == 0 {
+		return 0, err
+	}
+	epoch--
+	return epoch, ErrNone
+}
+
 func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	go func() {
 		s := NewKeyServ()
@@ -433,29 +460,24 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	err1 := servCli.Call(RpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
 	machine.Assume(err1 == ErrNone)
 
-	dig0, err2 := CallGetDigest(servCli, 0)
+	epochAdtr, err2 := UpdateAdtrDigs(servCli, adtrCli)
 	machine.Assume(err2 == ErrNone)
-	dig1, err3 := CallGetDigest(servCli, 0)
-	machine.Assume(err3 == ErrNone)
-	err4 := CallUpdate(adtrCli, dig0)
-	machine.Assume(err4 == ErrNone)
-	err5 := CallUpdate(adtrCli, dig1)
-	machine.Assume(err5 == ErrNone)
+	machine.Assume(epochAdtr == uint64(1))
 
 	bobId := cryptoShim.Hash([]byte("bob"))
 	bobCli := NewKeyCli(bobId, servAddr, adtrAddrs, adtrVks)
 	charlieId := cryptoShim.Hash([]byte("charlie"))
 	charlieCli := NewKeyCli(charlieId, servAddr, adtrAddrs, adtrVks)
 
-	epoch0, val0, err6 := bobCli.Get(aliceId)
-	machine.Assume(err6 == ErrNone)
-	epoch1, val1, err7 := charlieCli.Get(aliceId)
-	machine.Assume(err7 == ErrNone)
+	epoch0, val0, err3 := bobCli.Get(aliceId)
+	machine.Assume(err3 == ErrNone)
+	epoch1, val1, err4 := charlieCli.Get(aliceId)
+	machine.Assume(err4 == ErrNone)
 
-	epoch2, err8 := bobCli.Audit(0)
-	machine.Assume(err8 == ErrNone)
-	epoch3, err9 := charlieCli.Audit(0)
-	machine.Assume(err9 == ErrNone)
+	epoch2, err5 := bobCli.Audit(0)
+	machine.Assume(err5 == ErrNone)
+	epoch3, err6 := charlieCli.Audit(0)
+	machine.Assume(err6 == ErrNone)
 
 	if epoch0 == epoch1 && epoch0 <= epoch2 && epoch1 <= epoch3 {
 		machine.Assert(std.BytesEqual(val0, val1))

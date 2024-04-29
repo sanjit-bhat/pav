@@ -499,21 +499,28 @@ func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, Error) {
 }
 
 type UpdateArg struct {
+	Epoch  Epoch
 	Digest merkle.Digest
 }
 
 func (o *UpdateArg) Encode() []byte {
 	var b = make([]byte, 0)
+	b = marshal.WriteInt(b, o.Epoch)
 	b = marshal.WriteBytes(b, o.Digest)
 	return b
 }
 
 func (o *UpdateArg) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
+	epoch, b, err := SafeReadInt(b)
+	if err != ErrNone {
+		return nil, err
+	}
 	digest, b, err := SafeReadBytes(b, cryptoShim.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
+	o.Epoch = epoch
 	o.Digest = digest
 	return b, ErrNone
 }
@@ -538,18 +545,8 @@ func (o *UpdateReply) Decode(b0 []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
-type GetLinkArg struct {
-	Epoch Epoch
-}
-
-func (o *GetLinkArg) Encode() []byte {
-	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.Epoch)
-	return b
-}
-
-func CallUpdate(cli *urpc.Client, dig merkle.Digest) Error {
-	argB := (&UpdateArg{Digest: dig}).Encode()
+func CallUpdate(cli *urpc.Client, epoch Epoch, dig merkle.Digest) Error {
+	argB := (&UpdateArg{Epoch: epoch, Digest: dig}).Encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(RpcAuditorUpdate, argB, &replyB, 100)
 	if err0 != ErrNone {
@@ -561,6 +558,16 @@ func CallUpdate(cli *urpc.Client, dig merkle.Digest) Error {
 		return err1
 	}
 	return reply.Error
+}
+
+type GetLinkArg struct {
+	Epoch Epoch
+}
+
+func (o *GetLinkArg) Encode() []byte {
+	var b = make([]byte, 0)
+	b = marshal.WriteInt(b, o.Epoch)
+	return b
 }
 
 func (o *GetLinkArg) Decode(b0 []byte) ([]byte, Error) {
@@ -621,4 +628,3 @@ func CallGetLink(cli *urpc.Client, epoch Epoch) (Link, cryptoShim.Sig, Error) {
 	}
 	return reply.Link, reply.Sig, reply.Error
 }
-
