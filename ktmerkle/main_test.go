@@ -13,18 +13,30 @@ import (
 )
 
 func TestBasicServ(t *testing.T) {
-	servSk, _ := cryptoffi.MakeKeys()
+	servSk, servPk := cryptoffi.MakeKeys()
 	s := newKeyServ(servSk)
 	id := cryptoffi.Hash([]byte("id"))
 	val := []byte("val")
-	_, _, err := s.put(id, val)
+	epoch, sig, err := s.put(id, val)
 	if err != errNone {
 		t.Fatal()
 	}
-	// TODO: maybe want to test sigs coming from these funcs?
+	if epoch != 1 {
+		t.Fatal(epoch)
+	}
+	enc0 := (&idValEpoch{id: id, val: val, epoch: epoch}).encode()
+	ok := cryptoffi.Verify(servPk, enc0, sig)
+	if !ok {
+		t.Fatal()
+	}
 
 	reply0 := s.getIdLatest(id)
 	if reply0.error != errNone {
+		t.Fatal()
+	}
+	enc1 := (&epochHash{epoch: reply0.epoch, hash: reply0.digest}).encode()
+	ok = cryptoffi.Verify(servPk, enc1, reply0.sig)
+	if !ok {
 		t.Fatal()
 	}
 	err = merkle.CheckProof(merkle.NonmembProofTy, reply0.proof, id, nil, reply0.digest)
@@ -38,6 +50,11 @@ func TestBasicServ(t *testing.T) {
 	if reply0.error != errNone {
 		t.Fatal()
 	}
+	enc1 = (&epochHash{epoch: reply0.epoch, hash: reply0.digest}).encode()
+	ok = cryptoffi.Verify(servPk, enc1, reply0.sig)
+	if !ok {
+		t.Fatal()
+	}
 	err = merkle.CheckProof(merkle.MembProofTy, reply0.proof, id, val, reply0.digest)
 	if err != errNone {
 		t.Fatal()
@@ -47,16 +64,26 @@ func TestBasicServ(t *testing.T) {
 	if reply1.error != errNone {
 		t.Fatal()
 	}
+	enc1 = (&epochHash{epoch: 1, hash: reply1.digest}).encode()
+	ok = cryptoffi.Verify(servPk, enc1, reply1.sig)
+	if !ok {
+		t.Fatal()
+	}
 	err = merkle.CheckProof(merkle.MembProofTy, reply1.proof, id, val, reply1.digest)
 	if err != errNone {
 		t.Fatal()
 	}
 
-	dig1, _, err := s.getDigest(1)
+	dig1, sig, err := s.getDigest(1)
 	if err != errNone {
 		t.Fatal()
 	}
 	if !bytes.Equal(reply0.digest, dig1) {
+		t.Fatal()
+	}
+	enc1 = (&epochHash{epoch: 1, hash: dig1}).encode()
+	ok = cryptoffi.Verify(servPk, enc1, sig)
+	if !ok {
 		t.Fatal()
 	}
 }
@@ -73,7 +100,8 @@ func makeUniqueAddr() uint64 {
 	return addr
 }
 
-// Until we have proof tests for everything, this provides coverage.
+// TestBasicAll provides coverage for all funcs.
+// Useful until we make proof tests.
 func TestBasicAll(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	servSk, servPk := cryptoffi.MakeKeys()
@@ -105,10 +133,12 @@ func TestBasicAll(t *testing.T) {
 	aliceId := cryptoffi.Hash([]byte("alice"))
 	alice := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
 	val0 := []byte("val0")
-	_, err := alice.put(val0)
-	// TODO: maybe test alice Put epoch output
+	epoch, err := alice.put(val0)
 	if err != errNone {
 		t.Fatal()
+	}
+	if epoch != 1 {
+		t.Fatal(epoch)
 	}
 
 	errRpc = servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
@@ -121,9 +151,12 @@ func TestBasicAll(t *testing.T) {
 	}
 
 	val1 := []byte("val1")
-	_, err = alice.put(val1)
+	epoch, err = alice.put(val1)
 	if err != errNone {
 		t.Fatal()
+	}
+	if epoch != 3 {
+		t.Fatal(epoch)
 	}
 
 	errRpc = servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
