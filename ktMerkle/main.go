@@ -1,11 +1,11 @@
-package ktMerkle
+package ktmerkle
 
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoFFI"
-	"github.com/mit-pdos/secure-chat/cryptoHelpers"
+	"github.com/mit-pdos/secure-chat/cryptoffi"
+	"github.com/mit-pdos/secure-chat/cryptoutil"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"github.com/tchajed/goose/machine"
 	"sync"
@@ -14,14 +14,14 @@ import (
 // Key server.
 
 type keyServ struct {
-	sk     cryptoFFI.PrivateKey
+	sk     cryptoffi.PrivateKey
 	mu     *sync.Mutex
 	trees  []*merkle.Tree
 	nextTr *merkle.Tree
 	chain  []linkTy
 }
 
-func newKeyServ(sk cryptoFFI.PrivateKey) *keyServ {
+func newKeyServ(sk cryptoffi.PrivateKey) *keyServ {
 	s := &keyServ{}
 	s.sk = sk
 	s.mu = new(sync.Mutex)
@@ -33,10 +33,10 @@ func newKeyServ(sk cryptoFFI.PrivateKey) *keyServ {
 }
 
 func calcNextLink(prevLink linkTy, data []byte) linkTy {
-	var hr cryptoHelpers.Hasher
-	cryptoHelpers.HasherWrite(&hr, data)
-	cryptoHelpers.HasherWrite(&hr, prevLink)
-	newLink := cryptoHelpers.HasherSum(hr, nil)
+	var hr cryptoutil.Hasher
+	cryptoutil.HasherWrite(&hr, data)
+	cryptoutil.HasherWrite(&hr, prevLink)
+	newLink := cryptoutil.HasherSum(hr, nil)
 	return newLink
 }
 
@@ -62,12 +62,12 @@ func (s *keyServ) updateEpoch() {
 }
 
 // Returns the epoch at which this val should be visible.
-func (s *keyServ) put(id merkle.Id, val merkle.Val) (epochTy, cryptoFFI.Sig, errorTy) {
+func (s *keyServ) put(id merkle.Id, val merkle.Val) (epochTy, cryptoffi.Sig, errorTy) {
 	s.mu.Lock()
 	nextEpoch := uint64(len(s.trees))
 	_, _, err := s.nextTr.Put(id, val)
 	enc := (&idValEpoch{id: id, val: val, epoch: nextEpoch}).encode()
-	sig := cryptoFFI.Sign(s.sk, enc)
+	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return nextEpoch, sig, err
 }
@@ -83,7 +83,7 @@ func (s *keyServ) getIdAtEpoch(id merkle.Id, epoch epochTy) *getIdAtEpochReply {
 	tr := s.trees[epoch]
 	reply := tr.Get(id)
 	enc := (&epochHash{epoch: epoch, hash: reply.Digest}).encode()
-	sig := cryptoFFI.Sign(s.sk, enc)
+	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return &getIdAtEpochReply{digest: reply.Digest, proof: reply.Proof,
 		sig: sig, error: reply.Error}
@@ -95,13 +95,13 @@ func (s *keyServ) getIdLatest(id merkle.Id) *getIdLatestReply {
 	tr := s.trees[lastEpoch]
 	reply := tr.Get(id)
 	enc := (&epochHash{epoch: lastEpoch, hash: reply.Digest}).encode()
-	sig := cryptoFFI.Sign(s.sk, enc)
+	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return &getIdLatestReply{epoch: lastEpoch, val: reply.Val, digest: reply.Digest,
 		proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
 }
 
-func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoFFI.Sig, errorTy) {
+func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
 	s.mu.Lock()
 	if epoch >= uint64(len(s.trees)) {
 		s.mu.Unlock()
@@ -110,7 +110,7 @@ func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoFFI.Sig, errorT
 	tr := s.trees[epoch]
 	dig := tr.Digest()
 	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
-	sig := cryptoFFI.Sign(s.sk, enc)
+	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return dig, sig, errNone
 }
@@ -184,19 +184,19 @@ func (s *keyServ) start(addr grove_ffi.Address) {
 
 type auditor struct {
 	mu     *sync.Mutex
-	sk     cryptoFFI.PrivateKey
-	servPk cryptoFFI.PublicKey
+	sk     cryptoffi.PrivateKey
+	servPk cryptoffi.PublicKey
 	chain  []linkTy
 }
 
-func newAuditor(sk cryptoFFI.PrivateKey, servPk cryptoFFI.PublicKey) *auditor {
+func newAuditor(sk cryptoffi.PrivateKey, servPk cryptoffi.PublicKey) *auditor {
 	return &auditor{mu: new(sync.Mutex), sk: sk, servPk: servPk, chain: nil}
 }
 
-func (a *auditor) update(epoch epochTy, dig merkle.Digest, sig cryptoFFI.Sig) errorTy {
+func (a *auditor) update(epoch epochTy, dig merkle.Digest, sig cryptoffi.Sig) errorTy {
 	a.mu.Lock()
 	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
-	ok := cryptoFFI.Verify(a.servPk, enc, sig)
+	ok := cryptoffi.Verify(a.servPk, enc, sig)
 	if !ok {
 		a.mu.Unlock()
 		return errSome
@@ -210,7 +210,7 @@ func (a *auditor) update(epoch epochTy, dig merkle.Digest, sig cryptoFFI.Sig) er
 	return errNone
 }
 
-func (a *auditor) getLink(epoch epochTy) (linkTy, cryptoFFI.Sig, errorTy) {
+func (a *auditor) getLink(epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
 	a.mu.Lock()
 	if epoch >= uint64(len(a.chain)) {
 		a.mu.Unlock()
@@ -218,7 +218,7 @@ func (a *auditor) getLink(epoch epochTy) (linkTy, cryptoFFI.Sig, errorTy) {
 	}
 	link := a.chain[epoch]
 	enc := (&epochHash{epoch: epoch, hash: link}).encode()
-	sig := cryptoFFI.Sign(a.sk, enc)
+	sig := cryptoffi.Sign(a.sk, enc)
 	a.mu.Unlock()
 	return link, sig, errNone
 }
@@ -261,8 +261,8 @@ func (a *auditor) start(addr grove_ffi.Address) {
 
 type keyCli struct {
 	adtrs     []*urpc.Client
-	adtrPks   []cryptoFFI.PublicKey
-	servPk    cryptoFFI.PublicKey
+	adtrPks   []cryptoffi.PublicKey
+	servPk    cryptoffi.PublicKey
 	digs      map[epochTy]merkle.Digest
 	id        merkle.Id
 	serv      *urpc.Client
@@ -270,7 +270,7 @@ type keyCli struct {
 	vals      []merkle.Val
 }
 
-func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrPks []cryptoFFI.PublicKey, servPk cryptoFFI.PublicKey) *keyCli {
+func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrPks []cryptoffi.PublicKey, servPk cryptoffi.PublicKey) *keyCli {
 	c := &keyCli{}
 	c.serv = urpc.MakeClient(servAddr)
 	var adtrs []*urpc.Client
@@ -292,7 +292,7 @@ func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
 		return 0, err
 	}
 	enc := (&idValEpoch{id: c.id, val: val, epoch: epoch}).encode()
-	ok := cryptoFFI.Verify(c.servPk, enc, sig)
+	ok := cryptoffi.Verify(c.servPk, enc, sig)
 	if !ok {
 		return 0, errSome
 	}
@@ -315,7 +315,7 @@ func (c *keyCli) get(id merkle.Id) (epochTy, merkle.Val, errorTy) {
 	}
 
 	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
-	ok0 := cryptoFFI.Verify(c.servPk, enc, sig)
+	ok0 := cryptoffi.Verify(c.servPk, enc, sig)
 	if !ok0 {
 		return 0, nil, errSome
 	}
@@ -349,7 +349,7 @@ func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
 		return nil, err
 	}
 	enc := (&epochHash{epoch: epoch, hash: newDig}).encode()
-	ok1 := cryptoFFI.Verify(c.servPk, enc, sig)
+	ok1 := cryptoffi.Verify(c.servPk, enc, sig)
 	if !ok1 {
 		return nil, errSome
 	}
@@ -384,7 +384,7 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	}
 
 	enc := (&epochHash{epoch: epoch, hash: link}).encode()
-	ok := cryptoFFI.Verify(adtrPk, enc, sig)
+	ok := cryptoffi.Verify(adtrPk, enc, sig)
 	if !ok {
 		return 0, errSome
 	}
@@ -406,7 +406,7 @@ func (c *keyCli) checkProofWithExpected(epoch epochTy, val merkle.Val, proofTy m
 		return false
 	}
 	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
-	ok0 := cryptoFFI.Verify(c.servPk, enc, sig)
+	ok0 := cryptoffi.Verify(c.servPk, enc, sig)
 	if !ok0 {
 		return false
 	}
@@ -476,14 +476,14 @@ func updateAdtrDigs(servCli, adtrCli *urpc.Client) epochTy {
 }
 
 func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
-	servSk, servPk := cryptoFFI.MakeKeys()
+	servSk, servPk := cryptoffi.MakeKeys()
 	go func() {
 		s := newKeyServ(servSk)
 		s.start(servAddr)
 	}()
 
-	adtrSk, adtrPk := cryptoFFI.MakeKeys()
-	adtrPks := []cryptoFFI.PublicKey{adtrPk}
+	adtrSk, adtrPk := cryptoffi.MakeKeys()
+	adtrPks := []cryptoffi.PublicKey{adtrPk}
 	adtrAddrs := []grove_ffi.Address{adtrAddr}
 	go func() {
 		a := newAuditor(adtrSk, servPk)
@@ -494,7 +494,7 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	servCli := urpc.MakeClient(servAddr)
 	adtrCli := urpc.MakeClient(adtrAddr)
 
-	aliceId := cryptoFFI.Hash([]byte("alice"))
+	aliceId := cryptoffi.Hash([]byte("alice"))
 	aliceVal := []byte("val")
 	aliceCli := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
 	_, err0 := aliceCli.put(aliceVal)
@@ -507,9 +507,9 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	epochAdtr := updateAdtrDigs(servCli, adtrCli)
 	machine.Assume(epochAdtr == uint64(2))
 
-	bobId := cryptoFFI.Hash([]byte("bob"))
+	bobId := cryptoffi.Hash([]byte("bob"))
 	bobCli := newKeyCli(bobId, servAddr, adtrAddrs, adtrPks, servPk)
-	charlieId := cryptoFFI.Hash([]byte("charlie"))
+	charlieId := cryptoffi.Hash([]byte("charlie"))
 	charlieCli := newKeyCli(charlieId, servAddr, adtrAddrs, adtrPks, servPk)
 
 	epoch0, val0, err3 := bobCli.get(aliceId)

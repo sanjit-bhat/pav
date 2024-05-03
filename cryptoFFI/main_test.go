@@ -1,4 +1,4 @@
-package cryptoFFI
+package cryptoffi
 
 import (
 	"bytes"

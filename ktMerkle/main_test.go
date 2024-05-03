@@ -1,11 +1,11 @@
-package ktMerkle
+package ktmerkle
 
 import (
 	"bytes"
 	"fmt"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoFFI"
+	"github.com/mit-pdos/secure-chat/cryptoffi"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"sync"
 	"testing"
@@ -13,9 +13,9 @@ import (
 )
 
 func TestBasicServ(t *testing.T) {
-	servSk, _ := cryptoFFI.MakeKeys()
+	servSk, _ := cryptoffi.MakeKeys()
 	s := newKeyServ(servSk)
-	id := cryptoFFI.Hash([]byte("id"))
+	id := cryptoffi.Hash([]byte("id"))
 	val := []byte("val")
 	_, _, err := s.put(id, val)
 	if err != errNone {
@@ -76,14 +76,14 @@ func makeUniqueAddr() uint64 {
 // Until we have proof tests for everything, this provides coverage.
 func TestBasicAll(t *testing.T) {
 	servAddr := makeUniqueAddr()
-	servSk, servPk := cryptoFFI.MakeKeys()
+	servSk, servPk := cryptoffi.MakeKeys()
 	go func() {
 		s := newKeyServ(servSk)
 		s.start(servAddr)
 	}()
 
-	adtrSk, adtrPk := cryptoFFI.MakeKeys()
-	adtrPks := []cryptoFFI.PublicKey{adtrPk}
+	adtrSk, adtrPk := cryptoffi.MakeKeys()
+	adtrPks := []cryptoffi.PublicKey{adtrPk}
 	adtrAddr := makeUniqueAddr()
 	adtrAddrs := []grove_ffi.Address{adtrAddr}
 	go func() {
@@ -102,7 +102,7 @@ func TestBasicAll(t *testing.T) {
 		t.Fatal()
 	}
 
-	aliceId := cryptoFFI.Hash([]byte("alice"))
+	aliceId := cryptoffi.Hash([]byte("alice"))
 	alice := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
 	val0 := []byte("val0")
     _, err := alice.put(val0)
@@ -142,7 +142,7 @@ func TestBasicAll(t *testing.T) {
 	}
 
 	var digs []merkle.Digest
-	var sigs []cryptoFFI.Sig
+	var sigs []cryptoffi.Sig
 	for epoch := uint64(0); ; epoch++ {
 		dig, sig, err := callGetDigest(servCli, epoch)
 		if err != errNone {

@@ -2,7 +2,7 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/mit-pdos/secure-chat/cryptoFFI"
+	"github.com/mit-pdos/secure-chat/cryptoffi"
 	"testing"
 )
 
@@ -79,7 +79,7 @@ func GetNonmembCheck(t *testing.T, tr *Tree, id Id) {
 }
 
 func TestOnePut(t *testing.T) {
-	id0 := make([]byte, cryptoFFI.HashLen)
+	id0 := make([]byte, cryptoffi.HashLen)
 	val0 := make([]byte, 1)
 
 	tr := &Tree{}
@@ -91,9 +91,9 @@ func TestOnePut(t *testing.T) {
 }
 
 func TestTwoPut(t *testing.T) {
-	id0 := cryptoFFI.Hash([]byte("id0"))
+	id0 := cryptoffi.Hash([]byte("id0"))
 	val0 := []byte("val0")
-	id1 := cryptoFFI.Hash([]byte("id1"))
+	id1 := cryptoffi.Hash([]byte("id1"))
 	val1 := []byte("val1")
 
 	tr := &Tree{}
@@ -110,7 +110,7 @@ func TestTwoPut(t *testing.T) {
 }
 
 func TestOverwrite(t *testing.T) {
-	id0 := cryptoFFI.Hash([]byte("id0"))
+	id0 := cryptoffi.Hash([]byte("id0"))
 	val0 := []byte("val0")
 	val1 := []byte("val1")
 
@@ -124,9 +124,9 @@ func TestOverwrite(t *testing.T) {
 }
 
 func TestGetNil(t *testing.T) {
-	id0 := make([]byte, cryptoFFI.HashLen)
+	id0 := make([]byte, cryptoffi.HashLen)
 	val0 := []byte("val0")
-	id1 := make([]byte, cryptoFFI.HashLen)
+	id1 := make([]byte, cryptoffi.HashLen)
 	id1[0] = 1
 
 	tr := &Tree{}
@@ -135,16 +135,16 @@ func TestGetNil(t *testing.T) {
 }
 
 func TestGetNilEmpty(t *testing.T) {
-	id0 := make([]byte, cryptoFFI.HashLen)
+	id0 := make([]byte, cryptoffi.HashLen)
 	tr := &Tree{}
 	GetNonmembCheck(t, tr, id0)
 }
 
 func TestGetNilBottom(t *testing.T) {
-	id0 := make([]byte, cryptoFFI.HashLen)
+	id0 := make([]byte, cryptoffi.HashLen)
 	val0 := []byte("val0")
-	id1 := make([]byte, cryptoFFI.HashLen)
-	id1[cryptoFFI.HashLen-1] = 1
+	id1 := make([]byte, cryptoffi.HashLen)
+	id1[cryptoffi.HashLen-1] = 1
 
 	tr := &Tree{}
 	PutCheck(t, tr, id0, val0)
@@ -156,7 +156,7 @@ func TestGetNilBottom(t *testing.T) {
 // This could happen if, e.g., nil children weren't factored into their
 // parent's hash.
 func TestAttackChildEmptyHashing(t *testing.T) {
-	id0 := make([]byte, cryptoFFI.HashLen)
+	id0 := make([]byte, cryptoffi.HashLen)
 	val0 := []byte("val0")
 
 	tr := &Tree{}
@@ -185,11 +185,11 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 // This attack exploits the bug to prove membership of a nil
 // value at some empty node in the tree.
 func TestAttackPutNilEmptyNode(t *testing.T) {
-	id0 := make([]byte, cryptoFFI.HashLen)
-	id1 := make([]byte, cryptoFFI.HashLen)
+	id0 := make([]byte, cryptoffi.HashLen)
+	id1 := make([]byte, cryptoffi.HashLen)
 	// It's important that the change be at the end since that's where
 	// membership proofs will still be valid.
-	id1[cryptoFFI.HashLen-1] = 1
+	id1[cryptoffi.HashLen-1] = 1
 
 	tr := &Tree{}
 	digest0, proof0, err := tr.Put(id0, nil)
