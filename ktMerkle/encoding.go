@@ -3,6 +3,7 @@ package ktmerkle
 import (
 	"github.com/mit-pdos/gokv/urpc"
 	"github.com/mit-pdos/secure-chat/cryptoffi"
+	"github.com/mit-pdos/secure-chat/marshalutil"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"github.com/tchajed/marshal"
 )
@@ -26,135 +27,6 @@ const (
 	rpcAuditorGetLink      uint64 = 2
 )
 
-func SafeReadInt(b0 []byte) (uint64, []byte, errorTy) {
-	var b = b0
-	if uint64(len(b0)) < 8 {
-		return 0, nil, errSome
-	}
-	data, b := marshal.ReadInt(b)
-	return data, b, errNone
-}
-
-func SafeReadBytes(b0 []byte, length uint64) ([]byte, []byte, errorTy) {
-	var b = b0
-	if uint64(len(b)) < length {
-		return nil, nil, errSome
-	}
-	data, b := marshal.ReadBytes(b, length)
-	return data, b, errNone
-}
-
-func WriteBool(b0 []byte, data bool) []byte {
-	var b = b0
-	var data1 uint64
-	if data {
-		data1 = 1
-	}
-	b = marshal.WriteInt(b, data1)
-	return b
-}
-
-func ReadBool(b0 []byte) (bool, []byte, errorTy) {
-	var b = b0
-	data, b, err := SafeReadInt(b)
-	if err != errNone {
-		return false, nil, err
-	}
-	var data1 bool
-	if data != 0 {
-		data1 = true
-	}
-	return data1, b, errNone
-}
-
-func WriteSlice1D(b0 []byte, data []byte) []byte {
-	var b = b0
-	b = marshal.WriteInt(b, uint64(len(data)))
-	b = marshal.WriteBytes(b, data)
-	return b
-}
-
-func WriteSlice2D(b0 []byte, data [][]byte) []byte {
-	var b = b0
-	b = marshal.WriteInt(b, uint64(len(data)))
-	for _, data1 := range data {
-		b = WriteSlice1D(b, data1)
-	}
-	return b
-}
-
-func WriteSlice3D(b0 []byte, data [][][]byte) []byte {
-	var b = b0
-	b = marshal.WriteInt(b, uint64(len(data)))
-	for _, data1 := range data {
-		b = WriteSlice2D(b, data1)
-	}
-	return b
-}
-
-func ReadSlice1D(b0 []byte) ([]byte, []byte, errorTy) {
-	var b = b0
-	length, b, err := SafeReadInt(b)
-	if err != errNone {
-		return nil, nil, err
-	}
-	data, b, err := SafeReadBytes(b, length)
-	if err != errNone {
-		return nil, nil, err
-	}
-	return data, b, errNone
-}
-
-func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
-	var b = b0
-	length, b, err := SafeReadInt(b)
-	if err != errNone {
-		return nil, nil, err
-	}
-	var data0 [][]byte
-	var err0 errorTy
-	var i uint64
-	for ; i < length; i++ {
-		var data1 []byte
-		var err1 errorTy
-		data1, b, err1 = ReadSlice1D(b)
-		if err1 != errNone {
-			err0 = err1
-			continue
-		}
-		data0 = append(data0, data1)
-	}
-	if err0 != errNone {
-		return nil, nil, err0
-	}
-	return data0, b, errNone
-}
-
-func ReadSlice3D(b0 []byte) ([][][]byte, []byte, errorTy) {
-	var b = b0
-	length, b, err := SafeReadInt(b)
-	if err != errNone {
-		return nil, nil, err
-	}
-	var data0 [][][]byte
-	var err0 errorTy
-	var i uint64
-	for ; i < length; i++ {
-		var data1 [][]byte
-		var err1 errorTy
-		data1, b, err1 = ReadSlice2D(b)
-		if err1 != errNone {
-			err0 = err1
-			continue
-		}
-		data0 = append(data0, data1)
-	}
-	if err0 != errNone {
-		return nil, nil, err0
-	}
-	return data0, b, errNone
-}
-
 type epochHash struct {
 	epoch epochTy
 	hash  []byte
@@ -169,11 +41,11 @@ func (o *epochHash) encode() []byte {
 
 func (o *epochHash) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := SafeReadInt(b)
+	epoch, b, err := marshalutil.SafeReadInt(b)
 	if err != errNone {
 		return nil, err
 	}
-	hash, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	hash, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
@@ -190,17 +62,17 @@ type putArg struct {
 func (o *putArg) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.id)
-	b = WriteSlice1D(b, o.val)
+	b = marshalutil.WriteSlice1D(b, o.val)
 	return b
 }
 
 func (o *putArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	id, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
-	val, b, err := ReadSlice1D(b)
+	val, b, err := marshalutil.ReadSlice1D(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -218,22 +90,22 @@ type idValEpoch struct {
 func (o *idValEpoch) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.id)
-	b = WriteSlice1D(b, o.val)
+	b = marshalutil.WriteSlice1D(b, o.val)
 	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
 
 func (o *idValEpoch) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	id, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
-	val, b, err := ReadSlice1D(b)
+	val, b, err := marshalutil.ReadSlice1D(b)
 	if err != errNone {
 		return nil, err
 	}
-	epoch, b, err := SafeReadInt(b)
+	epoch, b, err := marshalutil.SafeReadInt(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -253,21 +125,21 @@ func (o *putReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.sig)
-	b = WriteBool(b, o.error)
+	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
 
 func (o *putReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := SafeReadInt(b)
+	epoch, b, err := marshalutil.SafeReadInt(b)
 	if err != errNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoffi.SigLen)
+	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
 	if err != errNone {
 		return nil, err
 	}
-	error, b, err := ReadBool(b)
+	error, b, err := marshalutil.ReadBool(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -306,11 +178,11 @@ func (o *getIdAtEpochArg) encode() []byte {
 
 func (o *getIdAtEpochArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	id, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
-	epoch, b, err := SafeReadInt(b)
+	epoch, b, err := marshalutil.SafeReadInt(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -329,24 +201,24 @@ type getIdAtEpochReply struct {
 func (o *getIdAtEpochReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.digest)
-	b = WriteSlice3D(b, o.proof)
+	b = marshalutil.WriteSlice3D(b, o.proof)
 	b = marshal.WriteBytes(b, o.sig)
-	b = WriteBool(b, o.error)
+	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
 
 func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	digest, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
-	proof, b, err := ReadSlice3D(b)
+	proof, b, err := marshalutil.ReadSlice3D(b)
 	if err != errNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoffi.SigLen)
-	error, b, err := ReadBool(b)
+	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
+	error, b, err := marshalutil.ReadBool(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -386,7 +258,7 @@ func (o *getIdLatestArg) encode() []byte {
 
 func (o *getIdLatestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	id, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
@@ -407,42 +279,42 @@ type getIdLatestReply struct {
 func (o *getIdLatestReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.epoch)
-	b = WriteSlice1D(b, o.val)
+	b = marshalutil.WriteSlice1D(b, o.val)
 	b = marshal.WriteBytes(b, o.digest)
-	b = WriteBool(b, o.proofTy)
-	b = WriteSlice3D(b, o.proof)
+	b = marshalutil.WriteBool(b, o.proofTy)
+	b = marshalutil.WriteSlice3D(b, o.proof)
 	b = marshal.WriteBytes(b, o.sig)
-	b = WriteBool(b, o.error)
+	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
 
 func (o *getIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := SafeReadInt(b)
+	epoch, b, err := marshalutil.SafeReadInt(b)
 	if err != errNone {
 		return nil, err
 	}
-	val, b, err := ReadSlice1D(b)
+	val, b, err := marshalutil.ReadSlice1D(b)
 	if err != errNone {
 		return nil, err
 	}
-	digest, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
-	proofTy, b, err := ReadBool(b)
+	proofTy, b, err := marshalutil.ReadBool(b)
 	if err != errNone {
 		return nil, err
 	}
-	proof, b, err := ReadSlice3D(b)
+	proof, b, err := marshalutil.ReadSlice3D(b)
 	if err != errNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoffi.SigLen)
+	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
 	if err != errNone {
 		return nil, err
 	}
-	error, b, err := ReadBool(b)
+	error, b, err := marshalutil.ReadBool(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -485,7 +357,7 @@ func (o *getDigestArg) encode() []byte {
 
 func (o *getDigestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := SafeReadInt(b)
+	epoch, b, err := marshalutil.SafeReadInt(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -503,21 +375,21 @@ func (o *getDigestReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.digest)
 	b = marshal.WriteBytes(b, o.sig)
-	b = WriteBool(b, o.error)
+	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
 
 func (o *getDigestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	digest, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoffi.SigLen)
+	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
 	if err != errNone {
 		return nil, err
 	}
-	error, b, err := ReadBool(b)
+	error, b, err := marshalutil.ReadBool(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -558,15 +430,15 @@ func (o *updateArg) encode() []byte {
 
 func (o *updateArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := SafeReadInt(b)
+	epoch, b, err := marshalutil.SafeReadInt(b)
 	if err != errNone {
 		return nil, err
 	}
-	digest, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoffi.SigLen)
+	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
 	if err != errNone {
 		return nil, err
 	}
@@ -582,13 +454,13 @@ type updateReply struct {
 
 func (o *updateReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = WriteBool(b, o.error)
+	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
 
 func (o *updateReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	error, b, err := ReadBool(b)
+	error, b, err := marshalutil.ReadBool(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -623,7 +495,7 @@ func (o *getLinkArg) encode() []byte {
 
 func (o *getLinkArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := SafeReadInt(b)
+	epoch, b, err := marshalutil.SafeReadInt(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -641,21 +513,21 @@ func (o *getLinkReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.link)
 	b = marshal.WriteBytes(b, o.sig)
-	b = WriteBool(b, o.error)
+	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
 
 func (o *getLinkReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	link, b, err := SafeReadBytes(b, cryptoffi.HashLen)
+	link, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
 	if err != errNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoffi.SigLen)
+	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
 	if err != errNone {
 		return nil, err
 	}
-	error, b, err := ReadBool(b)
+	error, b, err := marshalutil.ReadBool(b)
 	if err != errNone {
 		return nil, err
 	}
