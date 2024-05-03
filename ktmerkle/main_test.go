@@ -105,8 +105,8 @@ func TestBasicAll(t *testing.T) {
 	aliceId := cryptoffi.Hash([]byte("alice"))
 	alice := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
 	val0 := []byte("val0")
-    _, err := alice.put(val0)
-    // TODO: maybe test alice Put epoch output
+	_, err := alice.put(val0)
+	// TODO: maybe test alice Put epoch output
 	if err != errNone {
 		t.Fatal()
 	}
@@ -135,10 +135,10 @@ func TestBasicAll(t *testing.T) {
 		t.Fatal()
 	}
 
-	epoch := alice.selfAudit()
-	expMaxEpochExcl := uint64(6)
-	if epoch != expMaxEpochExcl {
-		t.Fatal(epoch)
+	selfAuditEpoch := alice.selfAudit()
+	expMaxEpochExcl := uint64(5)
+	if selfAuditEpoch != expMaxEpochExcl {
+		t.Fatal(selfAuditEpoch)
 	}
 
 	var digs []merkle.Digest
@@ -165,22 +165,22 @@ func TestBasicAll(t *testing.T) {
 	}
 
 	bob := newKeyCli(nil, servAddr, adtrAddrs, adtrPks, servPk)
-	epoch, val2, err := bob.get(aliceId)
+	getEpoch, val2, err := bob.get(aliceId)
 	if err != errNone {
 		t.Fatal()
 	}
-	if epoch != expMaxEpochExcl {
-		t.Fatal(epoch)
+	if getEpoch != expMaxEpochExcl-1 {
+		t.Fatal(getEpoch)
 	}
 	if !bytes.Equal(val1, val2) {
 		t.Fatal(val1, val2)
 	}
-	epoch, err = bob.audit(0)
+	auditEpoch, err := bob.audit(0)
 	if err != errNone {
 		t.Fatal()
 	}
-	if epoch != expMaxEpochExcl {
-		t.Fatal(epoch)
+	if auditEpoch != expMaxEpochExcl {
+		t.Fatal(auditEpoch)
 	}
 }
 

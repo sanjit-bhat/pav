@@ -11,14 +11,6 @@ import (
 	"sync"
 )
 
-/*
-for rpc calls,
-we have args and replies.
-those are full units.
-really it should just be a pure func API.
-and the internal funcs should take care of packing them into structs.
-*/
-
 // Key server.
 
 type keyServ struct {
@@ -376,12 +368,14 @@ func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
 	return newDig, errNone
 }
 
-// Audited through Epoch idx in retval.
+// audit through epoch idx exclusive.
 func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
 	var link linkTy
 	var epoch uint64
+	// TODO: maybe factor out digest fetch into sep loop.
+	// Consider doing this for other for loop as well.
 	for {
 		dig, err0 := c.getOrFillDig(epoch)
 		if err0 != errNone {
@@ -393,16 +387,16 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	if epoch == 0 {
 		return 0, errSome
 	}
-	epoch--
+	lastEpoch := epoch - 1
 
 	adtr := c.adtrs[adtrId]
 	adtrPk := c.adtrPks[adtrId]
-	adtrLink, sig, err1 := callGetLink(adtr, epoch)
+	adtrLink, sig, err1 := callGetLink(adtr, lastEpoch)
 	if err1 != errNone {
 		return 0, err1
 	}
 
-	enc := (&epochHash{epoch: epoch, hash: link}).encode()
+	enc := (&epochHash{epoch: lastEpoch, hash: link}).encode()
 	ok := cryptoffi.Verify(adtrPk, enc, sig)
 	if !ok {
 		return 0, errSome
@@ -436,7 +430,6 @@ func (c *keyCli) checkProofWithExpected(epoch epochTy, val merkle.Val, proofTy m
 	if err1 != errNone {
 		return false
 	}
-	// Compare the dig against what we already might have.
 	origDig, ok1 := c.digs[epoch]
 	if ok1 && !std.BytesEqual(dig, origDig) {
 		return false
@@ -447,9 +440,7 @@ func (c *keyCli) checkProofWithExpected(epoch epochTy, val merkle.Val, proofTy m
 	return true
 }
 
-// Audited through retval Epoch idx exclusive.
-// TODO: we use inclusive in other places.
-// make sure we're not doing anything stupid.
+// selfAudit through Epoch idx exclusive.
 func (c *keyCli) selfAudit() epochTy {
 	numVals := uint64(len(c.vals))
 	var valIdx uint64
@@ -541,7 +532,9 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	epoch3, err6 := charlieCli.audit(0)
 	machine.Assume(err6 == errNone)
 
-	if epoch0 == epoch1 && epoch0 <= epoch2 && epoch1 <= epoch3 {
-		machine.Assert(std.BytesEqual(val0, val1))
-	}
+	machine.Assume(epoch0 == epoch1)
+	machine.Assume(epoch0 < epoch2)
+	machine.Assume(epoch1 < epoch3)
+
+	machine.Assert(std.BytesEqual(val0, val1))
 }
