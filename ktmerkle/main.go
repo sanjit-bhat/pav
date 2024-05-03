@@ -11,6 +11,14 @@ import (
 	"sync"
 )
 
+/*
+for rpc calls,
+we have args and replies.
+those are full units.
+really it should just be a pure func API.
+and the internal funcs should take care of packing them into structs.
+*/
+
 // Key server.
 
 type keyServ struct {
@@ -85,8 +93,12 @@ func (s *keyServ) getIdAtEpoch(id merkle.Id, epoch epochTy) *getIdAtEpochReply {
 	enc := (&epochHash{epoch: epoch, hash: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
-	return &getIdAtEpochReply{digest: reply.Digest, proof: reply.Proof,
-		sig: sig, error: reply.Error}
+	ret := &getIdAtEpochReply{}
+	ret.digest = reply.Digest
+	ret.proof = reply.Proof
+	ret.sig = sig
+	ret.error = reply.Error
+	return ret
 }
 
 func (s *keyServ) getIdLatest(id merkle.Id) *getIdLatestReply {
@@ -97,8 +109,15 @@ func (s *keyServ) getIdLatest(id merkle.Id) *getIdLatestReply {
 	enc := (&epochHash{epoch: lastEpoch, hash: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
-	return &getIdLatestReply{epoch: lastEpoch, val: reply.Val, digest: reply.Digest,
-		proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
+	ret := &getIdLatestReply{}
+	ret.epoch = lastEpoch
+	ret.val = reply.Val
+	ret.digest = reply.Digest
+	ret.proofTy = reply.ProofTy
+	ret.proof = reply.Proof
+	ret.sig = sig
+	ret.error = reply.Error
+	return ret
 }
 
 func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
