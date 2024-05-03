@@ -22,22 +22,22 @@ func Hash(data []byte) []byte {
 
 // Signatures.
 
-type SignerT = ed25519.PrivateKey
+type PrivateKey = ed25519.PrivateKey
 
-type VerifierT = ed25519.PublicKey
+type PublicKey = ed25519.PublicKey
 
-func MakeKeys() (SignerT, VerifierT) {
+func MakeKeys() (PrivateKey, PublicKey) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return SignerT(priv), VerifierT(pub)
+	return PrivateKey(priv), PublicKey(pub)
 }
 
-func Sign(sk SignerT, data []byte) Sig {
+func Sign(sk PrivateKey, data []byte) Sig {
 	return ed25519.Sign(sk, data)
 }
 
-func Verify(vk VerifierT, data, sig Sig) bool {
-	return ed25519.Verify(vk, data, sig)
+func Verify(pk PublicKey, data, sig Sig) bool {
+	return ed25519.Verify(pk, data, sig)
 }

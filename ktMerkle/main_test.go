@@ -76,18 +76,18 @@ func makeUniqueAddr() uint64 {
 // Until we have proof tests for everything, this provides coverage.
 func TestBasicAll(t *testing.T) {
 	servAddr := makeUniqueAddr()
-	servSk, servVk := cryptoFFI.MakeKeys()
+	servSk, servPk := cryptoFFI.MakeKeys()
 	go func() {
 		s := newKeyServ(servSk)
 		s.start(servAddr)
 	}()
 
-	adtrSk, adtrVk := cryptoFFI.MakeKeys()
-	adtrVks := []cryptoFFI.VerifierT{adtrVk}
+	adtrSk, adtrPk := cryptoFFI.MakeKeys()
+	adtrPks := []cryptoFFI.PublicKey{adtrPk}
 	adtrAddr := makeUniqueAddr()
 	adtrAddrs := []grove_ffi.Address{adtrAddr}
 	go func() {
-		a := newAuditor(adtrSk, servVk)
+		a := newAuditor(adtrSk, servPk)
 		a.start(adtrAddr)
 	}()
 
@@ -103,7 +103,7 @@ func TestBasicAll(t *testing.T) {
 	}
 
 	aliceId := cryptoFFI.Hash([]byte("alice"))
-	alice := newKeyCli(aliceId, servAddr, adtrAddrs, adtrVks, servVk)
+	alice := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
 	val0 := []byte("val0")
     _, err := alice.put(val0)
     // TODO: maybe test alice Put epoch output
@@ -164,7 +164,7 @@ func TestBasicAll(t *testing.T) {
 		}
 	}
 
-	bob := newKeyCli(nil, servAddr, adtrAddrs, adtrVks, servVk)
+	bob := newKeyCli(nil, servAddr, adtrAddrs, adtrPks, servPk)
 	epoch, val2, err := bob.get(aliceId)
 	if err != errNone {
 		t.Fatal()
