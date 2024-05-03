@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoShim"
+	"github.com/mit-pdos/secure-chat/cryptoFFI"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"sync"
 	"testing"
@@ -13,15 +13,15 @@ import (
 )
 
 func TestBasicServ(t *testing.T) {
-	servSk, _ := cryptoShim.MakeKeys()
+	servSk, _ := cryptoFFI.MakeKeys()
 	s := NewKeyServ(servSk)
-	id := cryptoShim.Hash([]byte("id"))
+	id := cryptoFFI.Hash([]byte("id"))
 	val := []byte("val")
 	_, _, err := s.Put(id, val)
 	if err != ErrNone {
 		t.Fatal()
 	}
-    // TODO: maybe want to test sigs coming from these funcs?
+	// TODO: maybe want to test sigs coming from these funcs?
 
 	reply0 := s.GetIdLatest(id)
 	if reply0.Error != ErrNone {
@@ -76,14 +76,14 @@ func MakeUniqueAddr() uint64 {
 // Until we have proof tests for everything, this provides coverage.
 func TestBasicAll(t *testing.T) {
 	servAddr := MakeUniqueAddr()
-    servSk, servVk := cryptoShim.MakeKeys()
+	servSk, servVk := cryptoFFI.MakeKeys()
 	go func() {
 		s := NewKeyServ(servSk)
 		s.Start(servAddr)
 	}()
 
-	adtrSk, adtrVk := cryptoShim.MakeKeys()
-	adtrVks := []cryptoShim.VerifierT{adtrVk}
+	adtrSk, adtrVk := cryptoFFI.MakeKeys()
+	adtrVks := []cryptoFFI.VerifierT{adtrVk}
 	adtrAddr := MakeUniqueAddr()
 	adtrAddrs := []grove_ffi.Address{adtrAddr}
 	go func() {
@@ -102,7 +102,7 @@ func TestBasicAll(t *testing.T) {
 		t.Fatal()
 	}
 
-	aliceId := cryptoShim.Hash([]byte("alice"))
+	aliceId := cryptoFFI.Hash([]byte("alice"))
 	alice := NewKeyCli(aliceId, servAddr, adtrAddrs, adtrVks, servVk)
 	val0 := []byte("val0")
 	err = alice.Put(val0)
@@ -144,14 +144,14 @@ func TestBasicAll(t *testing.T) {
 	}
 
 	var digs []merkle.Digest
-    var sigs []cryptoShim.Sig
+	var sigs []cryptoFFI.Sig
 	for epoch := uint64(0); ; epoch++ {
 		dig, sig, err := CallGetDigest(servCli, epoch)
 		if err != ErrNone {
 			break
 		}
 		digs = append(digs, dig)
-        sigs = append(sigs, sig)
+		sigs = append(sigs, sig)
 	}
 	numDigs := uint64(len(digs))
 	if numDigs != expMaxEpochExcl {
@@ -159,7 +159,7 @@ func TestBasicAll(t *testing.T) {
 	}
 
 	for epoch, dig := range digs {
-        sig := sigs[epoch]
+		sig := sigs[epoch]
 		err := CallUpdate(adtrCli, uint64(epoch), dig, sig)
 		if err != ErrNone {
 			t.Fatal()

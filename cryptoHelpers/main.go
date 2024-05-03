@@ -1,7 +1,7 @@
 package cryptoHelpers
 
 import (
-	"github.com/mit-pdos/secure-chat/cryptoShim"
+	"github.com/mit-pdos/secure-chat/cryptoFFI"
 )
 
 type Hasher = []byte
@@ -22,7 +22,7 @@ func HasherWriteSl(h *Hasher, data [][]byte) {
 
 func HasherSum(h Hasher, b []byte) []byte {
 	var b1 = b
-	hash := cryptoShim.Hash(h)
+	hash := cryptoFFI.Hash(h)
 	for _, byt := range hash {
 		b1 = append(b1, byt)
 	}

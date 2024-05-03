@@ -3,7 +3,7 @@ package merkle
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/secure-chat/cryptoHelpers"
-	"github.com/mit-pdos/secure-chat/cryptoShim"
+	"github.com/mit-pdos/secure-chat/cryptoFFI"
 )
 
 type Error = uint64
@@ -42,12 +42,12 @@ type Node struct {
 func (n *Node) Hash() []byte {
 	if n == nil {
 		// Empty node.
-		return cryptoShim.Hash([]byte{EmptyNodeId})
+		return cryptoFFI.Hash([]byte{EmptyNodeId})
 	}
 	return n.hash
 }
 
-func (n *Node) DeepCopy() *Node {
+func DeepCopyInternal(n *Node) *Node {
 	if n == nil {
 		return nil
 	}
@@ -60,6 +60,10 @@ func (n *Node) DeepCopy() *Node {
 	}
 	n2.Children = children
 	return n2
+}
+
+func (n *Node) DeepCopy() *Node {
+	return DeepCopyInternal(n)
 }
 
 func (n *Node) UpdateLeafHash() {
@@ -102,7 +106,7 @@ type Proof = [][][]byte
 func IsValidHashSl(data [][]byte) bool {
 	var ok = true
 	for _, hash := range data {
-		if uint64(len(hash)) != cryptoShim.HashLen {
+		if uint64(len(hash)) != cryptoFFI.HashLen {
 			ok = false
 		}
 	}
@@ -156,11 +160,11 @@ func getLeafNodeHash(val Val) []byte {
 }
 
 func getEmptyNodeHash() []byte {
-	return cryptoShim.Hash([]byte{EmptyNodeId})
+	return cryptoFFI.Hash([]byte{EmptyNodeId})
 }
 
 func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) Error {
-	if uint64(len(proof)) > cryptoShim.HashLen {
+	if uint64(len(proof)) > cryptoFFI.HashLen {
 		return ErrBadInput
 	}
 	if len(id) < len(proof) {
@@ -228,7 +232,7 @@ func (t *Tree) GetPath(id Id) []*Node {
 		return nodePath
 	}
 	var stop = false
-	for pathIdx := uint64(0); pathIdx < cryptoShim.HashLen && !stop; pathIdx++ {
+	for pathIdx := uint64(0); pathIdx < cryptoFFI.HashLen && !stop; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
 		nextNode := currNode.Children[pos]
@@ -246,7 +250,7 @@ func (t *Tree) GetPathAddNodes(id Id) []*Node {
 	}
 	var nodePath []*Node
 	nodePath = append(nodePath, t.Root)
-	for pathIdx := uint64(0); pathIdx < cryptoShim.HashLen; pathIdx++ {
+	for pathIdx := uint64(0); pathIdx < cryptoFFI.HashLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
 		if currNode.Children[pos] == nil {
@@ -258,15 +262,15 @@ func (t *Tree) GetPathAddNodes(id Id) []*Node {
 }
 
 func (t *Tree) Put(id Id, val Val) (Digest, Proof, Error) {
-	if uint64(len(id)) != cryptoShim.HashLen {
+	if uint64(len(id)) != cryptoFFI.HashLen {
 		return nil, nil, ErrBadInput
 	}
 
 	nodePath := t.GetPathAddNodes(id)
-	nodePath[cryptoShim.HashLen].Val = val
-	nodePath[cryptoShim.HashLen].UpdateLeafHash()
+	nodePath[cryptoFFI.HashLen].Val = val
+	nodePath[cryptoFFI.HashLen].UpdateLeafHash()
 	// +1/-1 offsets for Goosable uint64 loop var.
-	for pathIdx := cryptoShim.HashLen; pathIdx >= 1; pathIdx-- {
+	for pathIdx := cryptoFFI.HashLen; pathIdx >= 1; pathIdx-- {
 		nodePath[pathIdx-1].UpdateInteriorHash()
 	}
 
@@ -287,7 +291,7 @@ type GetReply struct {
 // Return ProofTy vs. having sep funcs bc regardless, would want a proof.
 func (t *Tree) Get(id Id) *GetReply {
 	errReply := &GetReply{}
-	if uint64(len(id)) != cryptoShim.HashLen {
+	if uint64(len(id)) != cryptoFFI.HashLen {
 		errReply.Error = ErrBadInput
 		return errReply
 	}

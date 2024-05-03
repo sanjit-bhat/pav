@@ -2,7 +2,7 @@ package ktMerkle
 
 import (
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoShim"
+	"github.com/mit-pdos/secure-chat/cryptoFFI"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"github.com/tchajed/marshal"
 )
@@ -173,7 +173,7 @@ func (o *EpochHash) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	hash, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	hash, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (o *PutArg) Encode() []byte {
 
 func (o *PutArg) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
-	id, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	id, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (o *IdValEpoch) Encode() []byte {
 
 func (o *IdValEpoch) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
-	id, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	id, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -245,7 +245,7 @@ func (o *IdValEpoch) Decode(b0 []byte) ([]byte, Error) {
 
 type PutReply struct {
 	Epoch Epoch
-	Sig   cryptoShim.Sig
+	Sig   cryptoFFI.Sig
 	Error Error
 }
 
@@ -263,7 +263,7 @@ func (o *PutReply) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (o *PutReply) Decode(b0 []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
-func CallPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (Epoch, cryptoShim.Sig, Error) {
+func CallPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (Epoch, cryptoFFI.Sig, Error) {
 	argB := (&PutArg{Id: id, Val: val}).Encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(RpcKeyServPut, argB, &replyB, 100)
@@ -306,7 +306,7 @@ func (o *GetIdAtEpochArg) Encode() []byte {
 
 func (o *GetIdAtEpochArg) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
-	id, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	id, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func (o *GetIdAtEpochArg) Decode(b0 []byte) ([]byte, Error) {
 type GetIdAtEpochReply struct {
 	Digest merkle.Digest
 	Proof  merkle.Proof
-	Sig    cryptoShim.Sig
+	Sig    cryptoFFI.Sig
 	Error  Error
 }
 
@@ -337,7 +337,7 @@ func (o *GetIdAtEpochReply) Encode() []byte {
 
 func (o *GetIdAtEpochReply) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
-	digest, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	digest, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -345,7 +345,7 @@ func (o *GetIdAtEpochReply) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
 	error, b, err := SafeReadInt(b)
 	if err != ErrNone {
 		return nil, err
@@ -387,7 +387,7 @@ func (o *GetIdLatestArg) Encode() []byte {
 
 func (o *GetIdLatestArg) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
-	id, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	id, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -401,7 +401,7 @@ type GetIdLatestReply struct {
 	Digest  merkle.Digest
 	ProofTy merkle.ProofTy
 	Proof   merkle.Proof
-	Sig     cryptoShim.Sig
+	Sig     cryptoFFI.Sig
 	Error   Error
 }
 
@@ -427,7 +427,7 @@ func (o *GetIdLatestReply) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	digest, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	digest, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -439,7 +439,7 @@ func (o *GetIdLatestReply) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -497,7 +497,7 @@ func (o *GetDigestArg) Decode(b0 []byte) ([]byte, Error) {
 
 type GetDigestReply struct {
 	Digest merkle.Digest
-	Sig    cryptoShim.Sig
+	Sig    cryptoFFI.Sig
 	Error  Error
 }
 
@@ -511,11 +511,11 @@ func (o *GetDigestReply) Encode() []byte {
 
 func (o *GetDigestReply) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
-	digest, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	digest, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -529,7 +529,7 @@ func (o *GetDigestReply) Decode(b0 []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
-func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, cryptoShim.Sig, Error) {
+func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, cryptoFFI.Sig, Error) {
 	argB := (&GetDigestArg{Epoch: epoch}).Encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(RpcKeyServGetDigest, argB, &replyB, 100)
@@ -547,7 +547,7 @@ func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, cryptoShim.Sig
 type UpdateArg struct {
 	Epoch  Epoch
 	Digest merkle.Digest
-	Sig    cryptoShim.Sig
+	Sig    cryptoFFI.Sig
 }
 
 func (o *UpdateArg) Encode() []byte {
@@ -564,11 +564,11 @@ func (o *UpdateArg) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
-	digest, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	digest, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -598,7 +598,7 @@ func (o *UpdateReply) Decode(b0 []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
-func CallUpdate(cli *urpc.Client, epoch Epoch, dig merkle.Digest, sig cryptoShim.Sig) Error {
+func CallUpdate(cli *urpc.Client, epoch Epoch, dig merkle.Digest, sig cryptoFFI.Sig) Error {
 	argB := (&UpdateArg{Epoch: epoch, Digest: dig, Sig: sig}).Encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(RpcAuditorUpdate, argB, &replyB, 100)
@@ -635,7 +635,7 @@ func (o *GetLinkArg) Decode(b0 []byte) ([]byte, Error) {
 
 type GetLinkReply struct {
 	Link  Link
-	Sig   cryptoShim.Sig
+	Sig   cryptoFFI.Sig
 	Error Error
 }
 
@@ -649,11 +649,11 @@ func (o *GetLinkReply) Encode() []byte {
 
 func (o *GetLinkReply) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
-	link, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	link, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
 	if err != ErrNone {
 		return nil, err
 	}
-	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -667,7 +667,7 @@ func (o *GetLinkReply) Decode(b0 []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
-func CallGetLink(cli *urpc.Client, epoch Epoch) (Link, cryptoShim.Sig, Error) {
+func CallGetLink(cli *urpc.Client, epoch Epoch) (Link, cryptoFFI.Sig, Error) {
 	argB := (&GetLinkArg{Epoch: epoch}).Encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(RpcAuditorGetLink, argB, &replyB, 100)
