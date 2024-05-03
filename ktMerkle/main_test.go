@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoFFI"
+	"github.com/mit-pdos/secure-chat/cryptoShim"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"sync"
 	"testing"
@@ -13,13 +13,15 @@ import (
 )
 
 func TestBasicServ(t *testing.T) {
-	s := NewKeyServ()
-	id := cryptoFFI.Hash([]byte("id"))
+	servSk, _ := cryptoShim.MakeKeys()
+	s := NewKeyServ(servSk)
+	id := cryptoShim.Hash([]byte("id"))
 	val := []byte("val")
-	_, err := s.Put(id, val)
+	_, _, err := s.Put(id, val)
 	if err != ErrNone {
 		t.Fatal()
 	}
+    // TODO: maybe want to test sigs coming from these funcs?
 
 	reply0 := s.GetIdLatest(id)
 	if reply0.Error != ErrNone {
@@ -50,7 +52,7 @@ func TestBasicServ(t *testing.T) {
 		t.Fatal()
 	}
 
-	dig1, err := s.GetDigest(1)
+	dig1, _, err := s.GetDigest(1)
 	if err != ErrNone {
 		t.Fatal()
 	}
@@ -71,19 +73,21 @@ func MakeUniqueAddr() uint64 {
 	return addr
 }
 
+// Until we have proof tests for everything, this provides coverage.
 func TestBasicAll(t *testing.T) {
 	servAddr := MakeUniqueAddr()
+    servSk, servVk := cryptoShim.MakeKeys()
 	go func() {
-		s := NewKeyServ()
+		s := NewKeyServ(servSk)
 		s.Start(servAddr)
 	}()
 
-	sk, vk := cryptoFFI.MakeKeys()
-	adtrVks := []cryptoFFI.VerifierT{vk}
+	adtrSk, adtrVk := cryptoShim.MakeKeys()
+	adtrVks := []cryptoShim.VerifierT{adtrVk}
 	adtrAddr := MakeUniqueAddr()
 	adtrAddrs := []grove_ffi.Address{adtrAddr}
 	go func() {
-		a := NewAuditor(sk)
+		a := NewAuditor(adtrSk, servVk)
 		a.Start(adtrAddr)
 	}()
 
@@ -98,8 +102,8 @@ func TestBasicAll(t *testing.T) {
 		t.Fatal()
 	}
 
-	aliceId := cryptoFFI.Hash([]byte("alice"))
-	alice := NewKeyCli(aliceId, servAddr, adtrAddrs, adtrVks)
+	aliceId := cryptoShim.Hash([]byte("alice"))
+	alice := NewKeyCli(aliceId, servAddr, adtrAddrs, adtrVks, servVk)
 	val0 := []byte("val0")
 	err = alice.Put(val0)
 	if err != ErrNone {
@@ -130,41 +134,44 @@ func TestBasicAll(t *testing.T) {
 		t.Fatal()
 	}
 
-	epoch, err := alice.SelfAudit()
+	epoch := alice.SelfAudit()
 	if err != ErrNone {
 		t.Fatal()
 	}
-	expMaxEpoch := uint64(5)
-	if epoch != expMaxEpoch {
+	expMaxEpochExcl := uint64(6)
+	if epoch != expMaxEpochExcl {
 		t.Fatal(epoch)
 	}
 
 	var digs []merkle.Digest
+    var sigs []cryptoShim.Sig
 	for epoch := uint64(0); ; epoch++ {
-		dig, err := CallGetDigest(servCli, epoch)
+		dig, sig, err := CallGetDigest(servCli, epoch)
 		if err != ErrNone {
 			break
 		}
 		digs = append(digs, dig)
+        sigs = append(sigs, sig)
 	}
 	numDigs := uint64(len(digs))
-	if numDigs != expMaxEpoch+1 {
+	if numDigs != expMaxEpochExcl {
 		t.Fatal(numDigs)
 	}
 
-	for _, dig := range digs {
-		err := CallUpdate(adtrCli, dig)
+	for epoch, dig := range digs {
+        sig := sigs[epoch]
+		err := CallUpdate(adtrCli, uint64(epoch), dig, sig)
 		if err != ErrNone {
 			t.Fatal()
 		}
 	}
 
-	bob := NewKeyCli(nil, servAddr, adtrAddrs, adtrVks)
+	bob := NewKeyCli(nil, servAddr, adtrAddrs, adtrVks, servVk)
 	epoch, val2, err := bob.Get(aliceId)
 	if err != ErrNone {
 		t.Fatal()
 	}
-	if epoch != expMaxEpoch {
+	if epoch != expMaxEpochExcl {
 		t.Fatal(epoch)
 	}
 	if !bytes.Equal(val1, val2) {
@@ -174,7 +181,7 @@ func TestBasicAll(t *testing.T) {
 	if err != ErrNone {
 		t.Fatal()
 	}
-	if epoch != expMaxEpoch {
+	if epoch != expMaxEpochExcl {
 		t.Fatal(epoch)
 	}
 }

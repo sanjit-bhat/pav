@@ -10,6 +10,7 @@ import (
 type Epoch = uint64
 type Link = []byte
 type Error = uint64
+type Ok = bool
 
 const (
 	// Errors
@@ -208,14 +209,50 @@ func (o *PutArg) Decode(b0 []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
+type IdValEpoch struct {
+	Id    merkle.Id
+	Val   merkle.Val
+	Epoch Epoch
+}
+
+func (o *IdValEpoch) Encode() []byte {
+	var b = make([]byte, 0)
+	b = marshal.WriteBytes(b, o.Id)
+	b = WriteSlice1D(b, o.Val)
+	b = marshal.WriteInt(b, o.Epoch)
+	return b
+}
+
+func (o *IdValEpoch) Decode(b0 []byte) ([]byte, Error) {
+	var b = b0
+	id, b, err := SafeReadBytes(b, cryptoShim.HashLen)
+	if err != ErrNone {
+		return nil, err
+	}
+	val, b, err := ReadSlice1D(b)
+	if err != ErrNone {
+		return nil, err
+	}
+	epoch, b, err := SafeReadInt(b)
+	if err != ErrNone {
+		return nil, err
+	}
+	o.Id = id
+	o.Val = val
+	o.Epoch = epoch
+	return b, ErrNone
+}
+
 type PutReply struct {
 	Epoch Epoch
+	Sig   cryptoShim.Sig
 	Error Error
 }
 
 func (o *PutReply) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.Epoch)
+	b = marshal.WriteBytes(b, o.Sig)
 	b = marshal.WriteInt(b, o.Error)
 	return b
 }
@@ -226,28 +263,33 @@ func (o *PutReply) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
+	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	if err != ErrNone {
+		return nil, err
+	}
 	error, b, err := SafeReadInt(b)
 	if err != ErrNone {
 		return nil, err
 	}
+	o.Sig = sig
 	o.Epoch = epoch
 	o.Error = error
 	return b, ErrNone
 }
 
-func CallPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (Epoch, Error) {
+func CallPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (Epoch, cryptoShim.Sig, Error) {
 	argB := (&PutArg{Id: id, Val: val}).Encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(RpcKeyServPut, argB, &replyB, 100)
 	if err0 != ErrNone {
-		return 0, err0
+		return 0, nil, err0
 	}
 	reply := &PutReply{}
 	_, err1 := reply.Decode(replyB)
 	if err1 != ErrNone {
-		return 0, err1
+		return 0, nil, err1
 	}
-	return reply.Epoch, reply.Error
+	return reply.Epoch, reply.Sig, reply.Error
 }
 
 type GetIdAtEpochArg struct {
@@ -278,34 +320,24 @@ func (o *GetIdAtEpochArg) Decode(b0 []byte) ([]byte, Error) {
 }
 
 type GetIdAtEpochReply struct {
-	Val     merkle.Val
-	Digest  merkle.Digest
-	ProofTy merkle.ProofTy
-	Proof   merkle.Proof
-	Error   Error
+	Digest merkle.Digest
+	Proof  merkle.Proof
+	Sig    cryptoShim.Sig
+	Error  Error
 }
 
 func (o *GetIdAtEpochReply) Encode() []byte {
 	var b = make([]byte, 0)
-	b = WriteSlice1D(b, o.Val)
 	b = marshal.WriteBytes(b, o.Digest)
-	b = WriteBool(b, o.ProofTy)
 	b = WriteSlice3D(b, o.Proof)
+	b = marshal.WriteBytes(b, o.Sig)
 	b = marshal.WriteInt(b, o.Error)
 	return b
 }
 
 func (o *GetIdAtEpochReply) Decode(b0 []byte) ([]byte, Error) {
 	var b = b0
-	val, b, err := ReadSlice1D(b)
-	if err != ErrNone {
-		return nil, err
-	}
 	digest, b, err := SafeReadBytes(b, cryptoShim.HashLen)
-	if err != ErrNone {
-		return nil, err
-	}
-	proofTy, b, err := ReadBool(b)
 	if err != ErrNone {
 		return nil, err
 	}
@@ -313,14 +345,14 @@ func (o *GetIdAtEpochReply) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
+	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
 	error, b, err := SafeReadInt(b)
 	if err != ErrNone {
 		return nil, err
 	}
-	o.Val = val
 	o.Digest = digest
-	o.ProofTy = proofTy
 	o.Proof = proof
+	o.Sig = sig
 	o.Error = error
 	return b, ErrNone
 }
@@ -369,6 +401,7 @@ type GetIdLatestReply struct {
 	Digest  merkle.Digest
 	ProofTy merkle.ProofTy
 	Proof   merkle.Proof
+	Sig     cryptoShim.Sig
 	Error   Error
 }
 
@@ -379,6 +412,7 @@ func (o *GetIdLatestReply) Encode() []byte {
 	b = marshal.WriteBytes(b, o.Digest)
 	b = WriteBool(b, o.ProofTy)
 	b = WriteSlice3D(b, o.Proof)
+	b = marshal.WriteBytes(b, o.Sig)
 	b = marshal.WriteInt(b, o.Error)
 	return b
 }
@@ -405,6 +439,10 @@ func (o *GetIdLatestReply) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
+	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	if err != ErrNone {
+		return nil, err
+	}
 	error, b, err := SafeReadInt(b)
 	if err != ErrNone {
 		return nil, err
@@ -414,6 +452,7 @@ func (o *GetIdLatestReply) Decode(b0 []byte) ([]byte, Error) {
 	o.Digest = digest
 	o.ProofTy = proofTy
 	o.Proof = proof
+	o.Sig = sig
 	o.Error = error
 	return b, ErrNone
 }
@@ -458,12 +497,14 @@ func (o *GetDigestArg) Decode(b0 []byte) ([]byte, Error) {
 
 type GetDigestReply struct {
 	Digest merkle.Digest
+	Sig    cryptoShim.Sig
 	Error  Error
 }
 
 func (o *GetDigestReply) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.Digest)
+	b = marshal.WriteBytes(b, o.Sig)
 	b = marshal.WriteInt(b, o.Error)
 	return b
 }
@@ -474,39 +515,46 @@ func (o *GetDigestReply) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
+	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	if err != ErrNone {
+		return nil, err
+	}
 	error, b, err := SafeReadInt(b)
 	if err != ErrNone {
 		return nil, err
 	}
 	o.Digest = digest
+	o.Sig = sig
 	o.Error = error
 	return b, ErrNone
 }
 
-func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, Error) {
+func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, cryptoShim.Sig, Error) {
 	argB := (&GetDigestArg{Epoch: epoch}).Encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(RpcKeyServGetDigest, argB, &replyB, 100)
 	if err0 != ErrNone {
-		return nil, err0
+		return nil, nil, err0
 	}
 	reply := &GetDigestReply{}
 	_, err1 := reply.Decode(replyB)
 	if err1 != ErrNone {
-		return nil, err1
+		return nil, nil, err1
 	}
-	return reply.Digest, reply.Error
+	return reply.Digest, reply.Sig, reply.Error
 }
 
 type UpdateArg struct {
 	Epoch  Epoch
 	Digest merkle.Digest
+	Sig    cryptoShim.Sig
 }
 
 func (o *UpdateArg) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.Epoch)
 	b = marshal.WriteBytes(b, o.Digest)
+	b = marshal.WriteBytes(b, o.Sig)
 	return b
 }
 
@@ -520,8 +568,13 @@ func (o *UpdateArg) Decode(b0 []byte) ([]byte, Error) {
 	if err != ErrNone {
 		return nil, err
 	}
+	sig, b, err := SafeReadBytes(b, cryptoShim.SigLen)
+	if err != ErrNone {
+		return nil, err
+	}
 	o.Epoch = epoch
 	o.Digest = digest
+	o.Sig = sig
 	return b, ErrNone
 }
 
@@ -545,8 +598,8 @@ func (o *UpdateReply) Decode(b0 []byte) ([]byte, Error) {
 	return b, ErrNone
 }
 
-func CallUpdate(cli *urpc.Client, epoch Epoch, dig merkle.Digest) Error {
-	argB := (&UpdateArg{Epoch: epoch, Digest: dig}).Encode()
+func CallUpdate(cli *urpc.Client, epoch Epoch, dig merkle.Digest, sig cryptoShim.Sig) Error {
+	argB := (&UpdateArg{Epoch: epoch, Digest: dig, Sig: sig}).Encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(RpcAuditorUpdate, argB, &replyB, 100)
 	if err0 != ErrNone {

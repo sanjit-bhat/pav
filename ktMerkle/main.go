@@ -14,14 +14,16 @@ import (
 // Key server.
 
 type KeyServ struct {
+	Sk     cryptoShim.SignerT
 	Mu     *sync.Mutex
 	Trees  []*merkle.Tree
 	NextTr *merkle.Tree
 	Chain  []Link
 }
 
-func NewKeyServ() *KeyServ {
+func NewKeyServ(sk cryptoShim.SignerT) *KeyServ {
 	s := &KeyServ{}
+	s.Sk = sk
 	s.Mu = new(sync.Mutex)
 	emptyTr := &merkle.Tree{}
 	s.Trees = []*merkle.Tree{emptyTr}
@@ -59,27 +61,31 @@ func (s *KeyServ) UpdateEpoch() {
 	s.Mu.Unlock()
 }
 
-func (s *KeyServ) Put(id merkle.Id, val merkle.Val) (Epoch, Error) {
+func (s *KeyServ) Put(id merkle.Id, val merkle.Val) (Epoch, cryptoShim.Sig, Error) {
 	s.Mu.Lock()
 	nextEpoch := uint64(len(s.Trees))
 	_, _, err := s.NextTr.Put(id, val)
+	enc := (&IdValEpoch{Id: id, Val: val, Epoch: nextEpoch}).Encode()
+	sig := cryptoShim.Sign(s.Sk, enc)
 	s.Mu.Unlock()
-	return nextEpoch, err
+	return nextEpoch, sig, err
 }
 
 func (s *KeyServ) GetIdAtEpoch(id merkle.Id, epoch Epoch) *GetIdAtEpochReply {
 	errReply := &GetIdAtEpochReply{}
+	errReply.Error = ErrSome
 	s.Mu.Lock()
 	if epoch >= uint64(len(s.Trees)) {
 		s.Mu.Unlock()
-		errReply.Error = ErrSome
 		return errReply
 	}
 	tr := s.Trees[epoch]
 	reply := tr.Get(id)
+	enc := (&EpochHash{Epoch: epoch, Hash: reply.Digest}).Encode()
+	sig := cryptoShim.Sign(s.Sk, enc)
 	s.Mu.Unlock()
-	return &GetIdAtEpochReply{Val: reply.Val, Digest: reply.Digest,
-		ProofTy: reply.ProofTy, Proof: reply.Proof, Error: reply.Error}
+	return &GetIdAtEpochReply{Digest: reply.Digest, Proof: reply.Proof,
+		Sig: sig, Error: reply.Error}
 }
 
 func (s *KeyServ) GetIdLatest(id merkle.Id) *GetIdLatestReply {
@@ -87,21 +93,25 @@ func (s *KeyServ) GetIdLatest(id merkle.Id) *GetIdLatestReply {
 	lastEpoch := uint64(len(s.Trees)) - 1
 	tr := s.Trees[lastEpoch]
 	reply := tr.Get(id)
+	enc := (&EpochHash{Epoch: lastEpoch, Hash: reply.Digest}).Encode()
+	sig := cryptoShim.Sign(s.Sk, enc)
 	s.Mu.Unlock()
 	return &GetIdLatestReply{Epoch: lastEpoch, Val: reply.Val, Digest: reply.Digest,
-		ProofTy: reply.ProofTy, Proof: reply.Proof, Error: reply.Error}
+		ProofTy: reply.ProofTy, Proof: reply.Proof, Sig: sig, Error: reply.Error}
 }
 
-func (s *KeyServ) GetDigest(epoch Epoch) (merkle.Digest, Error) {
+func (s *KeyServ) GetDigest(epoch Epoch) (merkle.Digest, cryptoShim.Sig, Error) {
 	s.Mu.Lock()
 	if epoch >= uint64(len(s.Trees)) {
 		s.Mu.Unlock()
-		return nil, ErrSome
+		return nil, nil, ErrSome
 	}
 	tr := s.Trees[epoch]
 	dig := tr.Digest()
+	enc := (&EpochHash{Epoch: epoch, Hash: dig}).Encode()
+	sig := cryptoShim.Sign(s.Sk, enc)
 	s.Mu.Unlock()
-	return dig, ErrNone
+	return dig, sig, ErrNone
 }
 
 func (s *KeyServ) Start(addr grove_ffi.Address) {
@@ -120,8 +130,8 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 				*enc_reply = (&PutReply{Epoch: 0, Error: err0}).Encode()
 				return
 			}
-			epoch, err1 := s.Put(args.Id, args.Val)
-			*enc_reply = (&PutReply{Epoch: epoch, Error: err1}).Encode()
+			epoch, sig, err1 := s.Put(args.Id, args.Val)
+			*enc_reply = (&PutReply{Epoch: epoch, Sig: sig, Error: err1}).Encode()
 		}
 
 	handlers[RpcKeyServGetIdAtEpoch] =
@@ -162,8 +172,8 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 				*enc_reply = reply.Encode()
 				return
 			}
-			dig, err1 := s.GetDigest(args.Epoch)
-			*enc_reply = (&GetDigestReply{Digest: dig, Error: err1}).Encode()
+			dig, sig, err1 := s.GetDigest(args.Epoch)
+			*enc_reply = (&GetDigestReply{Digest: dig, Sig: sig, Error: err1}).Encode()
 		}
 
 	urpc.MakeServer(handlers).Serve(addr)
@@ -172,17 +182,24 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 // Auditor.
 
 type Auditor struct {
-	Mu    *sync.Mutex
-	Sk    cryptoShim.SignerT
-	Chain []Link
+	Mu     *sync.Mutex
+	Sk     cryptoShim.SignerT
+	ServVk cryptoShim.VerifierT
+	Chain  []Link
 }
 
-func NewAuditor(sk cryptoShim.SignerT) *Auditor {
-	return &Auditor{Mu: new(sync.Mutex), Sk: sk, Chain: nil}
+func NewAuditor(sk cryptoShim.SignerT, servVk cryptoShim.VerifierT) *Auditor {
+	return &Auditor{Mu: new(sync.Mutex), Sk: sk, ServVk: servVk, Chain: nil}
 }
 
-func (a *Auditor) Update(epoch Epoch, dig merkle.Digest) Error {
+func (a *Auditor) Update(epoch Epoch, dig merkle.Digest, sig cryptoShim.Sig) Error {
 	a.Mu.Lock()
+	enc := (&EpochHash{Epoch: epoch, Hash: dig}).Encode()
+	ok := cryptoShim.Verify(a.ServVk, enc, sig)
+	if !ok {
+		a.Mu.Unlock()
+		return ErrSome
+	}
 	if epoch != uint64(len(a.Chain)) {
 		a.Mu.Unlock()
 		return ErrSome
@@ -199,8 +216,8 @@ func (a *Auditor) GetLink(epoch Epoch) (Link, cryptoShim.Sig, Error) {
 		return nil, nil, ErrSome
 	}
 	link := a.Chain[epoch]
-	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	sig := cryptoShim.Sign(a.Sk, encB)
+	enc := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
+	sig := cryptoShim.Sign(a.Sk, enc)
 	a.Mu.Unlock()
 	return link, sig, ErrNone
 }
@@ -218,7 +235,7 @@ func (a *Auditor) Start(addr grove_ffi.Address) {
 				*enc_reply = reply.Encode()
 				return
 			}
-			err1 := a.Update(args.Epoch, args.Digest)
+			err1 := a.Update(args.Epoch, args.Digest, args.Sig)
 			*enc_reply = (&UpdateReply{Error: err1}).Encode()
 		}
 
@@ -244,6 +261,7 @@ func (a *Auditor) Start(addr grove_ffi.Address) {
 type KeyCli struct {
 	Adtrs     []*urpc.Client
 	AdtrVks   []cryptoShim.VerifierT
+	ServVk    cryptoShim.VerifierT
 	Digs      map[Epoch]merkle.Digest
 	Id        merkle.Id
 	Serv      *urpc.Client
@@ -251,7 +269,7 @@ type KeyCli struct {
 	Vals      []merkle.Val
 }
 
-func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []cryptoShim.VerifierT) *KeyCli {
+func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []cryptoShim.VerifierT, servVk cryptoShim.VerifierT) *KeyCli {
 	c := &KeyCli{}
 	c.Serv = urpc.MakeClient(servAddr)
 	var adtrs []*urpc.Client
@@ -260,6 +278,7 @@ func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.A
 	}
 	c.Adtrs = adtrs
 	c.AdtrVks = adtrVks
+	c.ServVk = servVk
 	c.Digs = make(map[Epoch]merkle.Digest)
 	c.Id = id
 	return c
@@ -267,9 +286,14 @@ func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.A
 
 // TODO: what happens if client calls Put twice in an epoch?
 func (c *KeyCli) Put(val merkle.Val) Error {
-	epoch, err := CallPut(c.Serv, c.Id, val)
+	epoch, sig, err := CallPut(c.Serv, c.Id, val)
 	if err != ErrNone {
 		return err
+	}
+	enc := (&IdValEpoch{Id: c.Id, Val: val, Epoch: epoch}).Encode()
+	ok := cryptoShim.Verify(c.ServVk, enc, sig)
+	if !ok {
+		return ErrSome
 	}
 	c.ValEpochs = append(c.ValEpochs, epoch)
 	c.Vals = append(c.Vals, val)
@@ -281,20 +305,29 @@ func (c *KeyCli) Get(id merkle.Id) (Epoch, merkle.Val, Error) {
 	epoch := reply.Epoch
 	val := reply.Val
 	dig := reply.Digest
+	proofTy := reply.ProofTy
+	proof := reply.Proof
+	sig := reply.Sig
 	err0 := reply.Error
 	if err0 != ErrNone {
 		return 0, nil, err0
 	}
 
-	err1 := merkle.CheckProof(reply.ProofTy, reply.Proof, id, val, dig)
+	enc := (&EpochHash{Epoch: epoch, Hash: dig}).Encode()
+	ok0 := cryptoShim.Verify(c.ServVk, enc, sig)
+	if !ok0 {
+		return 0, nil, ErrSome
+	}
+
+	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
 	if err1 != ErrNone {
 		return 0, nil, err1
 	}
 
 	// If we don't have dig, add it. Otherwise, compare against what we have.
-	origDig, ok := c.Digs[epoch]
+	origDig, ok1 := c.Digs[epoch]
 	var err2 Error
-	if ok {
+	if ok1 {
 		if !std.BytesEqual(origDig, dig) {
 			err2 = ErrSome
 		}
@@ -304,30 +337,38 @@ func (c *KeyCli) Get(id merkle.Id) (Epoch, merkle.Val, Error) {
 	return epoch, val, err2
 }
 
+func (c *KeyCli) getOrFillDig(epoch Epoch) (merkle.Digest, Error) {
+	var dig merkle.Digest
+	dig, ok0 := c.Digs[epoch]
+	if ok0 {
+		return dig, ErrNone
+	}
+	newDig, sig, err := CallGetDigest(c.Serv, epoch)
+	if err != ErrNone {
+		return nil, err
+	}
+	enc := (&EpochHash{Epoch: epoch, Hash: newDig}).Encode()
+	ok1 := cryptoShim.Verify(c.ServVk, enc, sig)
+	if !ok1 {
+		return nil, ErrSome
+	}
+	c.Digs[epoch] = newDig
+	return newDig, ErrNone
+}
+
 // Audited through Epoch idx in retval.
 func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
 	var link Link
 	var epoch uint64
-	var stop bool
-	// Loop written in weird way bc Goose doesn't support continue in nested Ifs.
-	for !stop {
-		var dig merkle.Digest
-		dig, ok0 := c.Digs[epoch]
-		if !ok0 {
-			newDig, err0 := CallGetDigest(c.Serv, epoch)
-			if err0 != ErrNone {
-				stop = true
-			} else {
-				c.Digs[epoch] = newDig
-				dig = newDig
-			}
+	for {
+		dig, err0 := c.getOrFillDig(epoch)
+		if err0 != ErrNone {
+			break
 		}
-		if !stop {
-			link = CalcNextLink(link, dig)
-			epoch++
-		}
+		link = CalcNextLink(link, dig)
+		epoch++
 	}
 	if epoch == 0 {
 		return 0, ErrSome
@@ -341,9 +382,9 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 		return 0, err1
 	}
 
-	encB := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	ok1 := cryptoShim.Verify(adtrVk, encB, sig)
-	if !ok1 {
+	enc := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
+	ok := cryptoShim.Verify(adtrVk, enc, sig)
+	if !ok {
 		return 0, ErrSome
 	}
 	if !std.BytesEqual(link, adtrLink) {
@@ -353,15 +394,48 @@ func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
 	return epoch, ErrNone
 }
 
-// Audited through Epoch idx in retval.
-func (c *KeyCli) SelfAudit() (Epoch, Error) {
+func (c *KeyCli) checkProofWithExpected(epoch Epoch, val merkle.Val, proofTy merkle.ProofTy) Ok {
 	id := c.Id
+	reply := CallGetIdAtEpoch(c.Serv, id, epoch)
+	dig := reply.Digest
+	proof := reply.Proof
+	sig := reply.Sig
+	err0 := reply.Error
+	if err0 != ErrNone {
+		return false
+	}
+	enc := (&EpochHash{Epoch: epoch, Hash: dig}).Encode()
+	ok0 := cryptoShim.Verify(c.ServVk, enc, sig)
+	if !ok0 {
+		return false
+	}
+	// There will only be one (proofTy, val) pair that will
+	// injectively satisfy the (id, dig), so don't need
+	// to request them from the server.
+	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
+	if err1 != ErrNone {
+		return false
+	}
+	// Compare the dig against what we already might have.
+	origDig, ok1 := c.Digs[epoch]
+	if ok1 && !std.BytesEqual(dig, origDig) {
+		return false
+	}
+	if !ok1 {
+		c.Digs[epoch] = dig
+	}
+	return true
+}
+
+// Audited through retval Epoch idx exclusive.
+// TODO: we use inclusive in other places.
+// make sure we're not doing anything stupid.
+func (c *KeyCli) SelfAudit() Epoch {
 	numVals := uint64(len(c.Vals))
 	var valIdx uint64
 	var epoch Epoch
-	var stop bool
-	for !stop {
-		// Check if we hit val at the next epoch.
+	for {
+		// Check if we're at the next val update.
 		if valIdx != numVals {
 			epochChange := c.ValEpochs[valIdx]
 			if epoch == epochChange {
@@ -370,79 +444,48 @@ func (c *KeyCli) SelfAudit() (Epoch, Error) {
 		}
 		var expProofTy merkle.ProofTy
 		var expVal merkle.Val
-		// Check if we're before we even put a val.
+		// Check if at epoch before we even sent a val.
 		if valIdx != 0 {
 			expProofTy = merkle.MembProofTy
 			expVal = c.Vals[valIdx-1]
 		}
-
-		reply := CallGetIdAtEpoch(c.Serv, id, epoch)
-		dig := reply.Digest
-		err0 := reply.Error
-		if err0 != ErrNone {
-			stop = true
-			continue
-		}
-		if reply.ProofTy != expProofTy {
-			stop = true
-			continue
-		}
-		err1 := merkle.CheckProof(reply.ProofTy, reply.Proof, id, expVal, dig)
-		if err1 != ErrNone {
-			stop = true
-			continue
-		}
-		// Store the dig if we don't already have it.
-		origDig, ok0 := c.Digs[epoch]
-		if !ok0 {
-			c.Digs[epoch] = dig
-		} else if !std.BytesEqual(dig, origDig) {
-			stop = true
-		}
-		if !stop {
-			epoch++
-		}
-	}
-	if epoch == 0 {
-		return 0, ErrSome
-	}
-	epoch--
-	return epoch, ErrNone
-}
-
-func UpdateAdtrDigs(servCli, adtrCli *urpc.Client) (Epoch, Error) {
-	var err Error
-	var epoch uint64 = 0
-	for {
-		dig, err0 := CallGetDigest(servCli, epoch)
-		if err0 != ErrNone {
-			break
-		}
-		err1 := CallUpdate(adtrCli, epoch, dig)
-		if err1 != ErrNone {
-			err = ErrSome
+		ok := c.checkProofWithExpected(epoch, expVal, expProofTy)
+		if !ok {
 			break
 		}
 		epoch++
 	}
-	if err != ErrNone || epoch == 0 {
-		return 0, err
+	return epoch
+}
+
+func UpdateAdtrDigs(servCli, adtrCli *urpc.Client) Epoch {
+	var epoch uint64 = 0
+	for {
+		dig, sig, err0 := CallGetDigest(servCli, epoch)
+		if err0 != ErrNone {
+			break
+		}
+		err1 := CallUpdate(adtrCli, epoch, dig, sig)
+		if err1 != ErrNone {
+			break
+		}
+		epoch++
 	}
-	epoch--
-	return epoch, ErrNone
+	return epoch
 }
 
 func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
+	servSk, servVk := cryptoShim.MakeKeys()
 	go func() {
-		s := NewKeyServ()
+		s := NewKeyServ(servSk)
 		s.Start(servAddr)
 	}()
 
-	sk, vk := cryptoShim.MakeKeys()
-	adtrVks := []cryptoShim.VerifierT{vk}
+	adtrSk, adtrVk := cryptoShim.MakeKeys()
+	adtrVks := []cryptoShim.VerifierT{adtrVk}
 	adtrAddrs := []grove_ffi.Address{adtrAddr}
 	go func() {
-		a := NewAuditor(sk)
+		a := NewAuditor(adtrSk, servVk)
 		a.Start(adtrAddr)
 	}()
 
@@ -452,7 +495,7 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 
 	aliceId := cryptoShim.Hash([]byte("alice"))
 	aliceVal := []byte("val")
-	aliceCli := NewKeyCli(aliceId, servAddr, adtrAddrs, adtrVks)
+	aliceCli := NewKeyCli(aliceId, servAddr, adtrAddrs, adtrVks, servVk)
 	err0 := aliceCli.Put(aliceVal)
 	machine.Assume(err0 == ErrNone)
 
@@ -460,14 +503,13 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	err1 := servCli.Call(RpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
 	machine.Assume(err1 == ErrNone)
 
-	epochAdtr, err2 := UpdateAdtrDigs(servCli, adtrCli)
-	machine.Assume(err2 == ErrNone)
-	machine.Assume(epochAdtr == uint64(1))
+	epochAdtr := UpdateAdtrDigs(servCli, adtrCli)
+	machine.Assume(epochAdtr == uint64(2))
 
 	bobId := cryptoShim.Hash([]byte("bob"))
-	bobCli := NewKeyCli(bobId, servAddr, adtrAddrs, adtrVks)
+	bobCli := NewKeyCli(bobId, servAddr, adtrAddrs, adtrVks, servVk)
 	charlieId := cryptoShim.Hash([]byte("charlie"))
-	charlieCli := NewKeyCli(charlieId, servAddr, adtrAddrs, adtrVks)
+	charlieCli := NewKeyCli(charlieId, servAddr, adtrAddrs, adtrVks, servVk)
 
 	epoch0, val0, err3 := bobCli.Get(aliceId)
 	machine.Assume(err3 == ErrNone)
