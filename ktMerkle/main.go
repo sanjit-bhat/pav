@@ -4,8 +4,8 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoHelpers"
 	"github.com/mit-pdos/secure-chat/cryptoFFI"
+	"github.com/mit-pdos/secure-chat/cryptoHelpers"
 	"github.com/mit-pdos/secure-chat/merkle"
 	"github.com/tchajed/goose/machine"
 	"sync"
@@ -13,26 +13,26 @@ import (
 
 // Key server.
 
-type KeyServ struct {
-	Sk     cryptoFFI.SignerT
-	Mu     *sync.Mutex
-	Trees  []*merkle.Tree
-	NextTr *merkle.Tree
-	Chain  []Link
+type keyServ struct {
+	sk     cryptoFFI.SignerT
+	mu     *sync.Mutex
+	trees  []*merkle.Tree
+	nextTr *merkle.Tree
+	chain  []linkTy
 }
 
-func NewKeyServ(sk cryptoFFI.SignerT) *KeyServ {
-	s := &KeyServ{}
-	s.Sk = sk
-	s.Mu = new(sync.Mutex)
+func newKeyServ(sk cryptoFFI.SignerT) *keyServ {
+	s := &keyServ{}
+	s.sk = sk
+	s.mu = new(sync.Mutex)
 	emptyTr := &merkle.Tree{}
-	s.Trees = []*merkle.Tree{emptyTr}
-	s.NextTr = &merkle.Tree{}
-	s.Chain = []Link{emptyTr.Digest()}
+	s.trees = []*merkle.Tree{emptyTr}
+	s.nextTr = &merkle.Tree{}
+	s.chain = []linkTy{emptyTr.Digest()}
 	return s
 }
 
-func CalcNextLink(prevLink Link, data []byte) Link {
+func calcNextLink(prevLink linkTy, data []byte) linkTy {
 	var hr cryptoHelpers.Hasher
 	cryptoHelpers.HasherWrite(&hr, data)
 	cryptoHelpers.HasherWrite(&hr, prevLink)
@@ -40,141 +40,141 @@ func CalcNextLink(prevLink Link, data []byte) Link {
 	return newLink
 }
 
-func ExtendChain(chain *[]Link, data []byte) {
+func extendChain(chain *[]linkTy, data []byte) {
 	oldChain := *chain
-	var prevLink Link
+	var prevLink linkTy
 	chainLen := uint64(len(oldChain))
 	if chainLen > 0 {
 		prevLink = oldChain[chainLen-1]
 	}
-	newLink := CalcNextLink(prevLink, data)
+	newLink := calcNextLink(prevLink, data)
 	*chain = append(oldChain, newLink)
 }
 
-func (s *KeyServ) UpdateEpoch() {
-	s.Mu.Lock()
-	nextTr := s.NextTr
+func (s *keyServ) updateEpoch() {
+	s.mu.Lock()
+	nextTr := s.nextTr
 	dig := nextTr.Digest()
-	ExtendChain(&s.Chain, dig)
-	s.Trees = append(s.Trees, nextTr)
-	s.NextTr = nextTr.DeepCopy()
-	s.Mu.Unlock()
+	extendChain(&s.chain, dig)
+	s.trees = append(s.trees, nextTr)
+	s.nextTr = nextTr.DeepCopy()
+	s.mu.Unlock()
 }
 
 // Returns the epoch at which this val should be visible.
-func (s *KeyServ) Put(id merkle.Id, val merkle.Val) (Epoch, cryptoFFI.Sig, Error) {
-	s.Mu.Lock()
-	nextEpoch := uint64(len(s.Trees))
-	_, _, err := s.NextTr.Put(id, val)
-	enc := (&IdValEpoch{Id: id, Val: val, Epoch: nextEpoch}).Encode()
-	sig := cryptoFFI.Sign(s.Sk, enc)
-	s.Mu.Unlock()
+func (s *keyServ) put(id merkle.Id, val merkle.Val) (epochTy, cryptoFFI.Sig, errorTy) {
+	s.mu.Lock()
+	nextEpoch := uint64(len(s.trees))
+	_, _, err := s.nextTr.Put(id, val)
+	enc := (&idValEpoch{id: id, val: val, epoch: nextEpoch}).encode()
+	sig := cryptoFFI.Sign(s.sk, enc)
+	s.mu.Unlock()
 	return nextEpoch, sig, err
 }
 
-func (s *KeyServ) GetIdAtEpoch(id merkle.Id, epoch Epoch) *GetIdAtEpochReply {
-	errReply := &GetIdAtEpochReply{}
-	errReply.Error = ErrSome
-	s.Mu.Lock()
-	if epoch >= uint64(len(s.Trees)) {
-		s.Mu.Unlock()
+func (s *keyServ) getIdAtEpoch(id merkle.Id, epoch epochTy) *getIdAtEpochReply {
+	errReply := &getIdAtEpochReply{}
+	errReply.error = errSome
+	s.mu.Lock()
+	if epoch >= uint64(len(s.trees)) {
+		s.mu.Unlock()
 		return errReply
 	}
-	tr := s.Trees[epoch]
+	tr := s.trees[epoch]
 	reply := tr.Get(id)
-	enc := (&EpochHash{Epoch: epoch, Hash: reply.Digest}).Encode()
-	sig := cryptoFFI.Sign(s.Sk, enc)
-	s.Mu.Unlock()
-	return &GetIdAtEpochReply{Digest: reply.Digest, Proof: reply.Proof,
-		Sig: sig, Error: reply.Error}
+	enc := (&epochHash{epoch: epoch, hash: reply.Digest}).encode()
+	sig := cryptoFFI.Sign(s.sk, enc)
+	s.mu.Unlock()
+	return &getIdAtEpochReply{digest: reply.Digest, proof: reply.Proof,
+		sig: sig, error: reply.Error}
 }
 
-func (s *KeyServ) GetIdLatest(id merkle.Id) *GetIdLatestReply {
-	s.Mu.Lock()
-	lastEpoch := uint64(len(s.Trees)) - 1
-	tr := s.Trees[lastEpoch]
+func (s *keyServ) getIdLatest(id merkle.Id) *getIdLatestReply {
+	s.mu.Lock()
+	lastEpoch := uint64(len(s.trees)) - 1
+	tr := s.trees[lastEpoch]
 	reply := tr.Get(id)
-	enc := (&EpochHash{Epoch: lastEpoch, Hash: reply.Digest}).Encode()
-	sig := cryptoFFI.Sign(s.Sk, enc)
-	s.Mu.Unlock()
-	return &GetIdLatestReply{Epoch: lastEpoch, Val: reply.Val, Digest: reply.Digest,
-		ProofTy: reply.ProofTy, Proof: reply.Proof, Sig: sig, Error: reply.Error}
+	enc := (&epochHash{epoch: lastEpoch, hash: reply.Digest}).encode()
+	sig := cryptoFFI.Sign(s.sk, enc)
+	s.mu.Unlock()
+	return &getIdLatestReply{epoch: lastEpoch, val: reply.Val, digest: reply.Digest,
+		proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
 }
 
-func (s *KeyServ) GetDigest(epoch Epoch) (merkle.Digest, cryptoFFI.Sig, Error) {
-	s.Mu.Lock()
-	if epoch >= uint64(len(s.Trees)) {
-		s.Mu.Unlock()
-		return nil, nil, ErrSome
+func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoFFI.Sig, errorTy) {
+	s.mu.Lock()
+	if epoch >= uint64(len(s.trees)) {
+		s.mu.Unlock()
+		return nil, nil, errSome
 	}
-	tr := s.Trees[epoch]
+	tr := s.trees[epoch]
 	dig := tr.Digest()
-	enc := (&EpochHash{Epoch: epoch, Hash: dig}).Encode()
-	sig := cryptoFFI.Sign(s.Sk, enc)
-	s.Mu.Unlock()
-	return dig, sig, ErrNone
+	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	sig := cryptoFFI.Sign(s.sk, enc)
+	s.mu.Unlock()
+	return dig, sig, errNone
 }
 
-func (s *KeyServ) Start(addr grove_ffi.Address) {
+func (s *keyServ) start(addr grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
-	handlers[RpcKeyServUpdateEpoch] =
+	handlers[rpcKeyServUpdateEpoch] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			s.UpdateEpoch()
+			s.updateEpoch()
 		}
 
-	handlers[RpcKeyServPut] =
+	handlers[rpcKeyServPut] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			args := &PutArg{}
-			_, err0 := args.Decode(enc_args)
-			if err0 != ErrNone {
-				*enc_reply = (&PutReply{Epoch: 0, Error: err0}).Encode()
+			args := &putArg{}
+			_, err0 := args.decode(enc_args)
+			if err0 != errNone {
+				*enc_reply = (&putReply{epoch: 0, error: err0}).encode()
 				return
 			}
-			epoch, sig, err1 := s.Put(args.Id, args.Val)
-			*enc_reply = (&PutReply{Epoch: epoch, Sig: sig, Error: err1}).Encode()
+			epoch, sig, err1 := s.put(args.id, args.val)
+			*enc_reply = (&putReply{epoch: epoch, sig: sig, error: err1}).encode()
 		}
 
-	handlers[RpcKeyServGetIdAtEpoch] =
+	handlers[rpcKeyServGetIdAtEpoch] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			args := &GetIdAtEpochArg{}
-			_, err0 := args.Decode(enc_args)
-			if err0 != ErrNone {
-				reply := &GetIdAtEpochReply{}
-				reply.Error = ErrSome
-				*enc_reply = reply.Encode()
+			args := &getIdAtEpochArg{}
+			_, err0 := args.decode(enc_args)
+			if err0 != errNone {
+				reply := &getIdAtEpochReply{}
+				reply.error = errSome
+				*enc_reply = reply.encode()
 				return
 			}
-			reply := s.GetIdAtEpoch(args.Id, args.Epoch)
-			*enc_reply = reply.Encode()
+			reply := s.getIdAtEpoch(args.id, args.epoch)
+			*enc_reply = reply.encode()
 		}
 
-	handlers[RpcKeyServGetIdLatest] =
+	handlers[rpcKeyServGetIdLatest] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			args := &GetIdLatestArg{}
-			_, err0 := args.Decode(enc_args)
-			if err0 != ErrNone {
-				reply := &GetIdLatestReply{}
-				reply.Error = ErrSome
-				*enc_reply = reply.Encode()
+			args := &getIdLatestArg{}
+			_, err0 := args.decode(enc_args)
+			if err0 != errNone {
+				reply := &getIdLatestReply{}
+				reply.error = errSome
+				*enc_reply = reply.encode()
 				return
 			}
-			reply := s.GetIdLatest(args.Id)
-			*enc_reply = reply.Encode()
+			reply := s.getIdLatest(args.id)
+			*enc_reply = reply.encode()
 		}
 
-	handlers[RpcKeyServGetDigest] =
+	handlers[rpcKeyServGetDigest] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			args := &GetDigestArg{}
-			_, err0 := args.Decode(enc_args)
-			if err0 != ErrNone {
-				reply := &GetDigestReply{}
-				reply.Error = ErrSome
-				*enc_reply = reply.Encode()
+			args := &getDigestArg{}
+			_, err0 := args.decode(enc_args)
+			if err0 != errNone {
+				reply := &getDigestReply{}
+				reply.error = errSome
+				*enc_reply = reply.encode()
 				return
 			}
-			dig, sig, err1 := s.GetDigest(args.Epoch)
-			*enc_reply = (&GetDigestReply{Digest: dig, Sig: sig, Error: err1}).Encode()
+			dig, sig, err1 := s.getDigest(args.epoch)
+			*enc_reply = (&getDigestReply{digest: dig, sig: sig, error: err1}).encode()
 		}
 
 	urpc.MakeServer(handlers).Serve(addr)
@@ -182,76 +182,76 @@ func (s *KeyServ) Start(addr grove_ffi.Address) {
 
 // Auditor.
 
-type Auditor struct {
-	Mu     *sync.Mutex
-	Sk     cryptoFFI.SignerT
-	ServVk cryptoFFI.VerifierT
-	Chain  []Link
+type auditor struct {
+	mu     *sync.Mutex
+	sk     cryptoFFI.SignerT
+	servVk cryptoFFI.VerifierT
+	chain  []linkTy
 }
 
-func NewAuditor(sk cryptoFFI.SignerT, servVk cryptoFFI.VerifierT) *Auditor {
-	return &Auditor{Mu: new(sync.Mutex), Sk: sk, ServVk: servVk, Chain: nil}
+func newAuditor(sk cryptoFFI.SignerT, servVk cryptoFFI.VerifierT) *auditor {
+	return &auditor{mu: new(sync.Mutex), sk: sk, servVk: servVk, chain: nil}
 }
 
-func (a *Auditor) Update(epoch Epoch, dig merkle.Digest, sig cryptoFFI.Sig) Error {
-	a.Mu.Lock()
-	enc := (&EpochHash{Epoch: epoch, Hash: dig}).Encode()
-	ok := cryptoFFI.Verify(a.ServVk, enc, sig)
+func (a *auditor) update(epoch epochTy, dig merkle.Digest, sig cryptoFFI.Sig) errorTy {
+	a.mu.Lock()
+	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	ok := cryptoFFI.Verify(a.servVk, enc, sig)
 	if !ok {
-		a.Mu.Unlock()
-		return ErrSome
+		a.mu.Unlock()
+		return errSome
 	}
-	if epoch != uint64(len(a.Chain)) {
-		a.Mu.Unlock()
-		return ErrSome
+	if epoch != uint64(len(a.chain)) {
+		a.mu.Unlock()
+		return errSome
 	}
-	ExtendChain(&a.Chain, dig)
-	a.Mu.Unlock()
-	return ErrNone
+	extendChain(&a.chain, dig)
+	a.mu.Unlock()
+	return errNone
 }
 
-func (a *Auditor) GetLink(epoch Epoch) (Link, cryptoFFI.Sig, Error) {
-	a.Mu.Lock()
-	if epoch >= uint64(len(a.Chain)) {
-		a.Mu.Unlock()
-		return nil, nil, ErrSome
+func (a *auditor) getLink(epoch epochTy) (linkTy, cryptoFFI.Sig, errorTy) {
+	a.mu.Lock()
+	if epoch >= uint64(len(a.chain)) {
+		a.mu.Unlock()
+		return nil, nil, errSome
 	}
-	link := a.Chain[epoch]
-	enc := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
-	sig := cryptoFFI.Sign(a.Sk, enc)
-	a.Mu.Unlock()
-	return link, sig, ErrNone
+	link := a.chain[epoch]
+	enc := (&epochHash{epoch: epoch, hash: link}).encode()
+	sig := cryptoFFI.Sign(a.sk, enc)
+	a.mu.Unlock()
+	return link, sig, errNone
 }
 
-func (a *Auditor) Start(addr grove_ffi.Address) {
+func (a *auditor) start(addr grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
-	handlers[RpcAuditorUpdate] =
+	handlers[rpcAuditorUpdate] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			args := &UpdateArg{}
-			_, err0 := args.Decode(enc_args)
-			if err0 != ErrNone {
-				reply := &UpdateReply{}
-				reply.Error = ErrSome
-				*enc_reply = reply.Encode()
+			args := &updateArg{}
+			_, err0 := args.decode(enc_args)
+			if err0 != errNone {
+				reply := &updateReply{}
+				reply.error = errSome
+				*enc_reply = reply.encode()
 				return
 			}
-			err1 := a.Update(args.Epoch, args.Digest, args.Sig)
-			*enc_reply = (&UpdateReply{Error: err1}).Encode()
+			err1 := a.update(args.epoch, args.digest, args.sig)
+			*enc_reply = (&updateReply{error: err1}).encode()
 		}
 
-	handlers[RpcAuditorGetLink] =
+	handlers[rpcAuditorGetLink] =
 		func(enc_args []byte, enc_reply *[]byte) {
-			args := &GetLinkArg{}
-			_, err0 := args.Decode(enc_args)
-			if err0 != ErrNone {
-				reply := &GetLinkReply{}
-				reply.Error = ErrSome
-				*enc_reply = reply.Encode()
+			args := &getLinkArg{}
+			_, err0 := args.decode(enc_args)
+			if err0 != errNone {
+				reply := &getLinkReply{}
+				reply.error = errSome
+				*enc_reply = reply.encode()
 				return
 			}
-			link, sig, err1 := a.GetLink(args.Epoch)
-			*enc_reply = (&GetLinkReply{Link: link, Sig: sig, Error: err1}).Encode()
+			link, sig, err1 := a.getLink(args.epoch)
+			*enc_reply = (&getLinkReply{link: link, sig: sig, error: err1}).encode()
 		}
 
 	urpc.MakeServer(handlers).Serve(addr)
@@ -259,154 +259,154 @@ func (a *Auditor) Start(addr grove_ffi.Address) {
 
 // Key client.
 
-type KeyCli struct {
-	Adtrs     []*urpc.Client
-	AdtrVks   []cryptoFFI.VerifierT
-	ServVk    cryptoFFI.VerifierT
-	Digs      map[Epoch]merkle.Digest
-	Id        merkle.Id
-	Serv      *urpc.Client
-	ValEpochs []Epoch
-	Vals      []merkle.Val
+type keyCli struct {
+	adtrs     []*urpc.Client
+	adtrVks   []cryptoFFI.VerifierT
+	servVk    cryptoFFI.VerifierT
+	digs      map[epochTy]merkle.Digest
+	id        merkle.Id
+	serv      *urpc.Client
+	valEpochs []epochTy
+	vals      []merkle.Val
 }
 
-func NewKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []cryptoFFI.VerifierT, servVk cryptoFFI.VerifierT) *KeyCli {
-	c := &KeyCli{}
-	c.Serv = urpc.MakeClient(servAddr)
+func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrVks []cryptoFFI.VerifierT, servVk cryptoFFI.VerifierT) *keyCli {
+	c := &keyCli{}
+	c.serv = urpc.MakeClient(servAddr)
 	var adtrs []*urpc.Client
 	for _, addr := range adtrAddrs {
 		adtrs = append(adtrs, urpc.MakeClient(addr))
 	}
-	c.Adtrs = adtrs
-	c.AdtrVks = adtrVks
-	c.ServVk = servVk
-	c.Digs = make(map[Epoch]merkle.Digest)
-	c.Id = id
+	c.adtrs = adtrs
+	c.adtrVks = adtrVks
+	c.servVk = servVk
+	c.digs = make(map[epochTy]merkle.Digest)
+	c.id = id
 	return c
 }
 
-// TODO: what happens if client calls Put twice in an epoch?
-func (c *KeyCli) Put(val merkle.Val) (Epoch, Error) {
-	epoch, sig, err := CallPut(c.Serv, c.Id, val)
-	if err != ErrNone {
+// TODO: what happens if client calls put twice in an epoch?
+func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
+	epoch, sig, err := callPut(c.serv, c.id, val)
+	if err != errNone {
 		return 0, err
 	}
-	enc := (&IdValEpoch{Id: c.Id, Val: val, Epoch: epoch}).Encode()
-	ok := cryptoFFI.Verify(c.ServVk, enc, sig)
+	enc := (&idValEpoch{id: c.id, val: val, epoch: epoch}).encode()
+	ok := cryptoFFI.Verify(c.servVk, enc, sig)
 	if !ok {
-		return 0, ErrSome
+		return 0, errSome
 	}
-	c.ValEpochs = append(c.ValEpochs, epoch)
-	c.Vals = append(c.Vals, val)
-	return epoch, ErrNone
+	c.valEpochs = append(c.valEpochs, epoch)
+	c.vals = append(c.vals, val)
+	return epoch, errNone
 }
 
-func (c *KeyCli) Get(id merkle.Id) (Epoch, merkle.Val, Error) {
-	reply := CallGetIdLatest(c.Serv, id)
-	epoch := reply.Epoch
-	val := reply.Val
-	dig := reply.Digest
-	proofTy := reply.ProofTy
-	proof := reply.Proof
-	sig := reply.Sig
-	err0 := reply.Error
-	if err0 != ErrNone {
+func (c *keyCli) get(id merkle.Id) (epochTy, merkle.Val, errorTy) {
+	reply := callGetIdLatest(c.serv, id)
+	epoch := reply.epoch
+	val := reply.val
+	dig := reply.digest
+	proofTy := reply.proofTy
+	proof := reply.proof
+	sig := reply.sig
+	err0 := reply.error
+	if err0 != errNone {
 		return 0, nil, err0
 	}
 
-	enc := (&EpochHash{Epoch: epoch, Hash: dig}).Encode()
-	ok0 := cryptoFFI.Verify(c.ServVk, enc, sig)
+	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	ok0 := cryptoFFI.Verify(c.servVk, enc, sig)
 	if !ok0 {
-		return 0, nil, ErrSome
+		return 0, nil, errSome
 	}
 
 	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
-	if err1 != ErrNone {
+	if err1 != errNone {
 		return 0, nil, err1
 	}
 
 	// If we don't have dig, add it. Otherwise, compare against what we have.
-	origDig, ok1 := c.Digs[epoch]
-	var err2 Error
+	origDig, ok1 := c.digs[epoch]
+	var err2 errorTy
 	if ok1 {
 		if !std.BytesEqual(origDig, dig) {
-			err2 = ErrSome
+			err2 = errSome
 		}
 	} else {
-		c.Digs[epoch] = dig
+		c.digs[epoch] = dig
 	}
 	return epoch, val, err2
 }
 
-func (c *KeyCli) getOrFillDig(epoch Epoch) (merkle.Digest, Error) {
+func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
 	var dig merkle.Digest
-	dig, ok0 := c.Digs[epoch]
+	dig, ok0 := c.digs[epoch]
 	if ok0 {
-		return dig, ErrNone
+		return dig, errNone
 	}
-	newDig, sig, err := CallGetDigest(c.Serv, epoch)
-	if err != ErrNone {
+	newDig, sig, err := callGetDigest(c.serv, epoch)
+	if err != errNone {
 		return nil, err
 	}
-	enc := (&EpochHash{Epoch: epoch, Hash: newDig}).Encode()
-	ok1 := cryptoFFI.Verify(c.ServVk, enc, sig)
+	enc := (&epochHash{epoch: epoch, hash: newDig}).encode()
+	ok1 := cryptoFFI.Verify(c.servVk, enc, sig)
 	if !ok1 {
-		return nil, ErrSome
+		return nil, errSome
 	}
-	c.Digs[epoch] = newDig
-	return newDig, ErrNone
+	c.digs[epoch] = newDig
+	return newDig, errNone
 }
 
 // Audited through Epoch idx in retval.
-func (c *KeyCli) Audit(adtrId uint64) (Epoch, Error) {
+func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
-	var link Link
+	var link linkTy
 	var epoch uint64
 	for {
 		dig, err0 := c.getOrFillDig(epoch)
-		if err0 != ErrNone {
+		if err0 != errNone {
 			break
 		}
-		link = CalcNextLink(link, dig)
+		link = calcNextLink(link, dig)
 		epoch++
 	}
 	if epoch == 0 {
-		return 0, ErrSome
+		return 0, errSome
 	}
 	epoch--
 
-	adtr := c.Adtrs[adtrId]
-	adtrVk := c.AdtrVks[adtrId]
-	adtrLink, sig, err1 := CallGetLink(adtr, epoch)
-	if err1 != ErrNone {
+	adtr := c.adtrs[adtrId]
+	adtrVk := c.adtrVks[adtrId]
+	adtrLink, sig, err1 := callGetLink(adtr, epoch)
+	if err1 != errNone {
 		return 0, err1
 	}
 
-	enc := (&EpochHash{Epoch: epoch, Hash: link}).Encode()
+	enc := (&epochHash{epoch: epoch, hash: link}).encode()
 	ok := cryptoFFI.Verify(adtrVk, enc, sig)
 	if !ok {
-		return 0, ErrSome
+		return 0, errSome
 	}
 	if !std.BytesEqual(link, adtrLink) {
-		return 0, ErrSome
+		return 0, errSome
 	}
 
-	return epoch, ErrNone
+	return epoch, errNone
 }
 
-func (c *KeyCli) checkProofWithExpected(epoch Epoch, val merkle.Val, proofTy merkle.ProofTy) Ok {
-	id := c.Id
-	reply := CallGetIdAtEpoch(c.Serv, id, epoch)
-	dig := reply.Digest
-	proof := reply.Proof
-	sig := reply.Sig
-	err0 := reply.Error
-	if err0 != ErrNone {
+func (c *keyCli) checkProofWithExpected(epoch epochTy, val merkle.Val, proofTy merkle.ProofTy) okTy {
+	id := c.id
+	reply := callGetIdAtEpoch(c.serv, id, epoch)
+	dig := reply.digest
+	proof := reply.proof
+	sig := reply.sig
+	err0 := reply.error
+	if err0 != errNone {
 		return false
 	}
-	enc := (&EpochHash{Epoch: epoch, Hash: dig}).Encode()
-	ok0 := cryptoFFI.Verify(c.ServVk, enc, sig)
+	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	ok0 := cryptoFFI.Verify(c.servVk, enc, sig)
 	if !ok0 {
 		return false
 	}
@@ -414,16 +414,16 @@ func (c *KeyCli) checkProofWithExpected(epoch Epoch, val merkle.Val, proofTy mer
 	// injectively satisfy the (id, dig), so don't need
 	// to request them from the server.
 	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
-	if err1 != ErrNone {
+	if err1 != errNone {
 		return false
 	}
 	// Compare the dig against what we already might have.
-	origDig, ok1 := c.Digs[epoch]
+	origDig, ok1 := c.digs[epoch]
 	if ok1 && !std.BytesEqual(dig, origDig) {
 		return false
 	}
 	if !ok1 {
-		c.Digs[epoch] = dig
+		c.digs[epoch] = dig
 	}
 	return true
 }
@@ -431,14 +431,14 @@ func (c *KeyCli) checkProofWithExpected(epoch Epoch, val merkle.Val, proofTy mer
 // Audited through retval Epoch idx exclusive.
 // TODO: we use inclusive in other places.
 // make sure we're not doing anything stupid.
-func (c *KeyCli) SelfAudit() Epoch {
-	numVals := uint64(len(c.Vals))
+func (c *keyCli) selfAudit() epochTy {
+	numVals := uint64(len(c.vals))
 	var valIdx uint64
-	var epoch Epoch
+	var epoch epochTy
 	for {
 		// Check if we're at the next val update.
 		if valIdx != numVals {
-			epochChange := c.ValEpochs[valIdx]
+			epochChange := c.valEpochs[valIdx]
 			if epoch == epochChange {
 				valIdx++
 			}
@@ -448,7 +448,7 @@ func (c *KeyCli) SelfAudit() Epoch {
 		// Check if at epoch before we even sent a val.
 		if valIdx != 0 {
 			expProofTy = merkle.MembProofTy
-			expVal = c.Vals[valIdx-1]
+			expVal = c.vals[valIdx-1]
 		}
 		ok := c.checkProofWithExpected(epoch, expVal, expProofTy)
 		if !ok {
@@ -459,15 +459,15 @@ func (c *KeyCli) SelfAudit() Epoch {
 	return epoch
 }
 
-func UpdateAdtrDigs(servCli, adtrCli *urpc.Client) Epoch {
+func updateAdtrDigs(servCli, adtrCli *urpc.Client) epochTy {
 	var epoch uint64 = 0
 	for {
-		dig, sig, err0 := CallGetDigest(servCli, epoch)
-		if err0 != ErrNone {
+		dig, sig, err0 := callGetDigest(servCli, epoch)
+		if err0 != errNone {
 			break
 		}
-		err1 := CallUpdate(adtrCli, epoch, dig, sig)
-		if err1 != ErrNone {
+		err1 := callUpdate(adtrCli, epoch, dig, sig)
+		if err1 != errNone {
 			break
 		}
 		epoch++
@@ -478,16 +478,16 @@ func UpdateAdtrDigs(servCli, adtrCli *urpc.Client) Epoch {
 func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	servSk, servVk := cryptoFFI.MakeKeys()
 	go func() {
-		s := NewKeyServ(servSk)
-		s.Start(servAddr)
+		s := newKeyServ(servSk)
+		s.start(servAddr)
 	}()
 
 	adtrSk, adtrVk := cryptoFFI.MakeKeys()
 	adtrVks := []cryptoFFI.VerifierT{adtrVk}
 	adtrAddrs := []grove_ffi.Address{adtrAddr}
 	go func() {
-		a := NewAuditor(adtrSk, servVk)
-		a.Start(adtrAddr)
+		a := newAuditor(adtrSk, servVk)
+		a.start(adtrAddr)
 	}()
 
 	machine.Sleep(1_000_000)
@@ -496,31 +496,31 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 
 	aliceId := cryptoFFI.Hash([]byte("alice"))
 	aliceVal := []byte("val")
-	aliceCli := NewKeyCli(aliceId, servAddr, adtrAddrs, adtrVks, servVk)
-	err0 := aliceCli.Put(aliceVal)
-	machine.Assume(err0 == ErrNone)
+	aliceCli := newKeyCli(aliceId, servAddr, adtrAddrs, adtrVks, servVk)
+	_, err0 := aliceCli.put(aliceVal)
+	machine.Assume(err0 == errNone)
 
 	emptyReplyB := make([]byte, 0)
-	err1 := servCli.Call(RpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
-	machine.Assume(err1 == ErrNone)
+	err1 := servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
+	machine.Assume(err1 == urpc.ErrNone)
 
-	epochAdtr := UpdateAdtrDigs(servCli, adtrCli)
+	epochAdtr := updateAdtrDigs(servCli, adtrCli)
 	machine.Assume(epochAdtr == uint64(2))
 
 	bobId := cryptoFFI.Hash([]byte("bob"))
-	bobCli := NewKeyCli(bobId, servAddr, adtrAddrs, adtrVks, servVk)
+	bobCli := newKeyCli(bobId, servAddr, adtrAddrs, adtrVks, servVk)
 	charlieId := cryptoFFI.Hash([]byte("charlie"))
-	charlieCli := NewKeyCli(charlieId, servAddr, adtrAddrs, adtrVks, servVk)
+	charlieCli := newKeyCli(charlieId, servAddr, adtrAddrs, adtrVks, servVk)
 
-	epoch0, val0, err3 := bobCli.Get(aliceId)
-	machine.Assume(err3 == ErrNone)
-	epoch1, val1, err4 := charlieCli.Get(aliceId)
-	machine.Assume(err4 == ErrNone)
+	epoch0, val0, err3 := bobCli.get(aliceId)
+	machine.Assume(err3 == errNone)
+	epoch1, val1, err4 := charlieCli.get(aliceId)
+	machine.Assume(err4 == errNone)
 
-	epoch2, err5 := bobCli.Audit(0)
-	machine.Assume(err5 == ErrNone)
-	epoch3, err6 := charlieCli.Audit(0)
-	machine.Assume(err6 == ErrNone)
+	epoch2, err5 := bobCli.audit(0)
+	machine.Assume(err5 == errNone)
+	epoch3, err6 := charlieCli.audit(0)
+	machine.Assume(err6 == errNone)
 
 	if epoch0 == epoch1 && epoch0 <= epoch2 && epoch1 <= epoch3 {
 		machine.Assert(std.BytesEqual(val0, val1))

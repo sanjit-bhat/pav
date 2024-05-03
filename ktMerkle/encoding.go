@@ -7,41 +7,41 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-type Epoch = uint64
-type Link = []byte
-type Error = uint64
-type Ok = bool
+type epochTy = uint64
+type linkTy = []byte
+type errorTy = bool
+type okTy = bool
 
 const (
 	// Errors
-	ErrNone Error = 0
-	ErrSome Error = 1
+	errNone errorTy = false
+	errSome errorTy = true
 	// RPCs
-	RpcKeyServUpdateEpoch  uint64 = 1
-	RpcKeyServPut          uint64 = 2
-	RpcKeyServGetIdAtEpoch uint64 = 3
-	RpcKeyServGetIdLatest  uint64 = 4
-	RpcKeyServGetDigest    uint64 = 5
-	RpcAuditorUpdate       uint64 = 1
-	RpcAuditorGetLink      uint64 = 2
+	rpcKeyServUpdateEpoch  uint64 = 1
+	rpcKeyServPut          uint64 = 2
+	rpcKeyServGetIdAtEpoch uint64 = 3
+	rpcKeyServGetIdLatest  uint64 = 4
+	rpcKeyServGetDigest    uint64 = 5
+	rpcAuditorUpdate       uint64 = 1
+	rpcAuditorGetLink      uint64 = 2
 )
 
-func SafeReadInt(b0 []byte) (uint64, []byte, Error) {
+func SafeReadInt(b0 []byte) (uint64, []byte, errorTy) {
 	var b = b0
 	if uint64(len(b0)) < 8 {
-		return 0, nil, ErrSome
+		return 0, nil, errSome
 	}
 	data, b := marshal.ReadInt(b)
-	return data, b, ErrNone
+	return data, b, errNone
 }
 
-func SafeReadBytes(b0 []byte, length uint64) ([]byte, []byte, Error) {
+func SafeReadBytes(b0 []byte, length uint64) ([]byte, []byte, errorTy) {
 	var b = b0
 	if uint64(len(b)) < length {
-		return nil, nil, ErrSome
+		return nil, nil, errSome
 	}
 	data, b := marshal.ReadBytes(b, length)
-	return data, b, ErrNone
+	return data, b, errNone
 }
 
 func WriteBool(b0 []byte, data bool) []byte {
@@ -54,17 +54,17 @@ func WriteBool(b0 []byte, data bool) []byte {
 	return b
 }
 
-func ReadBool(b0 []byte) (bool, []byte, Error) {
+func ReadBool(b0 []byte) (bool, []byte, errorTy) {
 	var b = b0
 	data, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return false, nil, err
 	}
 	var data1 bool
 	if data != 0 {
 		data1 = true
 	}
-	return data1, b, ErrNone
+	return data1, b, errNone
 }
 
 func WriteSlice1D(b0 []byte, data []byte) []byte {
@@ -92,592 +92,590 @@ func WriteSlice3D(b0 []byte, data [][][]byte) []byte {
 	return b
 }
 
-func ReadSlice1D(b0 []byte) ([]byte, []byte, Error) {
+func ReadSlice1D(b0 []byte) ([]byte, []byte, errorTy) {
 	var b = b0
 	length, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, nil, err
 	}
 	data, b, err := SafeReadBytes(b, length)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, nil, err
 	}
-	return data, b, ErrNone
+	return data, b, errNone
 }
 
-func ReadSlice2D(b0 []byte) ([][]byte, []byte, Error) {
+func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
 	var b = b0
 	length, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, nil, err
 	}
 	var data0 [][]byte
-	var err0 Error
+	var err0 errorTy
 	var i uint64
 	for ; i < length; i++ {
 		var data1 []byte
-		var err1 Error
+		var err1 errorTy
 		data1, b, err1 = ReadSlice1D(b)
-		if err1 != ErrNone {
+		if err1 != errNone {
 			err0 = err1
 			continue
 		}
 		data0 = append(data0, data1)
 	}
-	if err0 != ErrNone {
+	if err0 != errNone {
 		return nil, nil, err0
 	}
-	return data0, b, ErrNone
+	return data0, b, errNone
 }
 
-func ReadSlice3D(b0 []byte) ([][][]byte, []byte, Error) {
+func ReadSlice3D(b0 []byte) ([][][]byte, []byte, errorTy) {
 	var b = b0
 	length, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, nil, err
 	}
 	var data0 [][][]byte
-	var err0 Error
+	var err0 errorTy
 	var i uint64
 	for ; i < length; i++ {
 		var data1 [][]byte
-		var err1 Error
+		var err1 errorTy
 		data1, b, err1 = ReadSlice2D(b)
-		if err1 != ErrNone {
+		if err1 != errNone {
 			err0 = err1
 			continue
 		}
 		data0 = append(data0, data1)
 	}
-	if err0 != ErrNone {
+	if err0 != errNone {
 		return nil, nil, err0
 	}
-	return data0, b, ErrNone
+	return data0, b, errNone
 }
 
-type EpochHash struct {
-	Epoch Epoch
-	Hash  []byte
+type epochHash struct {
+	epoch epochTy
+	hash  []byte
 }
 
-func (o *EpochHash) Encode() []byte {
+func (o *epochHash) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.Epoch)
-	b = marshal.WriteBytes(b, o.Hash)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.hash)
 	return b
 }
 
-func (o *EpochHash) Decode(b0 []byte) ([]byte, Error) {
+func (o *epochHash) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	hash, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	o.Epoch = epoch
-	o.Hash = hash
-	return b, ErrNone
+	o.epoch = epoch
+	o.hash = hash
+	return b, errNone
 }
 
-type PutArg struct {
-	Id  merkle.Id
-	Val merkle.Val
+type putArg struct {
+	id  merkle.Id
+	val merkle.Val
 }
 
-func (o *PutArg) Encode() []byte {
+func (o *putArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.Id)
-	b = WriteSlice1D(b, o.Val)
+	b = marshal.WriteBytes(b, o.id)
+	b = WriteSlice1D(b, o.val)
 	return b
 }
 
-func (o *PutArg) Decode(b0 []byte) ([]byte, Error) {
+func (o *putArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	val, b, err := ReadSlice1D(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	o.Id = id
-	o.Val = val
-	return b, ErrNone
+	o.id = id
+	o.val = val
+	return b, errNone
 }
 
-type IdValEpoch struct {
-	Id    merkle.Id
-	Val   merkle.Val
-	Epoch Epoch
+type idValEpoch struct {
+	id    merkle.Id
+	val   merkle.Val
+	epoch epochTy
 }
 
-func (o *IdValEpoch) Encode() []byte {
+func (o *idValEpoch) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.Id)
-	b = WriteSlice1D(b, o.Val)
-	b = marshal.WriteInt(b, o.Epoch)
+	b = marshal.WriteBytes(b, o.id)
+	b = WriteSlice1D(b, o.val)
+	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
 
-func (o *IdValEpoch) Decode(b0 []byte) ([]byte, Error) {
+func (o *idValEpoch) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	val, b, err := ReadSlice1D(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	epoch, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	o.Id = id
-	o.Val = val
-	o.Epoch = epoch
-	return b, ErrNone
+	o.id = id
+	o.val = val
+	o.epoch = epoch
+	return b, errNone
 }
 
-type PutReply struct {
-	Epoch Epoch
-	Sig   cryptoFFI.Sig
-	Error Error
+type putReply struct {
+	epoch epochTy
+	sig   cryptoFFI.Sig
+	error errorTy
 }
 
-func (o *PutReply) Encode() []byte {
+func (o *putReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.Epoch)
-	b = marshal.WriteBytes(b, o.Sig)
-	b = marshal.WriteInt(b, o.Error)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.sig)
+	b = WriteBool(b, o.error)
 	return b
 }
 
-func (o *PutReply) Decode(b0 []byte) ([]byte, Error) {
+func (o *putReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	error, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	error, b, err := ReadBool(b)
+	if err != errNone {
 		return nil, err
 	}
-	o.Sig = sig
-	o.Epoch = epoch
-	o.Error = error
-	return b, ErrNone
+	o.sig = sig
+	o.epoch = epoch
+	o.error = error
+	return b, errNone
 }
 
-func CallPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (Epoch, cryptoFFI.Sig, Error) {
-	argB := (&PutArg{Id: id, Val: val}).Encode()
+func callPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (epochTy, cryptoFFI.Sig, errorTy) {
+	argB := (&putArg{id: id, val: val}).encode()
 	replyB := make([]byte, 0)
-	err0 := cli.Call(RpcKeyServPut, argB, &replyB, 100)
-	if err0 != ErrNone {
-		return 0, nil, err0
+	err0 := cli.Call(rpcKeyServPut, argB, &replyB, 100)
+	if err0 != urpc.ErrNone {
+		return 0, nil, errSome
 	}
-	reply := &PutReply{}
-	_, err1 := reply.Decode(replyB)
-	if err1 != ErrNone {
+	reply := &putReply{}
+	_, err1 := reply.decode(replyB)
+	if err1 != errNone {
 		return 0, nil, err1
 	}
-	return reply.Epoch, reply.Sig, reply.Error
+	return reply.epoch, reply.sig, reply.error
 }
 
-type GetIdAtEpochArg struct {
-	Id    merkle.Id
-	Epoch Epoch
+type getIdAtEpochArg struct {
+	id    merkle.Id
+	epoch epochTy
 }
 
-func (o *GetIdAtEpochArg) Encode() []byte {
+func (o *getIdAtEpochArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.Id)
-	b = marshal.WriteInt(b, o.Epoch)
+	b = marshal.WriteBytes(b, o.id)
+	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
 
-func (o *GetIdAtEpochArg) Decode(b0 []byte) ([]byte, Error) {
+func (o *getIdAtEpochArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	epoch, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	o.Id = id
-	o.Epoch = epoch
-	return b, ErrNone
+	o.id = id
+	o.epoch = epoch
+	return b, errNone
 }
 
-type GetIdAtEpochReply struct {
-	Digest merkle.Digest
-	Proof  merkle.Proof
-	Sig    cryptoFFI.Sig
-	Error  Error
+type getIdAtEpochReply struct {
+	digest merkle.Digest
+	proof  merkle.Proof
+	sig    cryptoFFI.Sig
+	error  errorTy
 }
 
-func (o *GetIdAtEpochReply) Encode() []byte {
+func (o *getIdAtEpochReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.Digest)
-	b = WriteSlice3D(b, o.Proof)
-	b = marshal.WriteBytes(b, o.Sig)
-	b = marshal.WriteInt(b, o.Error)
+	b = marshal.WriteBytes(b, o.digest)
+	b = WriteSlice3D(b, o.proof)
+	b = marshal.WriteBytes(b, o.sig)
+	b = WriteBool(b, o.error)
 	return b
 }
 
-func (o *GetIdAtEpochReply) Decode(b0 []byte) ([]byte, Error) {
+func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	digest, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	proof, b, err := ReadSlice3D(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
-	error, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	error, b, err := ReadBool(b)
+	if err != errNone {
 		return nil, err
 	}
-	o.Digest = digest
-	o.Proof = proof
-	o.Sig = sig
-	o.Error = error
-	return b, ErrNone
+	o.digest = digest
+	o.proof = proof
+	o.sig = sig
+	o.error = error
+	return b, errNone
 }
 
-func CallGetIdAtEpoch(cli *urpc.Client, id merkle.Id, epoch Epoch) *GetIdAtEpochReply {
-	errReply := &GetIdAtEpochReply{}
-	argB := (&GetIdAtEpochArg{Id: id, Epoch: epoch}).Encode()
+func callGetIdAtEpoch(cli *urpc.Client, id merkle.Id, epoch epochTy) *getIdAtEpochReply {
+	errReply := &getIdAtEpochReply{}
+	errReply.error = errSome
+	argB := (&getIdAtEpochArg{id: id, epoch: epoch}).encode()
 	replyB := make([]byte, 0)
-	err0 := cli.Call(RpcKeyServGetIdAtEpoch, argB, &replyB, 100)
-	if err0 != ErrNone {
-		errReply.Error = err0
+	err0 := cli.Call(rpcKeyServGetIdAtEpoch, argB, &replyB, 100)
+	if err0 != urpc.ErrNone {
 		return errReply
 	}
-	reply := &GetIdAtEpochReply{}
-	_, err1 := reply.Decode(replyB)
-	if err1 != ErrNone {
-		errReply.Error = err1
+	reply := &getIdAtEpochReply{}
+	_, err1 := reply.decode(replyB)
+	if err1 != errNone {
 		return errReply
 	}
 	return reply
 }
 
-type GetIdLatestArg struct {
-	Id merkle.Id
+type getIdLatestArg struct {
+	id merkle.Id
 }
 
-func (o *GetIdLatestArg) Encode() []byte {
+func (o *getIdLatestArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.Id)
+	b = marshal.WriteBytes(b, o.id)
 	return b
 }
 
-func (o *GetIdLatestArg) Decode(b0 []byte) ([]byte, Error) {
+func (o *getIdLatestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	o.Id = id
-	return b, ErrNone
+	o.id = id
+	return b, errNone
 }
 
-type GetIdLatestReply struct {
-	Epoch   Epoch
-	Val     merkle.Val
-	Digest  merkle.Digest
-	ProofTy merkle.ProofTy
-	Proof   merkle.Proof
-	Sig     cryptoFFI.Sig
-	Error   Error
+type getIdLatestReply struct {
+	epoch   epochTy
+	val     merkle.Val
+	digest  merkle.Digest
+	proofTy merkle.ProofTy
+	proof   merkle.Proof
+	sig     cryptoFFI.Sig
+	error   errorTy
 }
 
-func (o *GetIdLatestReply) Encode() []byte {
+func (o *getIdLatestReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.Epoch)
-	b = WriteSlice1D(b, o.Val)
-	b = marshal.WriteBytes(b, o.Digest)
-	b = WriteBool(b, o.ProofTy)
-	b = WriteSlice3D(b, o.Proof)
-	b = marshal.WriteBytes(b, o.Sig)
-	b = marshal.WriteInt(b, o.Error)
+	b = marshal.WriteInt(b, o.epoch)
+	b = WriteSlice1D(b, o.val)
+	b = marshal.WriteBytes(b, o.digest)
+	b = WriteBool(b, o.proofTy)
+	b = WriteSlice3D(b, o.proof)
+	b = marshal.WriteBytes(b, o.sig)
+	b = WriteBool(b, o.error)
 	return b
 }
 
-func (o *GetIdLatestReply) Decode(b0 []byte) ([]byte, Error) {
+func (o *getIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	val, b, err := ReadSlice1D(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	digest, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	proofTy, b, err := ReadBool(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	proof, b, err := ReadSlice3D(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	error, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	error, b, err := ReadBool(b)
+	if err != errNone {
 		return nil, err
 	}
-	o.Epoch = epoch
-	o.Val = val
-	o.Digest = digest
-	o.ProofTy = proofTy
-	o.Proof = proof
-	o.Sig = sig
-	o.Error = error
-	return b, ErrNone
+	o.epoch = epoch
+	o.val = val
+	o.digest = digest
+	o.proofTy = proofTy
+	o.proof = proof
+	o.sig = sig
+	o.error = error
+	return b, errNone
 }
 
-func CallGetIdLatest(cli *urpc.Client, id merkle.Id) *GetIdLatestReply {
-	errReply := &GetIdLatestReply{}
-	argB := (&GetIdLatestArg{Id: id}).Encode()
+func callGetIdLatest(cli *urpc.Client, id merkle.Id) *getIdLatestReply {
+	errReply := &getIdLatestReply{}
+	errReply.error = errSome
+	argB := (&getIdLatestArg{id: id}).encode()
 	replyB := make([]byte, 0)
-	err0 := cli.Call(RpcKeyServGetIdLatest, argB, &replyB, 100)
-	if err0 != ErrNone {
-		errReply.Error = err0
+	err0 := cli.Call(rpcKeyServGetIdLatest, argB, &replyB, 100)
+	if err0 != urpc.ErrNone {
 		return errReply
 	}
-	reply := &GetIdLatestReply{}
-	_, err1 := reply.Decode(replyB)
-	if err1 != ErrNone {
-		errReply.Error = err1
+	reply := &getIdLatestReply{}
+	_, err1 := reply.decode(replyB)
+	if err1 != errNone {
 		return errReply
 	}
 	return reply
 }
 
-type GetDigestArg struct {
-	Epoch Epoch
+type getDigestArg struct {
+	epoch epochTy
 }
 
-func (o *GetDigestArg) Encode() []byte {
+func (o *getDigestArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.Epoch)
+	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
 
-func (o *GetDigestArg) Decode(b0 []byte) ([]byte, Error) {
+func (o *getDigestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	o.Epoch = epoch
-	return b, ErrNone
+	o.epoch = epoch
+	return b, errNone
 }
 
-type GetDigestReply struct {
-	Digest merkle.Digest
-	Sig    cryptoFFI.Sig
-	Error  Error
+type getDigestReply struct {
+	digest merkle.Digest
+	sig    cryptoFFI.Sig
+	error  errorTy
 }
 
-func (o *GetDigestReply) Encode() []byte {
+func (o *getDigestReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.Digest)
-	b = marshal.WriteBytes(b, o.Sig)
-	b = marshal.WriteInt(b, o.Error)
+	b = marshal.WriteBytes(b, o.digest)
+	b = marshal.WriteBytes(b, o.sig)
+	b = WriteBool(b, o.error)
 	return b
 }
 
-func (o *GetDigestReply) Decode(b0 []byte) ([]byte, Error) {
+func (o *getDigestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	digest, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	error, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	error, b, err := ReadBool(b)
+	if err != errNone {
 		return nil, err
 	}
-	o.Digest = digest
-	o.Sig = sig
-	o.Error = error
-	return b, ErrNone
+	o.digest = digest
+	o.sig = sig
+	o.error = error
+	return b, errNone
 }
 
-func CallGetDigest(cli *urpc.Client, epoch Epoch) (merkle.Digest, cryptoFFI.Sig, Error) {
-	argB := (&GetDigestArg{Epoch: epoch}).Encode()
+func callGetDigest(cli *urpc.Client, epoch epochTy) (merkle.Digest, cryptoFFI.Sig, errorTy) {
+	argB := (&getDigestArg{epoch: epoch}).encode()
 	replyB := make([]byte, 0)
-	err0 := cli.Call(RpcKeyServGetDigest, argB, &replyB, 100)
-	if err0 != ErrNone {
-		return nil, nil, err0
+	err0 := cli.Call(rpcKeyServGetDigest, argB, &replyB, 100)
+	if err0 != urpc.ErrNone {
+		return nil, nil, errSome
 	}
-	reply := &GetDigestReply{}
-	_, err1 := reply.Decode(replyB)
-	if err1 != ErrNone {
+	reply := &getDigestReply{}
+	_, err1 := reply.decode(replyB)
+	if err1 != errNone {
 		return nil, nil, err1
 	}
-	return reply.Digest, reply.Sig, reply.Error
+	return reply.digest, reply.sig, reply.error
 }
 
-type UpdateArg struct {
-	Epoch  Epoch
-	Digest merkle.Digest
-	Sig    cryptoFFI.Sig
+type updateArg struct {
+	epoch  epochTy
+	digest merkle.Digest
+	sig    cryptoFFI.Sig
 }
 
-func (o *UpdateArg) Encode() []byte {
+func (o *updateArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.Epoch)
-	b = marshal.WriteBytes(b, o.Digest)
-	b = marshal.WriteBytes(b, o.Sig)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.digest)
+	b = marshal.WriteBytes(b, o.sig)
 	return b
 }
 
-func (o *UpdateArg) Decode(b0 []byte) ([]byte, Error) {
+func (o *updateArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	digest, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	o.Epoch = epoch
-	o.Digest = digest
-	o.Sig = sig
-	return b, ErrNone
+	o.epoch = epoch
+	o.digest = digest
+	o.sig = sig
+	return b, errNone
 }
 
-type UpdateReply struct {
-	Error Error
+type updateReply struct {
+	error errorTy
 }
 
-func (o *UpdateReply) Encode() []byte {
+func (o *updateReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.Error)
+	b = WriteBool(b, o.error)
 	return b
 }
 
-func (o *UpdateReply) Decode(b0 []byte) ([]byte, Error) {
+func (o *updateReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	error, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	error, b, err := ReadBool(b)
+	if err != errNone {
 		return nil, err
 	}
-	o.Error = error
-	return b, ErrNone
+	o.error = error
+	return b, errNone
 }
 
-func CallUpdate(cli *urpc.Client, epoch Epoch, dig merkle.Digest, sig cryptoFFI.Sig) Error {
-	argB := (&UpdateArg{Epoch: epoch, Digest: dig, Sig: sig}).Encode()
+func callUpdate(cli *urpc.Client, epoch epochTy, dig merkle.Digest, sig cryptoFFI.Sig) errorTy {
+	argB := (&updateArg{epoch: epoch, digest: dig, sig: sig}).encode()
 	replyB := make([]byte, 0)
-	err0 := cli.Call(RpcAuditorUpdate, argB, &replyB, 100)
-	if err0 != ErrNone {
-		return err0
+	err0 := cli.Call(rpcAuditorUpdate, argB, &replyB, 100)
+	if err0 != urpc.ErrNone {
+		return errSome
 	}
-	reply := &UpdateReply{}
-	_, err1 := reply.Decode(replyB)
-	if err1 != ErrNone {
+	reply := &updateReply{}
+	_, err1 := reply.decode(replyB)
+	if err1 != errNone {
 		return err1
 	}
-	return reply.Error
+	return reply.error
 }
 
-type GetLinkArg struct {
-	Epoch Epoch
+type getLinkArg struct {
+	epoch epochTy
 }
 
-func (o *GetLinkArg) Encode() []byte {
+func (o *getLinkArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.Epoch)
+	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
 
-func (o *GetLinkArg) Decode(b0 []byte) ([]byte, Error) {
+func (o *getLinkArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	o.Epoch = epoch
-	return b, ErrNone
+	o.epoch = epoch
+	return b, errNone
 }
 
-type GetLinkReply struct {
-	Link  Link
-	Sig   cryptoFFI.Sig
-	Error Error
+type getLinkReply struct {
+	link  linkTy
+	sig   cryptoFFI.Sig
+	error errorTy
 }
 
-func (o *GetLinkReply) Encode() []byte {
+func (o *getLinkReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.Link)
-	b = marshal.WriteBytes(b, o.Sig)
-	b = marshal.WriteInt(b, o.Error)
+	b = marshal.WriteBytes(b, o.link)
+	b = marshal.WriteBytes(b, o.sig)
+	b = WriteBool(b, o.error)
 	return b
 }
 
-func (o *GetLinkReply) Decode(b0 []byte) ([]byte, Error) {
+func (o *getLinkReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	link, b, err := SafeReadBytes(b, cryptoFFI.HashLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
 	sig, b, err := SafeReadBytes(b, cryptoFFI.SigLen)
-	if err != ErrNone {
+	if err != errNone {
 		return nil, err
 	}
-	error, b, err := SafeReadInt(b)
-	if err != ErrNone {
+	error, b, err := ReadBool(b)
+	if err != errNone {
 		return nil, err
 	}
-	o.Link = link
-	o.Sig = sig
-	o.Error = error
-	return b, ErrNone
+	o.link = link
+	o.sig = sig
+	o.error = error
+	return b, errNone
 }
 
-func CallGetLink(cli *urpc.Client, epoch Epoch) (Link, cryptoFFI.Sig, Error) {
-	argB := (&GetLinkArg{Epoch: epoch}).Encode()
+func callGetLink(cli *urpc.Client, epoch epochTy) (linkTy, cryptoFFI.Sig, errorTy) {
+	argB := (&getLinkArg{epoch: epoch}).encode()
 	replyB := make([]byte, 0)
-	err0 := cli.Call(RpcAuditorGetLink, argB, &replyB, 100)
-	if err0 != ErrNone {
-		return nil, nil, err0
+	err0 := cli.Call(rpcAuditorGetLink, argB, &replyB, 100)
+	if err0 != urpc.ErrNone {
+		return nil, nil, errSome
 	}
-	reply := &GetLinkReply{}
-	_, err1 := reply.Decode(replyB)
-	if err1 != ErrNone {
+	reply := &getLinkReply{}
+	_, err1 := reply.decode(replyB)
+	if err1 != errNone {
 		return nil, nil, err1
 	}
-	return reply.Link, reply.Sig, reply.Error
+	return reply.link, reply.sig, reply.error
 }

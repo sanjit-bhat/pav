@@ -2,24 +2,21 @@ package merkle
 
 import (
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/secure-chat/cryptoHelpers"
 	"github.com/mit-pdos/secure-chat/cryptoFFI"
+	"github.com/mit-pdos/secure-chat/cryptoHelpers"
 )
 
-type Error = uint64
+type errorTy = bool
 type ProofTy = bool
 
 const (
-	ErrNone      Error = 0
-	ErrFound     Error = 1
-	ErrNotFound  Error = 2
-	ErrBadInput  Error = 3
-	ErrPathProof Error = 4
+	errNone errorTy = false
+	errSome errorTy = true
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
-	NumChildren    uint64  = 256
-	EmptyNodeId    byte    = 0
-	LeafNodeId     byte    = 1
-	InteriorNodeId byte    = 2
+	numChildren    uint64  = 256
+	emptyNodeId    byte    = 0
+	leafNodeId     byte    = 1
+	interiorNodeId byte    = 2
 	NonmembProofTy ProofTy = false
 	MembProofTy    ProofTy = true
 )
@@ -32,70 +29,70 @@ type Id = []byte
 // "values" of the tree.
 type Val = []byte
 
-type Node struct {
-	Val      Val
+type node struct {
+	val      Val
 	hash     []byte
-	Children []*Node
+	children []*node
 }
 
-// Hash getter to support hashes of empty (nil) nodes.
-func (n *Node) Hash() []byte {
+// getHash getter to support hashes of empty (nil) nodes.
+func (n *node) getHash() []byte {
 	if n == nil {
 		// Empty node.
-		return cryptoFFI.Hash([]byte{EmptyNodeId})
+		return cryptoFFI.Hash([]byte{emptyNodeId})
 	}
 	return n.hash
 }
 
-func DeepCopyInternal(n *Node) *Node {
+func deepCopyInternal(n *node) *node {
 	if n == nil {
 		return nil
 	}
-	var n2 = &Node{}
-	n2.Val = std.BytesClone(n.Val)
+	var n2 = &node{}
+	n2.val = std.BytesClone(n.val)
 	n2.hash = std.BytesClone(n.hash)
-	children := make([]*Node, len(n.Children))
-	for i, c := range n.Children {
-		children[i] = c.DeepCopy()
+	children := make([]*node, len(n.children))
+	for i, c := range n.children {
+		children[i] = c.deepCopy()
 	}
-	n2.Children = children
+	n2.children = children
 	return n2
 }
 
-func (n *Node) DeepCopy() *Node {
-	return DeepCopyInternal(n)
+func (n *node) deepCopy() *node {
+	return deepCopyInternal(n)
 }
 
-func (n *Node) UpdateLeafHash() {
+func (n *node) updateLeafHash() {
 	var h cryptoHelpers.Hasher
-	cryptoHelpers.HasherWrite(&h, n.Val)
-	cryptoHelpers.HasherWrite(&h, []byte{LeafNodeId})
+	cryptoHelpers.HasherWrite(&h, n.val)
+	cryptoHelpers.HasherWrite(&h, []byte{leafNodeId})
 	n.hash = cryptoHelpers.HasherSum(h, nil)
 }
 
 // Assumes recursive child hashes are already up-to-date.
-func (n *Node) UpdateInteriorHash() {
+func (n *node) updateInteriorHash() {
 	var h cryptoHelpers.Hasher
-	for _, n := range n.Children {
-		cryptoHelpers.HasherWrite(&h, n.Hash())
+	for _, n := range n.children {
+		cryptoHelpers.HasherWrite(&h, n.getHash())
 	}
-	cryptoHelpers.HasherWrite(&h, []byte{InteriorNodeId})
+	cryptoHelpers.HasherWrite(&h, []byte{interiorNodeId})
 	n.hash = cryptoHelpers.HasherSum(h, nil)
 }
 
 // This node doesn't satisfy the invariant for any logical node.
 // It'll be specialized after adding it to the tree.
-func NewGenericNode() *Node {
-	c := make([]*Node, NumChildren)
-	return &Node{Val: nil, hash: nil, Children: c}
+func newGenericNode() *node {
+	c := make([]*node, numChildren)
+	return &node{val: nil, hash: nil, children: c}
 }
 
 type Digest = []byte
 
 // General proof object.
 // Binds an id down the tree to a particular node hash.
-type PathProof struct {
-	Id          Id
+type pathProof struct {
+	id          Id
 	NodeHash    []byte
 	Digest      Digest
 	ChildHashes [][][]byte
@@ -103,7 +100,7 @@ type PathProof struct {
 
 type Proof = [][][]byte
 
-func IsValidHashSl(data [][]byte) bool {
+func isValidHashSl(data [][]byte) bool {
 	var ok = true
 	for _, hash := range data {
 		if uint64(len(hash)) != cryptoFFI.HashLen {
@@ -113,8 +110,8 @@ func IsValidHashSl(data [][]byte) bool {
 	return ok
 }
 
-func (p *PathProof) Check() Error {
-	var err = ErrNone
+func (p *pathProof) check() errorTy {
+	var err = errNone
 	var currHash []byte = p.NodeHash
 	proofLen := uint64(len(p.ChildHashes))
 	// Goose doesn't support general loops, so re-write this way.
@@ -123,15 +120,15 @@ func (p *PathProof) Check() Error {
 	for ; loopIdx < proofLen; loopIdx++ {
 		pathIdx := proofLen - 1 - loopIdx
 		children := p.ChildHashes[pathIdx]
-		if uint64(len(children)) != NumChildren-1 {
-			err = ErrPathProof
+		if uint64(len(children)) != numChildren-1 {
+			err = errSome
 			continue
 		}
-		if !IsValidHashSl(children) {
-			err = ErrPathProof
+		if !isValidHashSl(children) {
+			err = errSome
 			continue
 		}
-		pos := uint64(p.Id[pathIdx])
+		pos := uint64(p.id[pathIdx])
 		before := children[:pos]
 		after := children[pos:]
 
@@ -139,36 +136,36 @@ func (p *PathProof) Check() Error {
 		cryptoHelpers.HasherWriteSl(&hr, before)
 		cryptoHelpers.HasherWrite(&hr, currHash)
 		cryptoHelpers.HasherWriteSl(&hr, after)
-		cryptoHelpers.HasherWrite(&hr, []byte{InteriorNodeId})
+		cryptoHelpers.HasherWrite(&hr, []byte{interiorNodeId})
 		currHash = cryptoHelpers.HasherSum(hr, nil)
 	}
 
-	if err != ErrNone {
-		return ErrPathProof
+	if err != errNone {
+		return errSome
 	}
 	if !std.BytesEqual(currHash, p.Digest) {
-		return ErrPathProof
+		return errSome
 	}
-	return ErrNone
+	return errNone
 }
 
 func getLeafNodeHash(val Val) []byte {
 	var hr cryptoHelpers.Hasher
 	cryptoHelpers.HasherWrite(&hr, val)
-	cryptoHelpers.HasherWrite(&hr, []byte{LeafNodeId})
+	cryptoHelpers.HasherWrite(&hr, []byte{leafNodeId})
 	return cryptoHelpers.HasherSum(hr, nil)
 }
 
 func getEmptyNodeHash() []byte {
-	return cryptoFFI.Hash([]byte{EmptyNodeId})
+	return cryptoFFI.Hash([]byte{emptyNodeId})
 }
 
-func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) Error {
+func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) errorTy {
 	if uint64(len(proof)) > cryptoFFI.HashLen {
-		return ErrBadInput
+		return errSome
 	}
 	if len(id) < len(proof) {
-		return ErrBadInput
+		return errSome
 	}
 	// For NonmembProof, have original id, so slice it down
 	// to same sz as path.
@@ -180,43 +177,43 @@ func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) Err
 		nodeHash = getEmptyNodeHash()
 	}
 
-	pathProof := &PathProof{
-		Id:          idPref,
+	pathProof := &pathProof{
+		id:          idPref,
 		NodeHash:    nodeHash,
 		Digest:      digest,
 		ChildHashes: proof,
 	}
-	return pathProof.Check()
+	return pathProof.check()
 }
 
 // Having a separate Tree type makes the API more clear compared to if it
 // was just a Node.
 type Tree struct {
-	Root *Node
+	root *node
 }
 
 func (t *Tree) DeepCopy() *Tree {
-	return &Tree{Root: t.Root.DeepCopy()}
+	return &Tree{root: t.root.deepCopy()}
 }
 
 func (t *Tree) Digest() Digest {
-	return t.Root.Hash()
+	return t.root.getHash()
 }
 
-func AppendNode2D(dst *[][]byte, src []*Node) {
+func appendNode2D(dst *[][]byte, src []*node) {
 	for _, sl := range src {
-		*dst = append(*dst, std.BytesClone(sl.Hash()))
+		*dst = append(*dst, std.BytesClone(sl.getHash()))
 	}
 }
 
-func GetChildHashes(nodePath []*Node, id Id) [][][]byte {
+func getChildHashes(nodePath []*node, id Id) [][][]byte {
 	childHashes := make([][][]byte, len(nodePath)-1)
 	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath))-1; pathIdx++ {
-		children := nodePath[pathIdx].Children
+		children := nodePath[pathIdx].children
 		pos := id[pathIdx]
 		var proofChildren [][]byte
-		AppendNode2D(&proofChildren, children[:pos])
-		AppendNode2D(&proofChildren, children[pos+1:])
+		appendNode2D(&proofChildren, children[:pos])
+		appendNode2D(&proofChildren, children[pos+1:])
 		childHashes[pathIdx] = proofChildren
 	}
 	return childHashes
@@ -225,17 +222,17 @@ func GetChildHashes(nodePath []*Node, id Id) [][][]byte {
 // Get the maximal path corresponding to Id.
 // If the full path to a leaf node doesn't exist,
 // return the partial path that ends in an empty node.
-func (t *Tree) GetPath(id Id) []*Node {
-	var nodePath []*Node
-	nodePath = append(nodePath, t.Root)
-	if t.Root == nil {
+func (t *Tree) getPath(id Id) []*node {
+	var nodePath []*node
+	nodePath = append(nodePath, t.root)
+	if t.root == nil {
 		return nodePath
 	}
 	var stop = false
 	for pathIdx := uint64(0); pathIdx < cryptoFFI.HashLen && !stop; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
-		nextNode := currNode.Children[pos]
+		nextNode := currNode.children[pos]
 		nodePath = append(nodePath, nextNode)
 		if nextNode == nil {
 			stop = true
@@ -244,39 +241,39 @@ func (t *Tree) GetPath(id Id) []*Node {
 	return nodePath
 }
 
-func (t *Tree) GetPathAddNodes(id Id) []*Node {
-	if t.Root == nil {
-		t.Root = NewGenericNode()
+func (t *Tree) getPathAddNodes(id Id) []*node {
+	if t.root == nil {
+		t.root = newGenericNode()
 	}
-	var nodePath []*Node
-	nodePath = append(nodePath, t.Root)
+	var nodePath []*node
+	nodePath = append(nodePath, t.root)
 	for pathIdx := uint64(0); pathIdx < cryptoFFI.HashLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
 		pos := id[pathIdx]
-		if currNode.Children[pos] == nil {
-			currNode.Children[pos] = NewGenericNode()
+		if currNode.children[pos] == nil {
+			currNode.children[pos] = newGenericNode()
 		}
-		nodePath = append(nodePath, currNode.Children[pos])
+		nodePath = append(nodePath, currNode.children[pos])
 	}
 	return nodePath
 }
 
-func (t *Tree) Put(id Id, val Val) (Digest, Proof, Error) {
+func (t *Tree) Put(id Id, val Val) (Digest, Proof, errorTy) {
 	if uint64(len(id)) != cryptoFFI.HashLen {
-		return nil, nil, ErrBadInput
+		return nil, nil, errSome
 	}
 
-	nodePath := t.GetPathAddNodes(id)
-	nodePath[cryptoFFI.HashLen].Val = val
-	nodePath[cryptoFFI.HashLen].UpdateLeafHash()
+	nodePath := t.getPathAddNodes(id)
+	nodePath[cryptoFFI.HashLen].val = val
+	nodePath[cryptoFFI.HashLen].updateLeafHash()
 	// +1/-1 offsets for Goosable uint64 loop var.
 	for pathIdx := cryptoFFI.HashLen; pathIdx >= 1; pathIdx-- {
-		nodePath[pathIdx-1].UpdateInteriorHash()
+		nodePath[pathIdx-1].updateInteriorHash()
 	}
 
-	digest := std.BytesClone(nodePath[0].Hash())
-	proof := GetChildHashes(nodePath, id)
-	return digest, proof, ErrNone
+	digest := std.BytesClone(nodePath[0].getHash())
+	proof := getChildHashes(nodePath, id)
+	return digest, proof, errNone
 }
 
 // Goose doesn't support returning more than 4 vars.
@@ -285,27 +282,27 @@ type GetReply struct {
 	Digest  Digest
 	ProofTy ProofTy
 	Proof   Proof
-	Error   Error
+	Error   errorTy
 }
 
 // Return ProofTy vs. having sep funcs bc regardless, would want a proof.
 func (t *Tree) Get(id Id) *GetReply {
 	errReply := &GetReply{}
 	if uint64(len(id)) != cryptoFFI.HashLen {
-		errReply.Error = ErrBadInput
+		errReply.Error = errSome
 		return errReply
 	}
-	nodePath := t.GetPath(id)
+	nodePath := t.getPath(id)
 	lastNode := nodePath[uint64(len(nodePath))-1]
 
-	digest := std.BytesClone(nodePath[0].Hash())
-	proof := GetChildHashes(nodePath, id)
+	digest := std.BytesClone(nodePath[0].getHash())
+	proof := getChildHashes(nodePath, id)
 	if lastNode == nil {
 		return &GetReply{Val: nil, Digest: digest, ProofTy: NonmembProofTy,
-			Proof: proof, Error: ErrNone}
+			Proof: proof, Error: errNone}
 	} else {
-		val := std.BytesClone(lastNode.Val)
+		val := std.BytesClone(lastNode.val)
 		return &GetReply{Val: val, Digest: digest, ProofTy: MembProofTy,
-			Proof: proof, Error: ErrNone}
+			Proof: proof, Error: errNone}
 	}
 }
