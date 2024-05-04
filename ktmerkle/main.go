@@ -298,14 +298,9 @@ func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.A
 
 // TODO: what happens if client calls put twice in an epoch?
 func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
-	epoch, sig, err := callPut(c.serv, c.id, val)
+	epoch, err := verCallPut(c.serv, c.servPk, c.id, val)
 	if err != errNone {
 		return 0, err
-	}
-	enc := (&idValEpoch{id: c.id, val: val, epoch: epoch}).encode()
-	ok := cryptoffi.Verify(c.servPk, enc, sig)
-	if !ok {
-		return 0, errSome
 	}
 	c.valEpochs = append(c.valEpochs, epoch)
 	c.vals = append(c.vals, val)
@@ -313,40 +308,24 @@ func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
 }
 
 func (c *keyCli) get(id merkle.Id) (epochTy, merkle.Val, errorTy) {
-	reply := callGetIdLatest(c.serv, id)
+	reply := verCallGetIdLatest(c.serv, c.servPk, id)
 	epoch := reply.epoch
 	val := reply.val
 	dig := reply.digest
-	proofTy := reply.proofTy
-	proof := reply.proof
-	sig := reply.sig
 	err0 := reply.error
 	if err0 != errNone {
 		return 0, nil, err0
 	}
 
-	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
-	ok0 := cryptoffi.Verify(c.servPk, enc, sig)
-	if !ok0 {
+	origDig, ok := c.digs[epoch]
+	var err1 errorTy
+	if ok && !std.BytesEqual(origDig, dig) {
 		return 0, nil, errSome
 	}
-
-	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
-	if err1 != errNone {
-		return 0, nil, err1
-	}
-
-	// If we don't have dig, add it. Otherwise, compare against what we have.
-	origDig, ok1 := c.digs[epoch]
-	var err2 errorTy
-	if ok1 {
-		if !std.BytesEqual(origDig, dig) {
-			err2 = errSome
-		}
-	} else {
+	if !ok {
 		c.digs[epoch] = dig
 	}
-	return epoch, val, err2
+	return epoch, val, err1
 }
 
 func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
@@ -355,14 +334,9 @@ func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
 	if ok0 {
 		return dig, errNone
 	}
-	newDig, sig, err := callGetDigest(c.serv, epoch)
+	newDig, err := verCallGetDigest(c.serv, c.servPk, epoch)
 	if err != errNone {
 		return nil, err
-	}
-	enc := (&epochHash{epoch: epoch, hash: newDig}).encode()
-	ok1 := cryptoffi.Verify(c.servPk, enc, sig)
-	if !ok1 {
-		return nil, errSome
 	}
 	c.digs[epoch] = newDig
 	return newDig, errNone
@@ -391,15 +365,9 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 
 	adtr := c.adtrs[adtrId]
 	adtrPk := c.adtrPks[adtrId]
-	adtrLink, sig, err1 := callGetLink(adtr, lastEpoch)
+	adtrLink, err1 := verCallGetLink(adtr, adtrPk, lastEpoch)
 	if err1 != errNone {
 		return 0, err1
-	}
-
-	enc := (&epochHash{epoch: lastEpoch, hash: link}).encode()
-	ok := cryptoffi.Verify(adtrPk, enc, sig)
-	if !ok {
-		return 0, errSome
 	}
 	if !std.BytesEqual(link, adtrLink) {
 		return 0, errSome
@@ -408,33 +376,27 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	return epoch, errNone
 }
 
-func (c *keyCli) checkProofWithExpected(epoch epochTy, val merkle.Val, proofTy merkle.ProofTy) okTy {
+func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expProofTy merkle.ProofTy) okTy {
 	id := c.id
-	reply := callGetIdAtEpoch(c.serv, id, epoch)
+	reply := verCallGetIdAtEpoch(c.serv, c.servPk, id, epoch)
+	val := reply.val
 	dig := reply.digest
-	proof := reply.proof
-	sig := reply.sig
-	err0 := reply.error
-	if err0 != errNone {
+	proofTy := reply.proofTy
+	err := reply.error
+	if err != errNone {
 		return false
 	}
-	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
-	ok0 := cryptoffi.Verify(c.servPk, enc, sig)
-	if !ok0 {
+	if !std.BytesEqual(val, expVal) {
 		return false
 	}
-	// There will only be one (proofTy, val) pair that will
-	// injectively satisfy the (id, dig), so don't need
-	// to request them from the server.
-	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
-	if err1 != errNone {
+	if proofTy != expProofTy {
 		return false
 	}
-	origDig, ok1 := c.digs[epoch]
-	if ok1 && !std.BytesEqual(dig, origDig) {
+	origDig, ok := c.digs[epoch]
+	if ok && !std.BytesEqual(dig, origDig) {
 		return false
 	}
-	if !ok1 {
+	if !ok {
 		c.digs[epoch] = dig
 	}
 	return true

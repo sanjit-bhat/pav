@@ -164,6 +164,19 @@ func callPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (epochTy, cryptoffi
 	return reply.epoch, reply.sig, reply.error
 }
 
+func verCallPut(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id, val merkle.Val) (epochTy, errorTy) {
+	epoch, sig, err := callPut(cli, id, val)
+	if err != errNone {
+		return 0, err
+	}
+	enc := (&idValEpoch{id: id, val: val, epoch: epoch}).encode()
+	ok := cryptoffi.Verify(pk, enc, sig)
+	if !ok {
+		return 0, errSome
+	}
+	return epoch, errNone
+}
+
 type getIdAtEpochArg struct {
 	id    merkle.Id
 	epoch epochTy
@@ -192,15 +205,19 @@ func (o *getIdAtEpochArg) decode(b0 []byte) ([]byte, errorTy) {
 }
 
 type getIdAtEpochReply struct {
-	digest merkle.Digest
-	proof  merkle.Proof
-	sig    cryptoffi.Sig
-	error  errorTy
+	val     merkle.Val
+	digest  merkle.Digest
+	proofTy merkle.ProofTy
+	proof   merkle.Proof
+	sig     cryptoffi.Sig
+	error   errorTy
 }
 
 func (o *getIdAtEpochReply) encode() []byte {
 	var b = make([]byte, 0)
+	b = marshalutil.WriteSlice1D(b, o.val)
 	b = marshal.WriteBytes(b, o.digest)
+	b = marshalutil.WriteBool(b, o.proofTy)
 	b = marshalutil.WriteSlice3D(b, o.proof)
 	b = marshal.WriteBytes(b, o.sig)
 	b = marshalutil.WriteBool(b, o.error)
@@ -209,7 +226,15 @@ func (o *getIdAtEpochReply) encode() []byte {
 
 func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
+	val, b, err := marshalutil.ReadSlice1D(b)
+	if err != errNone {
+		return nil, err
+	}
 	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
+	if err != errNone {
+		return nil, err
+	}
+	proofTy, b, err := marshalutil.ReadBool(b)
 	if err != errNone {
 		return nil, err
 	}
@@ -222,7 +247,9 @@ func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	if err != errNone {
 		return nil, err
 	}
+	o.val = val
 	o.digest = digest
+	o.proofTy = proofTy
 	o.proof = proof
 	o.sig = sig
 	o.error = error
@@ -240,6 +267,31 @@ func callGetIdAtEpoch(cli *urpc.Client, id merkle.Id, epoch epochTy) *getIdAtEpo
 	}
 	reply := &getIdAtEpochReply{}
 	_, err1 := reply.decode(replyB)
+	if err1 != errNone {
+		return errReply
+	}
+	return reply
+}
+
+func verCallGetIdAtEpoch(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id, epoch epochTy) *getIdAtEpochReply {
+	errReply := &getIdAtEpochReply{}
+	errReply.error = errSome
+	reply := callGetIdAtEpoch(cli, id, epoch)
+	val := reply.val
+	dig := reply.digest
+	proofTy := reply.proofTy
+	proof := reply.proof
+	sig := reply.sig
+	err0 := reply.error
+	if err0 != errNone {
+		return errReply
+	}
+	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	ok := cryptoffi.Verify(pk, enc, sig)
+	if !ok {
+		return errReply
+	}
+	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
 	if err1 != errNone {
 		return errReply
 	}
@@ -345,6 +397,34 @@ func callGetIdLatest(cli *urpc.Client, id merkle.Id) *getIdLatestReply {
 	return reply
 }
 
+func verCallGetIdLatest(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id) *getIdLatestReply {
+	errReply := &getIdLatestReply{}
+	errReply.error = errSome
+	reply := callGetIdLatest(cli, id)
+	epoch := reply.epoch
+	val := reply.val
+	dig := reply.digest
+	proofTy := reply.proofTy
+	proof := reply.proof
+	sig := reply.sig
+	err0 := reply.error
+	if err0 != errNone {
+		return errReply
+	}
+
+	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	ok0 := cryptoffi.Verify(pk, enc, sig)
+	if !ok0 {
+		return errReply
+	}
+
+	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
+	if err1 != errNone {
+		return errReply
+	}
+	return reply
+}
+
 type getDigestArg struct {
 	epoch epochTy
 }
@@ -412,6 +492,19 @@ func callGetDigest(cli *urpc.Client, epoch epochTy) (merkle.Digest, cryptoffi.Si
 		return nil, nil, err1
 	}
 	return reply.digest, reply.sig, reply.error
+}
+
+func verCallGetDigest(cli *urpc.Client, pk cryptoffi.PublicKey, epoch epochTy) (merkle.Digest, errorTy) {
+	dig, sig, err := callGetDigest(cli, epoch)
+	if err != errNone {
+		return nil, err
+	}
+	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	ok := cryptoffi.Verify(pk, enc, sig)
+	if !ok {
+		return nil, errSome
+	}
+	return dig, errNone
 }
 
 type updateArg struct {
@@ -550,4 +643,18 @@ func callGetLink(cli *urpc.Client, epoch epochTy) (linkTy, cryptoffi.Sig, errorT
 		return nil, nil, err1
 	}
 	return reply.link, reply.sig, reply.error
+}
+
+func verCallGetLink(cli *urpc.Client, pk cryptoffi.PublicKey, epoch epochTy) (linkTy, errorTy) {
+	link, sig, err := callGetLink(cli, epoch)
+	if err != errNone {
+		return nil, err
+	}
+
+	enc := (&epochHash{epoch: epoch, hash: link}).encode()
+	ok := cryptoffi.Verify(pk, enc, sig)
+	if !ok {
+		return nil, errSome
+	}
+	return link, errNone
 }
