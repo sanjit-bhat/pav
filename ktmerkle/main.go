@@ -85,12 +85,7 @@ func (s *keyServ) getIdAtEpoch(id merkle.Id, epoch epochTy) *getIdAtEpochReply {
 	enc := (&epochHash{epoch: epoch, hash: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
-	ret := &getIdAtEpochReply{}
-	ret.digest = reply.Digest
-	ret.proof = reply.Proof
-	ret.sig = sig
-	ret.error = reply.Error
-	return ret
+	return &getIdAtEpochReply{val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
 }
 
 func (s *keyServ) getIdLatest(id merkle.Id) *getIdLatestReply {
@@ -101,15 +96,7 @@ func (s *keyServ) getIdLatest(id merkle.Id) *getIdLatestReply {
 	enc := (&epochHash{epoch: lastEpoch, hash: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
-	ret := &getIdLatestReply{}
-	ret.epoch = lastEpoch
-	ret.val = reply.Val
-	ret.digest = reply.Digest
-	ret.proofTy = reply.ProofTy
-	ret.proof = reply.Proof
-	ret.sig = sig
-	ret.error = reply.Error
-	return ret
+	return &getIdLatestReply{epoch: lastEpoch, val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
 }
 
 func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
@@ -282,18 +269,13 @@ type keyCli struct {
 }
 
 func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrPks []cryptoffi.PublicKey, servPk cryptoffi.PublicKey) *keyCli {
-	c := &keyCli{}
-	c.serv = urpc.MakeClient(servAddr)
+	serv := urpc.MakeClient(servAddr)
 	var adtrs []*urpc.Client
 	for _, addr := range adtrAddrs {
 		adtrs = append(adtrs, urpc.MakeClient(addr))
 	}
-	c.adtrs = adtrs
-	c.adtrPks = adtrPks
-	c.servPk = servPk
-	c.digs = make(map[epochTy]merkle.Digest)
-	c.id = id
-	return c
+	digs := make(map[epochTy]merkle.Digest)
+	return &keyCli{adtrs: adtrs, adtrPks: adtrPks, servPk: servPk, digs: digs, id: id, serv: serv, valEpochs: nil, vals: nil}
 }
 
 // TODO: what happens if client calls put twice in an epoch?
@@ -309,23 +291,18 @@ func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
 
 func (c *keyCli) get(id merkle.Id) (epochTy, merkle.Val, errorTy) {
 	reply := verCallGetIdLatest(c.serv, c.servPk, id)
-	epoch := reply.epoch
-	val := reply.val
-	dig := reply.digest
-	err0 := reply.error
-	if err0 != errNone {
-		return 0, nil, err0
+	if reply.error != errNone {
+		return 0, nil, reply.error
 	}
 
-	origDig, ok := c.digs[epoch]
-	var err1 errorTy
-	if ok && !std.BytesEqual(origDig, dig) {
+	origDig, ok := c.digs[reply.epoch]
+	if ok && !std.BytesEqual(origDig, reply.digest) {
 		return 0, nil, errSome
 	}
 	if !ok {
-		c.digs[epoch] = dig
+		c.digs[reply.epoch] = reply.digest
 	}
-	return epoch, val, err1
+	return reply.epoch, reply.val, errNone
 }
 
 func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
@@ -379,25 +356,21 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expProofTy merkle.ProofTy) okTy {
 	id := c.id
 	reply := verCallGetIdAtEpoch(c.serv, c.servPk, id, epoch)
-	val := reply.val
-	dig := reply.digest
-	proofTy := reply.proofTy
-	err := reply.error
-	if err != errNone {
+	if reply.error != errNone {
 		return false
 	}
-	if !std.BytesEqual(val, expVal) {
+	if !std.BytesEqual(reply.val, expVal) {
 		return false
 	}
-	if proofTy != expProofTy {
+	if reply.proofTy != expProofTy {
 		return false
 	}
 	origDig, ok := c.digs[epoch]
-	if ok && !std.BytesEqual(dig, origDig) {
+	if ok && !std.BytesEqual(reply.digest, origDig) {
 		return false
 	}
 	if !ok {
-		c.digs[epoch] = dig
+		c.digs[epoch] = reply.digest
 	}
 	return true
 }
@@ -405,6 +378,8 @@ func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expPro
 // selfAudit through Epoch idx exclusive.
 func (c *keyCli) selfAudit() epochTy {
 	numVals := uint64(len(c.vals))
+	// valIdx points to one past the curr val.
+	// This makes it easy to represent nonmembership before any puts.
 	var valIdx uint64
 	var epoch epochTy
 	for {

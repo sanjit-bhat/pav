@@ -277,22 +277,16 @@ func verCallGetIdAtEpoch(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id,
 	errReply := &getIdAtEpochReply{}
 	errReply.error = errSome
 	reply := callGetIdAtEpoch(cli, id, epoch)
-	val := reply.val
-	dig := reply.digest
-	proofTy := reply.proofTy
-	proof := reply.proof
-	sig := reply.sig
-	err0 := reply.error
-	if err0 != errNone {
+	if reply.error != errNone {
 		return errReply
 	}
-	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
-	ok := cryptoffi.Verify(pk, enc, sig)
+	enc := (&epochHash{epoch: epoch, hash: reply.digest}).encode()
+	ok := cryptoffi.Verify(pk, enc, reply.sig)
 	if !ok {
 		return errReply
 	}
-	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
-	if err1 != errNone {
+	err := merkle.CheckProof(reply.proofTy, reply.proof, id, reply.val, reply.digest)
+	if err != errNone {
 		return errReply
 	}
 	return reply
@@ -401,25 +395,18 @@ func verCallGetIdLatest(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id) 
 	errReply := &getIdLatestReply{}
 	errReply.error = errSome
 	reply := callGetIdLatest(cli, id)
-	epoch := reply.epoch
-	val := reply.val
-	dig := reply.digest
-	proofTy := reply.proofTy
-	proof := reply.proof
-	sig := reply.sig
-	err0 := reply.error
-	if err0 != errNone {
+	if reply.error != errNone {
 		return errReply
 	}
 
-	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
-	ok0 := cryptoffi.Verify(pk, enc, sig)
+	enc := (&epochHash{epoch: reply.epoch, hash: reply.digest}).encode()
+	ok0 := cryptoffi.Verify(pk, enc, reply.sig)
 	if !ok0 {
 		return errReply
 	}
 
-	err1 := merkle.CheckProof(proofTy, proof, id, val, dig)
-	if err1 != errNone {
+	err := merkle.CheckProof(reply.proofTy, reply.proof, id, reply.val, reply.digest)
+	if err != errNone {
 		return errReply
 	}
 	return reply
