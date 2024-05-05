@@ -7,8 +7,17 @@ import (
 	"github.com/mit-pdos/secure-chat/cryptoffi"
 	"github.com/mit-pdos/secure-chat/cryptoutil"
 	"github.com/mit-pdos/secure-chat/merkle"
-	"github.com/tchajed/goose/machine"
 	"sync"
+)
+
+type epochTy = uint64
+type linkTy = []byte
+type errorTy = bool
+type okTy = bool
+
+const (
+	errNone errorTy = false
+	errSome errorTy = true
 )
 
 // Key server.
@@ -113,71 +122,6 @@ func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorT
 	return dig, sig, errNone
 }
 
-func (s *keyServ) start(addr grove_ffi.Address) {
-	handlers := make(map[uint64]func([]byte, *[]byte))
-
-	handlers[rpcKeyServUpdateEpoch] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			s.updateEpoch()
-		}
-
-	handlers[rpcKeyServPut] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			args := &putArg{}
-			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
-				*enc_reply = (&putReply{epoch: 0, error: err0}).encode()
-				return
-			}
-			epoch, sig, err1 := s.put(args.id, args.val)
-			*enc_reply = (&putReply{epoch: epoch, sig: sig, error: err1}).encode()
-		}
-
-	handlers[rpcKeyServGetIdAtEpoch] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			args := &getIdAtEpochArg{}
-			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
-				reply := &getIdAtEpochReply{}
-				reply.error = errSome
-				*enc_reply = reply.encode()
-				return
-			}
-			reply := s.getIdAtEpoch(args.id, args.epoch)
-			*enc_reply = reply.encode()
-		}
-
-	handlers[rpcKeyServGetIdLatest] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			args := &getIdLatestArg{}
-			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
-				reply := &getIdLatestReply{}
-				reply.error = errSome
-				*enc_reply = reply.encode()
-				return
-			}
-			reply := s.getIdLatest(args.id)
-			*enc_reply = reply.encode()
-		}
-
-	handlers[rpcKeyServGetDigest] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			args := &getDigestArg{}
-			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
-				reply := &getDigestReply{}
-				reply.error = errSome
-				*enc_reply = reply.encode()
-				return
-			}
-			dig, sig, err1 := s.getDigest(args.epoch)
-			*enc_reply = (&getDigestReply{digest: dig, sig: sig, error: err1}).encode()
-		}
-
-	urpc.MakeServer(handlers).Serve(addr)
-}
-
 // Auditor.
 
 type auditor struct {
@@ -219,40 +163,6 @@ func (a *auditor) getLink(epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
 	sig := cryptoffi.Sign(a.sk, enc)
 	a.mu.Unlock()
 	return link, sig, errNone
-}
-
-func (a *auditor) start(addr grove_ffi.Address) {
-	handlers := make(map[uint64]func([]byte, *[]byte))
-
-	handlers[rpcAuditorUpdate] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			args := &updateArg{}
-			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
-				reply := &updateReply{}
-				reply.error = errSome
-				*enc_reply = reply.encode()
-				return
-			}
-			err1 := a.update(args.epoch, args.digest, args.sig)
-			*enc_reply = (&updateReply{error: err1}).encode()
-		}
-
-	handlers[rpcAuditorGetLink] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			args := &getLinkArg{}
-			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
-				reply := &getLinkReply{}
-				reply.error = errSome
-				*enc_reply = reply.encode()
-				return
-			}
-			link, sig, err1 := a.getLink(args.epoch)
-			*enc_reply = (&getLinkReply{link: link, sig: sig, error: err1}).encode()
-		}
-
-	urpc.MakeServer(handlers).Serve(addr)
 }
 
 // Key client.
@@ -420,58 +330,4 @@ func updateAdtrDigs(servCli, adtrCli *urpc.Client) epochTy {
 		epoch++
 	}
 	return epoch
-}
-
-func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
-	servSk, servPk := cryptoffi.MakeKeys()
-	go func() {
-		s := newKeyServ(servSk)
-		s.start(servAddr)
-	}()
-
-	adtrSk, adtrPk := cryptoffi.MakeKeys()
-	adtrPks := []cryptoffi.PublicKey{adtrPk}
-	adtrAddrs := []grove_ffi.Address{adtrAddr}
-	go func() {
-		a := newAuditor(adtrSk, servPk)
-		a.start(adtrAddr)
-	}()
-
-	machine.Sleep(1_000_000)
-	servCli := urpc.MakeClient(servAddr)
-	adtrCli := urpc.MakeClient(adtrAddr)
-
-	aliceId := cryptoffi.Hash([]byte("alice"))
-	aliceVal := []byte("val")
-	aliceCli := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
-	_, err0 := aliceCli.put(aliceVal)
-	machine.Assume(err0 == errNone)
-
-	emptyReplyB := make([]byte, 0)
-	err1 := servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
-	machine.Assume(err1 == urpc.ErrNone)
-
-	epochAdtr := updateAdtrDigs(servCli, adtrCli)
-	machine.Assume(epochAdtr == uint64(2))
-
-	bobId := cryptoffi.Hash([]byte("bob"))
-	bobCli := newKeyCli(bobId, servAddr, adtrAddrs, adtrPks, servPk)
-	charlieId := cryptoffi.Hash([]byte("charlie"))
-	charlieCli := newKeyCli(charlieId, servAddr, adtrAddrs, adtrPks, servPk)
-
-	epoch0, val0, err3 := bobCli.get(aliceId)
-	machine.Assume(err3 == errNone)
-	epoch1, val1, err4 := charlieCli.get(aliceId)
-	machine.Assume(err4 == errNone)
-
-	epoch2, err5 := bobCli.audit(0)
-	machine.Assume(err5 == errNone)
-	epoch3, err6 := charlieCli.audit(0)
-	machine.Assume(err6 == errNone)
-
-	machine.Assume(epoch0 == epoch1)
-	machine.Assume(epoch0 < epoch2)
-	machine.Assume(epoch1 < epoch3)
-
-	machine.Assert(std.BytesEqual(val0, val1))
 }

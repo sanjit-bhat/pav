@@ -1,0 +1,63 @@
+package ktmerkle
+
+import (
+	"github.com/goose-lang/std"
+	"github.com/mit-pdos/gokv/grove_ffi"
+	"github.com/mit-pdos/gokv/urpc"
+	"github.com/mit-pdos/secure-chat/cryptoffi"
+	"github.com/tchajed/goose/machine"
+)
+
+func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
+	servSk, servPk := cryptoffi.MakeKeys()
+	go func() {
+		s := newKeyServ(servSk)
+		s.start(servAddr)
+	}()
+
+	adtrSk, adtrPk := cryptoffi.MakeKeys()
+	adtrPks := []cryptoffi.PublicKey{adtrPk}
+	adtrAddrs := []grove_ffi.Address{adtrAddr}
+	go func() {
+		a := newAuditor(adtrSk, servPk)
+		a.start(adtrAddr)
+	}()
+
+	machine.Sleep(1_000_000)
+	servCli := urpc.MakeClient(servAddr)
+	adtrCli := urpc.MakeClient(adtrAddr)
+
+	aliceId := cryptoffi.Hash([]byte("alice"))
+	aliceVal := []byte("val")
+	aliceCli := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
+	_, err0 := aliceCli.put(aliceVal)
+	machine.Assume(err0 == errNone)
+
+	emptyReplyB := make([]byte, 0)
+	err1 := servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
+	machine.Assume(err1 == urpc.ErrNone)
+
+	epochAdtr := updateAdtrDigs(servCli, adtrCli)
+	machine.Assume(epochAdtr == uint64(2))
+
+	bobId := cryptoffi.Hash([]byte("bob"))
+	bobCli := newKeyCli(bobId, servAddr, adtrAddrs, adtrPks, servPk)
+	charlieId := cryptoffi.Hash([]byte("charlie"))
+	charlieCli := newKeyCli(charlieId, servAddr, adtrAddrs, adtrPks, servPk)
+
+	epoch0, val0, err3 := bobCli.get(aliceId)
+	machine.Assume(err3 == errNone)
+	epoch1, val1, err4 := charlieCli.get(aliceId)
+	machine.Assume(err4 == errNone)
+
+	epoch2, err5 := bobCli.audit(0)
+	machine.Assume(err5 == errNone)
+	epoch3, err6 := charlieCli.audit(0)
+	machine.Assume(err6 == errNone)
+
+	machine.Assume(epoch0 == epoch1)
+	machine.Assume(epoch0 < epoch2)
+	machine.Assume(epoch1 < epoch3)
+
+	machine.Assert(std.BytesEqual(val0, val1))
+}
