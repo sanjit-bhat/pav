@@ -145,9 +145,7 @@ func callPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (epochTy, cryptoffi
 	argB := (&putArg{id: id, val: val}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcKeyServPut, argB, &replyB, 100)
-	if err0 != urpc.ErrNone {
-		return 0, nil, errSome
-	}
+	machine.Assume(err0 == urpc.ErrNone)
 	reply := &putReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 != errNone {
@@ -241,9 +239,7 @@ func callGetIdAtEpoch(cli *urpc.Client, id merkle.Id, epoch epochTy) *getIdAtEpo
 	argB := (&getIdAtEpochArg{id: id, epoch: epoch}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcKeyServGetIdAtEpoch, argB, &replyB, 100)
-	if err0 != urpc.ErrNone {
-		return errReply
-	}
+	machine.Assume(err0 == urpc.ErrNone)
 	reply := &getIdAtEpochReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 != errNone {
@@ -340,9 +336,7 @@ func callGetIdLatest(cli *urpc.Client, id merkle.Id) *getIdLatestReply {
 	argB := (&getIdLatestArg{id: id}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcKeyServGetIdLatest, argB, &replyB, 100)
-	if err0 != urpc.ErrNone {
-		return errReply
-	}
+	machine.Assume(err0 == urpc.ErrNone)
 	reply := &getIdLatestReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 != errNone {
@@ -409,9 +403,7 @@ func callGetDigest(cli *urpc.Client, epoch epochTy) (merkle.Digest, cryptoffi.Si
 	argB := (&getDigestArg{epoch: epoch}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcKeyServGetDigest, argB, &replyB, 100)
-	if err0 != urpc.ErrNone {
-		return nil, nil, errSome
-	}
+	machine.Assume(err0 == urpc.ErrNone)
 	reply := &getDigestReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 != errNone {
@@ -478,9 +470,7 @@ func callUpdate(cli *urpc.Client, epoch epochTy, dig merkle.Digest, sig cryptoff
 	argB := (&updateArg{epoch: epoch, digest: dig, sig: sig}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcAuditorUpdate, argB, &replyB, 100)
-	if err0 != urpc.ErrNone {
-		return errSome
-	}
+	machine.Assume(err0 == urpc.ErrNone)
 	reply := &updateReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 != errNone {
@@ -547,9 +537,7 @@ func callGetLink(cli *urpc.Client, epoch epochTy) (linkTy, cryptoffi.Sig, errorT
 	argB := (&getLinkArg{epoch: epoch}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcAuditorGetLink, argB, &replyB, 100)
-	if err0 != urpc.ErrNone {
-		return nil, nil, errSome
-	}
+	machine.Assume(err0 == urpc.ErrNone)
 	reply := &getLinkReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 != errNone {
