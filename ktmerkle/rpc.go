@@ -6,6 +6,7 @@ import (
 	"github.com/mit-pdos/secure-chat/cryptoffi"
 	"github.com/mit-pdos/secure-chat/marshalutil"
 	"github.com/mit-pdos/secure-chat/merkle"
+	"github.com/tchajed/goose/machine"
 	"github.com/tchajed/marshal"
 )
 
