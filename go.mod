@@ -1,6 +1,6 @@
 module github.com/mit-pdos/secure-chat
 
-go 1.20
+go 1.22
 
 require (
 	github.com/anishathalye/porcupine v0.1.6

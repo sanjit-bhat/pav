@@ -8,6 +8,7 @@ github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5Kwzbycv
 github.com/fatih/color v1.9.0/go.mod h1:eQcE1qtQxscV5RaZvpXrrb8Drkc3/DdQ+uUYCNjL+zU=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
+github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/goose-lang/std v0.0.0-20210910024443-21c4593d3dec/go.mod h1:eBTA88cbxhdegtDJayt+ns0Y9jjXsAwxv3CbH+62cKE=
 github.com/goose-lang/std v0.0.0-20240425183813-43192cce860e h1:018CrV2LoLsov7NmBfscOAhDKHeoxtDkiN7KGQ0fifI=
 github.com/goose-lang/std v0.0.0-20240425183813-43192cce860e/go.mod h1:eBTA88cbxhdegtDJayt+ns0Y9jjXsAwxv3CbH+62cKE=
