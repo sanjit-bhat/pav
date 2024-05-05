@@ -8,6 +8,22 @@ import (
 	"github.com/tchajed/goose/machine"
 )
 
+func updateAdtrDigs(servCli, adtrCli *urpc.Client) epochTy {
+	var epoch uint64 = 0
+	for {
+		dig, sig, err0 := callGetDigest(servCli, epoch)
+		if err0 != errNone {
+			break
+		}
+		err1 := callUpdate(adtrCli, epoch, dig, sig)
+		if err1 != errNone {
+			break
+		}
+		epoch++
+	}
+	return epoch
+}
+
 func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	servSk, servPk := cryptoffi.MakeKeys()
 	go func() {
