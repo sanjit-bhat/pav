@@ -124,12 +124,6 @@ func TestBasicAll(t *testing.T) {
 	adtrCli := urpc.MakeClient(adtrAddr)
 
 	// Create hist with [None, val0, val0, val1, val1].
-	emptyReplyB := make([]byte, 0)
-	errRpc := servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
-	if errRpc != urpc.ErrNone {
-		t.Fatal()
-	}
-
 	aliceId := cryptoffi.Hash([]byte("alice"))
 	alice := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
 	val0 := []byte("val0")
@@ -141,7 +135,8 @@ func TestBasicAll(t *testing.T) {
 		t.Fatal(epoch)
 	}
 
-	errRpc = servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
+	emptyReplyB := make([]byte, 0)
+	errRpc := servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
 	if errRpc != urpc.ErrNone {
 		t.Fatal()
 	}
