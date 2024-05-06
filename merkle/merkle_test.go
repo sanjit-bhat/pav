@@ -40,25 +40,25 @@ func TestTreeDeepCopy(t *testing.T) {
 
 func PutCheck(t *testing.T, tr *Tree, id Id, val Val) {
 	digest, proof, err := tr.Put(id, val)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	err = CheckProof(MembProofTy, proof, id, val, digest)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 }
 
 func GetMembCheck(t *testing.T, tr *Tree, id Id) Val {
 	reply := tr.Get(id)
-	if reply.Error != errNone {
+	if reply.Error {
 		t.Fatal()
 	}
 	if reply.ProofTy != MembProofTy {
 		t.Fatal()
 	}
 	err := CheckProof(MembProofTy, reply.Proof, id, reply.Val, reply.Digest)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	return reply.Val
@@ -66,14 +66,14 @@ func GetMembCheck(t *testing.T, tr *Tree, id Id) Val {
 
 func GetNonmembCheck(t *testing.T, tr *Tree, id Id) {
 	reply := tr.Get(id)
-	if reply.Error != errNone {
+	if reply.Error {
 		t.Fatal()
 	}
 	if reply.ProofTy != NonmembProofTy {
 		t.Fatal()
 	}
 	err := CheckProof(NonmembProofTy, reply.Proof, id, nil, reply.Digest)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 }
@@ -161,11 +161,11 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 
 	tr := &Tree{}
 	digest0, proof0, err := tr.Put(id0, val0)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	err = CheckProof(MembProofTy, proof0, id0, val0, digest0)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 
@@ -176,7 +176,7 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 	proof1[0][0] = proof1[0][1]
 	proof1[0][1] = tmp
 	err = CheckProof(NonmembProofTy, proof1, id0, nil, digest0)
-	if err != errSome {
+	if !err {
 		t.Fatal()
 	}
 }
@@ -193,16 +193,16 @@ func TestAttackPutNilEmptyNode(t *testing.T) {
 
 	tr := &Tree{}
 	digest0, proof0, err := tr.Put(id0, nil)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	err = CheckProof(MembProofTy, proof0, id0, nil, digest0)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 
 	err = CheckProof(MembProofTy, proof0, id1, nil, digest0)
-	if err != errSome {
+	if !err {
 		t.Fatal()
 	}
 }

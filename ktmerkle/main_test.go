@@ -18,7 +18,7 @@ func TestBasicServ(t *testing.T) {
 	id := cryptoffi.Hash([]byte("id"))
 	val := []byte("val")
 	epoch, sig, err := s.put(id, val)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	if epoch != 1 {
@@ -31,7 +31,7 @@ func TestBasicServ(t *testing.T) {
 	}
 
 	reply0 := s.getIdLatest(id)
-	if reply0.error != errNone {
+	if reply0.error {
 		t.Fatal()
 	}
 	enc1 := (&epochHash{epoch: reply0.epoch, hash: reply0.digest}).encode()
@@ -40,14 +40,14 @@ func TestBasicServ(t *testing.T) {
 		t.Fatal()
 	}
 	err = merkle.CheckProof(merkle.NonmembProofTy, reply0.proof, id, nil, reply0.digest)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 
 	s.updateEpoch()
 
 	reply0 = s.getIdLatest(id)
-	if reply0.error != errNone {
+	if reply0.error {
 		t.Fatal()
 	}
 	enc1 = (&epochHash{epoch: reply0.epoch, hash: reply0.digest}).encode()
@@ -56,12 +56,12 @@ func TestBasicServ(t *testing.T) {
 		t.Fatal()
 	}
 	err = merkle.CheckProof(merkle.MembProofTy, reply0.proof, id, val, reply0.digest)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 
 	reply1 := s.getIdAtEpoch(id, 1)
-	if reply1.error != errNone {
+	if reply1.error {
 		t.Fatal()
 	}
 	enc1 = (&epochHash{epoch: 1, hash: reply1.digest}).encode()
@@ -70,12 +70,12 @@ func TestBasicServ(t *testing.T) {
 		t.Fatal()
 	}
 	err = merkle.CheckProof(merkle.MembProofTy, reply1.proof, id, val, reply1.digest)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 
 	dig1, sig, err := s.getDigest(1)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	if !bytes.Equal(reply0.digest, dig1) {
@@ -128,7 +128,7 @@ func TestBasicAll(t *testing.T) {
 	alice := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
 	val0 := []byte("val0")
 	epoch, err := alice.put(val0)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	if epoch != 1 {
@@ -147,7 +147,7 @@ func TestBasicAll(t *testing.T) {
 
 	val1 := []byte("val1")
 	epoch, err = alice.put(val1)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	if epoch != 3 {
@@ -173,7 +173,7 @@ func TestBasicAll(t *testing.T) {
 	var sigs []cryptoffi.Sig
 	for epoch := uint64(0); ; epoch++ {
 		dig, sig, err := callGetDigest(servCli, epoch)
-		if err != errNone {
+		if err {
 			break
 		}
 		digs = append(digs, dig)
@@ -187,14 +187,14 @@ func TestBasicAll(t *testing.T) {
 	for epoch, dig := range digs {
 		sig := sigs[epoch]
 		err := callUpdate(adtrCli, uint64(epoch), dig, sig)
-		if err != errNone {
+		if err {
 			t.Fatal()
 		}
 	}
 
 	bob := newKeyCli(nil, servAddr, adtrAddrs, adtrPks, servPk)
 	getEpoch, val2, err := bob.get(aliceId)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	if getEpoch != expMaxEpochExcl-1 {
@@ -204,7 +204,7 @@ func TestBasicAll(t *testing.T) {
 		t.Fatal(val1, val2)
 	}
 	auditEpoch, err := bob.audit(0)
-	if err != errNone {
+	if err {
 		t.Fatal()
 	}
 	if auditEpoch != expMaxEpochExcl {
