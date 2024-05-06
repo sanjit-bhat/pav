@@ -44,7 +44,7 @@ func (n *node) getHash() []byte {
 	return n.hash
 }
 
-func deepCopyInternal(n *node) *node {
+func (n *node) deepCopy() *node {
 	if n == nil {
 		return nil
 	}
@@ -57,10 +57,6 @@ func deepCopyInternal(n *node) *node {
 	}
 	n2.children = children
 	return n2
-}
-
-func (n *node) deepCopy() *node {
-	return deepCopyInternal(n)
 }
 
 func (n *node) updateLeafHash() {
