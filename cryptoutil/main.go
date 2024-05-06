@@ -6,12 +6,8 @@ import (
 
 type Hasher = []byte
 
-// Goose doesn't support non-struct types that well, so until that exists,
-// use type aliases and non-method funcs.
 func HasherWrite(h *Hasher, data []byte) {
-	for _, b := range data {
-		*h = append(*h, b)
-	}
+	*h = append(*h, data...)
 }
 
 func HasherWriteSl(h *Hasher, data [][]byte) {
@@ -21,10 +17,8 @@ func HasherWriteSl(h *Hasher, data [][]byte) {
 }
 
 func HasherSum(h Hasher, b []byte) []byte {
-	var b1 = b
 	hash := cryptoffi.Hash(h)
-	for _, byt := range hash {
-		b1 = append(b1, byt)
-	}
+	var b1 = b
+	b1 = append(b1, hash...)
 	return b1
 }

@@ -191,7 +191,7 @@ func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.A
 // TODO: what happens if client calls put twice in an epoch?
 func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
 	epoch, err := verCallPut(c.serv, c.servPk, c.id, val)
-	if err != errNone {
+	if err {
 		return 0, err
 	}
 	c.valEpochs = append(c.valEpochs, epoch)
@@ -201,7 +201,7 @@ func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
 
 func (c *keyCli) get(id merkle.Id) (epochTy, merkle.Val, errorTy) {
 	reply := verCallGetIdLatest(c.serv, c.servPk, id)
-	if reply.error != errNone {
+	if reply.error {
 		return 0, nil, reply.error
 	}
 
@@ -222,7 +222,7 @@ func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
 		return dig, errNone
 	}
 	newDig, err := verCallGetDigest(c.serv, c.servPk, epoch)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	c.digs[epoch] = newDig
@@ -239,7 +239,7 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	// Consider doing this for other for loop as well.
 	for {
 		dig, err0 := c.getOrFillDig(epoch)
-		if err0 != errNone {
+		if err0 {
 			break
 		}
 		link = calcNextLink(link, dig)
@@ -253,7 +253,7 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	adtr := c.adtrs[adtrId]
 	adtrPk := c.adtrPks[adtrId]
 	adtrLink, err1 := verCallGetLink(adtr, adtrPk, lastEpoch)
-	if err1 != errNone {
+	if err1 {
 		return 0, err1
 	}
 	if !std.BytesEqual(link, adtrLink) {
@@ -266,7 +266,7 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expProofTy merkle.ProofTy) okTy {
 	id := c.id
 	reply := verCallGetIdAtEpoch(c.serv, c.servPk, id, epoch)
-	if reply.error != errNone {
+	if reply.error {
 		return false
 	}
 	if !std.BytesEqual(reply.val, expVal) {

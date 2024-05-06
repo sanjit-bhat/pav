@@ -32,21 +32,6 @@ func (o *epochHash) encode() []byte {
 	return b
 }
 
-func (o *epochHash) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err != errNone {
-		return nil, err
-	}
-	hash, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
-		return nil, err
-	}
-	o.epoch = epoch
-	o.hash = hash
-	return b, errNone
-}
-
 type putArg struct {
 	id  merkle.Id
 	val merkle.Val
@@ -62,11 +47,11 @@ func (o *putArg) encode() []byte {
 func (o *putArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	val, b, err := marshalutil.ReadSlice1D(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.id = id
@@ -88,26 +73,6 @@ func (o *idValEpoch) encode() []byte {
 	return b
 }
 
-func (o *idValEpoch) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	id, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
-		return nil, err
-	}
-	val, b, err := marshalutil.ReadSlice1D(b)
-	if err != errNone {
-		return nil, err
-	}
-	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err != errNone {
-		return nil, err
-	}
-	o.id = id
-	o.val = val
-	o.epoch = epoch
-	return b, errNone
-}
-
 type putReply struct {
 	epoch epochTy
 	sig   cryptoffi.Sig
@@ -125,15 +90,15 @@ func (o *putReply) encode() []byte {
 func (o *putReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	error, b, err := marshalutil.ReadBool(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.sig = sig
@@ -149,7 +114,7 @@ func callPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (epochTy, cryptoffi
 	machine.Assume(err0 == urpc.ErrNone)
 	reply := &putReply{}
 	_, err1 := reply.decode(replyB)
-	if err1 != errNone {
+	if err1 {
 		return 0, nil, err1
 	}
 	return reply.epoch, reply.sig, reply.error
@@ -170,11 +135,11 @@ func (o *getIdAtEpochArg) encode() []byte {
 func (o *getIdAtEpochArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.id = id
@@ -205,24 +170,27 @@ func (o *getIdAtEpochReply) encode() []byte {
 func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	val, b, err := marshalutil.ReadSlice1D(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	proofTy, b, err := marshalutil.ReadBool(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	proof, b, err := marshalutil.ReadSlice3D(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
+	if err {
+		return nil, err
+	}
 	error, b, err := marshalutil.ReadBool(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.val = val
@@ -243,7 +211,7 @@ func callGetIdAtEpoch(cli *urpc.Client, id merkle.Id, epoch epochTy) *getIdAtEpo
 	machine.Assume(err0 == urpc.ErrNone)
 	reply := &getIdAtEpochReply{}
 	_, err1 := reply.decode(replyB)
-	if err1 != errNone {
+	if err1 {
 		return errReply
 	}
 	return reply
@@ -262,7 +230,7 @@ func (o *getIdLatestArg) encode() []byte {
 func (o *getIdLatestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.id = id
@@ -294,31 +262,31 @@ func (o *getIdLatestReply) encode() []byte {
 func (o *getIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	val, b, err := marshalutil.ReadSlice1D(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	proofTy, b, err := marshalutil.ReadBool(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	proof, b, err := marshalutil.ReadSlice3D(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	error, b, err := marshalutil.ReadBool(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.epoch = epoch
@@ -340,7 +308,7 @@ func callGetIdLatest(cli *urpc.Client, id merkle.Id) *getIdLatestReply {
 	machine.Assume(err0 == urpc.ErrNone)
 	reply := &getIdLatestReply{}
 	_, err1 := reply.decode(replyB)
-	if err1 != errNone {
+	if err1 {
 		return errReply
 	}
 	return reply
@@ -359,7 +327,7 @@ func (o *getDigestArg) encode() []byte {
 func (o *getDigestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.epoch = epoch
@@ -383,15 +351,15 @@ func (o *getDigestReply) encode() []byte {
 func (o *getDigestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	error, b, err := marshalutil.ReadBool(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.digest = digest
@@ -407,7 +375,7 @@ func callGetDigest(cli *urpc.Client, epoch epochTy) (merkle.Digest, cryptoffi.Si
 	machine.Assume(err0 == urpc.ErrNone)
 	reply := &getDigestReply{}
 	_, err1 := reply.decode(replyB)
-	if err1 != errNone {
+	if err1 {
 		return nil, nil, err1
 	}
 	return reply.digest, reply.sig, reply.error
@@ -430,15 +398,15 @@ func (o *updateArg) encode() []byte {
 func (o *updateArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	digest, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.epoch = epoch
@@ -460,7 +428,7 @@ func (o *updateReply) encode() []byte {
 func (o *updateReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	error, b, err := marshalutil.ReadBool(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.error = error
@@ -474,7 +442,7 @@ func callUpdate(cli *urpc.Client, epoch epochTy, dig merkle.Digest, sig cryptoff
 	machine.Assume(err0 == urpc.ErrNone)
 	reply := &updateReply{}
 	_, err1 := reply.decode(replyB)
-	if err1 != errNone {
+	if err1 {
 		return err1
 	}
 	return reply.error
@@ -493,7 +461,7 @@ func (o *getLinkArg) encode() []byte {
 func (o *getLinkArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.epoch = epoch
@@ -517,15 +485,15 @@ func (o *getLinkReply) encode() []byte {
 func (o *getLinkReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	link, b, err := marshalutil.SafeReadBytes(b, cryptoffi.HashLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	sig, b, err := marshalutil.SafeReadBytes(b, cryptoffi.SigLen)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	error, b, err := marshalutil.ReadBool(b)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	o.link = link
@@ -541,7 +509,7 @@ func callGetLink(cli *urpc.Client, epoch epochTy) (linkTy, cryptoffi.Sig, errorT
 	machine.Assume(err0 == urpc.ErrNone)
 	reply := &getLinkReply{}
 	_, err1 := reply.decode(replyB)
-	if err1 != errNone {
+	if err1 {
 		return nil, nil, err1
 	}
 	return reply.link, reply.sig, reply.error
@@ -559,7 +527,7 @@ func (s *keyServ) start(addr grove_ffi.Address) {
 		func(enc_args []byte, enc_reply *[]byte) {
 			args := &putArg{}
 			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
+			if err0 {
 				*enc_reply = (&putReply{epoch: 0, error: err0}).encode()
 				return
 			}
@@ -571,7 +539,7 @@ func (s *keyServ) start(addr grove_ffi.Address) {
 		func(enc_args []byte, enc_reply *[]byte) {
 			args := &getIdAtEpochArg{}
 			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
+			if err0 {
 				reply := &getIdAtEpochReply{}
 				reply.error = errSome
 				*enc_reply = reply.encode()
@@ -585,7 +553,7 @@ func (s *keyServ) start(addr grove_ffi.Address) {
 		func(enc_args []byte, enc_reply *[]byte) {
 			args := &getIdLatestArg{}
 			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
+			if err0 {
 				reply := &getIdLatestReply{}
 				reply.error = errSome
 				*enc_reply = reply.encode()
@@ -599,7 +567,7 @@ func (s *keyServ) start(addr grove_ffi.Address) {
 		func(enc_args []byte, enc_reply *[]byte) {
 			args := &getDigestArg{}
 			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
+			if err0 {
 				reply := &getDigestReply{}
 				reply.error = errSome
 				*enc_reply = reply.encode()
@@ -619,7 +587,7 @@ func (a *auditor) start(addr grove_ffi.Address) {
 		func(enc_args []byte, enc_reply *[]byte) {
 			args := &updateArg{}
 			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
+			if err0 {
 				reply := &updateReply{}
 				reply.error = errSome
 				*enc_reply = reply.encode()
@@ -633,7 +601,7 @@ func (a *auditor) start(addr grove_ffi.Address) {
 		func(enc_args []byte, enc_reply *[]byte) {
 			args := &getLinkArg{}
 			_, err0 := args.decode(enc_args)
-			if err0 != errNone {
+			if err0 {
 				reply := &getLinkReply{}
 				reply.error = errSome
 				*enc_reply = reply.encode()

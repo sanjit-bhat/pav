@@ -140,7 +140,7 @@ func (p *pathProof) check() errorTy {
 		currHash = cryptoutil.HasherSum(hr, nil)
 	}
 
-	if err != errNone {
+	if err {
 		return errSome
 	}
 	if !std.BytesEqual(currHash, p.Digest) {
@@ -171,7 +171,7 @@ func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) err
 	// to same sz as path.
 	idPref := id[:len(proof)]
 	var nodeHash []byte
-	if proofTy == MembProofTy {
+	if proofTy {
 		nodeHash = getLeafNodeHash(val)
 	} else {
 		nodeHash = getEmptyNodeHash()

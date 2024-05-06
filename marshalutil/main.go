@@ -42,7 +42,7 @@ func WriteBool(b0 []byte, data bool) []byte {
 func ReadBool(b0 []byte) (bool, []byte, errorTy) {
 	var b = b0
 	data, b, err := SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return false, nil, err
 	}
 	var data1 bool
@@ -80,11 +80,11 @@ func WriteSlice3D(b0 []byte, data [][][]byte) []byte {
 func ReadSlice1D(b0 []byte) ([]byte, []byte, errorTy) {
 	var b = b0
 	length, b, err := SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, nil, err
 	}
 	data, b, err := SafeReadBytes(b, length)
-	if err != errNone {
+	if err {
 		return nil, nil, err
 	}
 	return data, b, errNone
@@ -93,7 +93,7 @@ func ReadSlice1D(b0 []byte) ([]byte, []byte, errorTy) {
 func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
 	var b = b0
 	length, b, err := SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, nil, err
 	}
 	var data0 [][]byte
@@ -103,13 +103,13 @@ func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
 		var data1 []byte
 		var err1 errorTy
 		data1, b, err1 = ReadSlice1D(b)
-		if err1 != errNone {
+		if err1 {
 			err0 = err1
 			continue
 		}
 		data0 = append(data0, data1)
 	}
-	if err0 != errNone {
+	if err0 {
 		return nil, nil, err0
 	}
 	return data0, b, errNone
@@ -118,7 +118,7 @@ func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
 func ReadSlice3D(b0 []byte) ([][][]byte, []byte, errorTy) {
 	var b = b0
 	length, b, err := SafeReadInt(b)
-	if err != errNone {
+	if err {
 		return nil, nil, err
 	}
 	var data0 [][][]byte
@@ -128,13 +128,13 @@ func ReadSlice3D(b0 []byte) ([][][]byte, []byte, errorTy) {
 		var data1 [][]byte
 		var err1 errorTy
 		data1, b, err1 = ReadSlice2D(b)
-		if err1 != errNone {
+		if err1 {
 			err0 = err1
 			continue
 		}
 		data0 = append(data0, data1)
 	}
-	if err0 != errNone {
+	if err0 {
 		return nil, nil, err0
 	}
 	return data0, b, errNone

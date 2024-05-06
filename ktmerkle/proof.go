@@ -12,11 +12,11 @@ func updateAdtrDigs(servCli, adtrCli *urpc.Client) epochTy {
 	var epoch uint64 = 0
 	for {
 		dig, sig, err0 := callGetDigest(servCli, epoch)
-		if err0 != errNone {
+		if err0 {
 			break
 		}
 		err1 := callUpdate(adtrCli, epoch, dig, sig)
-		if err1 != errNone {
+		if err1 {
 			break
 		}
 		epoch++
@@ -47,7 +47,7 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	aliceVal := []byte("val")
 	aliceCli := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
 	_, err0 := aliceCli.put(aliceVal)
-	machine.Assume(err0 == errNone)
+	machine.Assume(!err0)
 
 	emptyReplyB := make([]byte, 0)
 	err1 := servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
@@ -62,14 +62,14 @@ func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
 	charlieCli := newKeyCli(charlieId, servAddr, adtrAddrs, adtrPks, servPk)
 
 	epoch0, val0, err3 := bobCli.get(aliceId)
-	machine.Assume(err3 == errNone)
+	machine.Assume(!err3)
 	epoch1, val1, err4 := charlieCli.get(aliceId)
-	machine.Assume(err4 == errNone)
+	machine.Assume(!err4)
 
 	epoch2, err5 := bobCli.audit(0)
-	machine.Assume(err5 == errNone)
+	machine.Assume(!err5)
 	epoch3, err6 := charlieCli.audit(0)
-	machine.Assume(err6 == errNone)
+	machine.Assume(!err6)
 
 	machine.Assume(epoch0 == epoch1)
 	machine.Assume(epoch0 < epoch2)

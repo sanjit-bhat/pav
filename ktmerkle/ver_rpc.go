@@ -8,7 +8,7 @@ import (
 
 func verCallPut(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id, val merkle.Val) (epochTy, errorTy) {
 	epoch, sig, err := callPut(cli, id, val)
-	if err != errNone {
+	if err {
 		return 0, err
 	}
 	enc := (&idValEpoch{id: id, val: val, epoch: epoch}).encode()
@@ -23,7 +23,7 @@ func verCallGetIdAtEpoch(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id,
 	errReply := &getIdAtEpochReply{}
 	errReply.error = errSome
 	reply := callGetIdAtEpoch(cli, id, epoch)
-	if reply.error != errNone {
+	if reply.error {
 		return errReply
 	}
 	enc := (&epochHash{epoch: epoch, hash: reply.digest}).encode()
@@ -32,7 +32,7 @@ func verCallGetIdAtEpoch(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id,
 		return errReply
 	}
 	err := merkle.CheckProof(reply.proofTy, reply.proof, id, reply.val, reply.digest)
-	if err != errNone {
+	if err {
 		return errReply
 	}
 	return reply
@@ -42,7 +42,7 @@ func verCallGetIdLatest(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id) 
 	errReply := &getIdLatestReply{}
 	errReply.error = errSome
 	reply := callGetIdLatest(cli, id)
-	if reply.error != errNone {
+	if reply.error {
 		return errReply
 	}
 
@@ -53,7 +53,7 @@ func verCallGetIdLatest(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id) 
 	}
 
 	err := merkle.CheckProof(reply.proofTy, reply.proof, id, reply.val, reply.digest)
-	if err != errNone {
+	if err {
 		return errReply
 	}
 	return reply
@@ -61,7 +61,7 @@ func verCallGetIdLatest(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id) 
 
 func verCallGetDigest(cli *urpc.Client, pk cryptoffi.PublicKey, epoch epochTy) (merkle.Digest, errorTy) {
 	dig, sig, err := callGetDigest(cli, epoch)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
@@ -74,7 +74,7 @@ func verCallGetDigest(cli *urpc.Client, pk cryptoffi.PublicKey, epoch epochTy) (
 
 func verCallGetLink(cli *urpc.Client, pk cryptoffi.PublicKey, epoch epochTy) (linkTy, errorTy) {
 	link, sig, err := callGetLink(cli, epoch)
-	if err != errNone {
+	if err {
 		return nil, err
 	}
 
