@@ -1,4 +1,4 @@
-module github.com/mit-pdos/secure-chat
+module github.com/mit-pdos/pav
 
 go 1.22
 

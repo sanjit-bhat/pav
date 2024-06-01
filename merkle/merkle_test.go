@@ -2,7 +2,7 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/mit-pdos/secure-chat/cryptoffi"
+	"github.com/mit-pdos/pav/cryptoffi"
 	"testing"
 )
 

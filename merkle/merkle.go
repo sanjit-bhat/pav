@@ -2,8 +2,8 @@ package merkle
 
 import (
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/secure-chat/cryptoffi"
-	"github.com/mit-pdos/secure-chat/cryptoutil"
+	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/cryptoutil"
 )
 
 type errorTy = bool

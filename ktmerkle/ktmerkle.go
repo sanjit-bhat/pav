@@ -4,9 +4,9 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoffi"
-	"github.com/mit-pdos/secure-chat/cryptoutil"
-	"github.com/mit-pdos/secure-chat/merkle"
+	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/cryptoutil"
+	"github.com/mit-pdos/pav/merkle"
 	"sync"
 )
 

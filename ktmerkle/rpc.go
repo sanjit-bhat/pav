@@ -3,9 +3,9 @@ package ktmerkle
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoffi"
-	"github.com/mit-pdos/secure-chat/marshalutil"
-	"github.com/mit-pdos/secure-chat/merkle"
+	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/marshalutil"
+	"github.com/mit-pdos/pav/merkle"
 	"github.com/tchajed/goose/machine"
 	"github.com/tchajed/marshal"
 )

@@ -1,7 +1,7 @@
 package cryptoutil
 
 import (
-	"github.com/mit-pdos/secure-chat/cryptoffi"
+	"github.com/mit-pdos/pav/cryptoffi"
 )
 
 type Hasher = []byte

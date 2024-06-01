@@ -2,8 +2,8 @@ package ktmerkle
 
 import (
 	"github.com/mit-pdos/gokv/urpc"
-	"github.com/mit-pdos/secure-chat/cryptoffi"
-	"github.com/mit-pdos/secure-chat/merkle"
+	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/merkle"
 )
 
 func verCallPut(cli *urpc.Client, pk cryptoffi.PublicKey, id merkle.Id, val merkle.Val) (epochTy, errorTy) {
