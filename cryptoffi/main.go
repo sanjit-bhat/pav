@@ -22,9 +22,9 @@ func Hash(data []byte) []byte {
 
 // Signatures.
 
-type PrivateKey = ed25519.PrivateKey
+type PrivateKey ed25519.PrivateKey
 
-type PublicKey = ed25519.PublicKey
+type PublicKey ed25519.PublicKey
 
 func MakeKeys() (PrivateKey, PublicKey) {
 	pub, priv, err := ed25519.GenerateKey(nil)
@@ -35,9 +35,9 @@ func MakeKeys() (PrivateKey, PublicKey) {
 }
 
 func Sign(sk PrivateKey, data []byte) Sig {
-	return ed25519.Sign(sk, data)
+	return ed25519.Sign(ed25519.PrivateKey(sk), data)
 }
 
 func Verify(pk PublicKey, data, sig Sig) bool {
-	return ed25519.Verify(pk, data, sig)
+	return ed25519.Verify(ed25519.PublicKey(pk), data, sig)
 }
