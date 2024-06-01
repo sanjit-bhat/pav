@@ -13,12 +13,12 @@ const (
 	errNone errorTy = false
 	errSome errorTy = true
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
-	numChildren    uint64  = 256
-	emptyNodeId    byte    = 0
-	leafNodeId     byte    = 1
-	interiorNodeId byte    = 2
-	NonmembProofTy ProofTy = false
-	MembProofTy    ProofTy = true
+	numChildren     uint64  = 256
+	emptyNodeTag    byte    = 0
+	leafNodeTag     byte    = 1
+	interiorNodeTag byte    = 2
+	NonmembProofTy  ProofTy = false
+	MembProofTy     ProofTy = true
 )
 
 // "keys" of the tree.
@@ -39,7 +39,7 @@ type node struct {
 func (n *node) getHash() []byte {
 	if n == nil {
 		// Empty node.
-		return cryptoffi.Hash([]byte{emptyNodeId})
+		return cryptoffi.Hash([]byte{emptyNodeTag})
 	}
 	return n.hash
 }
@@ -62,7 +62,7 @@ func (n *node) deepCopy() *node {
 func (n *node) updateLeafHash() {
 	var h cryptoutil.Hasher
 	cryptoutil.HasherWrite(&h, n.val)
-	cryptoutil.HasherWrite(&h, []byte{leafNodeId})
+	cryptoutil.HasherWrite(&h, []byte{leafNodeTag})
 	n.hash = cryptoutil.HasherSum(h, nil)
 }
 
@@ -72,7 +72,7 @@ func (n *node) updateInteriorHash() {
 	for _, n := range n.children {
 		cryptoutil.HasherWrite(&h, n.getHash())
 	}
-	cryptoutil.HasherWrite(&h, []byte{interiorNodeId})
+	cryptoutil.HasherWrite(&h, []byte{interiorNodeTag})
 	n.hash = cryptoutil.HasherSum(h, nil)
 }
 
@@ -132,7 +132,7 @@ func (p *pathProof) check() errorTy {
 		cryptoutil.HasherWriteSl(&hr, before)
 		cryptoutil.HasherWrite(&hr, currHash)
 		cryptoutil.HasherWriteSl(&hr, after)
-		cryptoutil.HasherWrite(&hr, []byte{interiorNodeId})
+		cryptoutil.HasherWrite(&hr, []byte{interiorNodeTag})
 		currHash = cryptoutil.HasherSum(hr, nil)
 	}
 
@@ -148,12 +148,12 @@ func (p *pathProof) check() errorTy {
 func getLeafNodeHash(val Val) []byte {
 	var hr cryptoutil.Hasher
 	cryptoutil.HasherWrite(&hr, val)
-	cryptoutil.HasherWrite(&hr, []byte{leafNodeId})
+	cryptoutil.HasherWrite(&hr, []byte{leafNodeTag})
 	return cryptoutil.HasherSum(hr, nil)
 }
 
 func getEmptyNodeHash() []byte {
-	return cryptoffi.Hash([]byte{emptyNodeId})
+	return cryptoffi.Hash([]byte{emptyNodeTag})
 }
 
 func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) errorTy {
