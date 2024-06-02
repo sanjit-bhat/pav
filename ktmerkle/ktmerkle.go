@@ -20,6 +20,32 @@ const (
 	errSome errorTy = true
 )
 
+type hashChain []linkTy
+
+func (c *hashChain) get(idx uint64) (errorTy, []byte) {
+	chain := *c
+	chainLen := uint64(len(chain))
+	if idx >= chainLen {
+		return errSome, nil
+	}
+	return errNone, chain[idx]
+}
+
+func (c *hashChain) put(data []byte) {
+	chain := *c
+	var lastLink linkTy
+	chainLen := uint64(len(chain))
+	if chainLen > 0 {
+		lastLink = chain[chainLen-1]
+	}
+
+	var hr cryptoutil.Hasher
+	cryptoutil.HasherWrite(&hr, lastLink)
+	cryptoutil.HasherWrite(&hr, data)
+	newLink := cryptoutil.HasherSum(hr, nil)
+	*c = append(chain, newLink)
+}
+
 // Key server.
 
 type keyServ struct {
