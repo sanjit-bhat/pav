@@ -22,15 +22,6 @@ const (
 
 type hashChain []linkTy
 
-func (c *hashChain) get(idx uint64) (errorTy, []byte) {
-	chain := *c
-	chainLen := uint64(len(chain))
-	if idx >= chainLen {
-		return errSome, nil
-	}
-	return errNone, chain[idx]
-}
-
 func (c *hashChain) put(data []byte) {
 	chain := *c
 	var lastLink linkTy
@@ -53,7 +44,7 @@ type keyServ struct {
 	mu     *sync.Mutex
 	trees  []*merkle.Tree
 	nextTr *merkle.Tree
-	chain  []linkTy
+	chain  hashChain
 }
 
 func newKeyServ(sk cryptoffi.PrivateKey) *keyServ {
@@ -63,34 +54,16 @@ func newKeyServ(sk cryptoffi.PrivateKey) *keyServ {
 	emptyTr := &merkle.Tree{}
 	s.trees = []*merkle.Tree{emptyTr}
 	s.nextTr = &merkle.Tree{}
-	s.chain = []linkTy{emptyTr.Digest()}
+	s.chain = hashChain{}
+	s.chain.put(emptyTr.Digest())
 	return s
-}
-
-func calcNextLink(prevLink linkTy, data []byte) linkTy {
-	var hr cryptoutil.Hasher
-	cryptoutil.HasherWrite(&hr, data)
-	cryptoutil.HasherWrite(&hr, prevLink)
-	newLink := cryptoutil.HasherSum(hr, nil)
-	return newLink
-}
-
-func extendChain(chain *[]linkTy, data []byte) {
-	oldChain := *chain
-	var prevLink linkTy
-	chainLen := uint64(len(oldChain))
-	if chainLen > 0 {
-		prevLink = oldChain[chainLen-1]
-	}
-	newLink := calcNextLink(prevLink, data)
-	*chain = append(oldChain, newLink)
 }
 
 func (s *keyServ) updateEpoch() {
 	s.mu.Lock()
 	nextTr := s.nextTr
 	dig := nextTr.Digest()
-	extendChain(&s.chain, dig)
+	s.chain.put(dig)
 	s.trees = append(s.trees, nextTr)
 	s.nextTr = nextTr.DeepCopy()
 	s.mu.Unlock()
@@ -154,11 +127,11 @@ type auditor struct {
 	mu     *sync.Mutex
 	sk     cryptoffi.PrivateKey
 	servPk cryptoffi.PublicKey
-	chain  []linkTy
+	chain  hashChain
 }
 
 func newAuditor(sk cryptoffi.PrivateKey, servPk cryptoffi.PublicKey) *auditor {
-	return &auditor{mu: new(sync.Mutex), sk: sk, servPk: servPk, chain: nil}
+	return &auditor{mu: new(sync.Mutex), sk: sk, servPk: servPk, chain: hashChain{}}
 }
 
 func (a *auditor) update(epoch epochTy, dig merkle.Digest, sig cryptoffi.Sig) errorTy {
@@ -173,7 +146,7 @@ func (a *auditor) update(epoch epochTy, dig merkle.Digest, sig cryptoffi.Sig) er
 		a.mu.Unlock()
 		return errSome
 	}
-	extendChain(&a.chain, dig)
+	a.chain.put(dig)
 	a.mu.Unlock()
 	return errNone
 }
@@ -259,7 +232,7 @@ func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
 func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
-	var link linkTy
+	var chain hashChain
 	var epoch uint64
 	// TODO: maybe factor out digest fetch into sep loop.
 	// Consider doing this for other for loop as well.
@@ -268,7 +241,7 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 		if err0 {
 			break
 		}
-		link = calcNextLink(link, dig)
+		chain.put(dig)
 		epoch++
 	}
 	if epoch == 0 {
@@ -282,6 +255,7 @@ func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
 	if err1 {
 		return 0, err1
 	}
+	link := chain[uint64(len(chain))-1]
 	if !std.BytesEqual(link, adtrLink) {
 		return 0, errSome
 	}
