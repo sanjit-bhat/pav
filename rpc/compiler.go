@@ -57,9 +57,12 @@ func genRcvr(name string) *ast.FieldList {
 	}
 }
 
-func genWriteInt(name string) *ast.AssignStmt {
-	rhs := []ast.Expr{
-		&ast.CallExpr{
+func genFieldWrite(field *types.Var) ast.Stmt {
+	name := field.Name()
+	var call *ast.CallExpr
+	switch field.Type().(*types.Basic).Kind() {
+	case types.Uint64:
+		call = &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "marshal"},
 				Sel: &ast.Ident{Name: "WriteInt"},
@@ -71,12 +74,14 @@ func genWriteInt(name string) *ast.AssignStmt {
 					Sel: &ast.Ident{Name: name},
 				},
 			},
-		},
+		}
+	default:
+		panic("unsupported")
 	}
 	return &ast.AssignStmt{
 		Lhs: []ast.Expr{&ast.Ident{Name: "b"}},
 		Tok: token.ASSIGN,
-		Rhs: rhs,
+		Rhs: []ast.Expr{call},
 	}
 }
 
@@ -85,7 +90,6 @@ func genEncode(o types.Object) *ast.FuncDecl {
 	st := o.Type().(*types.Named).Underlying().(*types.Struct)
 
 	funcTy := &ast.FuncType{
-		Params: &ast.FieldList{},
 		Results: &ast.FieldList{
 			List: []*ast.Field{{
 				Type: &ast.ArrayType{
@@ -94,53 +98,149 @@ func genEncode(o types.Object) *ast.FuncDecl {
 			}},
 		},
 	}
+	callMake := &ast.CallExpr{
+		Fun: &ast.Ident{Name: "make"},
+		Args: []ast.Expr{
+			&ast.ArrayType{
+				Elt: &ast.Ident{Name: "byte"},
+			},
+			&ast.BasicLit{Kind: token.INT, Value: "0"},
+		},
+	}
 	makeByteSl := &ast.DeclStmt{
 		Decl: &ast.GenDecl{
 			Tok: token.VAR,
 			Specs: []ast.Spec{
 				&ast.ValueSpec{
-					Names: []*ast.Ident{{Name: "b"}},
-					Values: []ast.Expr{
-						&ast.CallExpr{
-							Fun: &ast.Ident{Name: "make"},
-							Args: []ast.Expr{
-								&ast.ArrayType{
-									Elt: &ast.Ident{Name: "byte"},
-								},
-								&ast.BasicLit{Kind: token.INT, Value: "0"},
-							},
-						},
-					},
+					Names:  []*ast.Ident{{Name: "b"}},
+					Values: []ast.Expr{callMake},
 				},
 			},
 		},
 	}
-	body := &ast.BlockStmt{
-		List: []ast.Stmt{
-			makeByteSl,
-		},
-	}
+	body := []ast.Stmt{makeByteSl}
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
-		fieldName := field.Name()
-		switch field.Type().(*types.Basic).Kind() {
-		case types.Uint64:
-			body.List = append(body.List, genWriteInt(fieldName))
-		default:
-			panic("unsupported")
-		}
+		body = append(body, genFieldWrite(field))
 	}
 	retStmt := &ast.ReturnStmt{
 		Results: []ast.Expr{
 			&ast.Ident{Name: "b"},
 		},
 	}
-	body.List = append(body.List, retStmt)
+	body = append(body, retStmt)
 	return &ast.FuncDecl{
 		Recv: genRcvr(name),
 		Name: &ast.Ident{Name: "encode"},
 		Type: funcTy,
-		Body: body,
+		Body: &ast.BlockStmt{List: body},
+	}
+}
+
+func genFieldRead(field *types.Var) []ast.Stmt {
+	name := field.Name()
+	var call *ast.CallExpr
+	switch field.Type().(*types.Basic).Kind() {
+	case types.Uint64:
+		call = &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "marshalutil"},
+				Sel: &ast.Ident{Name: "SafeReadInt"},
+			},
+			Args: []ast.Expr{&ast.Ident{Name: "b"}},
+		}
+	default:
+		panic("unsupported")
+	}
+	assign := &ast.AssignStmt{
+		Lhs: []ast.Expr{
+			&ast.Ident{Name: name},
+			&ast.Ident{Name: "b"},
+			&ast.Ident{Name: "err"},
+		},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{call},
+	}
+	err := &ast.IfStmt{
+		Cond: &ast.Ident{Name: "err"},
+		Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.ReturnStmt{
+				Results: []ast.Expr{
+					&ast.Ident{Name: "nil"},
+					&ast.Ident{Name: "err"},
+				},
+			},
+		}},
+	}
+	return []ast.Stmt{assign, err}
+}
+
+func genFieldAssign(field *types.Var) ast.Stmt {
+	name := field.Name()
+	return &ast.AssignStmt{
+		Lhs: []ast.Expr{&ast.SelectorExpr{
+			X:   &ast.Ident{Name: "o"},
+			Sel: &ast.Ident{Name: name},
+		}},
+		Tok: token.ASSIGN,
+		Rhs: []ast.Expr{&ast.Ident{Name: "y"}},
+	}
+}
+
+func genDecode(o types.Object) *ast.FuncDecl {
+	name := o.Name()
+	st := o.Type().(*types.Named).Underlying().(*types.Struct)
+
+	funcTy := &ast.FuncType{
+		Params: &ast.FieldList{
+			List: []*ast.Field{{
+				Names: []*ast.Ident{{Name: "b0"}},
+				Type: &ast.ArrayType{
+					Elt: &ast.Ident{Name: "byte"},
+				},
+			}},
+		},
+		Results: &ast.FieldList{
+			List: []*ast.Field{
+				{Type: &ast.ArrayType{
+					Elt: &ast.Ident{Name: "byte"},
+				}},
+				{Type: &ast.Ident{Name: "errorTy"}},
+			},
+		},
+	}
+	varDecl := &ast.DeclStmt{
+		Decl: &ast.GenDecl{
+			Tok: token.VAR,
+			Specs: []ast.Spec{
+				&ast.ValueSpec{
+					Names:  []*ast.Ident{{Name: "b"}},
+					Values: []ast.Expr{&ast.Ident{Name: "b0"}},
+				},
+			},
+		},
+	}
+	ret := &ast.ReturnStmt{
+		Results: []ast.Expr{
+			&ast.Ident{Name: "b"},
+			&ast.Ident{Name: "errNone"},
+		},
+	}
+	body := []ast.Stmt{varDecl}
+	for i := 0; i < st.NumFields(); i++ {
+		field := st.Field(i)
+		body = append(body, genFieldRead(field)...)
+	}
+	for i := 0; i < st.NumFields(); i++ {
+		field := st.Field(i)
+		body = append(body, genFieldAssign(field))
+	}
+	body = append(body, ret)
+	return &ast.FuncDecl{
+		Recv: genRcvr(name),
+		Name: &ast.Ident{Name: "decode"},
+		Type: funcTy,
+		Body: &ast.BlockStmt{List: body},
 	}
 }
 
@@ -150,7 +250,7 @@ func printAst(fpath string) {
 	if err != nil {
 		panic(err)
 	}
-	ast.Print(fset, f.Decls[3])
+	ast.Print(fset, f.Decls[4])
 }
 
 func genFileHeader() *ast.File {
@@ -171,7 +271,6 @@ func genFileHeader() *ast.File {
 			},
 		},
 	}
-
 	errTypeDecl := &ast.GenDecl{
 		Tok: token.TYPE,
 		Specs: []ast.Spec{
@@ -181,7 +280,6 @@ func genFileHeader() *ast.File {
 			},
 		},
 	}
-
 	constErrDecl := &ast.GenDecl{
 		Tok: token.CONST,
 		Specs: []ast.Spec{
@@ -197,7 +295,6 @@ func genFileHeader() *ast.File {
 			},
 		},
 	}
-
 	file := &ast.File{
 		Name: &ast.Ident{Name: "main"},
 		Decls: []ast.Decl{
@@ -206,7 +303,6 @@ func genFileHeader() *ast.File {
 			constErrDecl,
 		},
 	}
-
 	return file
 }
 
@@ -218,7 +314,7 @@ func printNode(n any) {
 }
 
 func driver(fpath string) {
-	printAst("out.gold.go")
+	printAst("spec.gold.go")
 	_ = fpath
 
 	ctx := &context{fpath: fpath}
@@ -227,7 +323,8 @@ func driver(fpath string) {
 	sts := ctx.getStructs()
 	for _, st := range sts {
 		enc := genEncode(st)
-		f.Decls = append(f.Decls, enc)
+		dec := genDecode(st)
+		f.Decls = append(f.Decls, enc, dec)
 	}
 	printNode(f)
 }
