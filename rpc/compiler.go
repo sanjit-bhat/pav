@@ -1,6 +1,7 @@
-package rpc
+package main
 
 import (
+	"bytes"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -8,18 +9,22 @@ import (
 	"go/types"
 	"log"
 	"os"
-	"path"
 )
 
 type context struct {
-	fpath string
-	fset  *token.FileSet
-	info  *types.Info
+	info *types.Info
 }
 
-func (ctx *context) typeCheck() {
-	ctx.fset = token.NewFileSet()
-	file, err := parser.ParseFile(ctx.fset, ctx.fpath, nil, parser.SkipObjectResolution)
+/*
+todo:
+1) make this file work with input as byte arr, not file path.
+2) make testing stuff work.
+3) make more functional and remove this stupid context thing.
+*/
+
+func (ctx *context) typeCheck(src []byte) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", src, parser.SkipObjectResolution)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,7 +33,7 @@ func (ctx *context) typeCheck() {
 	ctx.info = &types.Info{
 		Defs: make(map[*ast.Ident]types.Object),
 	}
-	_, err = conf.Check(path.Base(ctx.fpath), ctx.fset, files, ctx.info)
+	_, err = conf.Check("in.go", fset, files, ctx.info)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -76,7 +81,7 @@ func genFieldWrite(field *types.Var) ast.Stmt {
 			},
 		}
 	default:
-		panic("unsupported")
+        log.Fatal("unsupported")
 	}
 	return &ast.AssignStmt{
 		Lhs: []ast.Expr{&ast.Ident{Name: "b"}},
@@ -150,7 +155,7 @@ func genFieldRead(field *types.Var) []ast.Stmt {
 			Args: []ast.Expr{&ast.Ident{Name: "b"}},
 		}
 	default:
-		panic("unsupported")
+		log.Fatal("unsupported")
 	}
 	assign := &ast.AssignStmt{
 		Lhs: []ast.Expr{
@@ -290,7 +295,7 @@ func genFileHeader() *ast.File {
 	commentPos := token.Pos(1)
 	comment := &ast.Comment{
 		Slash: commentPos,
-		Text:  "// Auto-generated from github.com/mit-pdos/pav/cmd/rpc.",
+		Text:  "// Auto-generated from github.com/mit-pdos/pav/rpc.",
 	}
 	file := &ast.File{
 		Doc:     &ast.CommentGroup{List: []*ast.Comment{comment}},
@@ -305,32 +310,32 @@ func genFileHeader() *ast.File {
 	return file
 }
 
-func printGo(n any) {
+func printGo(n any) []byte {
 	fset := token.NewFileSet()
 	// Hacky: pkg comment fix. Range big enough to fit both specified pos's.
-	fset.AddFile("compiled.go", 1, 1)
-	err := format.Node(os.Stdout, fset, n)
+	fset.AddFile("out.go", 1, 1)
+	buf := new(bytes.Buffer)
+	err := format.Node(buf, fset, n)
 	if err != nil {
 		log.Fatal(err)
 	}
+	return buf.Bytes()
 }
 
-// printAst for testing. See what AST of existing files looks like.
-func printAst(fpath string) {
+// printAst when developing. See AST of golden files.
+func printAst(src string) {
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, fpath, nil, parser.ParseComments|parser.SkipObjectResolution)
+	f, err := parser.ParseFile(fset, src, nil, parser.ParseComments|parser.SkipObjectResolution)
 	if err != nil {
-		panic(err)
+        log.Fatal(err)
 	}
 	ast.Print(fset, f)
 }
 
-func driver(fpath string) {
-	//printAst("spec.gold.go")
-	_ = fpath
-
-	ctx := &context{fpath: fpath}
-	ctx.typeCheck()
+func compile(src []byte) []byte {
+	//printAst("testdata/test.golden")
+	ctx := &context{}
+	ctx.typeCheck(src)
 	f := genFileHeader()
 	sts := ctx.getStructs()
 	for _, st := range sts {
@@ -338,5 +343,14 @@ func driver(fpath string) {
 		dec := genDecode(st)
 		f.Decls = append(f.Decls, enc, dec)
 	}
-	printGo(f)
+	return printGo(f)
+}
+
+func driver(path string) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	res := compile(src)
+	log.Println(string(res))
 }
