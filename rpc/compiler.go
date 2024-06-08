@@ -183,7 +183,7 @@ func genFieldAssign(field *types.Var) ast.Stmt {
 			Sel: &ast.Ident{Name: name},
 		}},
 		Tok: token.ASSIGN,
-		Rhs: []ast.Expr{&ast.Ident{Name: "y"}},
+		Rhs: []ast.Expr{&ast.Ident{Name: name}},
 	}
 }
 
@@ -244,15 +244,6 @@ func genDecode(o types.Object) *ast.FuncDecl {
 	}
 }
 
-func printAst(fpath string) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, fpath, nil, parser.SkipObjectResolution)
-	if err != nil {
-		panic(err)
-	}
-	ast.Print(fset, f.Decls[4])
-}
-
 func genFileHeader() *ast.File {
 	importDecl := &ast.GenDecl{
 		Tok: token.IMPORT,
@@ -295,8 +286,16 @@ func genFileHeader() *ast.File {
 			},
 		},
 	}
+	// Hacky: pkg comment fix. Pkg starts after pkg comment.
+	commentPos := token.Pos(1)
+	comment := &ast.Comment{
+		Slash: commentPos,
+		Text:  "// Auto-generated from github.com/mit-pdos/pav/cmd/rpc.",
+	}
 	file := &ast.File{
-		Name: &ast.Ident{Name: "main"},
+		Doc:     &ast.CommentGroup{List: []*ast.Comment{comment}},
+		Package: commentPos + 1,
+		Name:    &ast.Ident{Name: "main"},
 		Decls: []ast.Decl{
 			importDecl,
 			errTypeDecl,
@@ -306,15 +305,28 @@ func genFileHeader() *ast.File {
 	return file
 }
 
-func printNode(n any) {
-	err := format.Node(os.Stdout, token.NewFileSet(), n)
+func printGo(n any) {
+	fset := token.NewFileSet()
+	// Hacky: pkg comment fix. Range big enough to fit both specified pos's.
+	fset.AddFile("compiled.go", 1, 1)
+	err := format.Node(os.Stdout, fset, n)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
+// printAst for testing. See what AST of existing files looks like.
+func printAst(fpath string) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, fpath, nil, parser.ParseComments|parser.SkipObjectResolution)
+	if err != nil {
+		panic(err)
+	}
+	ast.Print(fset, f)
+}
+
 func driver(fpath string) {
-	printAst("spec.gold.go")
+	//printAst("spec.gold.go")
 	_ = fpath
 
 	ctx := &context{fpath: fpath}
@@ -326,5 +338,5 @@ func driver(fpath string) {
 		dec := genDecode(st)
 		f.Decls = append(f.Decls, enc, dec)
 	}
-	printNode(f)
+	printGo(f)
 }

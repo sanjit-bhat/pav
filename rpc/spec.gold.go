@@ -1,9 +1,12 @@
+// Auto-generated from github.com/mit-pdos/pav/cmd/rpc.
 package rpc
 
 import (
 	"github.com/mit-pdos/pav/marshalutil"
 	"github.com/tchajed/marshal"
 )
+
+// com 1
 
 type errorTy = bool
 
