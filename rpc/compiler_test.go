@@ -21,7 +21,7 @@ type entry struct {
 }
 
 var data = []entry{
-	{"test.input", "test.golden"},
+	{"ints.input", "ints.golden"},
 }
 
 func check(t *testing.T, source, golden string) {
