@@ -14,6 +14,8 @@ const (
 
 var update = flag.Bool("update", false, "update golden files")
 
+var dump = flag.Bool("dump", false, "dump golden ast [for dev]")
+
 type entry struct {
 	source, golden string
 }
@@ -23,6 +25,16 @@ var data = []entry{
 }
 
 func check(t *testing.T, source, golden string) {
+	if *dump {
+		gld, err := os.ReadFile(golden)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		res := printAst(gld)
+		t.Logf("golden ast dump:\n%s", res)
+	}
+
 	src, err := os.ReadFile(source)
 	if err != nil {
 		t.Error(err)

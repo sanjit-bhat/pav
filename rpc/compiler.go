@@ -81,7 +81,7 @@ func genFieldWrite(field *types.Var) ast.Stmt {
 			},
 		}
 	default:
-        log.Fatal("unsupported")
+		log.Fatal("unsupported")
 	}
 	return &ast.AssignStmt{
 		Lhs: []ast.Expr{&ast.Ident{Name: "b"}},
@@ -271,8 +271,9 @@ func genFileHeader() *ast.File {
 		Tok: token.TYPE,
 		Specs: []ast.Spec{
 			&ast.TypeSpec{
-				Name: &ast.Ident{Name: "errorTy"},
-				Type: &ast.Ident{Name: "bool"},
+				Name:   &ast.Ident{Name: "errorTy"},
+				Assign: 1,
+				Type:   &ast.Ident{Name: "bool"},
 			},
 		},
 	}
@@ -300,7 +301,7 @@ func genFileHeader() *ast.File {
 	file := &ast.File{
 		Doc:     &ast.CommentGroup{List: []*ast.Comment{comment}},
 		Package: commentPos + 1,
-		Name:    &ast.Ident{Name: "main"},
+		Name:    &ast.Ident{Name: "rpc"},
 		Decls: []ast.Decl{
 			importDecl,
 			errTypeDecl,
@@ -323,17 +324,18 @@ func printGo(n any) []byte {
 }
 
 // printAst when developing. See AST of golden files.
-func printAst(src string) {
+func printAst(src []byte) []byte {
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, src, nil, parser.ParseComments|parser.SkipObjectResolution)
+	f, err := parser.ParseFile(fset, "", src, parser.ParseComments|parser.SkipObjectResolution)
 	if err != nil {
-        log.Fatal(err)
+		log.Fatal(err)
 	}
-	ast.Print(fset, f)
+	res := new(bytes.Buffer)
+	ast.Fprint(res, fset, f, ast.NotNilFilter)
+	return res.Bytes()
 }
 
 func compile(src []byte) []byte {
-	//printAst("testdata/test.golden")
 	ctx := &context{}
 	ctx.typeCheck(src)
 	f := genFileHeader()

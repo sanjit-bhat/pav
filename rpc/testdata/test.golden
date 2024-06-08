@@ -1,12 +1,10 @@
-// Auto-generated from github.com/mit-pdos/pav/cmd/rpc.
+// Auto-generated from github.com/mit-pdos/pav/rpc.
 package rpc
 
 import (
 	"github.com/mit-pdos/pav/marshalutil"
 	"github.com/tchajed/marshal"
 )
-
-// com 1
 
 type errorTy = bool
 
@@ -21,7 +19,6 @@ func (o *arg) encode() []byte {
 	b = marshal.WriteInt(b, o.y)
 	return b
 }
-
 func (o *arg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	x, b, err := marshalutil.SafeReadInt(b)
