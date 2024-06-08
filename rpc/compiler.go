@@ -7,44 +7,37 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"golang.org/x/tools/go/packages"
 	"log"
-	"os"
+	"path"
 )
 
-type context struct {
-	info *types.Info
-}
-
-/*
-todo:
-1) make this file work with input as byte arr, not file path.
-2) make testing stuff work.
-3) make more functional and remove this stupid context thing.
-*/
-
-func (ctx *context) typeCheck(src []byte) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.SkipObjectResolution)
+func getStructs(src string) []types.Object {
+	mode := packages.NeedName | packages.NeedFiles
+	mode |= packages.NeedImports | packages.NeedDeps
+	mode |= packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo
+	dir, file := path.Split(src)
+	_ = file
+	cfg := &packages.Config{
+		Mode: mode,
+		Dir:  dir,
+	}
+	pkgs, err := packages.Load(cfg, "")
 	if err != nil {
 		log.Fatal(err)
 	}
-	files := []*ast.File{file}
-	conf := types.Config{}
-	ctx.info = &types.Info{
-		Defs: make(map[*ast.Ident]types.Object),
+	if len(pkgs) != 1 {
+		log.Fatal("pkg len not 1")
 	}
-	_, err = conf.Check("in.go", fset, files, ctx.info)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+	pkg := pkgs[0]
+	info := pkg.TypesInfo
 
-func (ctx *context) getStructs() []types.Object {
 	var sts []types.Object
-	for _, o := range ctx.info.Defs {
+	for _, o := range info.Defs {
 		if o == nil {
 			continue
 		}
+		// TODO: Check file equality here.
 		switch o.Type().Underlying().(type) {
 		case *types.Struct:
 			sts = append(sts, o)
@@ -335,24 +328,13 @@ func printAst(src []byte) []byte {
 	return res.Bytes()
 }
 
-func compile(src []byte) []byte {
-	ctx := &context{}
-	ctx.typeCheck(src)
+func compile(src string) []byte {
+	sts := getStructs(src)
 	f := genFileHeader()
-	sts := ctx.getStructs()
 	for _, st := range sts {
 		enc := genEncode(st)
 		dec := genDecode(st)
 		f.Decls = append(f.Decls, enc, dec)
 	}
 	return printGo(f)
-}
-
-func driver(path string) {
-	src, err := os.ReadFile(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-	res := compile(src)
-	log.Println(string(res))
 }

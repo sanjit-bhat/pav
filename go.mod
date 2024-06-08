@@ -7,4 +7,9 @@ require (
 	github.com/mit-pdos/gokv v0.0.0-20231019222008-8f340ff02c0f
 	github.com/tchajed/goose v0.5.3
 	github.com/tchajed/marshal v0.4.3
+	golang.org/x/tools v0.19.0
+)
+
+require (
+	golang.org/x/mod v0.16.0 // indirect
 )

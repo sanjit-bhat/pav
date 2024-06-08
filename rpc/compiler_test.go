@@ -21,7 +21,7 @@ type entry struct {
 }
 
 var data = []entry{
-	{"ints.input", "ints.golden"},
+	{"ints/ints.go", "ints/ints.golden"},
 }
 
 func check(t *testing.T, source, golden string) {
@@ -35,13 +35,7 @@ func check(t *testing.T, source, golden string) {
 		t.Logf("golden ast dump:\n%s", res)
 	}
 
-	src, err := os.ReadFile(source)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	res := compile(src)
-
+	res := compile(source)
 	actual, err := os.CreateTemp("", "")
 	defer actual.Close()
 	if err != nil {
