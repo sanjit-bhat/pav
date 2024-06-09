@@ -18,11 +18,13 @@ var dump = flag.Bool("dump", false, "dump golden ast [for dev]")
 
 type entry struct {
 	source, golden string
+	runs           int
 }
 
 var data = []entry{
-	{"ints/ints.go", "ints/ints.golden"},
-	{"alias/alias.go", "alias/alias.golden"},
+	{"ints/ints.go", "ints/ints.golden", 1},
+	{"alias/alias.go", "alias/alias.golden", 1},
+	{"mult/mult.go", "mult/mult.golden", 3},
 }
 
 // tmpWrite writes data to a tmp file and returns the tmp file name.
@@ -83,7 +85,9 @@ func TestFiles(t *testing.T) {
 		golden := path.Join(dataDir, e.golden)
 		t.Run(e.source, func(t *testing.T) {
 			t.Parallel()
-			check(t, source, golden)
+			for i := 0; i < e.runs && !t.Failed(); i++ {
+				check(t, source, golden)
+			}
 		})
 	}
 }

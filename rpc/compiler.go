@@ -10,14 +10,19 @@ import (
 	"golang.org/x/tools/go/packages"
 	"log"
 	"path"
+	"path/filepath"
 )
 
 func getStructs(src string) []types.Object {
+	abs, err := filepath.Abs(src)
+	if err != nil {
+		log.Fatal(err)
+	}
+	dir := path.Dir(src)
+
 	mode := packages.NeedName | packages.NeedFiles
 	mode |= packages.NeedImports | packages.NeedDeps
 	mode |= packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo
-	dir, file := path.Split(src)
-	_ = file
 	cfg := &packages.Config{
 		Mode: mode,
 		Dir:  dir,
@@ -27,21 +32,45 @@ func getStructs(src string) []types.Object {
 		log.Fatal(err)
 	}
 	if len(pkgs) != 1 {
-		log.Fatal("TODO. pkg len not 1. maybe specify exact pkg.")
+		log.Fatal("pkg len not 1")
 	}
 	pkg := pkgs[0]
 	info := pkg.TypesInfo
 
+	var file *ast.File
+	for _, f := range pkg.Syntax {
+		tokF := pkg.Fset.File(f.FileStart)
+		if abs == tokF.Name() {
+			file = f
+		}
+	}
+	if file == nil {
+		log.Fatal("found no files matching src. does src end in .go?")
+	}
+
 	var sts []types.Object
-	for _, o := range info.Defs {
-		if o == nil {
+	for _, d := range file.Decls {
+		d2, ok := d.(*ast.GenDecl)
+		if !ok {
 			continue
 		}
-		// TODO: Check file equality here.
-		switch o.Type().Underlying().(type) {
-		case *types.Struct:
-			sts = append(sts, o)
+		if d2.Tok != token.TYPE {
+			continue
 		}
+		s, ok := d2.Specs[0].(*ast.TypeSpec)
+		if !ok {
+			continue
+		}
+		_, ok = s.Type.(*ast.StructType)
+		if !ok {
+			continue
+		}
+		o, ok := info.Defs[s.Name]
+		if !ok {
+			log.Fatalf("%s is not in defs map", s.Name)
+		}
+		_ = o.Type().Underlying().(*types.Struct)
+		sts = append(sts, o)
 	}
 	return sts
 }
