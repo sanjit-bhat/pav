@@ -107,6 +107,20 @@ func genFieldWrite(field *types.Var) ast.Stmt {
 				},
 			},
 		}
+	case types.Bool:
+		call = &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "marshalutil"},
+				Sel: &ast.Ident{Name: "WriteBool"},
+			},
+			Args: []ast.Expr{
+				&ast.Ident{Name: "b"},
+				&ast.SelectorExpr{
+					X:   &ast.Ident{Name: "o"},
+					Sel: &ast.Ident{Name: name},
+				},
+			},
+		}
 	default:
 		log.Fatal("unsupported type: ", basic.Name())
 	}
@@ -179,6 +193,14 @@ func genFieldRead(field *types.Var) []ast.Stmt {
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "marshalutil"},
 				Sel: &ast.Ident{Name: "SafeReadInt"},
+			},
+			Args: []ast.Expr{&ast.Ident{Name: "b"}},
+		}
+	case types.Bool:
+		call = &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "marshalutil"},
+				Sel: &ast.Ident{Name: "ReadBool"},
 			},
 			Args: []ast.Expr{&ast.Ident{Name: "b"}},
 		}
