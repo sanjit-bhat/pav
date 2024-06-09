@@ -13,7 +13,8 @@ import (
 	"path/filepath"
 )
 
-func getStructs(src string) []types.Object {
+// getStructs returns pkgName and objects that're guaranteed to map to structs.
+func getStructs(src string) (string, []types.Object) {
 	abs, err := filepath.Abs(src)
 	if err != nil {
 		log.Fatal(err)
@@ -72,7 +73,7 @@ func getStructs(src string) []types.Object {
 		_ = o.Type().Underlying().(*types.Struct)
 		sts = append(sts, o)
 	}
-	return sts
+	return file.Name.Name, sts
 }
 
 func genRcvr(name string) *ast.FieldList {
@@ -273,7 +274,7 @@ func genDecode(o types.Object) *ast.FuncDecl {
 	}
 }
 
-func genFileHeader() *ast.File {
+func genFileHeader(pkg string) *ast.File {
 	importDecl := &ast.GenDecl{
 		Tok: token.IMPORT,
 		Specs: []ast.Spec{
@@ -327,7 +328,7 @@ func genFileHeader() *ast.File {
 	file := &ast.File{
 		Doc:     &ast.CommentGroup{List: []*ast.Comment{comment}},
 		Package: commentPos + 1,
-		Name:    &ast.Ident{Name: "rpc"},
+		Name:    &ast.Ident{Name: pkg},
 		Decls: []ast.Decl{
 			importDecl,
 			errTypeDecl,
@@ -363,8 +364,8 @@ func printAst(src []byte) []byte {
 
 func compile(src string) []byte {
 	log.SetFlags(log.Lshortfile)
-	sts := getStructs(src)
-	f := genFileHeader()
+	pkg, sts := getStructs(src)
+	f := genFileHeader(pkg)
 	for _, st := range sts {
 		enc := genEncode(st)
 		dec := genDecode(st)

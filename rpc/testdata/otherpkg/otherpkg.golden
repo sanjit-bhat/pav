@@ -1,0 +1,14 @@
+// Auto-generated from github.com/mit-pdos/pav/rpc.
+package otherpkg
+
+import (
+	"github.com/mit-pdos/pav/marshalutil"
+	"github.com/tchajed/marshal"
+)
+
+type errorTy = bool
+
+const (
+	errNone errorTy = false
+	errSome errorTy = true
+)
