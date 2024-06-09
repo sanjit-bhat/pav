@@ -22,6 +22,21 @@ type entry struct {
 
 var data = []entry{
 	{"ints/ints.go", "ints/ints.golden"},
+	{"alias/alias.go", "alias/alias.golden"},
+}
+
+// tmpWrite writes data to a tmp file and returns the tmp file name.
+func tmpWrite(data []byte) (string, error) {
+	f, err := os.CreateTemp("", "")
+	defer f.Close()
+	if err != nil {
+		return "", err
+	}
+	_, err = f.Write(data)
+	if err != nil {
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 func check(t *testing.T, source, golden string) {
@@ -36,22 +51,21 @@ func check(t *testing.T, source, golden string) {
 	}
 
 	res := compile(source)
-	actual, err := os.CreateTemp("", "")
-	defer actual.Close()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	_, err = actual.Write(res)
+	actual, err := tmpWrite(res)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	cmd := exec.Command("diff", "--unified", actual.Name(), golden)
+	cmd := exec.Command("diff", "--unified", actual, golden)
 	diff, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Errorf("actual output diff from golden:\n%s", diff)
+	}
+
+	err = os.Remove(actual)
+	if err != nil {
+		t.Error(err)
 	}
 
 	if *update {

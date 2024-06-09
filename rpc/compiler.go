@@ -27,7 +27,7 @@ func getStructs(src string) []types.Object {
 		log.Fatal(err)
 	}
 	if len(pkgs) != 1 {
-		log.Fatal("pkg len not 1")
+		log.Fatal("TODO. pkg len not 1. maybe specify exact pkg.")
 	}
 	pkg := pkgs[0]
 	info := pkg.TypesInfo
@@ -58,7 +58,8 @@ func genRcvr(name string) *ast.FieldList {
 func genFieldWrite(field *types.Var) ast.Stmt {
 	name := field.Name()
 	var call *ast.CallExpr
-	switch field.Type().(*types.Basic).Kind() {
+	basic := field.Type().(*types.Basic)
+	switch basic.Kind() {
 	case types.Uint64:
 		call = &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
@@ -74,7 +75,7 @@ func genFieldWrite(field *types.Var) ast.Stmt {
 			},
 		}
 	default:
-		log.Fatal("unsupported")
+		log.Fatal("unsupported type: ", basic.Name())
 	}
 	return &ast.AssignStmt{
 		Lhs: []ast.Expr{&ast.Ident{Name: "b"}},
@@ -138,7 +139,8 @@ func genEncode(o types.Object) *ast.FuncDecl {
 func genFieldRead(field *types.Var) []ast.Stmt {
 	name := field.Name()
 	var call *ast.CallExpr
-	switch field.Type().(*types.Basic).Kind() {
+	basic := field.Type().(*types.Basic)
+	switch basic.Kind() {
 	case types.Uint64:
 		call = &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
@@ -148,7 +150,7 @@ func genFieldRead(field *types.Var) []ast.Stmt {
 			Args: []ast.Expr{&ast.Ident{Name: "b"}},
 		}
 	default:
-		log.Fatal("unsupported")
+		log.Fatal("unsupported type: ", basic.Name())
 	}
 	assign := &ast.AssignStmt{
 		Lhs: []ast.Expr{
@@ -289,7 +291,9 @@ func genFileHeader() *ast.File {
 	commentPos := token.Pos(1)
 	comment := &ast.Comment{
 		Slash: commentPos,
-		Text:  "// Auto-generated from github.com/mit-pdos/pav/rpc.",
+		// TODO: add from src struct file as well.
+		// from \"file\"\n using \"rpc\".
+		Text: "// Auto-generated from github.com/mit-pdos/pav/rpc.",
 	}
 	file := &ast.File{
 		Doc:     &ast.CommentGroup{List: []*ast.Comment{comment}},
@@ -329,6 +333,7 @@ func printAst(src []byte) []byte {
 }
 
 func compile(src string) []byte {
+	log.SetFlags(log.Lshortfile)
 	sts := getStructs(src)
 	f := genFileHeader()
 	for _, st := range sts {
