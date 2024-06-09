@@ -5,7 +5,7 @@
 [ ] return errs instead of log.Fatal. this'll work better with testing.
 [ ] add fixed size []byte support.
 [ ] add merkle.Id support. unalias that to []byte.
-[ ] generate same pkg name as src.
+[x] generate same pkg name as src.
 [ ] how does grpc differentiate fixed vs dynamic size byte sl?
 [x] 1. add epochTy support. unalias to uint64.
 [ ] add bool support.

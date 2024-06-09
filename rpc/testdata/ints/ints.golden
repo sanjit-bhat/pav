@@ -1,4 +1,5 @@
-// Auto-generated from github.com/mit-pdos/pav/rpc.
+// Auto-generated from spec "github.com/mit-pdos/pav/rpc/testdata/ints/ints.go"
+// using compiler "github.com/mit-pdos/pav/rpc".
 package rpc
 
 import (

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -13,13 +14,13 @@ import (
 	"path/filepath"
 )
 
-// getStructs returns pkgName and objects that're guaranteed to map to structs.
-func getStructs(src string) (string, []types.Object) {
+// getStructs post-cond: sts has struct objects.
+func getStructs(src string) (pkgName string, fileId string, sts []types.Object) {
 	abs, err := filepath.Abs(src)
 	if err != nil {
 		log.Fatal(err)
 	}
-	dir := path.Dir(src)
+	dir, base := path.Split(src)
 
 	mode := packages.NeedName | packages.NeedFiles
 	mode |= packages.NeedImports | packages.NeedDeps
@@ -49,7 +50,6 @@ func getStructs(src string) (string, []types.Object) {
 		log.Fatal("found no files matching src. does src end in .go?")
 	}
 
-	var sts []types.Object
 	for _, d := range file.Decls {
 		d2, ok := d.(*ast.GenDecl)
 		if !ok {
@@ -73,7 +73,10 @@ func getStructs(src string) (string, []types.Object) {
 		_ = o.Type().Underlying().(*types.Struct)
 		sts = append(sts, o)
 	}
-	return file.Name.Name, sts
+
+	pkgName = file.Name.Name
+	fileId = path.Join(pkg.ID, base)
+	return
 }
 
 func genRcvr(name string) *ast.FieldList {
@@ -274,7 +277,7 @@ func genDecode(o types.Object) *ast.FuncDecl {
 	}
 }
 
-func genFileHeader(pkg string) *ast.File {
+func genFileHeader(pkgName, fileId string) *ast.File {
 	importDecl := &ast.GenDecl{
 		Tok: token.IMPORT,
 		Specs: []ast.Spec{
@@ -318,17 +321,19 @@ func genFileHeader(pkg string) *ast.File {
 		},
 	}
 	// Hacky: pkg comment fix. Pkg starts after pkg comment.
-	commentPos := token.Pos(1)
-	comment := &ast.Comment{
-		Slash: commentPos,
-		// TODO: add from src struct file as well.
-		// from \"file\"\n using \"rpc\".
-		Text: "// Auto-generated from github.com/mit-pdos/pav/rpc.",
+	commPos := token.Pos(1)
+	comm1 := &ast.Comment{
+		Slash: commPos,
+		Text:  fmt.Sprintf("// Auto-generated from spec \"%s\"", fileId),
+	}
+	comm2 := &ast.Comment{
+		Slash: commPos,
+		Text:  "// using compiler \"github.com/mit-pdos/pav/rpc\".",
 	}
 	file := &ast.File{
-		Doc:     &ast.CommentGroup{List: []*ast.Comment{comment}},
-		Package: commentPos + 1,
-		Name:    &ast.Ident{Name: pkg},
+		Doc:     &ast.CommentGroup{List: []*ast.Comment{comm1, comm2}},
+		Package: commPos + 1,
+		Name:    &ast.Ident{Name: pkgName},
 		Decls: []ast.Decl{
 			importDecl,
 			errTypeDecl,
@@ -364,8 +369,8 @@ func printAst(src []byte) []byte {
 
 func compile(src string) []byte {
 	log.SetFlags(log.Lshortfile)
-	pkg, sts := getStructs(src)
-	f := genFileHeader(pkg)
+	pkgName, fileId, sts := getStructs(src)
+	f := genFileHeader(pkgName, fileId)
 	for _, st := range sts {
 		enc := genEncode(st)
 		dec := genDecode(st)
