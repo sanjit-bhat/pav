@@ -6,4 +6,6 @@ type args struct {
 	a3 []byte
 	// Invariant: len 16.
 	a4 []byte
+	a5 [][]byte
+	a6 [][][]byte
 }

@@ -78,7 +78,7 @@ func (c *compiler) getStructs(src string) []types.Object {
 		}
 		o, ok := info.Defs[s.Name]
 		if !ok {
-			log.Panicf("%s is not in defs map", s.Name)
+			log.Panic(s.Name, " is not in defs map")
 		}
 		_ = o.Type().Underlying().(*types.Struct)
 		sts = append(sts, o)
@@ -95,8 +95,8 @@ func genRcvr(name string) *ast.FieldList {
 	}
 }
 
-func (c *compiler) getFixedLen(f *types.Var) (isFixed bool, length string) {
-	p, _ := astutil.PathEnclosingInterval(c.file, f.Pos(), f.Pos())
+func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
+	p, _ := astutil.PathEnclosingInterval(c.file, pos, pos)
 	// First node is ident, then there's field.
 	node := p[1].(*ast.Field)
 	if node.Doc == nil {
@@ -108,27 +108,44 @@ func (c *compiler) getFixedLen(f *types.Var) (isFixed bool, length string) {
 	return true, comm
 }
 
+func (c *compiler) genSliceWrite(pos token.Pos, ty1 *types.Slice, depth int) *ast.SelectorExpr {
+	if depth > 3 {
+		log.Panic("unsupported slice nesting beyond depth 3")
+	}
+	switch ty2 := ty1.Elem().(type) {
+	case *types.Slice:
+		return c.genSliceWrite(pos, ty2, depth+1)
+	case *types.Basic:
+		if ty2.Kind() != types.Byte {
+			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
+		}
+		isFixed, _ := c.getFixedLen(pos)
+		if isFixed {
+			if depth == 1 {
+				return &ast.SelectorExpr{
+					X:   &ast.Ident{Name: "marshal"},
+					Sel: &ast.Ident{Name: "WriteBytes"},
+				}
+			} else {
+				log.Panicf("unsupported fixed len outside depth 1 slices")
+			}
+		}
+		return &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("WriteSlice%vD", depth)},
+		}
+	default:
+		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
+	}
+	return nil
+}
+
 func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 	name := field.Name()
 	var fun *ast.SelectorExpr
 	switch fTy := field.Type().(type) {
 	case *types.Slice:
-		basic := fTy.Elem().(*types.Basic)
-		if basic.Kind() != types.Byte {
-			log.Panic("unsupported slice elem ty: ", basic.Name())
-		}
-		isFixed, _ := c.getFixedLen(field)
-		if isFixed {
-			fun = &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshal"},
-				Sel: &ast.Ident{Name: "WriteBytes"},
-			}
-		} else {
-			fun = &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: "WriteSlice1D"},
-			}
-		}
+		fun = c.genSliceWrite(field.Pos(), fTy, 1)
 	case *types.Basic:
 		switch fTy.Kind() {
 		case types.Uint64:
@@ -216,36 +233,53 @@ func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	}
 }
 
+func (c *compiler) genSliceRead(pos token.Pos, ty1 *types.Slice, depth int) *ast.CallExpr {
+	if depth > 3 {
+		log.Panic("unsupported slice nesting beyond depth 3")
+	}
+	switch ty2 := ty1.Elem().(type) {
+	case *types.Slice:
+		return c.genSliceRead(pos, ty2, depth+1)
+	case *types.Basic:
+		if ty2.Kind() != types.Byte {
+			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
+		}
+		isFixed, length := c.getFixedLen(pos)
+		if isFixed {
+			if depth == 1 {
+				return &ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X:   &ast.Ident{Name: "marshalutil"},
+						Sel: &ast.Ident{Name: "SafeReadBytes"},
+					},
+					Args: []ast.Expr{
+						&ast.Ident{Name: "b"},
+						&ast.BasicLit{Kind: token.INT, Value: length},
+					},
+				}
+			} else {
+				log.Panicf("unsupported fixed len outside depth 1 slices")
+			}
+		}
+		return &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "marshalutil"},
+				Sel: &ast.Ident{Name: fmt.Sprintf("ReadSlice%vD", depth)},
+			},
+			Args: []ast.Expr{&ast.Ident{Name: "b"}},
+		}
+	default:
+		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
+	}
+	return nil
+}
+
 func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 	name := field.Name()
 	var call *ast.CallExpr
 	switch fTy := field.Type().(type) {
 	case *types.Slice:
-		basic := fTy.Elem().(*types.Basic)
-		if basic.Kind() != types.Byte {
-			log.Panic("unsupported slice elem ty: ", basic.Name())
-		}
-		isFixed, length := c.getFixedLen(field)
-		if isFixed {
-			call = &ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X:   &ast.Ident{Name: "marshalutil"},
-					Sel: &ast.Ident{Name: "SafeReadBytes"},
-				},
-				Args: []ast.Expr{
-					&ast.Ident{Name: "b"},
-					&ast.BasicLit{Kind: token.INT, Value: length},
-				},
-			}
-		} else {
-			call = &ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X:   &ast.Ident{Name: "marshalutil"},
-					Sel: &ast.Ident{Name: "ReadSlice1D"},
-				},
-				Args: []ast.Expr{&ast.Ident{Name: "b"}},
-			}
-		}
+		call = c.genSliceRead(field.Pos(), fTy, 1)
 	case *types.Basic:
 		switch fTy.Kind() {
 		case types.Uint64:
