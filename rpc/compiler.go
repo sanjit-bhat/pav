@@ -8,19 +8,26 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
 	"log"
 	"path"
 	"path/filepath"
+	"strings"
 )
 
-// getStructs post-cond: sts has struct objects.
-func getStructs(src string) (pkgName string, fileId string, sts []types.Object) {
+type compiler struct {
+	pkg  *packages.Package
+	file *ast.File
+}
+
+// getStructs post-cond: return struct objects.
+func (c *compiler) getStructs(src string) []types.Object {
 	abs, err := filepath.Abs(src)
 	if err != nil {
 		log.Fatal(err)
 	}
-	dir, base := path.Split(src)
+	dir := path.Dir(src)
 
 	mode := packages.NeedName | packages.NeedFiles
 	mode |= packages.NeedImports | packages.NeedDeps
@@ -37,6 +44,7 @@ func getStructs(src string) (pkgName string, fileId string, sts []types.Object) 
 		log.Fatal("pkg len not 1")
 	}
 	pkg := pkgs[0]
+	c.pkg = pkg
 	info := pkg.TypesInfo
 
 	var file *ast.File
@@ -49,7 +57,9 @@ func getStructs(src string) (pkgName string, fileId string, sts []types.Object) 
 	if file == nil {
 		log.Fatal("found no files matching src. does src end in .go?")
 	}
+	c.file = file
 
+	var sts []types.Object
 	for _, d := range file.Decls {
 		d2, ok := d.(*ast.GenDecl)
 		if !ok {
@@ -73,10 +83,7 @@ func getStructs(src string) (pkgName string, fileId string, sts []types.Object) 
 		_ = o.Type().Underlying().(*types.Struct)
 		sts = append(sts, o)
 	}
-
-	pkgName = file.Name.Name
-	fileId = path.Join(pkg.ID, base)
-	return
+	return sts
 }
 
 func genRcvr(name string) *ast.FieldList {
@@ -88,7 +95,20 @@ func genRcvr(name string) *ast.FieldList {
 	}
 }
 
-func genFieldWrite(field *types.Var) ast.Stmt {
+func (c *compiler) getFixedLen(f *types.Var) (isFixed bool, length string) {
+	p, _ := astutil.PathEnclosingInterval(c.file, f.Pos(), f.Pos())
+	// First node is ident, then there's field.
+	node := p[1].(*ast.Field)
+	if node.Doc == nil {
+		return false, ""
+	}
+	comm := node.Doc.List[0].Text
+	comm = strings.TrimPrefix(comm, "// Invariant: len ")
+	comm = strings.TrimRight(comm, ".")
+	return true, comm
+}
+
+func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 	name := field.Name()
 	var fun *ast.SelectorExpr
 	switch fTy := field.Type().(type) {
@@ -97,9 +117,17 @@ func genFieldWrite(field *types.Var) ast.Stmt {
 		if basic.Kind() != types.Byte {
 			log.Fatal("unsupported slice elem ty: ", basic.Name())
 		}
-		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
-			Sel: &ast.Ident{Name: "WriteSlice1D"},
+		isFixed, _ := c.getFixedLen(field)
+		if isFixed {
+			fun = &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "marshal"},
+				Sel: &ast.Ident{Name: "WriteBytes"},
+			}
+		} else {
+			fun = &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "marshalutil"},
+				Sel: &ast.Ident{Name: "WriteSlice1D"},
+			}
 		}
 	case *types.Basic:
 		switch fTy.Kind() {
@@ -136,7 +164,7 @@ func genFieldWrite(field *types.Var) ast.Stmt {
 	}
 }
 
-func genEncode(o types.Object) *ast.FuncDecl {
+func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	name := o.Name()
 	st := o.Type().(*types.Named).Underlying().(*types.Struct)
 
@@ -172,7 +200,7 @@ func genEncode(o types.Object) *ast.FuncDecl {
 	body := []ast.Stmt{makeByteSl}
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
-		body = append(body, genFieldWrite(field))
+		body = append(body, c.genFieldWrite(field))
 	}
 	retStmt := &ast.ReturnStmt{
 		Results: []ast.Expr{
@@ -188,7 +216,7 @@ func genEncode(o types.Object) *ast.FuncDecl {
 	}
 }
 
-func genFieldRead(field *types.Var) []ast.Stmt {
+func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 	name := field.Name()
 	var call *ast.CallExpr
 	switch fTy := field.Type().(type) {
@@ -197,12 +225,26 @@ func genFieldRead(field *types.Var) []ast.Stmt {
 		if basic.Kind() != types.Byte {
 			log.Fatal("unsupported slice elem ty: ", basic.Name())
 		}
-		call = &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: "ReadSlice1D"},
-			},
-			Args: []ast.Expr{&ast.Ident{Name: "b"}},
+		isFixed, length := c.getFixedLen(field)
+		if isFixed {
+			call = &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   &ast.Ident{Name: "marshalutil"},
+					Sel: &ast.Ident{Name: "SafeReadBytes"},
+				},
+				Args: []ast.Expr{
+					&ast.Ident{Name: "b"},
+					&ast.BasicLit{Kind: token.INT, Value: length},
+				},
+			}
+		} else {
+			call = &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   &ast.Ident{Name: "marshalutil"},
+					Sel: &ast.Ident{Name: "ReadSlice1D"},
+				},
+				Args: []ast.Expr{&ast.Ident{Name: "b"}},
+			}
 		}
 	case *types.Basic:
 		switch fTy.Kind() {
@@ -263,7 +305,7 @@ func genFieldAssign(field *types.Var) ast.Stmt {
 	}
 }
 
-func genDecode(o types.Object) *ast.FuncDecl {
+func (c *compiler) genDecode(o types.Object) *ast.FuncDecl {
 	name := o.Name()
 	st := o.Type().(*types.Named).Underlying().(*types.Struct)
 
@@ -305,7 +347,7 @@ func genDecode(o types.Object) *ast.FuncDecl {
 	body := []ast.Stmt{varDecl}
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
-		body = append(body, genFieldRead(field)...)
+		body = append(body, c.genFieldRead(field)...)
 	}
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
@@ -412,11 +454,15 @@ func printAst(src []byte) []byte {
 
 func compile(src string) []byte {
 	log.SetFlags(log.Lshortfile)
-	pkgName, fileId, sts := getStructs(src)
+	c := &compiler{}
+	sts := c.getStructs(src)
+	pkgName := c.file.Name.Name
+	fileId := path.Join(c.pkg.ID, path.Base(src))
+
 	f := genFileHeader(pkgName, fileId)
 	for _, st := range sts {
-		enc := genEncode(st)
-		dec := genDecode(st)
+		enc := c.genEncode(st)
+		dec := c.genDecode(st)
 		f.Decls = append(f.Decls, enc, dec)
 	}
 	return printGo(f)
