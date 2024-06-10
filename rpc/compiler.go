@@ -104,7 +104,7 @@ func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 		return false, ""
 	}
 	comm := node.Doc.List[0].Text
-    comm = strings.TrimPrefix(comm, "// rpc: invariant: len ")
+	comm = strings.TrimPrefix(comm, "// rpc: invariant: len ")
 	comm = strings.TrimRight(comm, ".")
 	return true, comm
 }
