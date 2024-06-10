@@ -37,6 +37,45 @@ func (c *hashChain) put(data []byte) {
 	*c = append(chain, newLink)
 }
 
+type timeEntry struct {
+	time  epochTy
+	entry merkle.Val
+}
+
+type timeSeries struct {
+	data []timeEntry
+}
+
+// put returns error if given old entry.
+func (ts *timeSeries) put(t epochTy, e merkle.Val) errorTy {
+	entries := ts.data
+	length := uint64(len(entries))
+	if length == 0 {
+		ts.data = append(entries, timeEntry{time: t, entry: e})
+		return errNone
+	}
+	last := entries[length-1].time
+	if t < last {
+		return errSome
+	}
+	ts.data = append(entries, timeEntry{time: t, entry: e})
+	return errNone
+}
+
+// get returns true if timeSeries has been initialized.
+// otherwise, it returns false and a nil value.
+func (ts *timeSeries) get(t epochTy) (bool, merkle.Val) {
+	var init bool
+	var latest merkle.Val
+	for _, te := range ts.data {
+		if te.time <= t {
+			init = true
+			latest = te.entry
+		}
+	}
+	return init, latest
+}
+
 // Key server.
 
 type keyServ struct {
@@ -167,14 +206,13 @@ func (a *auditor) getLink(epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
 // Key client.
 
 type keyCli struct {
-	adtrs     []*urpc.Client
-	adtrPks   []cryptoffi.PublicKey
-	servPk    cryptoffi.PublicKey
-	digs      map[epochTy]merkle.Digest
-	id        merkle.Id
-	serv      *urpc.Client
-	valEpochs []epochTy
-	vals      []merkle.Val
+	adtrs   []*urpc.Client
+	adtrPks []cryptoffi.PublicKey
+	servPk  cryptoffi.PublicKey
+	digs    map[epochTy]merkle.Digest
+	id      merkle.Id
+	serv    *urpc.Client
+	myVals  *timeSeries
 }
 
 func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrPks []cryptoffi.PublicKey, servPk cryptoffi.PublicKey) *keyCli {
@@ -184,7 +222,7 @@ func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.A
 		adtrs = append(adtrs, urpc.MakeClient(addr))
 	}
 	digs := make(map[epochTy]merkle.Digest)
-	return &keyCli{adtrs: adtrs, adtrPks: adtrPks, servPk: servPk, digs: digs, id: id, serv: serv, valEpochs: nil, vals: nil}
+	return &keyCli{adtrs: adtrs, adtrPks: adtrPks, servPk: servPk, digs: digs, id: id, serv: serv, myVals: &timeSeries{}}
 }
 
 // TODO: what happens if client calls put twice in an epoch?
@@ -193,8 +231,7 @@ func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
 	if err {
 		return 0, err
 	}
-	c.valEpochs = append(c.valEpochs, epoch)
-	c.vals = append(c.vals, val)
+	c.myVals.put(epoch, val)
 	return epoch, errNone
 }
 
@@ -287,26 +324,9 @@ func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expPro
 
 // selfAudit through Epoch idx exclusive.
 func (c *keyCli) selfAudit() epochTy {
-	numVals := uint64(len(c.vals))
-	// valIdx points to one past the curr val.
-	// This makes it easy to represent nonmembership before any puts.
-	var valIdx uint64
 	var epoch epochTy
 	for {
-		// Check if we're at the next val update.
-		if valIdx != numVals {
-			epochChange := c.valEpochs[valIdx]
-			if epoch == epochChange {
-				valIdx++
-			}
-		}
-		var expProofTy merkle.ProofTy
-		var expVal merkle.Val
-		// Check if at epoch before we even sent a val.
-		if valIdx != 0 {
-			expProofTy = merkle.MembProofTy
-			expVal = c.vals[valIdx-1]
-		}
+		expProofTy, expVal := c.myVals.get(epoch)
 		ok := c.checkProofWithExpected(epoch, expVal, expProofTy)
 		if !ok {
 			break
