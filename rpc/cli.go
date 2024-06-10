@@ -23,5 +23,5 @@ func main() {
 	if err := os.WriteFile(*out, res, 0644); err != nil {
 		log.Panic("failed to write to output file: ", *out)
 	}
-	log.Print("wrote to output file: ", *out)
+	log.Print("wrote output to file: ", *out)
 }
