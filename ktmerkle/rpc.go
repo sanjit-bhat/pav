@@ -13,17 +13,17 @@ type epochHash struct {
 }
 
 // rpc: no decode needed.
-type putArg struct {
-	// rpc: invariant: len 32.
-	id  merkle.Id
-	val merkle.Val
-}
-
 type idValEpoch struct {
 	// rpc: invariant: len 32.
 	id    merkle.Id
 	val   merkle.Val
 	epoch epochTy
+}
+
+type putArg struct {
+	// rpc: invariant: len 32.
+	id  merkle.Id
+	val merkle.Val
 }
 
 type putReply struct {
