@@ -104,7 +104,7 @@ func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 		return false, ""
 	}
 	comm := node.Doc.List[0].Text
-	comm = strings.TrimPrefix(comm, "// Invariant: len ")
+    comm = strings.TrimPrefix(comm, "// rpc: invariant: len ")
 	comm = strings.TrimRight(comm, ".")
 	return true, comm
 }
@@ -470,10 +470,10 @@ func (c *compiler) shouldGen(o types.Object) (encode bool, decode bool) {
 		return
 	}
 	for _, comm := range d.Doc.List {
-		if comm.Text == "//rpc: no encode needed." {
+		if comm.Text == "// rpc: no encode needed." {
 			encode = false
 		}
-		if comm.Text == "//rpc: no decode needed." {
+		if comm.Text == "// rpc: no decode needed." {
 			decode = false
 		}
 	}

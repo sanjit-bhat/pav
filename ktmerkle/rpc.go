@@ -5,22 +5,22 @@ import (
 	"github.com/mit-pdos/pav/merkle"
 )
 
-//rpc: no decode needed.
+// rpc: no decode needed.
 type epochHash struct {
 	epoch epochTy
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	hash []byte
 }
 
-//rpc: no decode needed.
+// rpc: no decode needed.
 type putArg struct {
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	id  merkle.Id
 	val merkle.Val
 }
 
 type idValEpoch struct {
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	id    merkle.Id
 	val   merkle.Val
 	epoch epochTy
@@ -28,41 +28,41 @@ type idValEpoch struct {
 
 type putReply struct {
 	epoch epochTy
-	// Invariant: len 64.
+	// rpc: invariant: len 64.
 	sig   cryptoffi.Sig
 	error errorTy
 }
 
 type getIdAtEpochArg struct {
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	id    merkle.Id
 	epoch epochTy
 }
 
 type getIdAtEpochReply struct {
 	val merkle.Val
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	digest  merkle.Digest
 	proofTy merkle.ProofTy
 	proof   merkle.Proof
-	// Invariant: len 64.
+	// rpc: invariant: len 64.
 	sig   cryptoffi.Sig
 	error errorTy
 }
 
 type getIdLatestArg struct {
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	id merkle.Id
 }
 
 type getIdLatestReply struct {
 	epoch epochTy
 	val   merkle.Val
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	digest  merkle.Digest
 	proofTy merkle.ProofTy
 	proof   merkle.Proof
-	// Invariant: len 64.
+	// rpc: invariant: len 64.
 	sig   cryptoffi.Sig
 	error errorTy
 }
@@ -72,18 +72,18 @@ type getDigestArg struct {
 }
 
 type getDigestReply struct {
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	digest merkle.Digest
-	// Invariant: len 64.
+	// rpc: invariant: len 64.
 	sig   cryptoffi.Sig
 	error errorTy
 }
 
 type updateArg struct {
 	epoch epochTy
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	digest merkle.Digest
-	// Invariant: len 64.
+	// rpc: invariant: len 64.
 	sig cryptoffi.Sig
 }
 
@@ -96,9 +96,9 @@ type getLinkArg struct {
 }
 
 type getLinkReply struct {
-	// Invariant: len 32.
+	// rpc: invariant: len 32.
 	link linkTy
-	// Invariant: len 64.
+	// rpc: invariant: len 64.
 	sig   cryptoffi.Sig
 	error errorTy
 }
