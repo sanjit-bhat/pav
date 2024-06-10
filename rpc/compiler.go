@@ -414,31 +414,6 @@ func genFileHeader(pkgName, fileId string) *ast.File {
 			},
 		},
 	}
-	errTypeDecl := &ast.GenDecl{
-		Tok: token.TYPE,
-		Specs: []ast.Spec{
-			&ast.TypeSpec{
-				Name:   &ast.Ident{Name: "errorTy"},
-				Assign: 1,
-				Type:   &ast.Ident{Name: "bool"},
-			},
-		},
-	}
-	constErrDecl := &ast.GenDecl{
-		Tok: token.CONST,
-		Specs: []ast.Spec{
-			&ast.ValueSpec{
-				Names:  []*ast.Ident{{Name: "errNone"}},
-				Type:   &ast.Ident{Name: "errorTy"},
-				Values: []ast.Expr{&ast.Ident{Name: "false"}},
-			},
-			&ast.ValueSpec{
-				Names:  []*ast.Ident{{Name: "errSome"}},
-				Type:   &ast.Ident{Name: "errorTy"},
-				Values: []ast.Expr{&ast.Ident{Name: "true"}},
-			},
-		},
-	}
 	// Hacky: pkg comment fix. Pkg starts after pkg comment.
 	commPos := token.Pos(1)
 	comm1 := &ast.Comment{
@@ -455,8 +430,6 @@ func genFileHeader(pkgName, fileId string) *ast.File {
 		Name:    &ast.Ident{Name: pkgName},
 		Decls: []ast.Decl{
 			importDecl,
-			errTypeDecl,
-			constErrDecl,
 		},
 	}
 	return file

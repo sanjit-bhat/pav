@@ -7,13 +7,6 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-type errorTy = bool
-
-const (
-	errNone errorTy = false
-	errSome errorTy = true
-)
-
 func (o *args) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.a1)
