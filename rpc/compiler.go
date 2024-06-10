@@ -25,7 +25,7 @@ type compiler struct {
 func (c *compiler) getStructs(src string) []types.Object {
 	abs, err := filepath.Abs(src)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	dir := path.Dir(src)
 
@@ -38,10 +38,10 @@ func (c *compiler) getStructs(src string) []types.Object {
 	}
 	pkgs, err := packages.Load(cfg, "")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	if len(pkgs) != 1 {
-		log.Fatal("pkg len not 1")
+		log.Panic("pkg len not 1")
 	}
 	pkg := pkgs[0]
 	c.pkg = pkg
@@ -55,7 +55,7 @@ func (c *compiler) getStructs(src string) []types.Object {
 		}
 	}
 	if file == nil {
-		log.Fatal("found no files matching src. does src end in .go?")
+		log.Panic("found no files matching src. does src end in .go?")
 	}
 	c.file = file
 
@@ -78,7 +78,7 @@ func (c *compiler) getStructs(src string) []types.Object {
 		}
 		o, ok := info.Defs[s.Name]
 		if !ok {
-			log.Fatalf("%s is not in defs map", s.Name)
+			log.Panicf("%s is not in defs map", s.Name)
 		}
 		_ = o.Type().Underlying().(*types.Struct)
 		sts = append(sts, o)
@@ -115,7 +115,7 @@ func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 	case *types.Slice:
 		basic := fTy.Elem().(*types.Basic)
 		if basic.Kind() != types.Byte {
-			log.Fatal("unsupported slice elem ty: ", basic.Name())
+			log.Panic("unsupported slice elem ty: ", basic.Name())
 		}
 		isFixed, _ := c.getFixedLen(field)
 		if isFixed {
@@ -142,10 +142,10 @@ func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 				Sel: &ast.Ident{Name: "WriteBool"},
 			}
 		default:
-			log.Fatal("unsupported type: ", fTy.Name())
+			log.Panic("unsupported type: ", fTy.Name())
 		}
 	default:
-		log.Fatal("unsupported type: ", fTy)
+		log.Panic("unsupported type: ", fTy)
 	}
 	call := &ast.CallExpr{
 		Fun: fun,
@@ -223,7 +223,7 @@ func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 	case *types.Slice:
 		basic := fTy.Elem().(*types.Basic)
 		if basic.Kind() != types.Byte {
-			log.Fatal("unsupported slice elem ty: ", basic.Name())
+			log.Panic("unsupported slice elem ty: ", basic.Name())
 		}
 		isFixed, length := c.getFixedLen(field)
 		if isFixed {
@@ -265,10 +265,10 @@ func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 				Args: []ast.Expr{&ast.Ident{Name: "b"}},
 			}
 		default:
-			log.Fatal("unsupported type: ", fTy.Name())
+			log.Panic("unsupported type: ", fTy.Name())
 		}
 	default:
-		log.Fatal("unsupported type: ", fTy)
+		log.Panic("unsupported type: ", fTy)
 	}
 	assign := &ast.AssignStmt{
 		Lhs: []ast.Expr{
@@ -435,7 +435,7 @@ func printGo(n any) []byte {
 	buf := new(bytes.Buffer)
 	err := format.Node(buf, fset, n)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	return buf.Bytes()
 }
@@ -445,7 +445,7 @@ func printAst(src []byte) []byte {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "", src, parser.ParseComments|parser.SkipObjectResolution)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	res := new(bytes.Buffer)
 	ast.Fprint(res, fset, f, ast.NotNilFilter)
