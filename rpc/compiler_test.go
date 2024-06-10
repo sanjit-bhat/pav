@@ -28,17 +28,24 @@ var data = []entry{
 }
 
 // tmpWrite writes data to a tmp file and returns the tmp file name.
-func tmpWrite(data []byte) (string, error) {
+func tmpWrite(t *testing.T, data []byte) string {
 	f, err := os.CreateTemp("", "")
-	defer f.Close()
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			t.Error(err)
+		}
+	}()
 	if err != nil {
-		return "", err
+		t.Error(err)
+		return ""
 	}
 	_, err = f.Write(data)
 	if err != nil {
-		return "", err
+		t.Error(err)
+		return ""
 	}
-	return f.Name(), nil
+	return f.Name()
 }
 
 func check(t *testing.T, source, golden string) {
@@ -53,11 +60,7 @@ func check(t *testing.T, source, golden string) {
 	}
 
 	res := compile(source)
-	actual, err := tmpWrite(res)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	actual := tmpWrite(t, res)
 
 	cmd := exec.Command("diff", "--unified", actual, golden)
 	diff, err := cmd.CombinedOutput()
