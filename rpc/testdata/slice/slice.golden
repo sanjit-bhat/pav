@@ -1,0 +1,30 @@
+// Auto-generated from spec "github.com/mit-pdos/pav/rpc/testdata/slice/slice.go"
+// using compiler "github.com/mit-pdos/pav/rpc".
+package rpc
+
+import (
+	"github.com/mit-pdos/pav/marshalutil"
+	"github.com/tchajed/marshal"
+)
+
+type errorTy = bool
+
+const (
+	errNone errorTy = false
+	errSome errorTy = true
+)
+
+func (o *arg) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshalutil.WriteSlice1D(b, o.x)
+	return b
+}
+func (o *arg) decode(b0 []byte) ([]byte, errorTy) {
+	var b = b0
+	x, b, err := marshalutil.ReadSlice1D(b)
+	if err {
+		return nil, err
+	}
+	o.x = x
+	return b, errNone
+}

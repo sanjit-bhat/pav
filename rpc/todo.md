@@ -6,17 +6,10 @@
 [ ] add fixed size []byte support.
 [ ] add merkle.Id support. unalias that to []byte.
 [x] generate same pkg name as src.
-[ ] how does grpc differentiate fixed vs dynamic size byte sl?
+[x] how does grpc differentiate fixed vs dynamic size byte sl?
 [x] 1. add epochTy support. unalias to uint64.
-[ ] add bool support.
+[x] add bool support.
 
 ---
 
 ## Planning
-
-How hard would it be to get alias's to work?
-File imports some pkg.
-pkg.Id is actually an alias to uint64.
-How to know that?
-Currently we just parse and typecheck a single file.
-I think we'd need to parse/typecheck the imports to make this work?

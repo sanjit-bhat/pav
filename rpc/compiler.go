@@ -90,39 +90,44 @@ func genRcvr(name string) *ast.FieldList {
 
 func genFieldWrite(field *types.Var) ast.Stmt {
 	name := field.Name()
-	var call *ast.CallExpr
-	basic := field.Type().(*types.Basic)
-	switch basic.Kind() {
-	case types.Uint64:
-		call = &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
+	var fun *ast.SelectorExpr
+	switch fTy := field.Type().(type) {
+	case *types.Slice:
+		basic := fTy.Elem().(*types.Basic)
+		if basic.Kind() != types.Byte {
+			log.Fatal("unsupported slice elem ty: ", basic.Name())
+		}
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: "WriteSlice1D"},
+		}
+	case *types.Basic:
+		switch fTy.Kind() {
+		case types.Uint64:
+			fun = &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "marshal"},
 				Sel: &ast.Ident{Name: "WriteInt"},
-			},
-			Args: []ast.Expr{
-				&ast.Ident{Name: "b"},
-				&ast.SelectorExpr{
-					X:   &ast.Ident{Name: "o"},
-					Sel: &ast.Ident{Name: name},
-				},
-			},
-		}
-	case types.Bool:
-		call = &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
+			}
+		case types.Bool:
+			fun = &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "marshalutil"},
 				Sel: &ast.Ident{Name: "WriteBool"},
-			},
-			Args: []ast.Expr{
-				&ast.Ident{Name: "b"},
-				&ast.SelectorExpr{
-					X:   &ast.Ident{Name: "o"},
-					Sel: &ast.Ident{Name: name},
-				},
-			},
+			}
+		default:
+			log.Fatal("unsupported type: ", fTy.Name())
 		}
 	default:
-		log.Fatal("unsupported type: ", basic.Name())
+		log.Fatal("unsupported type: ", fTy)
+	}
+	call := &ast.CallExpr{
+		Fun: fun,
+		Args: []ast.Expr{
+			&ast.Ident{Name: "b"},
+			&ast.SelectorExpr{
+				X:   &ast.Ident{Name: "o"},
+				Sel: &ast.Ident{Name: name},
+			},
+		},
 	}
 	return &ast.AssignStmt{
 		Lhs: []ast.Expr{&ast.Ident{Name: "b"}},
@@ -186,26 +191,42 @@ func genEncode(o types.Object) *ast.FuncDecl {
 func genFieldRead(field *types.Var) []ast.Stmt {
 	name := field.Name()
 	var call *ast.CallExpr
-	basic := field.Type().(*types.Basic)
-	switch basic.Kind() {
-	case types.Uint64:
+	switch fTy := field.Type().(type) {
+	case *types.Slice:
+		basic := fTy.Elem().(*types.Basic)
+		if basic.Kind() != types.Byte {
+			log.Fatal("unsupported slice elem ty: ", basic.Name())
+		}
 		call = &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: "SafeReadInt"},
+				Sel: &ast.Ident{Name: "ReadSlice1D"},
 			},
 			Args: []ast.Expr{&ast.Ident{Name: "b"}},
 		}
-	case types.Bool:
-		call = &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: "ReadBool"},
-			},
-			Args: []ast.Expr{&ast.Ident{Name: "b"}},
+	case *types.Basic:
+		switch fTy.Kind() {
+		case types.Uint64:
+			call = &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   &ast.Ident{Name: "marshalutil"},
+					Sel: &ast.Ident{Name: "SafeReadInt"},
+				},
+				Args: []ast.Expr{&ast.Ident{Name: "b"}},
+			}
+		case types.Bool:
+			call = &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   &ast.Ident{Name: "marshalutil"},
+					Sel: &ast.Ident{Name: "ReadBool"},
+				},
+				Args: []ast.Expr{&ast.Ident{Name: "b"}},
+			}
+		default:
+			log.Fatal("unsupported type: ", fTy.Name())
 		}
 	default:
-		log.Fatal("unsupported type: ", basic.Name())
+		log.Fatal("unsupported type: ", fTy)
 	}
 	assign := &ast.AssignStmt{
 		Lhs: []ast.Expr{
