@@ -1,0 +1,48 @@
+// Auto-generated from spec "github.com/mit-pdos/pav/rpc/testdata/types/types.go"
+// using compiler "github.com/mit-pdos/pav/rpc".
+package rpc
+
+import (
+	"github.com/mit-pdos/pav/marshalutil"
+	"github.com/tchajed/marshal"
+)
+
+type errorTy = bool
+
+const (
+	errNone errorTy = false
+	errSome errorTy = true
+)
+
+func (o *args) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshal.WriteInt(b, o.a1)
+	b = marshalutil.WriteBool(b, o.a2)
+	b = marshalutil.WriteSlice1D(b, o.a3)
+	b = marshal.WriteBytes(b, o.a4)
+	return b
+}
+func (o *args) decode(b0 []byte) ([]byte, errorTy) {
+	var b = b0
+	a1, b, err := marshalutil.SafeReadInt(b)
+	if err {
+		return nil, err
+	}
+	a2, b, err := marshalutil.ReadBool(b)
+	if err {
+		return nil, err
+	}
+	a3, b, err := marshalutil.ReadSlice1D(b)
+	if err {
+		return nil, err
+	}
+	a4, b, err := marshalutil.SafeReadBytes(b, 16)
+	if err {
+		return nil, err
+	}
+	o.a1 = a1
+	o.a2 = a2
+	o.a3 = a3
+	o.a4 = a4
+	return b, errNone
+}
