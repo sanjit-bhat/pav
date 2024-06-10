@@ -5,12 +5,14 @@ import (
 	"github.com/mit-pdos/pav/merkle"
 )
 
+//rpc: no decode needed.
 type epochHash struct {
 	epoch epochTy
 	// Invariant: len 32.
 	hash []byte
 }
 
+//rpc: no decode needed.
 type putArg struct {
 	// Invariant: len 32.
 	id  merkle.Id

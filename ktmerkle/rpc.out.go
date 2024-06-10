@@ -13,39 +13,11 @@ func (o *epochHash) encode() []byte {
 	b = marshal.WriteBytes(b, o.hash)
 	return b
 }
-func (o *epochHash) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	epoch, b, err := marshalutil.SafeReadInt(b)
-	if err {
-		return nil, err
-	}
-	hash, b, err := marshalutil.SafeReadBytes(b, 32)
-	if err {
-		return nil, err
-	}
-	o.epoch = epoch
-	o.hash = hash
-	return b, errNone
-}
 func (o *putArg) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.id)
 	b = marshalutil.WriteSlice1D(b, o.val)
 	return b
-}
-func (o *putArg) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	id, b, err := marshalutil.SafeReadBytes(b, 32)
-	if err {
-		return nil, err
-	}
-	val, b, err := marshalutil.ReadSlice1D(b)
-	if err {
-		return nil, err
-	}
-	o.id = id
-	o.val = val
-	return b, errNone
 }
 func (o *idValEpoch) encode() []byte {
 	var b = make([]byte, 0)

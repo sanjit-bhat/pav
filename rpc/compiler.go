@@ -95,6 +95,7 @@ func genRcvr(name string) *ast.FieldList {
 	}
 }
 
+// getFixedLen uses field pos to check if has special fixed len comment.
 func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 	p, _ := astutil.PathEnclosingInterval(c.file, pos, pos)
 	// First node is ident, then there's field.
@@ -459,6 +460,26 @@ func printAst(src []byte) []byte {
 	return res.Bytes()
 }
 
+// shouldGen checks whether a struct has special comments to not gen some funcs.
+func (c *compiler) shouldGen(o types.Object) (encode bool, decode bool) {
+	encode, decode = true, true
+	p, _ := astutil.PathEnclosingInterval(c.file, o.Pos(), o.Pos())
+	// First two are Ident and TypeSpec.
+	d := p[2].(*ast.GenDecl)
+	if d.Doc == nil {
+		return
+	}
+	for _, comm := range d.Doc.List {
+		if comm.Text == "//rpc: no encode needed." {
+			encode = false
+		}
+		if comm.Text == "//rpc: no decode needed." {
+			decode = false
+		}
+	}
+	return
+}
+
 func compile(src string) []byte {
 	log.SetFlags(log.Lshortfile)
 	c := &compiler{}
@@ -468,9 +489,13 @@ func compile(src string) []byte {
 
 	f := genFileHeader(pkgName, fileId)
 	for _, st := range sts {
-		enc := c.genEncode(st)
-		dec := c.genDecode(st)
-		f.Decls = append(f.Decls, enc, dec)
+		enc, dec := c.shouldGen(st)
+		if enc {
+			f.Decls = append(f.Decls, c.genEncode(st))
+		}
+		if dec {
+			f.Decls = append(f.Decls, c.genDecode(st))
+		}
 	}
 	return printGo(f)
 }

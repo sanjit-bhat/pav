@@ -25,6 +25,7 @@ var data = []entry{
 	{"types/types.go", "types/types.golden", 1},
 	{"alias/alias.go", "alias/alias.golden", 1},
 	{"mult/mult.go", "mult/mult.golden", 3},
+	{"nogen/nogen.go", "nogen/nogen.golden", 1},
 }
 
 // tmpWrite writes data to a tmp file and returns the tmp file name.
