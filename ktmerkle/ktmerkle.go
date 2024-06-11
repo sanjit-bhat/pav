@@ -20,8 +20,10 @@ const (
 	errSome errorTy = true
 )
 
+// hashChain gives a commitment to a series of data entries.
 type hashChain []linkTy
 
+// put invariant: all calls on the same hashChain should have the same data length.
 func (c *hashChain) put(data []byte) {
 	chain := *c
 	var lastLink linkTy
@@ -42,6 +44,8 @@ type timeEntry struct {
 	entry merkle.Val
 }
 
+// timeSeries converts a series of value updates into a view of the latest value
+// at any given time.
 type timeSeries struct {
 	data []timeEntry
 }
@@ -62,9 +66,9 @@ func (ts *timeSeries) put(t epochTy, e merkle.Val) errorTy {
 	return errNone
 }
 
-// get returns true if timeSeries has been initialized.
-// otherwise, it returns false and a nil value.
-func (ts *timeSeries) get(t epochTy) (bool, merkle.Val) {
+// get returns the latest time-bound update.
+// if no update happened up through that time, it returns nil and false.
+func (ts *timeSeries) get(t epochTy) (merkle.Val, bool) {
 	var init bool
 	var latest merkle.Val
 	for _, te := range ts.data {
@@ -73,7 +77,7 @@ func (ts *timeSeries) get(t epochTy) (bool, merkle.Val) {
 			latest = te.entry
 		}
 	}
-	return init, latest
+	return latest, init
 }
 
 // Key server.
@@ -326,7 +330,7 @@ func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expPro
 func (c *keyCli) selfAudit() epochTy {
 	var epoch epochTy
 	for {
-		expProofTy, expVal := c.myVals.get(epoch)
+		expVal, expProofTy := c.myVals.get(epoch)
 		ok := c.checkProofWithExpected(epoch, expVal, expProofTy)
 		if !ok {
 			break
