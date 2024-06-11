@@ -16,27 +16,32 @@ type errorTy = bool
 type okTy = bool
 
 const (
-	errNone errorTy = false
-	errSome errorTy = true
+	errNone      errorTy = false
+	errSome      errorTy = true
+	noneChainTag byte    = 0
+	someChainTag byte    = 1
 )
 
 // hashChain gives a commitment to a series of data entries.
 type hashChain []linkTy
 
-// put invariant: all calls on the same hashChain should have the same data length.
 func (c *hashChain) put(data []byte) {
 	chain := *c
-	var lastLink linkTy
 	chainLen := uint64(len(chain))
-	if chainLen > 0 {
-		lastLink = chain[chainLen-1]
+
+	if chainLen == 0 {
+		h := cryptoffi.Hash([]byte{noneChainTag})
+		*c = append(chain, h)
+		return
 	}
 
+	lastLink := chain[chainLen-1]
 	var hr cryptoutil.Hasher
+	cryptoutil.HasherWrite(&hr, []byte{someChainTag})
 	cryptoutil.HasherWrite(&hr, lastLink)
 	cryptoutil.HasherWrite(&hr, data)
-	newLink := cryptoutil.HasherSum(hr, nil)
-	*c = append(chain, newLink)
+	h := cryptoutil.HasherSum(hr, nil)
+	*c = append(chain, h)
 }
 
 type timeEntry struct {
