@@ -20,7 +20,7 @@ func (o *args) encode() []byte {
 }
 func (o *args) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	a1, b, err := marshalutil.SafeReadInt(b)
+	a1, b, err := marshalutil.ReadInt(b)
 	if err {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func (o *args) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	a4, b, err := marshalutil.SafeReadBytes(b, 16)
+	a4, b, err := marshalutil.ReadBytes(b, 16)
 	if err {
 		return nil, err
 	}

@@ -483,7 +483,7 @@ func (c *compiler) genSliceRead(pos token.Pos, ty1 *types.Slice, depth int) *ast
 				return &ast.CallExpr{
 					Fun: &ast.SelectorExpr{
 						X:   &ast.Ident{Name: "marshalutil"},
-						Sel: &ast.Ident{Name: "SafeReadBytes"},
+						Sel: &ast.Ident{Name: "ReadBytes"},
 					},
 					Args: []ast.Expr{
 						&ast.Ident{Name: "b"},
@@ -524,7 +524,7 @@ func (c *compiler) genIntRead(field *types.Var) *ast.CallExpr {
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: "SafeReadInt"},
+				Sel: &ast.Ident{Name: "ReadInt"},
 			},
 			Args: []ast.Expr{&ast.Ident{Name: "b"}},
 		}

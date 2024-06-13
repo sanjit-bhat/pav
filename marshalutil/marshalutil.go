@@ -23,7 +23,7 @@ func ReadConstInt(b0 []byte, cst uint64) ([]byte, errorTy) {
 	return b, errNone
 }
 
-func SafeReadInt(b0 []byte) (uint64, []byte, errorTy) {
+func ReadInt(b0 []byte) (uint64, []byte, errorTy) {
 	var b = b0
 	if uint64(len(b0)) < 8 {
 		return 0, nil, errSome
@@ -32,7 +32,7 @@ func SafeReadInt(b0 []byte) (uint64, []byte, errorTy) {
 	return data, b, errNone
 }
 
-func SafeReadBytes(b0 []byte, length uint64) ([]byte, []byte, errorTy) {
+func ReadBytes(b0 []byte, length uint64) ([]byte, []byte, errorTy) {
 	var b = b0
 	if uint64(len(b)) < length {
 		return nil, nil, errSome
@@ -53,7 +53,7 @@ func WriteBool(b0 []byte, data bool) []byte {
 
 func ReadBool(b0 []byte) (bool, []byte, errorTy) {
 	var b = b0
-	data, b, err := SafeReadInt(b)
+	data, b, err := ReadInt(b)
 	if err {
 		return false, nil, err
 	}
@@ -91,11 +91,11 @@ func WriteSlice3D(b0 []byte, data [][][]byte) []byte {
 
 func ReadSlice1D(b0 []byte) ([]byte, []byte, errorTy) {
 	var b = b0
-	length, b, err := SafeReadInt(b)
+	length, b, err := ReadInt(b)
 	if err {
 		return nil, nil, err
 	}
-	data, b, err := SafeReadBytes(b, length)
+	data, b, err := ReadBytes(b, length)
 	if err {
 		return nil, nil, err
 	}
@@ -104,7 +104,7 @@ func ReadSlice1D(b0 []byte) ([]byte, []byte, errorTy) {
 
 func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
 	var b = b0
-	length, b, err := SafeReadInt(b)
+	length, b, err := ReadInt(b)
 	if err {
 		return nil, nil, err
 	}
@@ -129,7 +129,7 @@ func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
 
 func ReadSlice3D(b0 []byte) ([][][]byte, []byte, errorTy) {
 	var b = b0
-	length, b, err := SafeReadInt(b)
+	length, b, err := ReadInt(b)
 	if err {
 		return nil, nil, err
 	}
