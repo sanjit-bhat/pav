@@ -7,21 +7,21 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func (o *signedDig) encode() []byte {
+func (o *servSigSepDig) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 0)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.dig)
 	return b
 }
-func (o *signedLink) encode() []byte {
+func (o *servSigSepLink) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 1)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.link)
 	return b
 }
-func (o *signedPutPromise) encode() []byte {
+func (o *servSigSepPut) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 2)
 	b = marshal.WriteInt(b, o.epoch)
@@ -29,26 +29,13 @@ func (o *signedPutPromise) encode() []byte {
 	b = marshalutil.WriteSlice1D(b, o.val)
 	return b
 }
-func (o *epochHash) encode() []byte {
-	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.epoch)
-	b = marshal.WriteBytes(b, o.hash)
-	return b
-}
-func (o *idValEpoch) encode() []byte {
-	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.id)
-	b = marshalutil.WriteSlice1D(b, o.val)
-	b = marshal.WriteInt(b, o.epoch)
-	return b
-}
-func (o *putArg) encode() []byte {
+func (o *servPutArg) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.id)
 	b = marshalutil.WriteSlice1D(b, o.val)
 	return b
 }
-func (o *putArg) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servPutArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
@@ -62,14 +49,14 @@ func (o *putArg) decode(b0 []byte) ([]byte, errorTy) {
 	o.val = val
 	return b, errNone
 }
-func (o *putReply) encode() []byte {
+func (o *servPutReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.sig)
 	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
-func (o *putReply) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servPutReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
@@ -88,13 +75,13 @@ func (o *putReply) decode(b0 []byte) ([]byte, errorTy) {
 	o.error = error
 	return b, errNone
 }
-func (o *getIdAtEpochArg) encode() []byte {
+func (o *servGetIdAtEpochArg) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.id)
 	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
-func (o *getIdAtEpochArg) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servGetIdAtEpochArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
@@ -108,7 +95,7 @@ func (o *getIdAtEpochArg) decode(b0 []byte) ([]byte, errorTy) {
 	o.epoch = epoch
 	return b, errNone
 }
-func (o *getIdAtEpochReply) encode() []byte {
+func (o *servGetIdAtEpochReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteSlice1D(b, o.val)
 	b = marshal.WriteBytes(b, o.digest)
@@ -118,7 +105,7 @@ func (o *getIdAtEpochReply) encode() []byte {
 	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
-func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servGetIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	val, b, err := marshalutil.ReadSlice1D(b)
 	if err {
@@ -152,12 +139,12 @@ func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	o.error = error
 	return b, errNone
 }
-func (o *getIdLatestArg) encode() []byte {
+func (o *servGetIdLatestArg) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.id)
 	return b
 }
-func (o *getIdLatestArg) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servGetIdLatestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	id, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
@@ -166,7 +153,7 @@ func (o *getIdLatestArg) decode(b0 []byte) ([]byte, errorTy) {
 	o.id = id
 	return b, errNone
 }
-func (o *getIdLatestReply) encode() []byte {
+func (o *servGetIdLatestReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshalutil.WriteSlice1D(b, o.val)
@@ -177,7 +164,7 @@ func (o *getIdLatestReply) encode() []byte {
 	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
-func (o *getIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servGetIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
@@ -216,12 +203,12 @@ func (o *getIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
 	o.error = error
 	return b, errNone
 }
-func (o *getDigestArg) encode() []byte {
+func (o *servGetDigestArg) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
-func (o *getDigestArg) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servGetDigestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
@@ -230,14 +217,14 @@ func (o *getDigestArg) decode(b0 []byte) ([]byte, errorTy) {
 	o.epoch = epoch
 	return b, errNone
 }
-func (o *getDigestReply) encode() []byte {
+func (o *servGetDigestReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.digest)
 	b = marshal.WriteBytes(b, o.sig)
 	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
-func (o *getDigestReply) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servGetDigestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	digest, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
@@ -256,52 +243,12 @@ func (o *getDigestReply) decode(b0 []byte) ([]byte, errorTy) {
 	o.error = error
 	return b, errNone
 }
-func (o *updateArg) encode() []byte {
-	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.epoch)
-	b = marshal.WriteBytes(b, o.digest)
-	b = marshal.WriteBytes(b, o.sig)
-	return b
-}
-func (o *updateArg) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	epoch, b, err := marshalutil.ReadInt(b)
-	if err {
-		return nil, err
-	}
-	digest, b, err := marshalutil.ReadBytes(b, 32)
-	if err {
-		return nil, err
-	}
-	sig, b, err := marshalutil.ReadBytes(b, 64)
-	if err {
-		return nil, err
-	}
-	o.epoch = epoch
-	o.digest = digest
-	o.sig = sig
-	return b, errNone
-}
-func (o *updateReply) encode() []byte {
-	var b = make([]byte, 0)
-	b = marshalutil.WriteBool(b, o.error)
-	return b
-}
-func (o *updateReply) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	error, b, err := marshalutil.ReadBool(b)
-	if err {
-		return nil, err
-	}
-	o.error = error
-	return b, errNone
-}
-func (o *getLinkArg) encode() []byte {
+func (o *servGetLinkArg) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
-func (o *getLinkArg) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servGetLinkArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
@@ -310,14 +257,80 @@ func (o *getLinkArg) decode(b0 []byte) ([]byte, errorTy) {
 	o.epoch = epoch
 	return b, errNone
 }
-func (o *getLinkReply) encode() []byte {
+func (o *servGetLinkReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.link)
 	b = marshal.WriteBytes(b, o.sig)
 	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
-func (o *getLinkReply) decode(b0 []byte) ([]byte, errorTy) {
+func (o *servGetLinkReply) decode(b0 []byte) ([]byte, errorTy) {
+	var b = b0
+	link, b, err := marshalutil.ReadBytes(b, 32)
+	if err {
+		return nil, err
+	}
+	sig, b, err := marshalutil.ReadBytes(b, 64)
+	if err {
+		return nil, err
+	}
+	error, b, err := marshalutil.ReadBool(b)
+	if err {
+		return nil, err
+	}
+	o.link = link
+	o.sig = sig
+	o.error = error
+	return b, errNone
+}
+func (o *adtrPutArg) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.link)
+	b = marshal.WriteBytes(b, o.sig)
+	return b
+}
+func (o *adtrPutArg) decode(b0 []byte) ([]byte, errorTy) {
+	var b = b0
+	epoch, b, err := marshalutil.ReadInt(b)
+	if err {
+		return nil, err
+	}
+	link, b, err := marshalutil.ReadBytes(b, 32)
+	if err {
+		return nil, err
+	}
+	sig, b, err := marshalutil.ReadBytes(b, 64)
+	if err {
+		return nil, err
+	}
+	o.epoch = epoch
+	o.link = link
+	o.sig = sig
+	return b, errNone
+}
+func (o *adtrGetArg) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshal.WriteInt(b, o.epoch)
+	return b
+}
+func (o *adtrGetArg) decode(b0 []byte) ([]byte, errorTy) {
+	var b = b0
+	epoch, b, err := marshalutil.ReadInt(b)
+	if err {
+		return nil, err
+	}
+	o.epoch = epoch
+	return b, errNone
+}
+func (o *adtrGetReply) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshal.WriteBytes(b, o.link)
+	b = marshal.WriteBytes(b, o.sig)
+	b = marshalutil.WriteBool(b, o.error)
+	return b
+}
+func (o *adtrGetReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
 	link, b, err := marshalutil.ReadBytes(b, 32)
 	if err {

@@ -5,8 +5,9 @@ import (
 	"github.com/mit-pdos/pav/merkle"
 )
 
+// servSigSepDig is the server's signature domain separation digest msg.
 // rpc: no decode needed.
-type signedDig struct {
+type servSigSepDig struct {
 	// rpc: invariant: const 0.
 	tag   byte
 	epoch epochTy
@@ -15,7 +16,7 @@ type signedDig struct {
 }
 
 // rpc: no decode needed.
-type signedLink struct {
+type servSigSepLink struct {
 	// rpc: invariant: const 1.
 	tag   byte
 	epoch epochTy
@@ -24,7 +25,7 @@ type signedLink struct {
 }
 
 // rpc: no decode needed.
-type signedPutPromise struct {
+type servSigSepPut struct {
 	// rpc: invariant: const 2.
 	tag   byte
 	epoch epochTy
@@ -33,41 +34,26 @@ type signedPutPromise struct {
 	val merkle.Val
 }
 
-// rpc: no decode needed.
-type epochHash struct {
-	epoch epochTy
-	// rpc: invariant: len 32.
-	hash []byte
-}
-
-// rpc: no decode needed.
-type idValEpoch struct {
-	// rpc: invariant: len 32.
-	id    merkle.Id
-	val   merkle.Val
-	epoch epochTy
-}
-
-type putArg struct {
+type servPutArg struct {
 	// rpc: invariant: len 32.
 	id  merkle.Id
 	val merkle.Val
 }
 
-type putReply struct {
+type servPutReply struct {
 	epoch epochTy
 	// rpc: invariant: len 64.
 	sig   cryptoffi.Sig
 	error errorTy
 }
 
-type getIdAtEpochArg struct {
+type servGetIdAtEpochArg struct {
 	// rpc: invariant: len 32.
 	id    merkle.Id
 	epoch epochTy
 }
 
-type getIdAtEpochReply struct {
+type servGetIdAtEpochReply struct {
 	val merkle.Val
 	// rpc: invariant: len 32.
 	digest  merkle.Digest
@@ -78,12 +64,12 @@ type getIdAtEpochReply struct {
 	error errorTy
 }
 
-type getIdLatestArg struct {
+type servGetIdLatestArg struct {
 	// rpc: invariant: len 32.
 	id merkle.Id
 }
 
-type getIdLatestReply struct {
+type servGetIdLatestReply struct {
 	epoch epochTy
 	val   merkle.Val
 	// rpc: invariant: len 32.
@@ -95,11 +81,11 @@ type getIdLatestReply struct {
 	error errorTy
 }
 
-type getDigestArg struct {
+type servGetDigestArg struct {
 	epoch epochTy
 }
 
-type getDigestReply struct {
+type servGetDigestReply struct {
 	// rpc: invariant: len 32.
 	digest merkle.Digest
 	// rpc: invariant: len 64.
@@ -107,23 +93,31 @@ type getDigestReply struct {
 	error errorTy
 }
 
-type updateArg struct {
+type servGetLinkArg struct {
+	epoch epochTy
+}
+
+type servGetLinkReply struct {
+	// rpc: invariant: len 32.
+	link linkTy
+	// rpc: invariant: len 64.
+	sig   cryptoffi.Sig
+	error errorTy
+}
+
+type adtrPutArg struct {
 	epoch epochTy
 	// rpc: invariant: len 32.
-	digest merkle.Digest
+	link linkTy
 	// rpc: invariant: len 64.
 	sig cryptoffi.Sig
 }
 
-type updateReply struct {
-	error errorTy
-}
-
-type getLinkArg struct {
+type adtrGetArg struct {
 	epoch epochTy
 }
 
-type getLinkReply struct {
+type adtrGetReply struct {
 	// rpc: invariant: len 32.
 	link linkTy
 	// rpc: invariant: len 64.
