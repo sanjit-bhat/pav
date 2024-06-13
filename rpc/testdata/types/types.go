@@ -1,18 +1,12 @@
 package rpc
 
 type args struct {
-	a1 uint64
-	a2 bool
-	a3 []byte
-	// rpc: invariant: len 16.
+	a1 bool
+	a2 byte
+	a3 uint64
 	a4 []byte
-	a5 [][]byte
-	a6 [][][]byte
-	// rpc: invariant: const 3.
-	a7 uint64
-	a8 byte
-	// rpc: invariant: const 3.
-	a9 byte
-	// rpc: invariant: const true.
-	a10 bool
+	// rpc: invariant: len 16.
+	a5 []byte
+	a6 [][]byte
+	a7 [][][]byte
 }
