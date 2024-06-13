@@ -11,6 +11,18 @@ const (
 	errSome errorTy = true
 )
 
+func ReadConstInt(b0 []byte, cst uint64) ([]byte, errorTy) {
+	var b = b0
+	if uint64(len(b0)) < 8 {
+		return nil, errSome
+	}
+	data, b := marshal.ReadInt(b)
+	if data != cst {
+		return nil, errSome
+	}
+	return b, errNone
+}
+
 func SafeReadInt(b0 []byte) (uint64, []byte, errorTy) {
 	var b = b0
 	if uint64(len(b0)) < 8 {

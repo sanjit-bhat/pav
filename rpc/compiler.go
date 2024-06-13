@@ -141,39 +141,77 @@ func (c *compiler) genSliceWrite(pos token.Pos, ty1 *types.Slice, depth int) *as
 	return nil
 }
 
+// getConst uses ast pos to check if field has special constant comment.
+func (c *compiler) getConst(pos token.Pos) (isCst bool, cst string) {
+	p, _ := astutil.PathEnclosingInterval(c.file, pos, pos)
+	// First node is ident, then there's field.
+	node := p[1].(*ast.Field)
+	if node.Doc == nil {
+		return false, ""
+	}
+	comm := node.Doc.List[0].Text
+	comm = strings.TrimPrefix(comm, "// rpc: invariant: const ")
+	comm = strings.TrimRight(comm, ".")
+	return true, comm
+}
+
+func (c *compiler) genIntWrite(field *types.Var) *ast.CallExpr {
+	fun := &ast.SelectorExpr{
+		X:   &ast.Ident{Name: "marshal"},
+		Sel: &ast.Ident{Name: "WriteInt"},
+	}
+	isCst, cst := c.getConst(field.Pos())
+	if isCst {
+		return &ast.CallExpr{
+			Fun: fun,
+			Args: []ast.Expr{
+				&ast.Ident{Name: "b"},
+				&ast.BasicLit{Kind: token.INT, Value: cst},
+			},
+		}
+	} else {
+		return &ast.CallExpr{
+			Fun:  fun,
+			Args: genStdFieldWriteArgs(field.Name()),
+		}
+	}
+}
+
+func genStdFieldWriteArgs(name string) []ast.Expr {
+	return []ast.Expr{
+		&ast.Ident{Name: "b"},
+		&ast.SelectorExpr{
+			X:   &ast.Ident{Name: "o"},
+			Sel: &ast.Ident{Name: name},
+		},
+	}
+}
+
 func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
-	name := field.Name()
-	var fun *ast.SelectorExpr
+	var call *ast.CallExpr
 	switch fTy := field.Type().(type) {
 	case *types.Slice:
-		fun = c.genSliceWrite(field.Pos(), fTy, 1)
+		call = &ast.CallExpr{
+			Fun:  c.genSliceWrite(field.Pos(), fTy, 1),
+			Args: genStdFieldWriteArgs(field.Name()),
+		}
 	case *types.Basic:
 		switch fTy.Kind() {
 		case types.Uint64:
-			fun = &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshal"},
-				Sel: &ast.Ident{Name: "WriteInt"},
-			}
+			call = c.genIntWrite(field)
 		case types.Bool:
-			fun = &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: "WriteBool"},
+			call = &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   &ast.Ident{Name: "marshalutil"},
+					Sel: &ast.Ident{Name: "WriteBool"},
+				},
+				Args: genStdFieldWriteArgs(field.Name()),
 			}
 		default:
 			log.Panic("unsupported type: ", fTy.Name())
 		}
 	default:
 		log.Panic("unsupported type: ", fTy)
-	}
-	call := &ast.CallExpr{
-		Fun: fun,
-		Args: []ast.Expr{
-			&ast.Ident{Name: "b"},
-			&ast.SelectorExpr{
-				X:   &ast.Ident{Name: "o"},
-				Sel: &ast.Ident{Name: name},
-			},
-		},
 	}
 	return &ast.AssignStmt{
 		Lhs: []ast.Expr{&ast.Ident{Name: "b"}},
@@ -275,6 +313,30 @@ func (c *compiler) genSliceRead(pos token.Pos, ty1 *types.Slice, depth int) *ast
 	return nil
 }
 
+func (c *compiler) genIntRead(field *types.Var) *ast.CallExpr {
+	isCst, cst := c.getConst(field.Pos())
+	if isCst {
+		return &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "marshalutil"},
+				Sel: &ast.Ident{Name: "ReadConstInt"},
+			},
+			Args: []ast.Expr{
+				&ast.Ident{Name: "b"},
+				&ast.BasicLit{Kind: token.INT, Value: cst},
+			},
+		}
+	} else {
+		return &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "marshalutil"},
+				Sel: &ast.Ident{Name: "SafeReadInt"},
+			},
+			Args: []ast.Expr{&ast.Ident{Name: "b"}},
+		}
+	}
+}
+
 func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 	name := field.Name()
 	var call *ast.CallExpr
@@ -284,13 +346,7 @@ func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 	case *types.Basic:
 		switch fTy.Kind() {
 		case types.Uint64:
-			call = &ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X:   &ast.Ident{Name: "marshalutil"},
-					Sel: &ast.Ident{Name: "SafeReadInt"},
-				},
-				Args: []ast.Expr{&ast.Ident{Name: "b"}},
-			}
+			call = c.genIntRead(field)
 		case types.Bool:
 			call = &ast.CallExpr{
 				Fun: &ast.SelectorExpr{

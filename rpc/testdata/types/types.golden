@@ -15,6 +15,7 @@ func (o *args) encode() []byte {
 	b = marshal.WriteBytes(b, o.a4)
 	b = marshalutil.WriteSlice2D(b, o.a5)
 	b = marshalutil.WriteSlice3D(b, o.a6)
+	b = marshal.WriteInt(b, 3)
 	return b
 }
 func (o *args) decode(b0 []byte) ([]byte, errorTy) {
@@ -43,11 +44,16 @@ func (o *args) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
+	a7, b, err := marshalutil.ReadConstInt(b, 3)
+	if err {
+		return nil, err
+	}
 	o.a1 = a1
 	o.a2 = a2
 	o.a3 = a3
 	o.a4 = a4
 	o.a5 = a5
 	o.a6 = a6
+	o.a7 = a7
 	return b, errNone
 }
