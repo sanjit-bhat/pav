@@ -7,6 +7,28 @@ import (
 	"github.com/tchajed/marshal"
 )
 
+func (o *signedDig) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshalutil.WriteByte(b, 0)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.dig)
+	return b
+}
+func (o *signedLink) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshalutil.WriteByte(b, 1)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.link)
+	return b
+}
+func (o *signedPutPromise) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshalutil.WriteByte(b, 2)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.id)
+	b = marshalutil.WriteSlice1D(b, o.val)
+	return b
+}
 func (o *epochHash) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.epoch)
@@ -28,7 +50,7 @@ func (o *putArg) encode() []byte {
 }
 func (o *putArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := marshalutil.SafeReadBytes(b, 32)
+	id, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
 	}
@@ -49,11 +71,11 @@ func (o *putReply) encode() []byte {
 }
 func (o *putReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := marshalutil.SafeReadInt(b)
+	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.SafeReadBytes(b, 64)
+	sig, b, err := marshalutil.ReadBytes(b, 64)
 	if err {
 		return nil, err
 	}
@@ -74,11 +96,11 @@ func (o *getIdAtEpochArg) encode() []byte {
 }
 func (o *getIdAtEpochArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := marshalutil.SafeReadBytes(b, 32)
+	id, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
 	}
-	epoch, b, err := marshalutil.SafeReadInt(b)
+	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
 		return nil, err
 	}
@@ -102,7 +124,7 @@ func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	digest, b, err := marshalutil.SafeReadBytes(b, 32)
+	digest, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
 	}
@@ -114,7 +136,7 @@ func (o *getIdAtEpochReply) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.SafeReadBytes(b, 64)
+	sig, b, err := marshalutil.ReadBytes(b, 64)
 	if err {
 		return nil, err
 	}
@@ -137,7 +159,7 @@ func (o *getIdLatestArg) encode() []byte {
 }
 func (o *getIdLatestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := marshalutil.SafeReadBytes(b, 32)
+	id, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
 	}
@@ -157,7 +179,7 @@ func (o *getIdLatestReply) encode() []byte {
 }
 func (o *getIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := marshalutil.SafeReadInt(b)
+	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
 		return nil, err
 	}
@@ -165,7 +187,7 @@ func (o *getIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	digest, b, err := marshalutil.SafeReadBytes(b, 32)
+	digest, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
 	}
@@ -177,7 +199,7 @@ func (o *getIdLatestReply) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.SafeReadBytes(b, 64)
+	sig, b, err := marshalutil.ReadBytes(b, 64)
 	if err {
 		return nil, err
 	}
@@ -201,7 +223,7 @@ func (o *getDigestArg) encode() []byte {
 }
 func (o *getDigestArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := marshalutil.SafeReadInt(b)
+	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
 		return nil, err
 	}
@@ -217,11 +239,11 @@ func (o *getDigestReply) encode() []byte {
 }
 func (o *getDigestReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	digest, b, err := marshalutil.SafeReadBytes(b, 32)
+	digest, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.SafeReadBytes(b, 64)
+	sig, b, err := marshalutil.ReadBytes(b, 64)
 	if err {
 		return nil, err
 	}
@@ -243,15 +265,15 @@ func (o *updateArg) encode() []byte {
 }
 func (o *updateArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := marshalutil.SafeReadInt(b)
+	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
 		return nil, err
 	}
-	digest, b, err := marshalutil.SafeReadBytes(b, 32)
+	digest, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.SafeReadBytes(b, 64)
+	sig, b, err := marshalutil.ReadBytes(b, 64)
 	if err {
 		return nil, err
 	}
@@ -281,7 +303,7 @@ func (o *getLinkArg) encode() []byte {
 }
 func (o *getLinkArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := marshalutil.SafeReadInt(b)
+	epoch, b, err := marshalutil.ReadInt(b)
 	if err {
 		return nil, err
 	}
@@ -297,11 +319,11 @@ func (o *getLinkReply) encode() []byte {
 }
 func (o *getLinkReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	link, b, err := marshalutil.SafeReadBytes(b, 32)
+	link, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.SafeReadBytes(b, 64)
+	sig, b, err := marshalutil.ReadBytes(b, 64)
 	if err {
 		return nil, err
 	}

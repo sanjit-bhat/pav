@@ -6,6 +6,34 @@ import (
 )
 
 // rpc: no decode needed.
+type signedDig struct {
+	// rpc: invariant: const 0.
+	tag   byte
+	epoch epochTy
+	// rpc: invariant: len 32.
+	dig merkle.Digest
+}
+
+// rpc: no decode needed.
+type signedLink struct {
+	// rpc: invariant: const 1.
+	tag   byte
+	epoch epochTy
+	// rpc: invariant: len 32.
+	link linkTy
+}
+
+// rpc: no decode needed.
+type signedPutPromise struct {
+	// rpc: invariant: const 2.
+	tag   byte
+	epoch epochTy
+	// rpc: invariant: len 32.
+	id  merkle.Id
+	val merkle.Val
+}
+
+// rpc: no decode needed.
 type epochHash struct {
 	epoch epochTy
 	// rpc: invariant: len 32.
