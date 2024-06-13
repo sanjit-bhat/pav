@@ -10,4 +10,9 @@ type args struct {
 	a6 [][][]byte
 	// rpc: invariant: const 3.
 	a7 uint64
+	a8 byte
+	// rpc: invariant: const 3.
+	a9 byte
+	// rpc: invariant: const true.
+	a10 bool
 }

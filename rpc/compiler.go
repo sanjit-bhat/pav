@@ -234,20 +234,7 @@ func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 			Args: genStdFieldWriteArgs(field.Name()),
 		}
 	case *types.Basic:
-		switch fTy.Kind() {
-		case types.Uint64:
-			call = c.genIntWrite(field)
-		case types.Bool:
-			call = &ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X:   &ast.Ident{Name: "marshalutil"},
-					Sel: &ast.Ident{Name: "WriteBool"},
-				},
-				Args: genStdFieldWriteArgs(field.Name()),
-			}
-		default:
-			log.Panic("unsupported type: ", fTy.Name())
-		}
+		call = c.genBasicWrite(field)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
@@ -304,10 +291,27 @@ func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 	return true, comm
 }
 
-func (c *compiler) genIntWrite(field *types.Var) *ast.CallExpr {
-	fun := &ast.SelectorExpr{
-		X:   &ast.Ident{Name: "marshal"},
-		Sel: &ast.Ident{Name: "WriteInt"},
+func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
+	var fun *ast.SelectorExpr
+	basic := field.Type().(*types.Basic)
+	switch basic.Kind() {
+	case types.Bool:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: "WriteBool"},
+		}
+	case types.Byte:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: "WriteByte"},
+		}
+	case types.Uint64:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshal"},
+			Sel: &ast.Ident{Name: "WriteInt"},
+		}
+	default:
+		log.Panic("unsupported type: ", basic.Name())
 	}
 	isCst, cst := c.getConst(field.Pos())
 	if isCst {
@@ -426,20 +430,7 @@ func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 	case *types.Slice:
 		call = c.genSliceRead(field.Pos(), fTy, 1)
 	case *types.Basic:
-		switch fTy.Kind() {
-		case types.Uint64:
-			call = c.genIntRead(field)
-		case types.Bool:
-			call = &ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X:   &ast.Ident{Name: "marshalutil"},
-					Sel: &ast.Ident{Name: "ReadBool"},
-				},
-				Args: []ast.Expr{&ast.Ident{Name: "b"}},
-			}
-		default:
-			log.Panic("unsupported type: ", fTy.Name())
-		}
+		call = c.genBasicRead(field)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
@@ -507,27 +498,45 @@ func (c *compiler) genSliceRead(pos token.Pos, ty1 *types.Slice, depth int) *ast
 	return nil
 }
 
-func (c *compiler) genIntRead(field *types.Var) *ast.CallExpr {
+func (c *compiler) genBasicRead(field *types.Var) *ast.CallExpr {
+	var cstFuncMod string
+	var args []ast.Expr
 	isCst, cst := c.getConst(field.Pos())
 	if isCst {
-		return &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: "ReadConstInt"},
-			},
-			Args: []ast.Expr{
-				&ast.Ident{Name: "b"},
-				&ast.BasicLit{Kind: token.INT, Value: cst},
-			},
+		cstFuncMod = "Const"
+		args = []ast.Expr{
+			&ast.Ident{Name: "b"},
+			&ast.BasicLit{Kind: token.INT, Value: cst},
 		}
 	} else {
-		return &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: "ReadInt"},
-			},
-			Args: []ast.Expr{&ast.Ident{Name: "b"}},
+		args = []ast.Expr{&ast.Ident{Name: "b"}}
+	}
+
+	var fun *ast.SelectorExpr
+	basic := field.Type().(*types.Basic)
+	switch basic.Kind() {
+	case types.Bool:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sBool", cstFuncMod)},
 		}
+	case types.Byte:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sByte", cstFuncMod)},
+		}
+	case types.Uint64:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sInt", cstFuncMod)},
+		}
+	default:
+		log.Panic("unsupported type: ", basic.Name())
+	}
+
+	return &ast.CallExpr{
+		Fun:  fun,
+		Args: args,
 	}
 }
 
