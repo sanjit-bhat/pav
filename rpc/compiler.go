@@ -227,7 +227,7 @@ func genRcvr(name string) *ast.FieldList {
 
 func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 	var call *ast.CallExpr
-	switch fTy := field.Type().(type) {
+	switch fTy := field.Type().Underlying().(type) {
 	case *types.Slice:
 		call = &ast.CallExpr{
 			Fun:  c.genSliceWrite(field.Pos(), fTy, 1),
@@ -249,7 +249,7 @@ func (c *compiler) genSliceWrite(pos token.Pos, ty1 *types.Slice, depth int) *as
 	if depth > 3 {
 		log.Panic("unsupported slice nesting beyond depth 3")
 	}
-	switch ty2 := ty1.Elem().(type) {
+	switch ty2 := ty1.Elem().Underlying().(type) {
 	case *types.Slice:
 		return c.genSliceWrite(pos, ty2, depth+1)
 	case *types.Basic:
@@ -293,7 +293,7 @@ func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 
 func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
 	var fun *ast.SelectorExpr
-	basic := field.Type().(*types.Basic)
+	basic := field.Type().Underlying().(*types.Basic)
 	switch basic.Kind() {
 	case types.Bool:
 		fun = &ast.SelectorExpr{
@@ -426,7 +426,7 @@ func genFieldAssign(field *types.Var) ast.Stmt {
 func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 	name := field.Name()
 	var call *ast.CallExpr
-	switch fTy := field.Type().(type) {
+	switch fTy := field.Type().Underlying().(type) {
 	case *types.Slice:
 		call = c.genSliceRead(field.Pos(), fTy, 1)
 	case *types.Basic:
@@ -461,7 +461,7 @@ func (c *compiler) genSliceRead(pos token.Pos, ty1 *types.Slice, depth int) *ast
 	if depth > 3 {
 		log.Panic("unsupported slice nesting beyond depth 3")
 	}
-	switch ty2 := ty1.Elem().(type) {
+	switch ty2 := ty1.Elem().Underlying().(type) {
 	case *types.Slice:
 		return c.genSliceRead(pos, ty2, depth+1)
 	case *types.Basic:
@@ -513,7 +513,7 @@ func (c *compiler) genBasicRead(field *types.Var) *ast.CallExpr {
 	}
 
 	var fun *ast.SelectorExpr
-	basic := field.Type().(*types.Basic)
+	basic := field.Type().Underlying().(*types.Basic)
 	switch basic.Kind() {
 	case types.Bool:
 		fun = &ast.SelectorExpr{

@@ -5,5 +5,6 @@ import (
 )
 
 type arg struct {
-	x other.TempInt
+	x other.AliasInt
+	y other.DefInt
 }

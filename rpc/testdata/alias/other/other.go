@@ -1,3 +1,5 @@
 package other
 
-type TempInt = uint64
+type AliasInt = uint64
+
+type DefInt uint64

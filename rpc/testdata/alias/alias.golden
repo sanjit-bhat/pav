@@ -10,6 +10,7 @@ import (
 func (o *arg) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.x)
+	b = marshal.WriteInt(b, o.y)
 	return b
 }
 func (o *arg) decode(b0 []byte) ([]byte, errorTy) {
@@ -18,6 +19,11 @@ func (o *arg) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
+	y, b, err := marshalutil.ReadInt(b)
+	if err {
+		return nil, err
+	}
 	o.x = x
+	o.y = y
 	return b, errNone
 }
