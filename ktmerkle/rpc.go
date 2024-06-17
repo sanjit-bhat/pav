@@ -52,7 +52,7 @@ type servRegArg struct {
 }
 
 type servRegReply struct {
-	err errorTy
+	error errorTy
 }
 
 type servPutArg struct {
@@ -64,33 +64,33 @@ type servPutArg struct {
 type servPutReply struct {
 	epoch epochTy
 	// rpc: invariant: len 64.
-	sig cryptoffi.Sig
-	err errorTy
+	sig   cryptoffi.Sig
+	error errorTy
 }
 
-type servGetIdAtEpochArg struct {
+type servGetIdAtArg struct {
 	// rpc: invariant: len 32.
 	id    merkle.Id
 	epoch epochTy
 }
 
-type servGetIdAtEpochReply struct {
+type servGetIdAtReply struct {
 	val merkle.Val
 	// rpc: invariant: len 32.
 	digest  merkle.Digest
 	proofTy merkle.ProofTy
 	proof   merkle.Proof
 	// rpc: invariant: len 64.
-	sig cryptoffi.Sig
-	err errorTy
+	sig   cryptoffi.Sig
+	error errorTy
 }
 
-type servGetIdLatestArg struct {
+type servGetIdNowArg struct {
 	// rpc: invariant: len 32.
 	id merkle.Id
 }
 
-type servGetIdLatestReply struct {
+type servGetIdNowReply struct {
 	epoch epochTy
 	val   merkle.Val
 	// rpc: invariant: len 32.
@@ -98,20 +98,20 @@ type servGetIdLatestReply struct {
 	proofTy merkle.ProofTy
 	proof   merkle.Proof
 	// rpc: invariant: len 64.
-	sig cryptoffi.Sig
-	err errorTy
+	sig   cryptoffi.Sig
+	error errorTy
 }
 
-type servGetDigestArg struct {
+type servGetDigArg struct {
 	epoch epochTy
 }
 
-type servGetDigestReply struct {
+type servGetDigReply struct {
 	// rpc: invariant: len 32.
 	digest merkle.Digest
 	// rpc: invariant: len 64.
-	sig cryptoffi.Sig
-	err errorTy
+	sig   cryptoffi.Sig
+	error errorTy
 }
 
 type servGetLinkArg struct {
@@ -122,8 +122,8 @@ type servGetLinkReply struct {
 	// rpc: invariant: len 32.
 	link linkTy
 	// rpc: invariant: len 64.
-	sig cryptoffi.Sig
-	err errorTy
+	sig   cryptoffi.Sig
+	error errorTy
 }
 
 type adtrPutArg struct {
@@ -131,6 +131,10 @@ type adtrPutArg struct {
 	link linkTy
 	// rpc: invariant: len 64.
 	sig cryptoffi.Sig
+}
+
+type adtrPutReply struct {
+	error errorTy
 }
 
 type adtrGetArg struct {
@@ -144,5 +148,5 @@ type adtrGetReply struct {
 	servSig cryptoffi.Sig
 	// rpc: invariant: len 64.
 	adtrSig cryptoffi.Sig
-	err     errorTy
+	error   errorTy
 }

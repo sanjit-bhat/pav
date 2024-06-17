@@ -55,18 +55,18 @@ type timeEntry struct {
 type timeSeries []timeEntry
 
 // put returns error if given old entry.
-func (ts *timeSeries) put(e epochTy, v merkle.Val, sig cryptoffi.Sig) errorTy {
+func (ts *timeSeries) put(epoch epochTy, val merkle.Val, sig cryptoffi.Sig) errorTy {
 	entries := *ts
 	length := uint64(len(entries))
 	if length == 0 {
-		*ts = append(entries, timeEntry{time: e, val: v, sig: sig})
+		*ts = append(entries, timeEntry{time: epoch, val: val, sig: sig})
 		return errNone
 	}
 	last := entries[length-1].time
-	if e < last {
+	if epoch < last {
 		return errSome
 	}
-	*ts = append(entries, timeEntry{time: e, val: v, sig: sig})
+	*ts = append(entries, timeEntry{time: epoch, val: val, sig: sig})
 	return errNone
 }
 
@@ -74,20 +74,20 @@ func (ts *timeSeries) put(e epochTy, v merkle.Val, sig cryptoffi.Sig) errorTy {
 // val is the latest update val for time t.
 // if no update happened before t, isInit = false and val = nil.
 // if the epoch was an update boundary, isBoundary = true and putPromise is set.
-func (ts *timeSeries) get(t epochTy) (merkle.Val, bool, cryptoffi.Sig, bool) {
+func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool) {
 	var latest merkle.Val
 	var init bool
 	var sig cryptoffi.Sig
 	var boundary bool
 
 	for _, te := range *ts {
-		if te.time > t {
+		if te.time > epoch {
 			continue
 		}
 		latest = te.val
 		init = true
 		sig = te.sig
-		boundary = te.time == t
+		boundary = te.time == epoch
 	}
 	return latest, init, sig, boundary
 }
@@ -100,6 +100,8 @@ type serv struct {
 	trees  []*merkle.Tree
 	nextTr *merkle.Tree
 	chain  hashChain
+	// Whether an ID has been changed in the next epoch.
+	changed map[string]bool
 }
 
 func newServ() (*serv, cryptoffi.PublicKey) {
@@ -108,7 +110,8 @@ func newServ() (*serv, cryptoffi.PublicKey) {
 	emptyTr := &merkle.Tree{}
 	trees := []*merkle.Tree{emptyTr}
 	nextTr := &merkle.Tree{}
-	return &serv{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: nil}, pk
+	changed := make(map[string]bool)
+	return &serv{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: nil, changed: changed}, pk
 }
 
 func (s *serv) updateEpoch() {
@@ -118,24 +121,32 @@ func (s *serv) updateEpoch() {
 	s.chain.put(dig)
 	s.trees = append(s.trees, nextTr)
 	s.nextTr = nextTr.DeepCopy()
+	s.changed = make(map[string]bool)
 	s.mu.Unlock()
 }
 
 // put returns the epoch at which this val should be visible.
 func (s *serv) put(id merkle.Id, val merkle.Val) (epochTy, cryptoffi.Sig, errorTy) {
 	s.mu.Lock()
+	idS := string(id)
+	changed, ok := s.changed[idS]
+	if ok && changed {
+		s.mu.Unlock()
+		return 0, nil, errSome
+	}
+	s.changed[idS] = true
+
 	nextEpoch := uint64(len(s.trees))
 	_, _, err := s.nextTr.Put(id, val)
 	enc := (&servSigSepPut{epoch: nextEpoch, id: id, val: val}).encode()
-    // Before signing, 
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return nextEpoch, sig, err
 }
 
-func (s *serv) getIdAtEpoch(id merkle.Id, epoch epochTy) *servGetIdAtEpochReply {
-	errReply := &servGetIdAtEpochReply{}
-	errReply.err = errSome
+func (s *serv) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
+	errReply := &servGetIdAtReply{}
+	errReply.error = errSome
 	s.mu.Lock()
 	if epoch >= uint64(len(s.trees)) {
 		s.mu.Unlock()
@@ -146,10 +157,10 @@ func (s *serv) getIdAtEpoch(id merkle.Id, epoch epochTy) *servGetIdAtEpochReply 
 	enc := (&servSigSepDig{epoch: epoch, dig: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
-	return &servGetIdAtEpochReply{val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, err: reply.Error}
+	return &servGetIdAtReply{val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
 }
 
-func (s *serv) getIdLatest(id merkle.Id) *servGetIdLatestReply {
+func (s *serv) getIdNow(id merkle.Id) *servGetIdNowReply {
 	s.mu.Lock()
 	epoch := uint64(len(s.trees)) - 1
 	tr := s.trees[epoch]
@@ -157,10 +168,10 @@ func (s *serv) getIdLatest(id merkle.Id) *servGetIdLatestReply {
 	enc := (&servSigSepDig{epoch: epoch, dig: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
-	return &servGetIdLatestReply{epoch: epoch, val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, err: reply.Error}
+	return &servGetIdNowReply{epoch: epoch, val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
 }
 
-func (s *serv) getDigest(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
+func (s *serv) getDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
 	s.mu.Lock()
 	if epoch >= uint64(len(s.trees)) {
 		s.mu.Unlock()
@@ -236,7 +247,7 @@ func (a *auditor) get(epoch epochTy) (linkTy, cryptoffi.Sig, cryptoffi.Sig, erro
 		return nil, nil, nil, errSome
 	}
 	entry := a.log[epoch]
-	enc := (&adtrSigSepLink{epoch: epoch, link: entry.link}).encode()
+	enc := (&adtrSigSepLink{epoch: epoch, link: entry.link, servSig: entry.sig}).encode()
 	sig := cryptoffi.Sign(a.sk, enc)
 	a.mu.Unlock()
 	return entry.link, entry.sig, sig, errNone
@@ -270,85 +281,224 @@ func newClient(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.A
 	return &client{id: id, myVals: nil, digs: digs, adtrs: adtrs, adtrPks: adtrPks, serv: serv, servPk: servPk}
 }
 
-/*
-// TODO: what happens if client calls put twice in an epoch?
-func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
-	epoch, err := verCallPut(c.serv, c.servPk, c.id, val)
+func (c *client) put(val merkle.Val) (epochTy, errorTy) {
+	// call rpc, check the server putpromise sig,
+	// store it for later in the timeSeries.
+	epoch, sig, err := callServPut(c.serv, c.id, val)
 	if err {
 		return 0, err
 	}
-	c.myVals.put(epoch, val)
+	enc := (&servSigSepPut{epoch: epoch, id: c.id, val: val}).encode()
+	ok := cryptoffi.Verify(c.servPk, enc, sig)
+	if !ok {
+		return 0, errSome
+	}
+	c.myVals.put(epoch, val, sig)
 	return epoch, errNone
 }
-*/
 
-/*
-func (c *keyCli) get(id merkle.Id) (epochTy, merkle.Val, errorTy) {
-	reply := verCallGetIdLatest(c.serv, c.servPk, id)
+// evidServDig is evidence that the server signed two diff digs for the same epoch.
+type evidServDig struct {
+	epoch epochTy
+	dig0  merkle.Digest
+	sig0  cryptoffi.Sig
+	dig1  merkle.Digest
+	sig1  cryptoffi.Sig
+}
+
+// check returns an error if the evidence does not check out.
+func (e *evidServDig) check(servPk cryptoffi.PublicKey) errorTy {
+	enc0 := (&servSigSepDig{epoch: e.epoch, dig: e.dig0}).encode()
+	ok0 := cryptoffi.Verify(servPk, enc0, e.sig0)
+	if !ok0 {
+		return errSome
+	}
+	enc1 := (&servSigSepDig{epoch: e.epoch, dig: e.dig1}).encode()
+	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
+	if !ok1 {
+		return errSome
+	}
+	if std.BytesEqual(e.dig0, e.dig1) {
+		return errSome
+	}
+	return errNone
+}
+
+// get returns an evidence object and error if irrefutable evidence is found.
+func (c *client) get(id merkle.Id) (epochTy, merkle.Val, *evidServDig, errorTy) {
+	reply := callServGetIdNow(c.serv, id)
 	if reply.error {
-		return 0, nil, reply.error
+		return 0, nil, nil, reply.error
+	}
+	enc := (&servSigSepDig{epoch: reply.epoch, dig: reply.digest}).encode()
+	ok := cryptoffi.Verify(c.servPk, enc, reply.sig)
+	if !ok {
+		return 0, nil, nil, errSome
 	}
 
 	origDig, ok := c.digs[reply.epoch]
-	if ok && !std.BytesEqual(origDig, reply.digest) {
-		return 0, nil, errSome
+	if ok && !std.BytesEqual(origDig.dig, reply.digest) {
+		ev := &evidServDig{epoch: reply.epoch, dig0: origDig.dig, sig0: origDig.sig, dig1: reply.digest, sig1: reply.sig}
+		return 0, nil, ev, errSome
 	}
 	if !ok {
-		c.digs[reply.epoch] = reply.digest
+		c.digs[reply.epoch] = &signedDig{dig: reply.digest, sig: reply.sig}
 	}
-	return reply.epoch, reply.val, errNone
+	return reply.epoch, reply.val, nil, errNone
 }
 
-func (c *keyCli) getOrFillDig(epoch epochTy) (merkle.Digest, errorTy) {
-	var dig merkle.Digest
-	dig, ok0 := c.digs[epoch]
+func (c *client) getOrFillDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
+	origDig, ok0 := c.digs[epoch]
 	if ok0 {
-		return dig, errNone
+		return origDig.dig, origDig.sig, errNone
 	}
-	newDig, err := verCallGetDigest(c.serv, c.servPk, epoch)
+	dig, sig, err := callServGetDig(c.serv, epoch)
 	if err {
-		return nil, err
+		return nil, nil, errSome
 	}
-	c.digs[epoch] = newDig
-	return newDig, errNone
+	enc := (&servSigSepDig{epoch: epoch, dig: dig}).encode()
+	ok := cryptoffi.Verify(c.servPk, enc, sig)
+	if !ok {
+		return nil, nil, errSome
+	}
+	c.digs[epoch] = &signedDig{dig: dig, sig: sig}
+	return dig, sig, errNone
 }
 
-// audit through epoch idx exclusive.
-func (c *keyCli) audit(adtrId uint64) (epochTy, errorTy) {
+// evidAdtrVer is evidence that the adtr gave out bad server signatures.
+type evidAdtrVer struct {
+	epoch   epochTy
+	link    linkTy
+	servSig cryptoffi.Sig
+	adtrSig cryptoffi.Sig
+}
+
+// check returns an error if the evidence doesn't check out.
+func (e *evidAdtrVer) check(adtrPk, servPk cryptoffi.PublicKey) errorTy {
+	enc0 := (&adtrSigSepLink{epoch: e.epoch, link: e.link, servSig: e.servSig}).encode()
+	ok0 := cryptoffi.Verify(adtrPk, enc0, e.adtrSig)
+	if !ok0 {
+		return errSome
+	}
+	enc1 := (&servSigSepLink{epoch: e.epoch, link: e.link}).encode()
+	ok1 := cryptoffi.Verify(servPk, enc1, e.servSig)
+	if !ok1 {
+		return errSome
+	}
+	return errNone
+}
+
+// evidServChain is evidence that the server signed two diff chains.
+type evidServChain struct {
+	epoch epochTy
+	digs0 []merkle.Digest
+	sigs0 []cryptoffi.Sig
+	link1 linkTy
+	sig1  cryptoffi.Sig
+}
+
+// check returns an error if the evidence does not check out.
+func (e *evidServChain) check(servPk cryptoffi.PublicKey) errorTy {
+	if e.epoch == 0 {
+		return errSome
+	}
+	digsLen := uint64(len(e.digs0))
+	sigsLen := uint64(len(e.sigs0))
+	if digsLen != sigsLen {
+		return errSome
+	}
+	if digsLen != e.epoch {
+		return errSome
+	}
+
+	var badSig bool
+	var chain hashChain
+	for i := uint64(0); i < e.epoch; i++ {
+		dig := e.digs0[i]
+		sig := e.sigs0[i]
+		enc0 := (&servSigSepDig{epoch: i, dig: dig}).encode()
+		ok0 := cryptoffi.Verify(servPk, enc0, sig)
+		if !ok0 {
+			badSig = true
+		}
+		chain.put(dig)
+	}
+	if badSig {
+		return errSome
+	}
+	link := chain[uint64(len(chain))-1]
+
+	enc1 := (&servSigSepLink{epoch: e.epoch, link: e.link1}).encode()
+	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
+	if !ok1 {
+		return errSome
+	}
+
+	if std.BytesEqual(link, e.link1) {
+		return errSome
+	}
+	return errNone
+}
+
+// audit returns epoch idx (exclusive) thru which audit succeeded.
+func (c *client) audit(adtrId uint64) (epochTy, *evidAdtrVer, *evidServChain, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
-	var chain hashChain
 	var epoch uint64
-	// TODO: maybe factor out digest fetch into sep loop.
-	// Consider doing this for other for loop as well.
+	var chain hashChain
+	var digs []merkle.Digest
+	var sigs []cryptoffi.Sig
 	for {
-		dig, err0 := c.getOrFillDig(epoch)
+		dig, sig, err0 := c.getOrFillDig(epoch)
 		if err0 {
 			break
 		}
 		chain.put(dig)
+		digs = append(digs, dig)
+		sigs = append(sigs, sig)
 		epoch++
 	}
 	if epoch == 0 {
-		return 0, errSome
+		return 0, nil, nil, errSome
 	}
 	lastEpoch := epoch - 1
+	myLink := chain[uint64(len(chain))-1]
 
 	adtr := c.adtrs[adtrId]
 	adtrPk := c.adtrPks[adtrId]
-	adtrLink, err1 := verCallGetLink(adtr, adtrPk, lastEpoch)
+	adtrLink, servSig, adtrSig, err1 := callAdtrGet(adtr, lastEpoch)
 	if err1 {
-		return 0, err1
+		return 0, nil, nil, err1
 	}
-	link := chain[uint64(len(chain))-1]
-	if !std.BytesEqual(link, adtrLink) {
-		return 0, errSome
+	enc0 := (&adtrSigSepLink{epoch: lastEpoch, link: adtrLink, servSig: servSig}).encode()
+	ok0 := cryptoffi.Verify(adtrPk, enc0, adtrSig)
+	// Adtr sig failed.
+	if !ok0 {
+		return 0, nil, nil, errSome
+	}
+	enc1 := (&servSigSepLink{epoch: lastEpoch, link: adtrLink}).encode()
+	ok1 := cryptoffi.Verify(c.servPk, enc1, servSig)
+	// Adtr should return valid server sig.
+	if !ok1 {
+		ev := &evidAdtrVer{epoch: lastEpoch, link: adtrLink, servSig: servSig, adtrSig: adtrSig}
+		return 0, ev, nil, errSome
 	}
 
-	return epoch, errNone
+	// Serv lied to us about the chain.
+	if !std.BytesEqual(myLink, adtrLink) {
+		ev := &evidServChain{epoch: lastEpoch, digs0: digs, sigs0: sigs, link1: adtrLink, sig1: servSig}
+		return 0, nil, ev, errSome
+	}
+	return epoch, nil, nil, errNone
 }
 
-func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expProofTy merkle.ProofTy) okTy {
+/*
+for selfauditing:
+return evidence if put promise broken.
+return evidence if get diff digs from expected.
+*/
+/*
+func (c *client) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expProofTy merkle.ProofTy) okTy {
 	id := c.id
 	reply := verCallGetIdAtEpoch(c.serv, c.servPk, id, epoch)
 	if reply.error {
@@ -369,13 +519,83 @@ func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expPro
 	}
 	return true
 }
+*/
 
-// selfAudit through Epoch idx exclusive.
-func (c *keyCli) selfAudit() epochTy {
+// evidServPut is evidence when a server promises to put a value at a certain
+// epoch but actually there's a different value.
+type evidServPut struct {
+	epoch epochTy
+	// For signed dig.
+	dig    merkle.Digest
+	sigDig cryptoffi.Sig
+	// For signed put.
+	id     merkle.Id
+	val0   merkle.Val
+	sigPut cryptoffi.Sig
+	// For merkle inclusion.
+	val1  merkle.Val
+	proof merkle.Proof
+}
+
+func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
+	// Proof of signing the digest.
+	enc0 := (&servSigSepDig{epoch: e.epoch, dig: e.dig}).encode()
+	ok0 := cryptoffi.Verify(servPk, enc0, e.sigDig)
+	if !ok0 {
+		return errSome
+	}
+
+	// Proof of signing the put promise.
+	enc1 := (&servSigSepPut{epoch: e.epoch, id: e.id, val: e.val0}).encode()
+	ok1 := cryptoffi.Verify(servPk, enc1, e.sigPut)
+	if !ok1 {
+		return errSome
+	}
+
+	// Proof of merkle inclusion of the other val.
+	err0 := merkle.CheckProof(merkle.MembProofTy, e.proof, e.id, e.val1, e.dig)
+	if err0 {
+		return errSome
+	}
+
+	if std.BytesEqual(e.val0, e.val1) {
+		return errSome
+	}
+	return errNone
+}
+
+func (c *client) selfAuditAt(epoch epochTy) (*evidServDig, *evidServPut, errorTy) {
+    reply := callServGetIdAt(c.serv, c.id, epoch)
+    if reply.error {
+        return nil, nil, reply.error
+    }
+    // Server dig sig doesn't verify.
+    enc0 := (&servSigSepDig{epoch: epoch, dig: reply.digest}).encode()
+    ok0 := cryptoffi.Verify(c.servPk, enc0, reply.sig)
+    if !ok0 {
+        return nil, nil, errSome
+    }
+
+    // We have a different stored dig.
+    origDig, ok1 := c.digs[epoch]
+    if ok1 && !std.BytesEqual(origDig.dig, reply.digest) {
+        ev := &evidServDig{epoch: epoch, dig0: origDig.dig, sig0: origDig.sig, dig1: reply.digest, sig1: reply.sig}
+        return ev, nil, errSome
+    }
+
+    // get expected val, 
+    // We already checked put promise
+    // start checking val stuff. 
+    
+}
+
+// selfAudit returns epoch idx (exclusive) thru which audit succeeded.
+/*
+func (c *client) selfAudit() epochTy {
 	// TODO: maybe ret err if audit fails during an epoch we know should exist.
 	var epoch epochTy
 	for {
-		expVal, expProofTy := c.myVals.get(epoch)
+		expVal, expProofTy, putSig, isBoundary := c.myVals.get(epoch)
 		ok := c.checkProofWithExpected(epoch, expVal, expProofTy)
 		if !ok {
 			break
