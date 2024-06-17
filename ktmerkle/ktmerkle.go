@@ -247,7 +247,7 @@ func (a *auditor) get(epoch epochTy) (linkTy, cryptoffi.Sig, cryptoffi.Sig, erro
 		return nil, nil, nil, errSome
 	}
 	entry := a.log[epoch]
-	enc := (&adtrSigSepLink{epoch: epoch, link: entry.link, servSig: entry.sig}).encode()
+	enc := (&adtrSigSepLink{epoch: epoch, link: entry.link}).encode()
 	sig := cryptoffi.Sign(a.sk, enc)
 	a.mu.Unlock()
 	return entry.link, entry.sig, sig, errNone
@@ -365,29 +365,6 @@ func (c *client) getOrFillDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, erro
 	return dig, sig, errNone
 }
 
-// evidAdtrVer is evidence that the adtr gave out bad server signatures.
-type evidAdtrVer struct {
-	epoch   epochTy
-	link    linkTy
-	servSig cryptoffi.Sig
-	adtrSig cryptoffi.Sig
-}
-
-// check returns an error if the evidence doesn't check out.
-func (e *evidAdtrVer) check(adtrPk, servPk cryptoffi.PublicKey) errorTy {
-	enc0 := (&adtrSigSepLink{epoch: e.epoch, link: e.link, servSig: e.servSig}).encode()
-	ok0 := cryptoffi.Verify(adtrPk, enc0, e.adtrSig)
-	if !ok0 {
-		return errSome
-	}
-	enc1 := (&servSigSepLink{epoch: e.epoch, link: e.link}).encode()
-	ok1 := cryptoffi.Verify(servPk, enc1, e.servSig)
-	if !ok1 {
-		return errSome
-	}
-	return errNone
-}
-
 // evidServChain is evidence that the server signed two diff chains.
 type evidServChain struct {
 	epoch epochTy
@@ -441,7 +418,7 @@ func (e *evidServChain) check(servPk cryptoffi.PublicKey) errorTy {
 }
 
 // audit returns epoch idx (exclusive) thru which audit succeeded.
-func (c *client) audit(adtrId uint64) (epochTy, *evidAdtrVer, *evidServChain, errorTy) {
+func (c *client) audit(adtrId uint64) (epochTy, *evidServChain, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
 	var epoch uint64
@@ -459,7 +436,7 @@ func (c *client) audit(adtrId uint64) (epochTy, *evidAdtrVer, *evidServChain, er
 		epoch++
 	}
 	if epoch == 0 {
-		return 0, nil, nil, errSome
+		return 0, nil, errSome
 	}
 	lastEpoch := epoch - 1
 	myLink := chain[uint64(len(chain))-1]
@@ -468,58 +445,28 @@ func (c *client) audit(adtrId uint64) (epochTy, *evidAdtrVer, *evidServChain, er
 	adtrPk := c.adtrPks[adtrId]
 	adtrLink, servSig, adtrSig, err1 := callAdtrGet(adtr, lastEpoch)
 	if err1 {
-		return 0, nil, nil, err1
+		return 0, nil, err1
 	}
-	enc0 := (&adtrSigSepLink{epoch: lastEpoch, link: adtrLink, servSig: servSig}).encode()
+	enc0 := (&adtrSigSepLink{epoch: lastEpoch, link: adtrLink}).encode()
 	ok0 := cryptoffi.Verify(adtrPk, enc0, adtrSig)
 	// Adtr sig failed.
 	if !ok0 {
-		return 0, nil, nil, errSome
+		return 0, nil, errSome
 	}
 	enc1 := (&servSigSepLink{epoch: lastEpoch, link: adtrLink}).encode()
 	ok1 := cryptoffi.Verify(c.servPk, enc1, servSig)
 	// Adtr should return valid server sig.
 	if !ok1 {
-		ev := &evidAdtrVer{epoch: lastEpoch, link: adtrLink, servSig: servSig, adtrSig: adtrSig}
-		return 0, ev, nil, errSome
+		return 0, nil, errSome
 	}
 
 	// Serv lied to us about the chain.
 	if !std.BytesEqual(myLink, adtrLink) {
 		ev := &evidServChain{epoch: lastEpoch, digs0: digs, sigs0: sigs, link1: adtrLink, sig1: servSig}
-		return 0, nil, ev, errSome
+		return 0, ev, errSome
 	}
-	return epoch, nil, nil, errNone
+	return epoch, nil, errNone
 }
-
-/*
-for selfauditing:
-return evidence if put promise broken.
-return evidence if get diff digs from expected.
-*/
-/*
-func (c *client) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expProofTy merkle.ProofTy) okTy {
-	id := c.id
-	reply := verCallGetIdAtEpoch(c.serv, c.servPk, id, epoch)
-	if reply.error {
-		return false
-	}
-	if !std.BytesEqual(reply.val, expVal) {
-		return false
-	}
-	if reply.proofTy != expProofTy {
-		return false
-	}
-	origDig, ok := c.digs[epoch]
-	if ok && !std.BytesEqual(reply.digest, origDig) {
-		return false
-	}
-	if !ok {
-		c.digs[epoch] = reply.digest
-	}
-	return true
-}
-*/
 
 // evidServPut is evidence when a server promises to put a value at a certain
 // epoch but actually there's a different value.
@@ -565,43 +512,63 @@ func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
 }
 
 func (c *client) selfAuditAt(epoch epochTy) (*evidServDig, *evidServPut, errorTy) {
-    reply := callServGetIdAt(c.serv, c.id, epoch)
-    if reply.error {
-        return nil, nil, reply.error
-    }
-    // Server dig sig doesn't verify.
-    enc0 := (&servSigSepDig{epoch: epoch, dig: reply.digest}).encode()
-    ok0 := cryptoffi.Verify(c.servPk, enc0, reply.sig)
-    if !ok0 {
-        return nil, nil, errSome
-    }
+	reply := callServGetIdAt(c.serv, c.id, epoch)
+	if reply.error {
+		return nil, nil, reply.error
+	}
+	// Server dig sig verifies.
+	enc0 := (&servSigSepDig{epoch: epoch, dig: reply.digest}).encode()
+	ok0 := cryptoffi.Verify(c.servPk, enc0, reply.sig)
+	if !ok0 {
+		return nil, nil, errSome
+	}
 
-    // We have a different stored dig.
-    origDig, ok1 := c.digs[epoch]
-    if ok1 && !std.BytesEqual(origDig.dig, reply.digest) {
-        ev := &evidServDig{epoch: epoch, dig0: origDig.dig, sig0: origDig.sig, dig1: reply.digest, sig1: reply.sig}
-        return ev, nil, errSome
-    }
+	// We have the same stored dig.
+	origDig, ok1 := c.digs[epoch]
+	if ok1 && !std.BytesEqual(origDig.dig, reply.digest) {
+		ev := &evidServDig{epoch: epoch, dig0: origDig.dig, sig0: origDig.sig, dig1: reply.digest, sig1: reply.sig}
+		return ev, nil, errSome
+	}
 
-    // get expected val, 
-    // We already checked put promise
-    // start checking val stuff. 
-    
+	// Merkle proof works.
+	err0 := merkle.CheckProof(reply.proofTy, reply.proof, c.id, reply.val, reply.digest)
+	if err0 {
+		return nil, nil, err0
+	}
+
+	// Put promise upheld, and vals are as expected.
+	expVal, expProofTy, putSig, isBoundary := c.myVals.get(epoch)
+	if expProofTy != reply.proofTy {
+		return nil, nil, errSome
+	}
+	if !std.BytesEqual(expVal, reply.val) {
+		// The put promise is only valid on a boundary epoch.
+		if isBoundary {
+			ev := &evidServPut{epoch: epoch, dig: reply.digest, sigDig: reply.sig, id: c.id, val0: expVal, sigPut: putSig, val1: reply.val, proof: reply.proof}
+			return nil, ev, errSome
+		} else {
+			return nil, nil, errSome
+		}
+	}
+	return nil, nil, errNone
 }
 
 // selfAudit returns epoch idx (exclusive) thru which audit succeeded.
-/*
-func (c *client) selfAudit() epochTy {
+func (c *client) selfAudit() (epochTy, *evidServDig, *evidServPut, errorTy) {
 	// TODO: maybe ret err if audit fails during an epoch we know should exist.
 	var epoch epochTy
+	var evidDig *evidServDig
+	var evidPut *evidServPut
+	var err errorTy
 	for {
-		expVal, expProofTy, putSig, isBoundary := c.myVals.get(epoch)
-		ok := c.checkProofWithExpected(epoch, expVal, expProofTy)
-		if !ok {
+		r0, r1, r2 := c.selfAuditAt(epoch)
+		evidDig = r0
+		evidPut = r1
+		err = r2
+		if r2 {
 			break
 		}
 		epoch++
 	}
-	return epoch
+	return epoch, evidDig, evidPut, err
 }
-*/
