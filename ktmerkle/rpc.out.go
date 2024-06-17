@@ -7,6 +7,13 @@ import (
 	"github.com/tchajed/marshal"
 )
 
+func (o *adtrSigSepLink) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshalutil.WriteByte(b, 0)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.link)
+	return b
+}
 func (o *servSigSepDig) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 0)
@@ -285,17 +292,12 @@ func (o *servGetLinkReply) decode(b0 []byte) ([]byte, errorTy) {
 }
 func (o *adtrPutArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.link)
 	b = marshal.WriteBytes(b, o.sig)
 	return b
 }
 func (o *adtrPutArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	epoch, b, err := marshalutil.ReadInt(b)
-	if err {
-		return nil, err
-	}
 	link, b, err := marshalutil.ReadBytes(b, 32)
 	if err {
 		return nil, err
@@ -304,7 +306,6 @@ func (o *adtrPutArg) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	o.epoch = epoch
 	o.link = link
 	o.sig = sig
 	return b, errNone
@@ -326,7 +327,8 @@ func (o *adtrGetArg) decode(b0 []byte) ([]byte, errorTy) {
 func (o *adtrGetReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteBytes(b, o.link)
-	b = marshal.WriteBytes(b, o.sig)
+	b = marshal.WriteBytes(b, o.servSig)
+	b = marshal.WriteBytes(b, o.adtrSig)
 	b = marshalutil.WriteBool(b, o.error)
 	return b
 }
@@ -336,7 +338,11 @@ func (o *adtrGetReply) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.ReadBytes(b, 64)
+	servSig, b, err := marshalutil.ReadBytes(b, 64)
+	if err {
+		return nil, err
+	}
+	adtrSig, b, err := marshalutil.ReadBytes(b, 64)
 	if err {
 		return nil, err
 	}
@@ -345,7 +351,8 @@ func (o *adtrGetReply) decode(b0 []byte) ([]byte, errorTy) {
 		return nil, err
 	}
 	o.link = link
-	o.sig = sig
+	o.servSig = servSig
+	o.adtrSig = adtrSig
 	o.error = error
 	return b, errNone
 }

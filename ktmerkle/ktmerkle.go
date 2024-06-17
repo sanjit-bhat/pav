@@ -22,13 +22,12 @@ const (
 	someChainTag byte    = 1
 )
 
-// hashChain gives a commitment to a series of data entries.
+// hashChain stores commitments to a series of data entries.
 type hashChain []linkTy
 
 func (c *hashChain) put(data []byte) {
 	chain := *c
 	chainLen := uint64(len(chain))
-
 	if chainLen == 0 {
 		h := cryptoffi.Hash([]byte{noneChainTag})
 		*c = append(chain, h)
@@ -45,49 +44,57 @@ func (c *hashChain) put(data []byte) {
 }
 
 type timeEntry struct {
-	time  epochTy
-	entry merkle.Val
+	time epochTy
+	val  merkle.Val
+	// Type servSigSepPut.
+	sig cryptoffi.Sig
 }
 
 // timeSeries converts a series of value updates into a view of the latest value
 // at any given time.
-type timeSeries struct {
-	data []timeEntry
-}
+type timeSeries []timeEntry
 
 // put returns error if given old entry.
-func (ts *timeSeries) put(t epochTy, e merkle.Val) errorTy {
-	entries := ts.data
+func (ts *timeSeries) put(e epochTy, v merkle.Val, sig cryptoffi.Sig) errorTy {
+	entries := *ts
 	length := uint64(len(entries))
 	if length == 0 {
-		ts.data = append(entries, timeEntry{time: t, entry: e})
+		*ts = append(entries, timeEntry{time: e, val: v, sig: sig})
 		return errNone
 	}
 	last := entries[length-1].time
-	if t < last {
+	if e < last {
 		return errSome
 	}
-	ts.data = append(entries, timeEntry{time: t, entry: e})
+	*ts = append(entries, timeEntry{time: e, val: v, sig: sig})
 	return errNone
 }
 
-// get returns the latest time-bound update.
-// if no update happened up through that time, it returns nil and false.
-func (ts *timeSeries) get(t epochTy) (merkle.Val, bool) {
-	var init bool
+// get returns val, isInit, putPromise sig, isBoundary.
+// val is the latest update val for time t.
+// if no update happened before t, isInit = false and val = nil.
+// if the epoch was an update boundary, isBoundary = true and putPromise is set.
+func (ts *timeSeries) get(t epochTy) (merkle.Val, bool, cryptoffi.Sig, bool) {
 	var latest merkle.Val
-	for _, te := range ts.data {
-		if te.time <= t {
-			init = true
-			latest = te.entry
+	var init bool
+	var sig cryptoffi.Sig
+	var boundary bool
+
+	for _, te := range *ts {
+		if te.time > t {
+			continue
 		}
+		latest = te.val
+		init = true
+		sig = te.sig
+		boundary = te.time == t
 	}
-	return latest, init
+	return latest, init, sig, boundary
 }
 
-// Key server.
+/* Key server. */
 
-type keyServ struct {
+type serv struct {
 	sk     cryptoffi.PrivateKey
 	mu     *sync.Mutex
 	trees  []*merkle.Tree
@@ -95,19 +102,16 @@ type keyServ struct {
 	chain  hashChain
 }
 
-func newKeyServ(sk cryptoffi.PrivateKey) *keyServ {
-	s := &keyServ{}
-	s.sk = sk
-	s.mu = new(sync.Mutex)
+func newServ() (*serv, cryptoffi.PublicKey) {
+	sk, pk := cryptoffi.MakeKeys()
+	mu := new(sync.Mutex)
 	emptyTr := &merkle.Tree{}
-	s.trees = []*merkle.Tree{emptyTr}
-	s.nextTr = &merkle.Tree{}
-	s.chain = hashChain{}
-	s.chain.put(emptyTr.Digest())
-	return s
+	trees := []*merkle.Tree{emptyTr}
+	nextTr := &merkle.Tree{}
+	return &serv{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: nil}, pk
 }
 
-func (s *keyServ) updateEpoch() {
+func (s *serv) updateEpoch() {
 	s.mu.Lock()
 	nextTr := s.nextTr
 	dig := nextTr.Digest()
@@ -117,20 +121,21 @@ func (s *keyServ) updateEpoch() {
 	s.mu.Unlock()
 }
 
-// Returns the epoch at which this val should be visible.
-func (s *keyServ) put(id merkle.Id, val merkle.Val) (epochTy, cryptoffi.Sig, errorTy) {
+// put returns the epoch at which this val should be visible.
+func (s *serv) put(id merkle.Id, val merkle.Val) (epochTy, cryptoffi.Sig, errorTy) {
 	s.mu.Lock()
 	nextEpoch := uint64(len(s.trees))
 	_, _, err := s.nextTr.Put(id, val)
-	enc := (&idValEpoch{id: id, val: val, epoch: nextEpoch}).encode()
+	enc := (&servSigSepPut{epoch: nextEpoch, id: id, val: val}).encode()
+    // Before signing, 
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return nextEpoch, sig, err
 }
 
-func (s *keyServ) getIdAtEpoch(id merkle.Id, epoch epochTy) *getIdAtEpochReply {
-	errReply := &getIdAtEpochReply{}
-	errReply.error = errSome
+func (s *serv) getIdAtEpoch(id merkle.Id, epoch epochTy) *servGetIdAtEpochReply {
+	errReply := &servGetIdAtEpochReply{}
+	errReply.err = errSome
 	s.mu.Lock()
 	if epoch >= uint64(len(s.trees)) {
 		s.mu.Unlock()
@@ -138,24 +143,24 @@ func (s *keyServ) getIdAtEpoch(id merkle.Id, epoch epochTy) *getIdAtEpochReply {
 	}
 	tr := s.trees[epoch]
 	reply := tr.Get(id)
-	enc := (&epochHash{epoch: epoch, hash: reply.Digest}).encode()
+	enc := (&servSigSepDig{epoch: epoch, dig: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
-	return &getIdAtEpochReply{val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
+	return &servGetIdAtEpochReply{val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, err: reply.Error}
 }
 
-func (s *keyServ) getIdLatest(id merkle.Id) *getIdLatestReply {
+func (s *serv) getIdLatest(id merkle.Id) *servGetIdLatestReply {
 	s.mu.Lock()
-	lastEpoch := uint64(len(s.trees)) - 1
-	tr := s.trees[lastEpoch]
+	epoch := uint64(len(s.trees)) - 1
+	tr := s.trees[epoch]
 	reply := tr.Get(id)
-	enc := (&epochHash{epoch: lastEpoch, hash: reply.Digest}).encode()
+	enc := (&servSigSepDig{epoch: epoch, dig: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
-	return &getIdLatestReply{epoch: lastEpoch, val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
+	return &servGetIdLatestReply{epoch: epoch, val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, err: reply.Error}
 }
 
-func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
+func (s *serv) getDigest(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
 	s.mu.Lock()
 	if epoch >= uint64(len(s.trees)) {
 		s.mu.Unlock()
@@ -163,77 +168,109 @@ func (s *keyServ) getDigest(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorT
 	}
 	tr := s.trees[epoch]
 	dig := tr.Digest()
-	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	enc := (&servSigSepDig{epoch: epoch, dig: dig}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return dig, sig, errNone
 }
 
-// Auditor.
+func (s *serv) getLink(epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
+	s.mu.Lock()
+	if epoch >= uint64(len(s.chain)) {
+		s.mu.Unlock()
+		return nil, nil, errSome
+	}
+	ln := s.chain[epoch]
+	enc := (&servSigSepLink{epoch: epoch, link: ln}).encode()
+	sig := cryptoffi.Sign(s.sk, enc)
+	s.mu.Unlock()
+	return ln, sig, errNone
+}
 
+/* auditor */
+
+type signedLink struct {
+	link linkTy
+	// Type servSigSepLink.
+	sig cryptoffi.Sig
+}
+
+// auditor is an append-only log of server signed links.
+// e.g., the S3 auditor in WhatsApp's deployment.
 type auditor struct {
 	mu     *sync.Mutex
 	sk     cryptoffi.PrivateKey
 	servPk cryptoffi.PublicKey
-	chain  hashChain
+	log    []*signedLink
 }
 
-func newAuditor(sk cryptoffi.PrivateKey, servPk cryptoffi.PublicKey) *auditor {
-	return &auditor{mu: new(sync.Mutex), sk: sk, servPk: servPk, chain: hashChain{}}
+func newAuditor(servPk cryptoffi.PublicKey) (*auditor, cryptoffi.PublicKey) {
+	sk, pk := cryptoffi.MakeKeys()
+	return &auditor{mu: new(sync.Mutex), sk: sk, servPk: servPk}, pk
 }
 
-func (a *auditor) update(epoch epochTy, dig merkle.Digest, sig cryptoffi.Sig) errorTy {
+// put adds a link to the log. it's unspecified how this gets called.
+// but we need to verify the sig / epoch to prove correctness under
+// an honest server and auditor.
+// sig type: servSigSepLink.
+func (a *auditor) put(link linkTy, sig cryptoffi.Sig) errorTy {
 	a.mu.Lock()
-	enc := (&epochHash{epoch: epoch, hash: dig}).encode()
+	epoch := uint64(len(a.log))
+	enc := (&servSigSepLink{epoch: epoch, link: link}).encode()
 	ok := cryptoffi.Verify(a.servPk, enc, sig)
 	if !ok {
-		a.mu.Unlock()
 		return errSome
 	}
-	if epoch != uint64(len(a.chain)) {
-		a.mu.Unlock()
-		return errSome
-	}
-	a.chain.put(dig)
+
+	entry := &signedLink{link: link, sig: sig}
+	a.log = append(a.log, entry)
 	a.mu.Unlock()
 	return errNone
 }
 
-func (a *auditor) getLink(epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
+// get returns 1) sig type: servSigSepLink, 2) sig type: adtrSigSepLink.
+func (a *auditor) get(epoch epochTy) (linkTy, cryptoffi.Sig, cryptoffi.Sig, errorTy) {
 	a.mu.Lock()
-	if epoch >= uint64(len(a.chain)) {
+	if epoch >= uint64(len(a.log)) {
 		a.mu.Unlock()
-		return nil, nil, errSome
+		return nil, nil, nil, errSome
 	}
-	link := a.chain[epoch]
-	enc := (&epochHash{epoch: epoch, hash: link}).encode()
+	entry := a.log[epoch]
+	enc := (&adtrSigSepLink{epoch: epoch, link: entry.link}).encode()
 	sig := cryptoffi.Sign(a.sk, enc)
 	a.mu.Unlock()
-	return link, sig, errNone
+	return entry.link, entry.sig, sig, errNone
 }
 
-// Key client.
+/* Key client. */
 
-type keyCli struct {
+type signedDig struct {
+	dig merkle.Digest
+	// Type: servSigSepDig.
+	sig cryptoffi.Sig
+}
+
+type client struct {
+	id      merkle.Id
+	myVals  timeSeries
+	digs    map[epochTy]*signedDig
 	adtrs   []*urpc.Client
 	adtrPks []cryptoffi.PublicKey
-	servPk  cryptoffi.PublicKey
-	digs    map[epochTy]merkle.Digest
-	id      merkle.Id
 	serv    *urpc.Client
-	myVals  *timeSeries
+	servPk  cryptoffi.PublicKey
 }
 
-func newKeyCli(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrPks []cryptoffi.PublicKey, servPk cryptoffi.PublicKey) *keyCli {
+func newClient(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrPks []cryptoffi.PublicKey, servPk cryptoffi.PublicKey) *client {
 	serv := urpc.MakeClient(servAddr)
 	var adtrs []*urpc.Client
 	for _, addr := range adtrAddrs {
 		adtrs = append(adtrs, urpc.MakeClient(addr))
 	}
-	digs := make(map[epochTy]merkle.Digest)
-	return &keyCli{adtrs: adtrs, adtrPks: adtrPks, servPk: servPk, digs: digs, id: id, serv: serv, myVals: &timeSeries{}}
+	digs := make(map[epochTy]*signedDig)
+	return &client{id: id, myVals: nil, digs: digs, adtrs: adtrs, adtrPks: adtrPks, serv: serv, servPk: servPk}
 }
 
+/*
 // TODO: what happens if client calls put twice in an epoch?
 func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
 	epoch, err := verCallPut(c.serv, c.servPk, c.id, val)
@@ -243,7 +280,9 @@ func (c *keyCli) put(val merkle.Val) (epochTy, errorTy) {
 	c.myVals.put(epoch, val)
 	return epoch, errNone
 }
+*/
 
+/*
 func (c *keyCli) get(id merkle.Id) (epochTy, merkle.Val, errorTy) {
 	reply := verCallGetIdLatest(c.serv, c.servPk, id)
 	if reply.error {
@@ -333,6 +372,7 @@ func (c *keyCli) checkProofWithExpected(epoch epochTy, expVal merkle.Val, expPro
 
 // selfAudit through Epoch idx exclusive.
 func (c *keyCli) selfAudit() epochTy {
+	// TODO: maybe ret err if audit fails during an epoch we know should exist.
 	var epoch epochTy
 	for {
 		expVal, expProofTy := c.myVals.get(epoch)
@@ -344,3 +384,4 @@ func (c *keyCli) selfAudit() epochTy {
 	}
 	return epoch
 }
+*/
