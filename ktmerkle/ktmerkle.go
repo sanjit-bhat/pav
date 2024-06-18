@@ -138,7 +138,7 @@ func (s *serv) put(id merkle.Id, val merkle.Val) (epochTy, cryptoffi.Sig, errorT
 
 	nextEpoch := uint64(len(s.trees))
 	_, _, err := s.nextTr.Put(id, val)
-	enc := (&servSigSepPut{epoch: nextEpoch, id: id, val: val}).encode()
+	enc := (&servSepPut{epoch: nextEpoch, id: id, val: val}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return nextEpoch, sig, err
@@ -154,7 +154,7 @@ func (s *serv) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
 	}
 	tr := s.trees[epoch]
 	reply := tr.Get(id)
-	enc := (&servSigSepDig{epoch: epoch, dig: reply.Digest}).encode()
+	enc := (&servSepDig{epoch: epoch, dig: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return &servGetIdAtReply{val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
@@ -165,7 +165,7 @@ func (s *serv) getIdNow(id merkle.Id) *servGetIdNowReply {
 	epoch := uint64(len(s.trees)) - 1
 	tr := s.trees[epoch]
 	reply := tr.Get(id)
-	enc := (&servSigSepDig{epoch: epoch, dig: reply.Digest}).encode()
+	enc := (&servSepDig{epoch: epoch, dig: reply.Digest}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return &servGetIdNowReply{epoch: epoch, val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
@@ -179,7 +179,7 @@ func (s *serv) getDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
 	}
 	tr := s.trees[epoch]
 	dig := tr.Digest()
-	enc := (&servSigSepDig{epoch: epoch, dig: dig}).encode()
+	enc := (&servSepDig{epoch: epoch, dig: dig}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return dig, sig, errNone
@@ -192,7 +192,7 @@ func (s *serv) getLink(epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
 		return nil, nil, errSome
 	}
 	ln := s.chain[epoch]
-	enc := (&servSigSepLink{epoch: epoch, link: ln}).encode()
+	enc := (&servSepLink{epoch: epoch, link: ln}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.mu.Unlock()
 	return ln, sig, errNone
@@ -227,7 +227,7 @@ func newAuditor(servPk cryptoffi.PublicKey) (*auditor, cryptoffi.PublicKey) {
 func (a *auditor) put(link linkTy, sig cryptoffi.Sig) errorTy {
 	a.mu.Lock()
 	epoch := uint64(len(a.log))
-	enc := (&servSigSepLink{epoch: epoch, link: link}).encode()
+	enc := (&servSepLink{epoch: epoch, link: link}).encode()
 	ok := cryptoffi.Verify(a.servPk, enc, sig)
 	if !ok {
 		return errSome
@@ -247,7 +247,7 @@ func (a *auditor) get(epoch epochTy) (linkTy, cryptoffi.Sig, cryptoffi.Sig, erro
 		return nil, nil, nil, errSome
 	}
 	entry := a.log[epoch]
-	enc := (&adtrSigSepLink{epoch: epoch, link: entry.link}).encode()
+	enc := (&adtrSepLink{epoch: epoch, link: entry.link}).encode()
 	sig := cryptoffi.Sign(a.sk, enc)
 	a.mu.Unlock()
 	return entry.link, entry.sig, sig, errNone
@@ -288,7 +288,7 @@ func (c *client) put(val merkle.Val) (epochTy, errorTy) {
 	if err {
 		return 0, err
 	}
-	enc := (&servSigSepPut{epoch: epoch, id: c.id, val: val}).encode()
+	enc := (&servSepPut{epoch: epoch, id: c.id, val: val}).encode()
 	ok := cryptoffi.Verify(c.servPk, enc, sig)
 	if !ok {
 		return 0, errSome
@@ -308,12 +308,12 @@ type evidServDig struct {
 
 // check returns an error if the evidence does not check out.
 func (e *evidServDig) check(servPk cryptoffi.PublicKey) errorTy {
-	enc0 := (&servSigSepDig{epoch: e.epoch, dig: e.dig0}).encode()
+	enc0 := (&servSepDig{epoch: e.epoch, dig: e.dig0}).encode()
 	ok0 := cryptoffi.Verify(servPk, enc0, e.sig0)
 	if !ok0 {
 		return errSome
 	}
-	enc1 := (&servSigSepDig{epoch: e.epoch, dig: e.dig1}).encode()
+	enc1 := (&servSepDig{epoch: e.epoch, dig: e.dig1}).encode()
 	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
 	if !ok1 {
 		return errSome
@@ -330,7 +330,7 @@ func (c *client) get(id merkle.Id) (epochTy, merkle.Val, *evidServDig, errorTy) 
 	if reply.error {
 		return 0, nil, nil, reply.error
 	}
-	enc := (&servSigSepDig{epoch: reply.epoch, dig: reply.digest}).encode()
+	enc := (&servSepDig{epoch: reply.epoch, dig: reply.digest}).encode()
 	ok := cryptoffi.Verify(c.servPk, enc, reply.sig)
 	if !ok {
 		return 0, nil, nil, errSome
@@ -356,7 +356,7 @@ func (c *client) getOrFillDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, erro
 	if err {
 		return nil, nil, errSome
 	}
-	enc := (&servSigSepDig{epoch: epoch, dig: dig}).encode()
+	enc := (&servSepDig{epoch: epoch, dig: dig}).encode()
 	ok := cryptoffi.Verify(c.servPk, enc, sig)
 	if !ok {
 		return nil, nil, errSome
@@ -393,7 +393,7 @@ func (e *evidServChain) check(servPk cryptoffi.PublicKey) errorTy {
 	for i := uint64(0); i < e.epoch; i++ {
 		dig := e.digs0[i]
 		sig := e.sigs0[i]
-		enc0 := (&servSigSepDig{epoch: i, dig: dig}).encode()
+		enc0 := (&servSepDig{epoch: i, dig: dig}).encode()
 		ok0 := cryptoffi.Verify(servPk, enc0, sig)
 		if !ok0 {
 			badSig = true
@@ -405,7 +405,7 @@ func (e *evidServChain) check(servPk cryptoffi.PublicKey) errorTy {
 	}
 	link := chain[uint64(len(chain))-1]
 
-	enc1 := (&servSigSepLink{epoch: e.epoch, link: e.link1}).encode()
+	enc1 := (&servSepLink{epoch: e.epoch, link: e.link1}).encode()
 	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
 	if !ok1 {
 		return errSome
@@ -447,13 +447,13 @@ func (c *client) audit(adtrId uint64) (epochTy, *evidServChain, errorTy) {
 	if err1 {
 		return 0, nil, err1
 	}
-	enc0 := (&adtrSigSepLink{epoch: lastEpoch, link: adtrLink}).encode()
+	enc0 := (&adtrSepLink{epoch: lastEpoch, link: adtrLink}).encode()
 	ok0 := cryptoffi.Verify(adtrPk, enc0, adtrSig)
 	// Adtr sig failed.
 	if !ok0 {
 		return 0, nil, errSome
 	}
-	enc1 := (&servSigSepLink{epoch: lastEpoch, link: adtrLink}).encode()
+	enc1 := (&servSepLink{epoch: lastEpoch, link: adtrLink}).encode()
 	ok1 := cryptoffi.Verify(c.servPk, enc1, servSig)
 	// Adtr should return valid server sig.
 	if !ok1 {
@@ -486,14 +486,14 @@ type evidServPut struct {
 
 func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
 	// Proof of signing the digest.
-	enc0 := (&servSigSepDig{epoch: e.epoch, dig: e.dig}).encode()
+	enc0 := (&servSepDig{epoch: e.epoch, dig: e.dig}).encode()
 	ok0 := cryptoffi.Verify(servPk, enc0, e.sigDig)
 	if !ok0 {
 		return errSome
 	}
 
 	// Proof of signing the put promise.
-	enc1 := (&servSigSepPut{epoch: e.epoch, id: e.id, val: e.val0}).encode()
+	enc1 := (&servSepPut{epoch: e.epoch, id: e.id, val: e.val0}).encode()
 	ok1 := cryptoffi.Verify(servPk, enc1, e.sigPut)
 	if !ok1 {
 		return errSome
@@ -517,7 +517,7 @@ func (c *client) selfAuditAt(epoch epochTy) (*evidServDig, *evidServPut, errorTy
 		return nil, nil, reply.error
 	}
 	// Server dig sig verifies.
-	enc0 := (&servSigSepDig{epoch: epoch, dig: reply.digest}).encode()
+	enc0 := (&servSepDig{epoch: epoch, dig: reply.digest}).encode()
 	ok0 := cryptoffi.Verify(c.servPk, enc0, reply.sig)
 	if !ok0 {
 		return nil, nil, errSome

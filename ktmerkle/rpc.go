@@ -8,7 +8,7 @@ import (
 // Sep structs are for domain separation.
 
 // rpc: no decode needed.
-type adtrSigSepLink struct {
+type adtrSepLink struct {
 	// rpc: invariant: const 0.
 	tag   byte
 	epoch epochTy
@@ -17,7 +17,15 @@ type adtrSigSepLink struct {
 }
 
 // rpc: no decode needed.
-type servSigSepDig struct {
+type servSepLink2 struct {
+	// rpc: invariant: const 0.
+	tag byte
+	// rpc: invariant: len 32.
+	link linkTy
+}
+
+// rpc: no decode needed.
+type servSepDig struct {
 	// rpc: invariant: const 0.
 	tag   byte
 	epoch epochTy
@@ -26,7 +34,7 @@ type servSigSepDig struct {
 }
 
 // rpc: no decode needed.
-type servSigSepLink struct {
+type servSepLink struct {
 	// rpc: invariant: const 1.
 	tag   byte
 	epoch epochTy
@@ -35,24 +43,13 @@ type servSigSepLink struct {
 }
 
 // rpc: no decode needed.
-type servSigSepPut struct {
+type servSepPut struct {
 	// rpc: invariant: const 2.
 	tag   byte
 	epoch epochTy
 	// rpc: invariant: len 32.
 	id  merkle.Id
 	val merkle.Val
-}
-
-type servRegArg struct {
-	// rpc: invariant: len 32.
-	id merkle.Id
-	// rpc: invariant: len 32.
-	pk cryptoffi.PublicKey
-}
-
-type servRegReply struct {
-	error errorTy
 }
 
 type servPutArg struct {
