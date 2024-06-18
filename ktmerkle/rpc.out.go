@@ -7,68 +7,40 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func (o *adtrSigSepLink) encode() []byte {
+func (o *adtrSepLink) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 0)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.link)
 	return b
 }
-func (o *servSigSepDig) encode() []byte {
+func (o *servSepLink2) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshalutil.WriteByte(b, 0)
+	b = marshal.WriteBytes(b, o.link)
+	return b
+}
+func (o *servSepDig) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 0)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.dig)
 	return b
 }
-func (o *servSigSepLink) encode() []byte {
+func (o *servSepLink) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 1)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.link)
 	return b
 }
-func (o *servSigSepPut) encode() []byte {
+func (o *servSepPut) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 2)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.id)
 	b = marshalutil.WriteSlice1D(b, o.val)
 	return b
-}
-func (o *servRegArg) encode() []byte {
-	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.id)
-	b = marshal.WriteBytes(b, o.pk)
-	return b
-}
-func (o *servRegArg) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	id, b, err := marshalutil.ReadBytes(b, 32)
-	if err {
-		return nil, err
-	}
-	pk, b, err := marshalutil.ReadBytes(b, 32)
-	if err {
-		return nil, err
-	}
-	o.id = id
-	o.pk = pk
-	return b, errNone
-}
-func (o *servRegReply) encode() []byte {
-	var b = make([]byte, 0)
-	b = marshalutil.WriteBool(b, o.error)
-	return b
-}
-func (o *servRegReply) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	error, b, err := marshalutil.ReadBool(b)
-	if err {
-		return nil, err
-	}
-	o.error = error
-	return b, errNone
 }
 func (o *servPutArg) encode() []byte {
 	var b = make([]byte, 0)
