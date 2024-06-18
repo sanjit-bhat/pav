@@ -90,11 +90,12 @@ func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool)
 /* Key server. */
 
 type serv struct {
-	sk     cryptoffi.PrivateKey
-	mu     *sync.Mutex
-	trees  []*merkle.Tree
-	nextTr *merkle.Tree
-	chain  hashChain
+	sk       cryptoffi.PrivateKey
+	mu       *sync.Mutex
+	trees    []*merkle.Tree
+	nextTr   *merkle.Tree
+	chain    hashChain
+	linkSigs []cryptoffi.Sig
 	// Whether an ID has been changed in the next epoch.
 	changed map[string]bool
 }
@@ -102,20 +103,35 @@ type serv struct {
 func newServ() (*serv, cryptoffi.PublicKey) {
 	sk, pk := cryptoffi.MakeKeys()
 	mu := new(sync.Mutex)
-	emptyTr := &merkle.Tree{}
-	trees := []*merkle.Tree{emptyTr}
 	nextTr := &merkle.Tree{}
 	changed := make(map[string]bool)
-	return &serv{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: nil, changed: changed}, pk
+
+	// epoch 0 is empty tree to avoid indexing out of bounds elsewhere.
+	emptyTr := &merkle.Tree{}
+	trees := []*merkle.Tree{emptyTr}
+	var chain hashChain
+	chain.put(emptyTr.Digest())
+	link := chain[0]
+	enc := (&servSepLink2{link: link}).encode()
+	sig := cryptoffi.Sign(sk, enc)
+	var sigs []cryptoffi.Sig
+	sigs = append(sigs, sig)
+
+	return &serv{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: chain, linkSigs: sigs, changed: changed}, pk
 }
 
 func (s *serv) updateEpoch() {
 	s.mu.Lock()
-	nextTr := s.nextTr
-	dig := nextTr.Digest()
+	commitTr := s.nextTr
+	s.nextTr = commitTr.DeepCopy()
+	s.trees = append(s.trees, commitTr)
+
+	dig := commitTr.Digest()
 	s.chain.put(dig)
-	s.trees = append(s.trees, nextTr)
-	s.nextTr = nextTr.DeepCopy()
+	link := s.chain[uint64(len(s.chain))-1]
+	enc := (&servSepLink2{link: link}).encode()
+	sig := cryptoffi.Sign(s.sk, enc)
+	s.linkSigs = append(s.linkSigs, sig)
 	s.changed = make(map[string]bool)
 	s.mu.Unlock()
 }
@@ -140,17 +156,16 @@ func (s *serv) put(id merkle.Id, val merkle.Val) (epochTy, cryptoffi.Sig, errorT
 }
 
 func (s *serv) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
+	s.mu.Lock()
 	errReply := &servGetIdAtReply{}
 	errReply.error = errSome
-	s.mu.Lock()
 	if epoch >= uint64(len(s.trees)) {
 		s.mu.Unlock()
 		return errReply
 	}
 	tr := s.trees[epoch]
 	reply := tr.Get(id)
-	enc := (&servSepDig{epoch: epoch, dig: reply.Digest}).encode()
-	sig := cryptoffi.Sign(s.sk, enc)
+	sig := s.linkSigs[epoch]
 	s.mu.Unlock()
 	return &servGetIdAtReply{val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
 }
@@ -160,8 +175,7 @@ func (s *serv) getIdNow(id merkle.Id) *servGetIdNowReply {
 	epoch := uint64(len(s.trees)) - 1
 	tr := s.trees[epoch]
 	reply := tr.Get(id)
-	enc := (&servSepDig{epoch: epoch, dig: reply.Digest}).encode()
-	sig := cryptoffi.Sign(s.sk, enc)
+	sig := s.linkSigs[epoch]
 	s.mu.Unlock()
 	return &servGetIdNowReply{epoch: epoch, val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
 }
@@ -187,8 +201,7 @@ func (s *serv) getLink(epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
 		return nil, nil, errSome
 	}
 	ln := s.chain[epoch]
-	enc := (&servSepLink{epoch: epoch, link: ln}).encode()
-	sig := cryptoffi.Sign(s.sk, enc)
+	sig := s.linkSigs[epoch]
 	s.mu.Unlock()
 	return ln, sig, errNone
 }
