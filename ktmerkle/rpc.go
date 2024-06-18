@@ -8,6 +8,22 @@ import (
 // Sep structs are for domain separation.
 
 // rpc: no decode needed.
+type chainSepNone struct {
+	// rpc: invariant: const 0.
+	tag byte
+}
+
+// rpc: no decode needed.
+type chainSepSome struct {
+	// rpc: invariant: const 1.
+	tag   byte
+	epoch epochTy
+	// rpc: invariant: len 32.
+	lastLink linkTy
+	data     []byte
+}
+
+// rpc: no decode needed.
 type adtrSepLink struct {
 	// rpc: invariant: const 0.
 	tag   byte

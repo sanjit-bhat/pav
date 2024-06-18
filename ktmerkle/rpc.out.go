@@ -7,6 +7,19 @@ import (
 	"github.com/tchajed/marshal"
 )
 
+func (o *chainSepNone) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshalutil.WriteByte(b, 0)
+	return b
+}
+func (o *chainSepSome) encode() []byte {
+	var b = make([]byte, 0)
+	b = marshalutil.WriteByte(b, 1)
+	b = marshal.WriteInt(b, o.epoch)
+	b = marshal.WriteBytes(b, o.lastLink)
+	b = marshalutil.WriteSlice1D(b, o.data)
+	return b
+}
 func (o *adtrSepLink) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 0)
