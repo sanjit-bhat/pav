@@ -5,7 +5,6 @@ import (
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
 	"sync"
 )
@@ -16,10 +15,8 @@ type errorTy = bool
 type okTy = bool
 
 const (
-	errNone      errorTy = false
-	errSome      errorTy = true
-	noneChainTag byte    = 0
-	someChainTag byte    = 1
+	errNone errorTy = false
+	errSome errorTy = true
 )
 
 // hashChain stores commitments to a series of data entries.
@@ -29,17 +26,15 @@ func (c *hashChain) put(data []byte) {
 	chain := *c
 	chainLen := uint64(len(chain))
 	if chainLen == 0 {
-		h := cryptoffi.Hash([]byte{noneChainTag})
+		enc := (&chainSepNone{}).encode()
+		h := cryptoffi.Hash(enc)
 		*c = append(chain, h)
 		return
 	}
 
 	lastLink := chain[chainLen-1]
-	var hr cryptoutil.Hasher
-	cryptoutil.HasherWrite(&hr, []byte{someChainTag})
-	cryptoutil.HasherWrite(&hr, lastLink)
-	cryptoutil.HasherWrite(&hr, data)
-	h := cryptoutil.HasherSum(hr, nil)
+	enc := (&chainSepSome{epoch: chainLen, lastLink: lastLink, data: data}).encode()
+	h := cryptoffi.Hash(enc)
 	*c = append(chain, h)
 }
 
