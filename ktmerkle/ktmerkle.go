@@ -416,83 +416,78 @@ func (c *client) get(id merkle.Id) (epochTy, merkle.Val, *evidServLink, errorTy)
 	return reply.epoch, reply.val, nil, errNone
 }
 
-/*
 func (c *client) fetchLink(epoch epochTy) (*evidServLink, errorTy) {
-    _, ok0 := c.links[epoch]
-    if ok0 {
-        return nil, errNone
-    }
-
-	origDig, ok0 := c.digs[epoch]
+	_, ok0 := c.links[epoch]
 	if ok0 {
-		return origDig.dig, origDig.sig, errNone
+		return nil, errNone
 	}
-	dig, sig, err := callServGetDig(c.serv, epoch)
-	if err {
-		return nil, nil, errSome
+	reply := callServGetLink(c.serv, epoch)
+	if reply.error {
+		return nil, reply.error
 	}
-	enc := (&servSepDig{epoch: epoch, dig: dig}).encode()
-	ok := cryptoffi.Verify(c.servPk, enc, sig)
-	if !ok {
-		return nil, nil, errSome
+	evid, err0 := c.addLink(epoch, reply.prevLink, reply.dig, reply.sig)
+	if err0 {
+		return evid, err0
 	}
-	c.digs[epoch] = &signedDig{dig: dig, sig: sig}
-	return dig, sig, errNone
+	return nil, errNone
 }
-*/
 
-/*
 // audit returns epoch idx (exclusive) thru which audit succeeded.
-func (c *client) audit(adtrId uint64) (epochTy, *evidServChain, errorTy) {
+// there could be lots of errors, but currently, we mainly
+// return an error if there's evidence.
+func (c *client) audit(adtrId uint64) (epochTy, *evidServLink, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
 	var epoch uint64
-	var chain hashChain
-	var digs []merkle.Digest
-	var sigs []cryptoffi.Sig
+	var evid *evidServLink
+	var err errorTy
 	for {
-		dig, sig, err0 := c.getOrFillDig(epoch)
-		if err0 {
+		evid, err = c.fetchLink(epoch)
+		if err {
 			break
 		}
-		chain.put(dig)
-		digs = append(digs, dig)
-		sigs = append(sigs, sig)
 		epoch++
 	}
 	if epoch == 0 {
 		return 0, nil, errSome
 	}
+	if evid != nil {
+		return 0, evid, err
+	}
 	lastEpoch := epoch - 1
-	myLink := chain[uint64(len(chain))-1]
+	lastLink := c.links[lastEpoch]
 
 	adtr := c.adtrs[adtrId]
 	adtrPk := c.adtrPks[adtrId]
-	adtrLink, servSig, adtrSig, err1 := callAdtrGet(adtr, lastEpoch)
-	if err1 {
-		return 0, nil, err1
+	reply := callAdtrGet(adtr, lastEpoch)
+	if reply.error {
+		return 0, nil, reply.error
 	}
-	enc0 := (&adtrSepLink{epoch: lastEpoch, link: adtrLink}).encode()
-	ok0 := cryptoffi.Verify(adtrPk, enc0, adtrSig)
-	// Adtr sig failed.
-	if !ok0 {
-		return 0, nil, errSome
-	}
-	enc1 := (&servSepLink{epoch: lastEpoch, link: adtrLink}).encode()
-	ok1 := cryptoffi.Verify(c.servPk, enc1, servSig)
-	// Adtr should return valid server sig.
-	if !ok1 {
+	preAdtrLink := (&chainSepSome{epoch: lastEpoch, prevLink: reply.prevLink, data: reply.dig}).encode()
+	adtrLink := cryptoffi.Hash(preAdtrLink)
+	preAdtrSig := (&adtrSepLink{link: adtrLink}).encode()
+	// Check adtr sig.
+	adtrOk := cryptoffi.Verify(adtrPk, preAdtrSig, reply.adtrSig)
+	if !adtrOk {
 		return 0, nil, errSome
 	}
 
-	// Serv lied to us about the chain.
-	if !std.BytesEqual(myLink, adtrLink) {
-		ev := &evidServChain{epoch: lastEpoch, digs0: digs, sigs0: sigs, link1: adtrLink, sig1: servSig}
-		return 0, ev, errSome
+	// Check serv sig.
+	preServSig := (&servSepLink{link: adtrLink}).encode()
+	servOk := cryptoffi.Verify(c.servPk, preServSig, reply.servSig)
+	if !servOk {
+		return 0, nil, errSome
+	}
+
+	// Check if our chain diverges from adtr.
+	if !std.BytesEqual(lastLink.link, adtrLink) {
+		evid := &evidServLink{epoch0: lastEpoch, prevLink0: lastLink.prevLink, dig0: lastLink.dig, sig0: lastLink.sig, epoch1: lastEpoch, prevLink1: reply.prevLink, dig1: reply.dig, sig1: reply.servSig}
+		return 0, evid, errSome
 	}
 	return epoch, nil, errNone
 }
 
+/*
 // evidServPut is evidence when a server promises to put a value at a certain
 // epoch but actually there's a different value.
 type evidServPut struct {
