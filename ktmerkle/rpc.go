@@ -19,21 +19,12 @@ type chainSepSome struct {
 	tag   byte
 	epoch epochTy
 	// rpc: invariant: len 32.
-	lastLink linkTy
+	prevLink linkTy
 	data     []byte
 }
 
 // rpc: no decode needed.
 type adtrSepLink struct {
-	// rpc: invariant: const 0.
-	tag   byte
-	epoch epochTy
-	// rpc: invariant: len 32.
-	link linkTy
-}
-
-// rpc: no decode needed.
-type servSepLink2 struct {
 	// rpc: invariant: const 0.
 	tag byte
 	// rpc: invariant: len 32.
@@ -41,19 +32,9 @@ type servSepLink2 struct {
 }
 
 // rpc: no decode needed.
-type servSepDig struct {
-	// rpc: invariant: const 0.
-	tag   byte
-	epoch epochTy
-	// rpc: invariant: len 32.
-	dig merkle.Digest
-}
-
-// rpc: no decode needed.
 type servSepLink struct {
-	// rpc: invariant: const 1.
-	tag   byte
-	epoch epochTy
+	// rpc: invariant: const 0.
+	tag byte
 	// rpc: invariant: len 32.
 	link linkTy
 }
@@ -75,10 +56,16 @@ type servPutArg struct {
 }
 
 type servPutReply struct {
-	epoch epochTy
+	putEpoch epochTy
+	// rpc: invariant: len 32.
+	prev2Link linkTy
+	// rpc: invariant: len 32.
+	prevDig merkle.Digest
 	// rpc: invariant: len 64.
-	sig   cryptoffi.Sig
-	error errorTy
+	linkSig cryptoffi.Sig
+	// rpc: invariant: len 64.
+	putSig cryptoffi.Sig
+	error  errorTy
 }
 
 type servGetIdAtArg struct {
@@ -88,14 +75,16 @@ type servGetIdAtArg struct {
 }
 
 type servGetIdAtReply struct {
-	val merkle.Val
 	// rpc: invariant: len 32.
-	digest  merkle.Digest
+	prevLink linkTy
+	// rpc: invariant: len 32.
+	dig merkle.Digest
+	// rpc: invariant: len 64.
+	sig     cryptoffi.Sig
+	val     merkle.Val
 	proofTy merkle.ProofTy
 	proof   merkle.Proof
-	// rpc: invariant: len 64.
-	sig   cryptoffi.Sig
-	error errorTy
+	error   errorTy
 }
 
 type servGetIdNowArg struct {
@@ -105,26 +94,16 @@ type servGetIdNowArg struct {
 
 type servGetIdNowReply struct {
 	epoch epochTy
-	val   merkle.Val
 	// rpc: invariant: len 32.
-	digest  merkle.Digest
+	prevLink linkTy
+	// rpc: invariant: len 32.
+	dig merkle.Digest
+	// rpc: invariant: len 64.
+	sig     cryptoffi.Sig
+	val     merkle.Val
 	proofTy merkle.ProofTy
 	proof   merkle.Proof
-	// rpc: invariant: len 64.
-	sig   cryptoffi.Sig
-	error errorTy
-}
-
-type servGetDigArg struct {
-	epoch epochTy
-}
-
-type servGetDigReply struct {
-	// rpc: invariant: len 32.
-	digest merkle.Digest
-	// rpc: invariant: len 64.
-	sig   cryptoffi.Sig
-	error errorTy
+	error   errorTy
 }
 
 type servGetLinkArg struct {
@@ -133,7 +112,9 @@ type servGetLinkArg struct {
 
 type servGetLinkReply struct {
 	// rpc: invariant: len 32.
-	link linkTy
+	prevLink linkTy
+	// rpc: invariant: len 32.
+	dig merkle.Digest
 	// rpc: invariant: len 64.
 	sig   cryptoffi.Sig
 	error errorTy
@@ -141,9 +122,11 @@ type servGetLinkReply struct {
 
 type adtrPutArg struct {
 	// rpc: invariant: len 32.
-	link linkTy
+	prevLink linkTy
+	// rpc: invariant: len 32.
+	dig merkle.Digest
 	// rpc: invariant: len 64.
-	sig cryptoffi.Sig
+	servSig cryptoffi.Sig
 }
 
 type adtrPutReply struct {
@@ -156,7 +139,9 @@ type adtrGetArg struct {
 
 type adtrGetReply struct {
 	// rpc: invariant: len 32.
-	link linkTy
+	prevLink linkTy
+	// rpc: invariant: len 32.
+	dig merkle.Digest
 	// rpc: invariant: len 64.
 	servSig cryptoffi.Sig
 	// rpc: invariant: len 64.
