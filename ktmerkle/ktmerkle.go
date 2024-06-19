@@ -92,7 +92,7 @@ func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool)
 	return latest, init, sig, boundary
 }
 
-/* Key server. */
+// KT server.
 
 type serv struct {
 	sk       cryptoffi.PrivateKey
@@ -211,7 +211,7 @@ func (s *serv) getLink(epoch epochTy) *servGetLinkReply {
 	return &servGetLinkReply{prevLink: prevLink, dig: dig, sig: sig, error: errNone}
 }
 
-/* auditor */
+// KT auditor.
 
 type adtrSigLink struct {
 	prevLink linkTy
@@ -270,7 +270,7 @@ func (a *auditor) get(epoch epochTy) *adtrGetReply {
 	return &adtrGetReply{prevLink: entry.prevLink, dig: entry.dig, servSig: entry.servSig, adtrSig: entry.adtrSig, error: errNone}
 }
 
-/* Key client. */
+// KT client.
 
 type cliSigLink struct {
 	prevLink linkTy
@@ -390,73 +390,26 @@ func (c *client) put(val merkle.Val) (epochTy, *evidServLink, errorTy) {
 	return reply.putEpoch, nil, errNone
 }
 
-/*
-func (c *client) put(val merkle.Val) (epochTy, errorTy) {
-	// call rpc, check the server putpromise sig,
-	// store it for later in the timeSeries.
-	epoch, sig, err := callServPut(c.serv, c.id, val)
-	if err {
-		return 0, err
-	}
-	enc := (&servSepPut{epoch: epoch, id: c.id, val: val}).encode()
-	ok := cryptoffi.Verify(c.servPk, enc, sig)
-	if !ok {
-		return 0, errSome
-	}
-	c.myVals.put(epoch, val, sig)
-	return epoch, errNone
-}
-
-// evidServDig is evidence that the server signed two diff digs for the same epoch.
-type evidServDig struct {
-	epoch epochTy
-	dig0  merkle.Digest
-	sig0  cryptoffi.Sig
-	dig1  merkle.Digest
-	sig1  cryptoffi.Sig
-}
-
-// check returns an error if the evidence does not check out.
-func (e *evidServDig) check(servPk cryptoffi.PublicKey) errorTy {
-	enc0 := (&servSepDig{epoch: e.epoch, dig: e.dig0}).encode()
-	ok0 := cryptoffi.Verify(servPk, enc0, e.sig0)
-	if !ok0 {
-		return errSome
-	}
-	enc1 := (&servSepDig{epoch: e.epoch, dig: e.dig1}).encode()
-	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
-	if !ok1 {
-		return errSome
-	}
-	if std.BytesEqual(e.dig0, e.dig1) {
-		return errSome
-	}
-	return errNone
-}
-
-// get returns an evidence object and error if irrefutable evidence is found.
-func (c *client) get(id merkle.Id) (epochTy, merkle.Val, *evidServDig, errorTy) {
+// get fetches the latest key for a particular id.
+func (c *client) get(id merkle.Id) (epochTy, merkle.Val, *evidServLink, errorTy) {
 	reply := callServGetIdNow(c.serv, id)
 	if reply.error {
 		return 0, nil, nil, reply.error
 	}
-	enc := (&servSepDig{epoch: reply.epoch, dig: reply.digest}).encode()
-	ok := cryptoffi.Verify(c.servPk, enc, reply.sig)
-	if !ok {
-		return 0, nil, nil, errSome
+
+	err0 := merkle.CheckProof(reply.proofTy, reply.proof, id, reply.val, reply.dig)
+	if err0 {
+		return 0, nil, nil, err0
 	}
 
-	origDig, ok := c.digs[reply.epoch]
-	if ok && !std.BytesEqual(origDig.dig, reply.digest) {
-		ev := &evidServDig{epoch: reply.epoch, dig0: origDig.dig, sig0: origDig.sig, dig1: reply.digest, sig1: reply.sig}
-		return 0, nil, ev, errSome
-	}
-	if !ok {
-		c.digs[reply.epoch] = &signedDig{dig: reply.digest, sig: reply.sig}
+	evid, err1 := c.fillSigLink(reply.epoch, reply.prevLink, reply.dig, reply.sig)
+	if err1 {
+		return 0, nil, evid, err1
 	}
 	return reply.epoch, reply.val, nil, errNone
 }
 
+/*
 func (c *client) getOrFillDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
 	origDig, ok0 := c.digs[epoch]
 	if ok0 {
