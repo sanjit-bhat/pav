@@ -19,7 +19,7 @@ const (
 	rpcAdtrGet         uint64 = 8
 )
 
-func callServPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (epochTy, cryptoffi.Sig, errorTy) {
+func callServPut(cli *urpc.Client, id merkle.Id, val merkle.Val) *servPutReply {
 	argB := (&servPutArg{id: id, val: val}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcServPut, argB, &replyB, 100)
@@ -27,9 +27,11 @@ func callServPut(cli *urpc.Client, id merkle.Id, val merkle.Val) (epochTy, crypt
 	reply := &servPutReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
-		return 0, nil, err1
+		errReply := &servPutReply{}
+		errReply.error = err1
+		return errReply
 	}
-	return reply.epoch, reply.sig, reply.error
+	return reply
 }
 
 func callServGetIdAt(cli *urpc.Client, id merkle.Id, epoch epochTy) *servGetIdAtReply {
@@ -40,7 +42,9 @@ func callServGetIdAt(cli *urpc.Client, id merkle.Id, epoch epochTy) *servGetIdAt
 	reply := &servGetIdAtReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
-		return &servGetIdAtReply{error: errSome}
+		errReply := &servGetIdAtReply{}
+		errReply.error = err1
+		return errReply
 	}
 	return reply
 }
@@ -53,25 +57,14 @@ func callServGetIdNow(cli *urpc.Client, id merkle.Id) *servGetIdNowReply {
 	reply := &servGetIdNowReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
-		return &servGetIdNowReply{error: errSome}
+		errReply := &servGetIdNowReply{}
+		errReply.error = err1
+		return errReply
 	}
 	return reply
 }
 
-func callServGetDig(cli *urpc.Client, epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
-	argB := (&servGetDigArg{epoch: epoch}).encode()
-	replyB := make([]byte, 0)
-	err0 := cli.Call(rpcServGetDig, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
-	reply := &servGetDigReply{}
-	_, err1 := reply.decode(replyB)
-	if err1 {
-		return nil, nil, err1
-	}
-	return reply.digest, reply.sig, reply.error
-}
-
-func callServGetLink(cli *urpc.Client, epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
+func callServGetLink(cli *urpc.Client, epoch epochTy) *servGetLinkReply {
 	argB := (&servGetLinkArg{epoch: epoch}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcServGetLink, argB, &replyB, 100)
@@ -79,35 +72,11 @@ func callServGetLink(cli *urpc.Client, epoch epochTy) (linkTy, cryptoffi.Sig, er
 	reply := &servGetLinkReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
-		return nil, nil, err1
+		errReply := &servGetLinkReply{}
+		errReply.error = err1
+		return errReply
 	}
-	return reply.link, reply.sig, reply.error
-}
-
-func callAdtrPut(cli *urpc.Client, link linkTy, sig cryptoffi.Sig) errorTy {
-	argB := (&adtrPutArg{link: link, sig: sig}).encode()
-	replyB := make([]byte, 0)
-	err0 := cli.Call(rpcAdtrPut, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
-	reply := &adtrPutReply{}
-	_, err1 := reply.decode(replyB)
-	if err1 {
-		return err1
-	}
-	return reply.error
-}
-
-func callAdtrGet(cli *urpc.Client, epoch epochTy) (linkTy, cryptoffi.Sig, cryptoffi.Sig, errorTy) {
-	argB := (&adtrGetArg{epoch: epoch}).encode()
-	replyB := make([]byte, 0)
-	err0 := cli.Call(rpcAdtrGet, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
-	reply := &adtrGetReply{}
-	_, err1 := reply.decode(replyB)
-	if err1 {
-		return nil, nil, nil, err1
-	}
-	return reply.link, reply.servSig, reply.adtrSig, reply.error
+	return reply
 }
 
 func (s *serv) start(addr grove_ffi.Address) {
@@ -128,8 +97,7 @@ func (s *serv) start(addr grove_ffi.Address) {
 				*enc_reply = reply.encode()
 				return
 			}
-			epoch, sig, err1 := s.put(args.id, args.val)
-			*enc_reply = (&servPutReply{epoch: epoch, sig: sig, error: err1}).encode()
+			*enc_reply = s.put(args.id, args.val).encode()
 		}
 
 	handlers[rpcServGetIdAt] =
@@ -142,8 +110,7 @@ func (s *serv) start(addr grove_ffi.Address) {
 				*enc_reply = reply.encode()
 				return
 			}
-			reply := s.getIdAt(args.id, args.epoch)
-			*enc_reply = reply.encode()
+			*enc_reply = s.getIdAt(args.id, args.epoch).encode()
 		}
 
 	handlers[rpcServGetIdNow] =
@@ -156,22 +123,7 @@ func (s *serv) start(addr grove_ffi.Address) {
 				*enc_reply = reply.encode()
 				return
 			}
-			reply := s.getIdNow(args.id)
-			*enc_reply = reply.encode()
-		}
-
-	handlers[rpcServGetDig] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			args := &servGetDigArg{}
-			_, err0 := args.decode(enc_args)
-			if err0 {
-				reply := &servGetDigReply{}
-				reply.error = errSome
-				*enc_reply = reply.encode()
-				return
-			}
-			dig, sig, err1 := s.getDig(args.epoch)
-			*enc_reply = (&servGetDigReply{digest: dig, sig: sig, error: err1}).encode()
+			*enc_reply = s.getIdNow(args.id).encode()
 		}
 
 	handlers[rpcServGetLink] =
@@ -184,11 +136,38 @@ func (s *serv) start(addr grove_ffi.Address) {
 				*enc_reply = reply.encode()
 				return
 			}
-			link, sig, err1 := s.getLink(args.epoch)
-			*enc_reply = (&servGetLinkReply{link: link, sig: sig, error: err1}).encode()
+			*enc_reply = s.getLink(args.epoch).encode()
 		}
 
 	urpc.MakeServer(handlers).Serve(addr)
+}
+
+func callAdtrPut(cli *urpc.Client, prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig) errorTy {
+	argB := (&adtrPutArg{prevLink: prevLink, dig: dig, servSig: servSig}).encode()
+	replyB := make([]byte, 0)
+	err0 := cli.Call(rpcAdtrPut, argB, &replyB, 100)
+	machine.Assume(err0 == urpc.ErrNone)
+	reply := &adtrPutReply{}
+	_, err1 := reply.decode(replyB)
+	if err1 {
+		return err1
+	}
+	return reply.error
+}
+
+func callAdtrGet(cli *urpc.Client, epoch epochTy) *adtrGetReply {
+	argB := (&adtrGetArg{epoch: epoch}).encode()
+	replyB := make([]byte, 0)
+	err0 := cli.Call(rpcAdtrGet, argB, &replyB, 100)
+	machine.Assume(err0 == urpc.ErrNone)
+	reply := &adtrGetReply{}
+	_, err1 := reply.decode(replyB)
+	if err1 {
+		errReply := &adtrGetReply{}
+		errReply.error = err1
+		return errReply
+	}
+	return reply
 }
 
 func (a *auditor) start(addr grove_ffi.Address) {
@@ -204,7 +183,7 @@ func (a *auditor) start(addr grove_ffi.Address) {
 				*enc_reply = reply.encode()
 				return
 			}
-			err1 := a.put(args.link, args.sig)
+			err1 := a.put(args.prevLink, args.dig, args.servSig)
 			*enc_reply = (&adtrPutReply{error: err1}).encode()
 		}
 
@@ -218,8 +197,7 @@ func (a *auditor) start(addr grove_ffi.Address) {
 				*enc_reply = reply.encode()
 				return
 			}
-			link, servSig, adtrSig, err1 := a.get(args.epoch)
-			*enc_reply = (&adtrGetReply{link: link, servSig: servSig, adtrSig: adtrSig, error: err1}).encode()
+			*enc_reply = a.get(args.epoch).encode()
 		}
 
 	urpc.MakeServer(handlers).Serve(addr)

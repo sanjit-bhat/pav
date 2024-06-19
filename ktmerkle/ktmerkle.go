@@ -19,23 +19,28 @@ const (
 	errSome errorTy = true
 )
 
-// hashChain stores commitments to a series of data entries.
+// hashChain supports fast commitments to prefixes of a list.
 type hashChain []linkTy
+
+func newHashChain() hashChain {
+	enc := (&chainSepNone{}).encode()
+	h := cryptoffi.Hash(enc)
+	var c hashChain
+	c = append(c, h)
+	return c
+}
 
 func (c *hashChain) put(data []byte) {
 	chain := *c
 	chainLen := uint64(len(chain))
-	if chainLen == 0 {
-		enc := (&chainSepNone{}).encode()
-		h := cryptoffi.Hash(enc)
-		*c = append(chain, h)
-		return
-	}
-
-	lastLink := chain[chainLen-1]
-	enc := (&chainSepSome{epoch: chainLen, lastLink: lastLink, data: data}).encode()
+	prevLink := chain[chainLen-1]
+	enc := (&chainSepSome{epoch: chainLen - 1, prevLink: prevLink, data: data}).encode()
 	h := cryptoffi.Hash(enc)
 	*c = append(chain, h)
+}
+
+func (c hashChain) getCommit(length uint64) linkTy {
+	return c[length]
 }
 
 type timeEntry struct {
@@ -106,17 +111,16 @@ func newServ() (*serv, cryptoffi.PublicKey) {
 	nextTr := &merkle.Tree{}
 	changed := make(map[string]bool)
 
-	// epoch 0 is empty tree to avoid indexing out of bounds elsewhere.
+	// epoch 0 is empty tree so we can serve early get reqs.
 	emptyTr := &merkle.Tree{}
 	trees := []*merkle.Tree{emptyTr}
-	var chain hashChain
+	chain := newHashChain()
 	chain.put(emptyTr.Digest())
-	link := chain[0]
-	enc := (&servSepLink2{link: link}).encode()
+	link := chain.getCommit(1)
+	enc := (&servSepLink{link: link}).encode()
 	sig := cryptoffi.Sign(sk, enc)
 	var sigs []cryptoffi.Sig
 	sigs = append(sigs, sig)
-
 	return &serv{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: chain, linkSigs: sigs, changed: changed}, pk
 }
 
@@ -125,34 +129,46 @@ func (s *serv) updateEpoch() {
 	commitTr := s.nextTr
 	s.nextTr = commitTr.DeepCopy()
 	s.trees = append(s.trees, commitTr)
+	numTrees := uint64(len(s.trees))
+	s.changed = make(map[string]bool)
 
 	dig := commitTr.Digest()
 	s.chain.put(dig)
-	link := s.chain[uint64(len(s.chain))-1]
-	enc := (&servSepLink2{link: link}).encode()
+	link := s.chain.getCommit(numTrees)
+	enc := (&servSepLink{link: link}).encode()
 	sig := cryptoffi.Sign(s.sk, enc)
 	s.linkSigs = append(s.linkSigs, sig)
-	s.changed = make(map[string]bool)
 	s.mu.Unlock()
 }
 
-// put returns the epoch at which this val should be visible.
-func (s *serv) put(id merkle.Id, val merkle.Val) (epochTy, cryptoffi.Sig, errorTy) {
+// put schedules a put to be committed at the next epoch update.
+func (s *serv) put(id merkle.Id, val merkle.Val) *servPutReply {
 	s.mu.Lock()
+	errReply := &servPutReply{}
+	errReply.error = errSome
+
 	idS := string(id)
 	changed, ok := s.changed[idS]
 	if ok && changed {
 		s.mu.Unlock()
-		return 0, nil, errSome
+		return errReply
 	}
 	s.changed[idS] = true
-
-	nextEpoch := uint64(len(s.trees))
 	_, _, err := s.nextTr.Put(id, val)
-	enc := (&servSepPut{epoch: nextEpoch, id: id, val: val}).encode()
-	sig := cryptoffi.Sign(s.sk, enc)
+	if err {
+		s.mu.Unlock()
+		return errReply
+	}
+
+	currEpoch := uint64(len(s.trees)) - 1
+	prev2Link := s.chain.getCommit(currEpoch)
+	prevDig := s.trees[currEpoch].Digest()
+	linkSig := s.linkSigs[currEpoch]
+
+	putPre := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
+	putSig := cryptoffi.Sign(s.sk, putPre)
 	s.mu.Unlock()
-	return nextEpoch, sig, err
+	return &servPutReply{putEpoch: currEpoch + 1, prev2Link: prev2Link, prevDig: prevDig, linkSig: linkSig, putSig: putSig, error: errNone}
 }
 
 func (s *serv) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
@@ -163,55 +179,45 @@ func (s *serv) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
 		s.mu.Unlock()
 		return errReply
 	}
-	tr := s.trees[epoch]
-	reply := tr.Get(id)
+	prevLink := s.chain.getCommit(epoch)
 	sig := s.linkSigs[epoch]
+	reply := s.trees[epoch].Get(id)
 	s.mu.Unlock()
-	return &servGetIdAtReply{val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
+	return &servGetIdAtReply{prevLink: prevLink, dig: reply.Digest, sig: sig, val: reply.Val, proofTy: reply.ProofTy, proof: reply.Proof, error: reply.Error}
 }
 
 func (s *serv) getIdNow(id merkle.Id) *servGetIdNowReply {
 	s.mu.Lock()
 	epoch := uint64(len(s.trees)) - 1
-	tr := s.trees[epoch]
-	reply := tr.Get(id)
+	prevLink := s.chain.getCommit(epoch)
 	sig := s.linkSigs[epoch]
+	reply := s.trees[epoch].Get(id)
 	s.mu.Unlock()
-	return &servGetIdNowReply{epoch: epoch, val: reply.Val, digest: reply.Digest, proofTy: reply.ProofTy, proof: reply.Proof, sig: sig, error: reply.Error}
+	return &servGetIdNowReply{epoch: epoch, prevLink: prevLink, dig: reply.Digest, sig: sig, val: reply.Val, proofTy: reply.ProofTy, proof: reply.Proof, error: reply.Error}
 }
 
-func (s *serv) getDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
+func (s *serv) getLink(epoch epochTy) *servGetLinkReply {
 	s.mu.Lock()
 	if epoch >= uint64(len(s.trees)) {
+		errReply := &servGetLinkReply{}
+		errReply.error = errSome
 		s.mu.Unlock()
-		return nil, nil, errSome
+		return errReply
 	}
-	tr := s.trees[epoch]
-	dig := tr.Digest()
-	enc := (&servSepDig{epoch: epoch, dig: dig}).encode()
-	sig := cryptoffi.Sign(s.sk, enc)
-	s.mu.Unlock()
-	return dig, sig, errNone
-}
-
-func (s *serv) getLink(epoch epochTy) (linkTy, cryptoffi.Sig, errorTy) {
-	s.mu.Lock()
-	if epoch >= uint64(len(s.chain)) {
-		s.mu.Unlock()
-		return nil, nil, errSome
-	}
-	ln := s.chain[epoch]
+	prevLink := s.chain.getCommit(epoch)
+	dig := s.trees[epoch].Digest()
 	sig := s.linkSigs[epoch]
 	s.mu.Unlock()
-	return ln, sig, errNone
+	return &servGetLinkReply{prevLink: prevLink, dig: dig, sig: sig, error: errNone}
 }
 
 /* auditor */
 
 type signedLink struct {
-	link linkTy
-	// Type servSigSepLink.
-	sig cryptoffi.Sig
+	prevLink linkTy
+	dig      merkle.Digest
+	servSig  cryptoffi.Sig
+	adtrSig  cryptoffi.Sig
 }
 
 // auditor is an append-only log of server signed links.
@@ -225,44 +231,48 @@ type auditor struct {
 
 func newAuditor(servPk cryptoffi.PublicKey) (*auditor, cryptoffi.PublicKey) {
 	sk, pk := cryptoffi.MakeKeys()
-	return &auditor{mu: new(sync.Mutex), sk: sk, servPk: servPk}, pk
+	return &auditor{mu: new(sync.Mutex), sk: sk, servPk: servPk, log: nil}, pk
 }
 
 // put adds a link to the log. it's unspecified how this gets called.
 // but we need to verify the sig / epoch to prove correctness under
 // an honest server and auditor.
-// sig type: servSigSepLink.
-func (a *auditor) put(link linkTy, sig cryptoffi.Sig) errorTy {
+func (a *auditor) put(prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig) errorTy {
 	a.mu.Lock()
 	epoch := uint64(len(a.log))
-	enc := (&servSepLink{epoch: epoch, link: link}).encode()
-	ok := cryptoffi.Verify(a.servPk, enc, sig)
+	linkSep := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
+	link := cryptoffi.Hash(linkSep)
+	servSep := (&servSepLink{link: link}).encode()
+	ok := cryptoffi.Verify(a.servPk, servSep, servSig)
 	if !ok {
 		return errSome
 	}
 
-	entry := &signedLink{link: link, sig: sig}
+	adtrSep := (&adtrSepLink{link: link}).encode()
+	adtrSig := cryptoffi.Sign(a.sk, adtrSep)
+	entry := &signedLink{prevLink: prevLink, dig: dig, servSig: servSig, adtrSig: adtrSig}
 	a.log = append(a.log, entry)
 	a.mu.Unlock()
 	return errNone
 }
 
-// get returns 1) sig type: servSigSepLink, 2) sig type: adtrSigSepLink.
-func (a *auditor) get(epoch epochTy) (linkTy, cryptoffi.Sig, cryptoffi.Sig, errorTy) {
+// get returns the signed link at a particular epoch.
+func (a *auditor) get(epoch epochTy) *adtrGetReply {
 	a.mu.Lock()
 	if epoch >= uint64(len(a.log)) {
+		errReply := &adtrGetReply{}
+		errReply.error = errSome
 		a.mu.Unlock()
-		return nil, nil, nil, errSome
+		return errReply
 	}
 	entry := a.log[epoch]
-	enc := (&adtrSepLink{epoch: epoch, link: entry.link}).encode()
-	sig := cryptoffi.Sign(a.sk, enc)
 	a.mu.Unlock()
-	return entry.link, entry.sig, sig, errNone
+	return &adtrGetReply{prevLink: entry.prevLink, dig: entry.dig, servSig: entry.servSig, adtrSig: entry.adtrSig, error: errNone}
 }
 
 /* Key client. */
 
+/*
 type signedDig struct {
 	dig merkle.Digest
 	// Type: servSigSepDig.
@@ -580,3 +590,4 @@ func (c *client) selfAudit() (epochTy, *evidServDig, *evidServPut, errorTy) {
 	}
 	return epoch, evidDig, evidPut, err
 }
+*/
