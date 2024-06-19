@@ -282,7 +282,7 @@ type cliSigLink struct {
 type client struct {
 	id      merkle.Id
 	myVals  timeSeries
-	digs    map[epochTy]*cliSigLink
+	links   map[epochTy]*cliSigLink
 	adtrs   []*urpc.Client
 	adtrPks []cryptoffi.PublicKey
 	serv    *urpc.Client
@@ -296,7 +296,7 @@ func newClient(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.A
 		adtrs = append(adtrs, urpc.MakeClient(addr))
 	}
 	digs := make(map[epochTy]*cliSigLink)
-	return &client{id: id, myVals: nil, digs: digs, adtrs: adtrs, adtrPks: adtrPks, serv: serv, servPk: servPk}
+	return &client{id: id, myVals: nil, links: digs, adtrs: adtrs, adtrPks: adtrPks, serv: serv, servPk: servPk}
 }
 
 // evidServLink is evidence that the server signed two conflicting links,
@@ -339,7 +339,7 @@ func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
 	return errSome
 }
 
-func (c *client) fillSigLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig cryptoffi.Sig) (*evidServLink, errorTy) {
+func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig cryptoffi.Sig) (*evidServLink, errorTy) {
 	link := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
 	// Check that link sig verifies.
 	preSig := (&servSepLink{link: link}).encode()
@@ -348,24 +348,31 @@ func (c *client) fillSigLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, 
 		return nil, errSome
 	}
 
-	// Check if link already exists.
-	cachedLink, ok1 := c.digs[epoch]
+	// Check if epoch already exists.
+	cachedLink, ok1 := c.links[epoch]
 	if ok1 && !std.BytesEqual(cachedLink.link, link) {
 		evid := &evidServLink{epoch0: epoch, prevLink0: cachedLink.prevLink, dig0: cachedLink.dig, sig0: cachedLink.sig, epoch1: epoch, prevLink1: prevLink, dig1: dig, sig1: sig}
 		return evid, errSome
 	}
 
-	// Check if prevLink already exists.
+	// Check if epoch-1 already exists.
 	if epoch != 0 {
-		cachedPrevLink, ok2 := c.digs[epoch-1]
+		cachedPrevLink, ok2 := c.links[epoch-1]
 		if ok2 && !std.BytesEqual(cachedPrevLink.link, prevLink) {
 			evid := &evidServLink{epoch0: epoch - 1, prevLink0: cachedPrevLink.prevLink, dig0: cachedPrevLink.dig, sig0: cachedPrevLink.sig, epoch1: epoch, prevLink1: prevLink, dig1: dig, sig1: sig}
 			return evid, errSome
 		}
 	}
 
+	// Check if epoch+1 already exists.
+	cachedNextLink, ok3 := c.links[epoch+1]
+	if ok3 && !std.BytesEqual(link, cachedNextLink.prevLink) {
+		evid := &evidServLink{epoch0: epoch, prevLink0: link, dig0: dig, sig0: sig, epoch1: epoch + 1, prevLink1: cachedNextLink.prevLink, dig1: cachedNextLink.dig, sig1: cachedNextLink.sig}
+		return evid, errSome
+	}
+
 	if !ok1 {
-		c.digs[epoch] = &cliSigLink{prevLink: prevLink, dig: dig, sig: sig, link: link}
+		c.links[epoch] = &cliSigLink{prevLink: prevLink, dig: dig, sig: sig, link: link}
 	}
 	return nil, errNone
 }
@@ -376,7 +383,7 @@ func (c *client) put(val merkle.Val) (epochTy, *evidServLink, errorTy) {
 		return 0, nil, reply.error
 	}
 
-	evid, err0 := c.fillSigLink(reply.putEpoch-1, reply.prev2Link, reply.prevDig, reply.linkSig)
+	evid, err0 := c.addLink(reply.putEpoch-1, reply.prev2Link, reply.prevDig, reply.linkSig)
 	if err0 {
 		return 0, evid, err0
 	}
@@ -402,7 +409,7 @@ func (c *client) get(id merkle.Id) (epochTy, merkle.Val, *evidServLink, errorTy)
 		return 0, nil, nil, err0
 	}
 
-	evid, err1 := c.fillSigLink(reply.epoch, reply.prevLink, reply.dig, reply.sig)
+	evid, err1 := c.addLink(reply.epoch, reply.prevLink, reply.dig, reply.sig)
 	if err1 {
 		return 0, nil, evid, err1
 	}
@@ -410,7 +417,12 @@ func (c *client) get(id merkle.Id) (epochTy, merkle.Val, *evidServLink, errorTy)
 }
 
 /*
-func (c *client) getOrFillDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, errorTy) {
+func (c *client) fetchLink(epoch epochTy) (*evidServLink, errorTy) {
+    _, ok0 := c.links[epoch]
+    if ok0 {
+        return nil, errNone
+    }
+
 	origDig, ok0 := c.digs[epoch]
 	if ok0 {
 		return origDig.dig, origDig.sig, errNone
@@ -427,59 +439,9 @@ func (c *client) getOrFillDig(epoch epochTy) (merkle.Digest, cryptoffi.Sig, erro
 	c.digs[epoch] = &signedDig{dig: dig, sig: sig}
 	return dig, sig, errNone
 }
+*/
 
-// evidServChain is evidence that the server signed two diff chains.
-type evidServChain struct {
-	epoch epochTy
-	digs0 []merkle.Digest
-	sigs0 []cryptoffi.Sig
-	link1 linkTy
-	sig1  cryptoffi.Sig
-}
-
-// check returns an error if the evidence does not check out.
-func (e *evidServChain) check(servPk cryptoffi.PublicKey) errorTy {
-	if e.epoch == 0 {
-		return errSome
-	}
-	digsLen := uint64(len(e.digs0))
-	sigsLen := uint64(len(e.sigs0))
-	if digsLen != sigsLen {
-		return errSome
-	}
-	if digsLen != e.epoch {
-		return errSome
-	}
-
-	var badSig bool
-	var chain hashChain
-	for i := uint64(0); i < e.epoch; i++ {
-		dig := e.digs0[i]
-		sig := e.sigs0[i]
-		enc0 := (&servSepDig{epoch: i, dig: dig}).encode()
-		ok0 := cryptoffi.Verify(servPk, enc0, sig)
-		if !ok0 {
-			badSig = true
-		}
-		chain.put(dig)
-	}
-	if badSig {
-		return errSome
-	}
-	link := chain[uint64(len(chain))-1]
-
-	enc1 := (&servSepLink{epoch: e.epoch, link: e.link1}).encode()
-	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
-	if !ok1 {
-		return errSome
-	}
-
-	if std.BytesEqual(link, e.link1) {
-		return errSome
-	}
-	return errNone
-}
-
+/*
 // audit returns epoch idx (exclusive) thru which audit succeeded.
 func (c *client) audit(adtrId uint64) (epochTy, *evidServChain, errorTy) {
 	// Note: potential attack.
