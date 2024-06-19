@@ -213,7 +213,7 @@ func (s *serv) getLink(epoch epochTy) *servGetLinkReply {
 
 /* auditor */
 
-type signedLink struct {
+type adtrSigLink struct {
 	prevLink linkTy
 	dig      merkle.Digest
 	servSig  cryptoffi.Sig
@@ -226,7 +226,7 @@ type auditor struct {
 	mu     *sync.Mutex
 	sk     cryptoffi.PrivateKey
 	servPk cryptoffi.PublicKey
-	log    []*signedLink
+	log    []*adtrSigLink
 }
 
 func newAuditor(servPk cryptoffi.PublicKey) (*auditor, cryptoffi.PublicKey) {
@@ -250,7 +250,7 @@ func (a *auditor) put(prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig)
 
 	adtrSep := (&adtrSepLink{link: link}).encode()
 	adtrSig := cryptoffi.Sign(a.sk, adtrSep)
-	entry := &signedLink{prevLink: prevLink, dig: dig, servSig: servSig, adtrSig: adtrSig}
+	entry := &adtrSigLink{prevLink: prevLink, dig: dig, servSig: servSig, adtrSig: adtrSig}
 	a.log = append(a.log, entry)
 	a.mu.Unlock()
 	return errNone
@@ -272,17 +272,17 @@ func (a *auditor) get(epoch epochTy) *adtrGetReply {
 
 /* Key client. */
 
-/*
-type signedDig struct {
-	dig merkle.Digest
-	// Type: servSigSepDig.
-	sig cryptoffi.Sig
+type cliSigLink struct {
+	prevLink linkTy
+	dig      merkle.Digest
+	sig      cryptoffi.Sig
+	link     linkTy
 }
 
 type client struct {
 	id      merkle.Id
 	myVals  timeSeries
-	digs    map[epochTy]*signedDig
+	digs    map[epochTy]*cliSigLink
 	adtrs   []*urpc.Client
 	adtrPks []cryptoffi.PublicKey
 	serv    *urpc.Client
@@ -295,10 +295,102 @@ func newClient(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.A
 	for _, addr := range adtrAddrs {
 		adtrs = append(adtrs, urpc.MakeClient(addr))
 	}
-	digs := make(map[epochTy]*signedDig)
+	digs := make(map[epochTy]*cliSigLink)
 	return &client{id: id, myVals: nil, digs: digs, adtrs: adtrs, adtrPks: adtrPks, serv: serv, servPk: servPk}
 }
 
+// evidServLink is evidence that the server signed two conflicting links,
+// either zero or one epochs away.
+type evidServLink struct {
+	epoch0    epochTy
+	prevLink0 linkTy
+	dig0      merkle.Digest
+	sig0      cryptoffi.Sig
+
+	epoch1    epochTy
+	prevLink1 linkTy
+	dig1      merkle.Digest
+	sig1      cryptoffi.Sig
+}
+
+// check returns an error if the evidence does not check out.
+// otherwise, it proves that the server was dishonest.
+func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
+	link0 := (&chainSepSome{epoch: e.epoch0, prevLink: e.prevLink0, data: e.dig0}).encode()
+	enc0 := (&servSepLink{link: link0}).encode()
+	ok0 := cryptoffi.Verify(servPk, enc0, e.sig0)
+	if !ok0 {
+		return errSome
+	}
+
+	link1 := (&chainSepSome{epoch: e.epoch1, prevLink: e.prevLink1, data: e.dig1}).encode()
+	enc1 := (&servSepLink{link: link1}).encode()
+	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
+	if !ok1 {
+		return errSome
+	}
+
+	if e.epoch0 == e.epoch1 {
+		return std.BytesEqual(link0, link1)
+	}
+	if e.epoch0+1 == e.epoch1 {
+		return std.BytesEqual(link0, e.prevLink1)
+	}
+	return errSome
+}
+
+func (c *client) fillSigLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig cryptoffi.Sig) (*evidServLink, errorTy) {
+	link := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
+	// Check that link sig verifies.
+	preSig := (&servSepLink{link: link}).encode()
+	ok0 := cryptoffi.Verify(c.servPk, preSig, sig)
+	if !ok0 {
+		return nil, errSome
+	}
+
+	// Check if link already exists.
+	cachedLink, ok1 := c.digs[epoch]
+	if ok1 && !std.BytesEqual(cachedLink.link, link) {
+		evid := &evidServLink{epoch0: epoch, prevLink0: cachedLink.prevLink, dig0: cachedLink.dig, sig0: cachedLink.sig, epoch1: epoch, prevLink1: prevLink, dig1: dig, sig1: sig}
+		return evid, errSome
+	}
+
+	// Check if prevLink already exists.
+	if epoch != 0 {
+		cachedPrevLink, ok2 := c.digs[epoch-1]
+		if ok2 && !std.BytesEqual(cachedPrevLink.link, prevLink) {
+			evid := &evidServLink{epoch0: epoch - 1, prevLink0: cachedPrevLink.prevLink, dig0: cachedPrevLink.dig, sig0: cachedPrevLink.sig, epoch1: epoch, prevLink1: prevLink, dig1: dig, sig1: sig}
+			return evid, errSome
+		}
+	}
+
+	if !ok1 {
+		c.digs[epoch] = &cliSigLink{prevLink: prevLink, dig: dig, sig: sig, link: link}
+	}
+	return nil, errNone
+}
+
+func (c *client) put(val merkle.Val) (epochTy, *evidServLink, errorTy) {
+	reply := callServPut(c.serv, c.id, val)
+	if reply.error {
+		return 0, nil, reply.error
+	}
+
+	evid, err0 := c.fillSigLink(reply.putEpoch-1, reply.prev2Link, reply.prevDig, reply.linkSig)
+	if err0 {
+		return 0, evid, err0
+	}
+
+	prePut := (&servSepPut{epoch: reply.putEpoch, id: c.id, val: val}).encode()
+	ok := cryptoffi.Verify(c.servPk, prePut, reply.putSig)
+	if !ok {
+		return 0, nil, errSome
+	}
+	c.myVals.put(reply.putEpoch, val, reply.putSig)
+	return reply.putEpoch, nil, errNone
+}
+
+/*
 func (c *client) put(val merkle.Val) (epochTy, errorTy) {
 	// call rpc, check the server putpromise sig,
 	// store it for later in the timeSeries.
