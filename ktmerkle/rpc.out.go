@@ -34,7 +34,7 @@ func (o *servSepLink) encode() []byte {
 }
 func (o *servSepPut) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshalutil.WriteByte(b, 2)
+	b = marshalutil.WriteByte(b, 1)
 	b = marshal.WriteInt(b, o.epoch)
 	b = marshal.WriteBytes(b, o.id)
 	b = marshalutil.WriteSlice1D(b, o.val)

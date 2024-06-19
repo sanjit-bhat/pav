@@ -41,7 +41,7 @@ type servSepLink struct {
 
 // rpc: no decode needed.
 type servSepPut struct {
-	// rpc: invariant: const 2.
+	// rpc: invariant: const 1.
 	tag   byte
 	epoch epochTy
 	// rpc: invariant: len 32.
