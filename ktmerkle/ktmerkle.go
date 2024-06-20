@@ -294,23 +294,17 @@ type cliSigLink struct {
 }
 
 type client struct {
-	id      merkle.Id
-	myVals  timeSeries
-	links   map[epochTy]*cliSigLink
-	adtrs   []*urpc.Client
-	adtrPks []cryptoffi.PublicKey
-	serv    *urpc.Client
-	servPk  cryptoffi.PublicKey
+	id     merkle.Id
+	myVals timeSeries
+	links  map[epochTy]*cliSigLink
+	serv   *urpc.Client
+	servPk cryptoffi.PublicKey
 }
 
-func newClient(id merkle.Id, servAddr grove_ffi.Address, adtrAddrs []grove_ffi.Address, adtrPks []cryptoffi.PublicKey, servPk cryptoffi.PublicKey) *client {
+func newClient(id merkle.Id, servAddr grove_ffi.Address, servPk cryptoffi.PublicKey) *client {
 	serv := urpc.MakeClient(servAddr)
-	var adtrs []*urpc.Client
-	for _, addr := range adtrAddrs {
-		adtrs = append(adtrs, urpc.MakeClient(addr))
-	}
 	digs := make(map[epochTy]*cliSigLink)
-	return &client{id: id, myVals: nil, links: digs, adtrs: adtrs, adtrPks: adtrPks, serv: serv, servPk: servPk}
+	return &client{id: id, myVals: nil, links: digs, serv: serv, servPk: servPk}
 }
 
 // evidServLink is evidence that the server signed two conflicting links,
@@ -449,8 +443,8 @@ func (c *client) fetchLink(epoch epochTy) (*evidServLink, errorTy) {
 // audit returns epoch idx (exclusive) thru which audit succeeded.
 // there could be lots of errors, but currently, we mainly
 // return an error if there's evidence.
-// TODO: maybe change err handling, in selfAudit as well.
-func (c *client) audit(adtrId uint64) (epochTy, *evidServLink, errorTy) {
+// TODO: maybe change err handling, in selfCheck as well.
+func (c *client) audit(adtrPk cryptoffi.PublicKey, adtrAddr grove_ffi.Address) (epochTy, *evidServLink, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
 	var epoch uint64
@@ -472,8 +466,7 @@ func (c *client) audit(adtrId uint64) (epochTy, *evidServLink, errorTy) {
 	lastEpoch := epoch - 1
 	lastLink := c.links[lastEpoch]
 
-	adtr := c.adtrs[adtrId]
-	adtrPk := c.adtrPks[adtrId]
+	adtr := urpc.MakeClient(adtrAddr)
 	reply := callAdtrGet(adtr, lastEpoch)
 	if reply.error {
 		return 0, nil, reply.error
@@ -548,7 +541,7 @@ func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
 	return errNone
 }
 
-func (c *client) selfAuditAt(epoch epochTy) (*evidServLink, *evidServPut, errorTy) {
+func (c *client) selfCheckAt(epoch epochTy) (*evidServLink, *evidServPut, errorTy) {
 	reply := callServGetIdAt(c.serv, c.id, epoch)
 	if reply.error {
 		return nil, nil, reply.error
@@ -583,16 +576,16 @@ func (c *client) selfAuditAt(epoch epochTy) (*evidServLink, *evidServPut, errorT
 	return nil, nil, errNone
 }
 
-// selfAudit returns epoch idx (exclusive) thru which audit succeeded.
+// selfCheck returns epoch idx (exclusive) thru which audit succeeded.
 // there could be lots of errors, but currently, we mainly
 // return an error if there's evidence.
-func (c *client) selfAudit() (epochTy, *evidServLink, *evidServPut, errorTy) {
+func (c *client) selfCheck() (epochTy, *evidServLink, *evidServPut, errorTy) {
 	var epoch epochTy
 	var evidLink *evidServLink
 	var evidPut *evidServPut
 	var err errorTy
 	for {
-		evidLink, evidPut, err = c.selfAuditAt(epoch)
+		evidLink, evidPut, err = c.selfCheckAt(epoch)
 		if err {
 			break
 		}
