@@ -19,6 +19,13 @@ const (
 	rpcAdtrGet         uint64 = 8
 )
 
+func callServUpdateEpoch(cli *urpc.Client) {
+	argB := make([]byte, 0)
+	replyB := make([]byte, 0)
+	err0 := cli.Call(rpcServUpdateEpoch, argB, &replyB, 100)
+	machine.Assume(err0 == urpc.ErrNone)
+}
+
 func callServPut(cli *urpc.Client, id merkle.Id, val merkle.Val) *servPutReply {
 	argB := (&servPutArg{id: id, val: val}).encode()
 	replyB := make([]byte, 0)
