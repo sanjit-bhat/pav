@@ -15,11 +15,11 @@ const (
 	rpcServUpdateEpoch uint64 = 1
 	rpcServPut         uint64 = 2
 	rpcServGetIdAt     uint64 = 3
-	rpcServGetIdNow    uint64 = 4
-	rpcServGetDig      uint64 = 5
-	rpcServGetLink     uint64 = 6
-	rpcAdtrPut         uint64 = 7
-	rpcAdtrGet         uint64 = 8
+	// rpcServGetIdNow    uint64 = 4
+	rpcServGetDig  uint64 = 5
+	rpcServGetLink uint64 = 6
+	rpcAdtrPut     uint64 = 7
+	rpcAdtrGet     uint64 = 8
 )
 
 func callServUpdateEpoch(cli *urpc.Client) {
@@ -59,6 +59,7 @@ func callServGetIdAt(cli *urpc.Client, id merkle.Id, epoch epochTy) *servGetIdAt
 	return reply
 }
 
+/*
 func callServGetIdNow(cli *urpc.Client, id merkle.Id) *servGetIdNowReply {
 	argB := (&servGetIdNowArg{id: id}).encode()
 	replyB := make([]byte, 0)
@@ -73,6 +74,7 @@ func callServGetIdNow(cli *urpc.Client, id merkle.Id) *servGetIdNowReply {
 	}
 	return reply
 }
+*/
 
 func callServGetLink(cli *urpc.Client, epoch epochTy) *servGetLinkReply {
 	argB := (&servGetLinkArg{epoch: epoch}).encode()
@@ -123,18 +125,20 @@ func (s *serv) start(addr grove_ffi.Address) {
 			*enc_reply = s.getIdAt(args.id, args.epoch).encode()
 		}
 
-	handlers[rpcServGetIdNow] =
-		func(enc_args []byte, enc_reply *[]byte) {
-			args := &servGetIdNowArg{}
-			_, err0 := args.decode(enc_args)
-			if err0 {
-				reply := &servGetIdNowReply{}
-				reply.error = errSome
-				*enc_reply = reply.encode()
-				return
-			}
-			*enc_reply = s.getIdNow(args.id).encode()
-		}
+		/*
+			handlers[rpcServGetIdNow] =
+				func(enc_args []byte, enc_reply *[]byte) {
+					args := &servGetIdNowArg{}
+					_, err0 := args.decode(enc_args)
+					if err0 {
+						reply := &servGetIdNowReply{}
+						reply.error = errSome
+						*enc_reply = reply.encode()
+						return
+					}
+					*enc_reply = s.getIdNow(args.id).encode()
+				}
+		*/
 
 	handlers[rpcServGetLink] =
 		func(enc_args []byte, enc_reply *[]byte) {

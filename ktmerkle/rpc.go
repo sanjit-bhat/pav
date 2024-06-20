@@ -9,12 +9,14 @@ import (
 
 // rpc: no decode needed.
 type chainSepNone struct {
+	//lint:ignore U1000 a const is still inserted into the rpc msg.
 	// rpc: invariant: const 0.
 	tag byte
 }
 
 // rpc: no decode needed.
 type chainSepSome struct {
+	//lint:ignore U1000 a const is still inserted into the rpc msg.
 	// rpc: invariant: const 1.
 	tag   byte
 	epoch epochTy
@@ -25,6 +27,7 @@ type chainSepSome struct {
 
 // rpc: no decode needed.
 type adtrSepLink struct {
+	//lint:ignore U1000 a const is still inserted into the rpc msg.
 	// rpc: invariant: const 0.
 	tag byte
 	// rpc: invariant: len 32.
@@ -33,6 +36,7 @@ type adtrSepLink struct {
 
 // rpc: no decode needed.
 type servSepLink struct {
+	//lint:ignore U1000 a const is still inserted into the rpc msg.
 	// rpc: invariant: const 0.
 	tag byte
 	// rpc: invariant: len 32.
@@ -41,6 +45,7 @@ type servSepLink struct {
 
 // rpc: no decode needed.
 type servSepPut struct {
+	//lint:ignore U1000 a const is still inserted into the rpc msg.
 	// rpc: invariant: const 1.
 	tag   byte
 	epoch epochTy
@@ -87,6 +92,7 @@ type servGetIdAtReply struct {
 	error   errorTy
 }
 
+/*
 type servGetIdNowArg struct {
 	// rpc: invariant: len 32.
 	id merkle.Id
@@ -105,6 +111,7 @@ type servGetIdNowReply struct {
 	proof   merkle.Proof
 	error   errorTy
 }
+*/
 
 type servGetLinkArg struct {
 	epoch epochTy
