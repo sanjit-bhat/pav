@@ -34,9 +34,9 @@ func (c *hashChain) put(data []byte) {
 	chain := *c
 	chainLen := uint64(len(chain))
 	prevLink := chain[chainLen-1]
-	enc := (&chainSepSome{epoch: chainLen - 1, prevLink: prevLink, data: data}).encode()
-	h := cryptoffi.Hash(enc)
-	*c = append(chain, h)
+	linkSep := (&chainSepSome{epoch: chainLen - 1, prevLink: prevLink, data: data}).encode()
+	link := cryptoffi.Hash(linkSep)
+	*c = append(chain, link)
 }
 
 func (c hashChain) getCommit(length uint64) linkTy {
@@ -249,7 +249,7 @@ func (a *auditor) put(prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig)
 		cachedPrevLink = a.log[epoch-1].link
 	}
 	if !std.BytesEqual(prevLink, cachedPrevLink) {
-		a.mu.Lock()
+		a.mu.Unlock()
 		return errSome
 	}
 
@@ -258,13 +258,13 @@ func (a *auditor) put(prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig)
 	servSep := (&servSepLink{link: link}).encode()
 	servOk := cryptoffi.Verify(a.servPk, servSep, servSig)
 	if !servOk {
-		a.mu.Lock()
+		a.mu.Unlock()
 		return errSome
 	}
 
 	adtrSep := (&adtrSepLink{link: link}).encode()
 	adtrSig := cryptoffi.Sign(a.sk, adtrSep)
-	entry := &adtrLinkSigs{prevLink: prevLink, dig: dig, servSig: servSig, adtrSig: adtrSig}
+	entry := &adtrLinkSigs{prevLink: prevLink, dig: dig, link: link, servSig: servSig, adtrSig: adtrSig}
 	a.log = append(a.log, entry)
 	a.mu.Unlock()
 	return errNone
@@ -324,14 +324,16 @@ type evidServLink struct {
 // check returns an error if the evidence does not check out.
 // otherwise, it proves that the server was dishonest.
 func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
-	link0 := (&chainSepSome{epoch: e.epoch0, prevLink: e.prevLink0, data: e.dig0}).encode()
+	linkSep0 := (&chainSepSome{epoch: e.epoch0, prevLink: e.prevLink0, data: e.dig0}).encode()
+	link0 := cryptoffi.Hash(linkSep0)
 	enc0 := (&servSepLink{link: link0}).encode()
 	ok0 := cryptoffi.Verify(servPk, enc0, e.sig0)
 	if !ok0 {
 		return errSome
 	}
 
-	link1 := (&chainSepSome{epoch: e.epoch1, prevLink: e.prevLink1, data: e.dig1}).encode()
+	linkSep1 := (&chainSepSome{epoch: e.epoch1, prevLink: e.prevLink1, data: e.dig1}).encode()
+	link1 := cryptoffi.Hash(linkSep1)
 	enc1 := (&servSepLink{link: link1}).encode()
 	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
 	if !ok1 {
@@ -348,7 +350,8 @@ func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
 }
 
 func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig cryptoffi.Sig) (*evidServLink, errorTy) {
-	link := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
+	linkSep := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
+	link := cryptoffi.Hash(linkSep)
 	// Check that link sig verifies.
 	preSig := (&servSepLink{link: link}).encode()
 	ok0 := cryptoffi.Verify(c.servPk, preSig, sig)
