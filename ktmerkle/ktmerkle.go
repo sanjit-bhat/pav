@@ -405,8 +405,27 @@ func (c *client) put(val merkle.Val) (epochTy, *evidServLink, errorTy) {
 	return reply.putEpoch, nil, errNone
 }
 
-// get fetches the latest key for a particular id.
-func (c *client) get(id merkle.Id) (epochTy, merkle.Val, *evidServLink, errorTy) {
+// getAt fetches an id at a particular epoch.
+func (c *client) getAt(id merkle.Id, epoch epochTy) (merkle.Val, *evidServLink, errorTy) {
+	reply := callServGetIdAt(c.serv, id, epoch)
+	if reply.error {
+		return nil, nil, reply.error
+	}
+
+	err0 := merkle.CheckProof(reply.proofTy, reply.proof, id, reply.val, reply.dig)
+	if err0 {
+		return nil, nil, err0
+	}
+
+	evid, err1 := c.addLink(epoch, reply.prevLink, reply.dig, reply.sig)
+	if err1 {
+		return nil, evid, err1
+	}
+	return reply.val, nil, errNone
+}
+
+// getNow fetches the latest key for a particular id.
+func (c *client) getNow(id merkle.Id) (epochTy, merkle.Val, *evidServLink, errorTy) {
 	reply := callServGetIdNow(c.serv, id)
 	if reply.error {
 		return 0, nil, nil, reply.error
@@ -444,7 +463,7 @@ func (c *client) fetchLink(epoch epochTy) (*evidServLink, errorTy) {
 // there could be lots of errors, but currently, we mainly
 // return an error if there's evidence.
 // TODO: maybe change err handling, in selfCheck as well.
-func (c *client) audit(adtrPk cryptoffi.PublicKey, adtrAddr grove_ffi.Address) (epochTy, *evidServLink, errorTy) {
+func (c *client) audit(adtrAddr grove_ffi.Address, adtrPk cryptoffi.PublicKey) (epochTy, *evidServLink, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
 	var epoch uint64
