@@ -1,5 +1,8 @@
 package ktmerkle
 
+// This file has code that probably should be auto-generated,
+// but I haven't gotten around to that yet.
+
 import (
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
