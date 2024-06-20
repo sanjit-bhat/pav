@@ -5,75 +5,110 @@ import (
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/merkle"
 	"github.com/tchajed/goose/machine"
 )
 
-func updateAdtrDigs(servCli, adtrCli *urpc.Client) epochTy {
-	var epoch uint64 = 0
-	for {
-		dig, sig, err0 := callGetDigest(servCli, epoch)
-		if err0 {
-			break
-		}
-		err1 := callUpdate(adtrCli, epoch, dig, sig)
-		if err1 {
-			break
-		}
-		epoch++
-	}
-	return epoch
-}
-
-func testAgreement(servAddr, adtrAddr grove_ffi.Address) {
-	servSk, servPk := cryptoffi.MakeKeys()
+func testAgreement(servAddr, adtr0Addr, adtr1Addr grove_ffi.Address) {
+	// Start server and two auditors.
+	serv, servPk := newServ()
+	helpers := &helpersTy{servPk: servPk}
 	go func() {
-		s := newKeyServ(servSk)
-		s.start(servAddr)
+		serv.start(servAddr)
 	}()
-
-	adtrSk, adtrPk := cryptoffi.MakeKeys()
-	adtrPks := []cryptoffi.PublicKey{adtrPk}
-	adtrAddrs := []grove_ffi.Address{adtrAddr}
+	adtr0, adtr0Pk := newAuditor(servPk)
+	adtr1, adtr1Pk := newAuditor(servPk)
 	go func() {
-		a := newAuditor(adtrSk, servPk)
-		a.start(adtrAddr)
+		adtr0.start(adtr0Addr)
 	}()
-
+	go func() {
+		adtr1.start(adtr1Addr)
+	}()
 	machine.Sleep(1_000_000)
 	servCli := urpc.MakeClient(servAddr)
-	adtrCli := urpc.MakeClient(adtrAddr)
+	adtr0Cli := urpc.MakeClient(adtr0Addr)
+	adtr1Cli := urpc.MakeClient(adtr1Addr)
 
+	// Run protocol.
 	aliceId := cryptoffi.Hash([]byte("alice"))
-	aliceVal := []byte("val")
-	aliceCli := newKeyCli(aliceId, servAddr, adtrAddrs, adtrPks, servPk)
-	_, err0 := aliceCli.put(aliceVal)
-	machine.Assume(!err0)
+	aliceCli := newClient(aliceId, servAddr, servPk)
+	aliceKey0 := []byte("key")
+	putEp := helpers.put(aliceCli, aliceKey0)
 
-	emptyReplyB := make([]byte, 0)
-	err1 := servCli.Call(rpcKeyServUpdateEpoch, nil, &emptyReplyB, 100)
-	machine.Assume(err1 == urpc.ErrNone)
+	callServUpdateEpoch(servCli)
+	updateAdtr(servCli, adtr0Cli, 2)
+	updateAdtr(servCli, adtr1Cli, 2)
 
-	epochAdtr := updateAdtrDigs(servCli, adtrCli)
-	machine.Assume(epochAdtr == uint64(2))
+	helpers.selfCheckThru(aliceCli, putEp)
+	helpers.auditThru(aliceCli, adtr0Addr, adtr0Pk, putEp)
+	helpers.auditThru(aliceCli, adtr1Addr, adtr1Pk, putEp)
 
 	bobId := cryptoffi.Hash([]byte("bob"))
-	bobCli := newKeyCli(bobId, servAddr, adtrAddrs, adtrPks, servPk)
-	charlieId := cryptoffi.Hash([]byte("charlie"))
-	charlieCli := newKeyCli(charlieId, servAddr, adtrAddrs, adtrPks, servPk)
+	bobCli := newClient(bobId, servAddr, servPk)
+	aliceKey1 := helpers.getAt(bobCli, aliceId, putEp)
+	helpers.auditThru(bobCli, adtr0Addr, adtr0Pk, putEp)
+	helpers.auditThru(bobCli, adtr1Addr, adtr1Pk, putEp)
 
-	epoch0, val0, err3 := bobCli.get(aliceId)
-	machine.Assume(!err3)
-	epoch1, val1, err4 := charlieCli.get(aliceId)
-	machine.Assume(!err4)
+	// Final assert. Bob got the same key alice put.
+	machine.Assert(std.BytesEqual(aliceKey0, aliceKey1))
+}
 
-	epoch2, err5 := bobCli.audit(0)
-	machine.Assume(!err5)
-	epoch3, err6 := charlieCli.audit(0)
-	machine.Assume(!err6)
+type helpersTy struct {
+	servPk cryptoffi.PublicKey
+}
 
-	machine.Assume(epoch0 == epoch1)
-	machine.Assume(epoch0 < epoch2)
-	machine.Assume(epoch1 < epoch3)
+func (h *helpersTy) put(c *client, val merkle.Val) epochTy {
+	putEp, evidAlLink0, err0 := c.put(val)
+	if evidAlLink0 != nil {
+		err := evidAlLink0.check(h.servPk)
+		machine.Assert(!err)
+	} else {
+		machine.Assume(!err0)
+	}
+	return putEp
+}
 
-	machine.Assert(std.BytesEqual(val0, val1))
+func updateAdtr(servCli, adtrCli *urpc.Client, numEpochs uint64) {
+	for i := uint64(0); i < numEpochs; i++ {
+		reply := callServGetLink(servCli, i)
+		machine.Assume(!reply.error)
+		err := callAdtrPut(adtrCli, reply.prevLink, reply.dig, reply.sig)
+		machine.Assume(!err)
+	}
+}
+
+func (h *helpersTy) selfCheckThru(c *client, thru epochTy) {
+	selfEp, evidLink, evidAlPut, err0 := c.selfCheck()
+	if evidLink != nil {
+		err := evidLink.check(h.servPk)
+		machine.Assert(!err)
+	} else if evidAlPut != nil {
+		err := evidAlPut.check(h.servPk)
+		machine.Assert(!err)
+	} else {
+		machine.Assume(!err0)
+	}
+	machine.Assume(thru < selfEp)
+}
+
+func (h *helpersTy) auditThru(c *client, adtrAddr grove_ffi.Address, adtrPk cryptoffi.PublicKey, thru epochTy) {
+	auditEp, evidLink, err0 := c.audit(adtrAddr, adtrPk)
+	if evidLink != nil {
+		err := evidLink.check(h.servPk)
+		machine.Assert(!err)
+	} else {
+		machine.Assume(!err0)
+	}
+	machine.Assume(thru < auditEp)
+}
+
+func (h *helpersTy) getAt(c *client, id merkle.Id, epoch epochTy) merkle.Val {
+	retVal, evidLink, err0 := c.getAt(id, epoch)
+	if evidLink != nil {
+		err := evidLink.check(h.servPk)
+		machine.Assert(!err)
+	} else {
+		machine.Assume(!err0)
+	}
+	return retVal
 }
