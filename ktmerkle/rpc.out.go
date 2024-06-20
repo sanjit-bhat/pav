@@ -67,7 +67,7 @@ func (o *servPutReply) encode() []byte {
 	b = marshal.WriteBytes(b, o.prevDig)
 	b = marshal.WriteBytes(b, o.linkSig)
 	b = marshal.WriteBytes(b, o.putSig)
-	b = marshalutil.WriteBool(b, o.error)
+	b = marshal.WriteBool(b, o.error)
 	return b
 }
 func (o *servPutReply) decode(b0 []byte) ([]byte, errorTy) {
@@ -130,9 +130,9 @@ func (o *servGetIdAtReply) encode() []byte {
 	b = marshal.WriteBytes(b, o.dig)
 	b = marshal.WriteBytes(b, o.sig)
 	b = marshalutil.WriteSlice1D(b, o.val)
-	b = marshalutil.WriteBool(b, o.proofTy)
+	b = marshal.WriteBool(b, o.proofTy)
 	b = marshalutil.WriteSlice3D(b, o.proof)
-	b = marshalutil.WriteBool(b, o.error)
+	b = marshal.WriteBool(b, o.error)
 	return b
 }
 func (o *servGetIdAtReply) decode(b0 []byte) ([]byte, errorTy) {
@@ -195,9 +195,9 @@ func (o *servGetIdNowReply) encode() []byte {
 	b = marshal.WriteBytes(b, o.dig)
 	b = marshal.WriteBytes(b, o.sig)
 	b = marshalutil.WriteSlice1D(b, o.val)
-	b = marshalutil.WriteBool(b, o.proofTy)
+	b = marshal.WriteBool(b, o.proofTy)
 	b = marshalutil.WriteSlice3D(b, o.proof)
-	b = marshalutil.WriteBool(b, o.error)
+	b = marshal.WriteBool(b, o.error)
 	return b
 }
 func (o *servGetIdNowReply) decode(b0 []byte) ([]byte, errorTy) {
@@ -263,7 +263,7 @@ func (o *servGetLinkReply) encode() []byte {
 	b = marshal.WriteBytes(b, o.prevLink)
 	b = marshal.WriteBytes(b, o.dig)
 	b = marshal.WriteBytes(b, o.sig)
-	b = marshalutil.WriteBool(b, o.error)
+	b = marshal.WriteBool(b, o.error)
 	return b
 }
 func (o *servGetLinkReply) decode(b0 []byte) ([]byte, errorTy) {
@@ -318,7 +318,7 @@ func (o *adtrPutArg) decode(b0 []byte) ([]byte, errorTy) {
 }
 func (o *adtrPutReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshalutil.WriteBool(b, o.error)
+	b = marshal.WriteBool(b, o.error)
 	return b
 }
 func (o *adtrPutReply) decode(b0 []byte) ([]byte, errorTy) {
@@ -350,7 +350,7 @@ func (o *adtrGetReply) encode() []byte {
 	b = marshal.WriteBytes(b, o.dig)
 	b = marshal.WriteBytes(b, o.servSig)
 	b = marshal.WriteBytes(b, o.adtrSig)
-	b = marshalutil.WriteBool(b, o.error)
+	b = marshal.WriteBool(b, o.error)
 	return b
 }
 func (o *adtrGetReply) decode(b0 []byte) ([]byte, errorTy) {
