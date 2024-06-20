@@ -29,27 +29,30 @@ func testAgreement(servAddr, adtr0Addr, adtr1Addr grove_ffi.Address) {
 	adtr0Cli := urpc.MakeClient(adtr0Addr)
 	adtr1Cli := urpc.MakeClient(adtr1Addr)
 
-	// Run protocol.
+	// Alice puts key.
 	aliceId := cryptoffi.Hash([]byte("alice"))
 	aliceCli := newClient(aliceId, servAddr, servPk)
 	aliceKey0 := []byte("key")
 	putEp := helpers.put(aliceCli, aliceKey0)
 
+	// Update server / auditors.
 	callServUpdateEpoch(servCli)
 	updateAdtr(servCli, adtr0Cli, 2)
 	updateAdtr(servCli, adtr1Cli, 2)
 
+	// Alice does checks.
 	helpers.selfCheckThru(aliceCli, putEp)
 	helpers.auditThru(aliceCli, adtr0Addr, adtr0Pk, putEp)
 	helpers.auditThru(aliceCli, adtr1Addr, adtr1Pk, putEp)
 
+	// Bob gets Alice's key and does checks.
 	bobId := cryptoffi.Hash([]byte("bob"))
 	bobCli := newClient(bobId, servAddr, servPk)
 	aliceKey1 := helpers.getAt(bobCli, aliceId, putEp)
 	helpers.auditThru(bobCli, adtr0Addr, adtr0Pk, putEp)
 	helpers.auditThru(bobCli, adtr1Addr, adtr1Pk, putEp)
 
-	// Final assert. Bob got the same key alice put.
+	// Final assert. Bob got the same key Alice put.
 	machine.Assert(std.BytesEqual(aliceKey0, aliceKey1))
 }
 
