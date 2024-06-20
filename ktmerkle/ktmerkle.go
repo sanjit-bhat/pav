@@ -12,7 +12,6 @@ import (
 type epochTy = uint64
 type linkTy = []byte
 type errorTy = bool
-type okTy = bool
 
 const (
 	errNone errorTy = false
@@ -186,6 +185,7 @@ func (s *serv) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
 	return &servGetIdAtReply{prevLink: prevLink, dig: reply.Digest, sig: sig, val: reply.Val, proofTy: reply.ProofTy, proof: reply.Proof, error: reply.Error}
 }
 
+/*
 func (s *serv) getIdNow(id merkle.Id) *servGetIdNowReply {
 	s.mu.Lock()
 	epoch := uint64(len(s.trees)) - 1
@@ -195,6 +195,7 @@ func (s *serv) getIdNow(id merkle.Id) *servGetIdNowReply {
 	s.mu.Unlock()
 	return &servGetIdNowReply{epoch: epoch, prevLink: prevLink, dig: reply.Digest, sig: sig, val: reply.Val, proofTy: reply.ProofTy, proof: reply.Proof, error: reply.Error}
 }
+*/
 
 func (s *serv) getLink(epoch epochTy) *servGetLinkReply {
 	s.mu.Lock()
@@ -427,6 +428,7 @@ func (c *client) getAt(id merkle.Id, epoch epochTy) (merkle.Val, *evidServLink, 
 	return reply.val, nil, errNone
 }
 
+/*
 // getNow fetches the latest key for a particular id.
 func (c *client) getNow(id merkle.Id) (epochTy, merkle.Val, *evidServLink, errorTy) {
 	reply := callServGetIdNow(c.serv, id)
@@ -445,6 +447,7 @@ func (c *client) getNow(id merkle.Id) (epochTy, merkle.Val, *evidServLink, error
 	}
 	return reply.epoch, reply.val, nil, errNone
 }
+*/
 
 func (c *client) fetchLink(epoch epochTy) (*evidServLink, errorTy) {
 	_, ok0 := c.links[epoch]
