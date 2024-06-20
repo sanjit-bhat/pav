@@ -9,7 +9,7 @@ import (
 
 func (o *args) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshalutil.WriteBool(b, o.a1)
+	b = marshal.WriteBool(b, o.a1)
 	b = marshalutil.WriteByte(b, o.a2)
 	b = marshal.WriteInt(b, o.a3)
 	b = marshalutil.WriteSlice1D(b, o.a4)

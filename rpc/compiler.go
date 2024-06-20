@@ -297,7 +297,7 @@ func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
 	switch basic.Kind() {
 	case types.Bool:
 		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
+			X:   &ast.Ident{Name: "marshal"},
 			Sel: &ast.Ident{Name: "WriteBool"},
 		}
 	case types.Byte:
