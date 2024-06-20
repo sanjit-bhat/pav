@@ -213,9 +213,10 @@ func (s *serv) getLink(epoch epochTy) *servGetLinkReply {
 
 // KT auditor.
 
-type adtrSigLink struct {
+type adtrLinkSigs struct {
 	prevLink linkTy
 	dig      merkle.Digest
+	link     linkTy
 	servSig  cryptoffi.Sig
 	adtrSig  cryptoffi.Sig
 }
@@ -226,7 +227,7 @@ type auditor struct {
 	mu     *sync.Mutex
 	sk     cryptoffi.PrivateKey
 	servPk cryptoffi.PublicKey
-	log    []*adtrSigLink
+	log    []*adtrLinkSigs
 }
 
 func newAuditor(servPk cryptoffi.PublicKey) (*auditor, cryptoffi.PublicKey) {
@@ -240,17 +241,30 @@ func newAuditor(servPk cryptoffi.PublicKey) (*auditor, cryptoffi.PublicKey) {
 func (a *auditor) put(prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig) errorTy {
 	a.mu.Lock()
 	epoch := uint64(len(a.log))
+	var cachedPrevLink linkTy
+	if epoch == 0 {
+		linkSep := (&chainSepNone{}).encode()
+		cachedPrevLink = cryptoffi.Hash(linkSep)
+	} else {
+		cachedPrevLink = a.log[epoch-1].link
+	}
+	if !std.BytesEqual(prevLink, cachedPrevLink) {
+		a.mu.Lock()
+		return errSome
+	}
+
 	linkSep := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
 	link := cryptoffi.Hash(linkSep)
 	servSep := (&servSepLink{link: link}).encode()
-	ok := cryptoffi.Verify(a.servPk, servSep, servSig)
-	if !ok {
+	servOk := cryptoffi.Verify(a.servPk, servSep, servSig)
+	if !servOk {
+		a.mu.Lock()
 		return errSome
 	}
 
 	adtrSep := (&adtrSepLink{link: link}).encode()
 	adtrSig := cryptoffi.Sign(a.sk, adtrSep)
-	entry := &adtrSigLink{prevLink: prevLink, dig: dig, servSig: servSig, adtrSig: adtrSig}
+	entry := &adtrLinkSigs{prevLink: prevLink, dig: dig, servSig: servSig, adtrSig: adtrSig}
 	a.log = append(a.log, entry)
 	a.mu.Unlock()
 	return errNone
@@ -489,7 +503,7 @@ func (c *client) audit(adtrId uint64) (epochTy, *evidServLink, errorTy) {
 }
 
 // evidServPut is evidence when a server promises to put a value at a certain
-// epoch but actually there's a different value.
+// epoch but actually there's a different value (as evidenced by a merkle proof).
 type evidServPut struct {
 	epoch epochTy
 	// For signed link.
