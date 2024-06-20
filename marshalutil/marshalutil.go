@@ -13,15 +13,11 @@ const (
 
 func ReadBool(b0 []byte) (bool, []byte, errorTy) {
 	var b = b0
-	data, b, err := ReadByte(b)
-	if err {
-		return false, nil, err
+	if uint64(len(b)) < 1 {
+		return false, nil, errSome
 	}
-	var data1 bool
-	if data != 0 {
-		data1 = true
-	}
-	return data1, b, errNone
+	data, b := marshal.ReadBool(b)
+	return data, b, errNone
 }
 
 func ReadConstBool(b0 []byte, cst bool) ([]byte, errorTy) {
@@ -34,16 +30,6 @@ func ReadConstBool(b0 []byte, cst bool) ([]byte, errorTy) {
 		return nil, errSome
 	}
 	return b, errNone
-}
-
-func WriteBool(b0 []byte, data bool) []byte {
-	var b = b0
-	var data1 byte
-	if data {
-		data1 = 1
-	}
-	b = WriteByte(b, data1)
-	return b
 }
 
 func ReadInt(b0 []byte) (uint64, []byte, errorTy) {
