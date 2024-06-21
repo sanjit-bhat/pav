@@ -91,7 +91,7 @@ func callServGetLink(cli *urpc.Client, epoch epochTy) *servGetLinkReply {
 	return reply
 }
 
-func (s *serv) start(addr grove_ffi.Address) {
+func (s *server) start(addr grove_ffi.Address) {
 	handlers := make(map[uint64]func([]byte, *[]byte))
 
 	handlers[rpcServUpdateEpoch] =

@@ -93,7 +93,7 @@ func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool)
 
 // KT server.
 
-type serv struct {
+type server struct {
 	sk       cryptoffi.PrivateKey
 	mu       *sync.Mutex
 	trees    []*merkle.Tree
@@ -104,7 +104,7 @@ type serv struct {
 	changed map[string]bool
 }
 
-func newServ() (*serv, cryptoffi.PublicKey) {
+func newServer() (*server, cryptoffi.PublicKey) {
 	sk, pk := cryptoffi.MakeKeys()
 	mu := new(sync.Mutex)
 	nextTr := &merkle.Tree{}
@@ -120,10 +120,10 @@ func newServ() (*serv, cryptoffi.PublicKey) {
 	sig := cryptoffi.Sign(sk, enc)
 	var sigs []cryptoffi.Sig
 	sigs = append(sigs, sig)
-	return &serv{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: chain, linkSigs: sigs, changed: changed}, pk
+	return &server{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: chain, linkSigs: sigs, changed: changed}, pk
 }
 
-func (s *serv) updateEpoch() {
+func (s *server) updateEpoch() {
 	s.mu.Lock()
 	commitTr := s.nextTr
 	s.nextTr = commitTr.DeepCopy()
@@ -141,7 +141,7 @@ func (s *serv) updateEpoch() {
 }
 
 // put schedules a put to be committed at the next epoch update.
-func (s *serv) put(id merkle.Id, val merkle.Val) *servPutReply {
+func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 	s.mu.Lock()
 	errReply := &servPutReply{}
 	errReply.error = errSome
@@ -170,7 +170,7 @@ func (s *serv) put(id merkle.Id, val merkle.Val) *servPutReply {
 	return &servPutReply{putEpoch: currEpoch + 1, prev2Link: prev2Link, prevDig: prevDig, linkSig: linkSig, putSig: putSig, error: errNone}
 }
 
-func (s *serv) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
+func (s *server) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
 	s.mu.Lock()
 	errReply := &servGetIdAtReply{}
 	errReply.error = errSome
@@ -197,7 +197,7 @@ func (s *serv) getIdNow(id merkle.Id) *servGetIdNowReply {
 }
 */
 
-func (s *serv) getLink(epoch epochTy) *servGetLinkReply {
+func (s *server) getLink(epoch epochTy) *servGetLinkReply {
 	s.mu.Lock()
 	if epoch >= uint64(len(s.trees)) {
 		errReply := &servGetLinkReply{}

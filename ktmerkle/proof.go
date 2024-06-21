@@ -11,7 +11,7 @@ import (
 
 func testAgreement(servAddr, adtr0Addr, adtr1Addr grove_ffi.Address) {
 	// Start server and two auditors.
-	serv, servPk := newServ()
+	serv, servPk := newServer()
 	helpers := &helpersTy{servPk: servPk}
 	go func() {
 		serv.start(servAddr)
