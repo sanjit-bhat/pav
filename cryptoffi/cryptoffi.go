@@ -26,18 +26,18 @@ type PrivateKey ed25519.PrivateKey
 
 type PublicKey ed25519.PublicKey
 
-func MakeKeys() (PrivateKey, PublicKey) {
+func GenerateKey() (PublicKey, PrivateKey) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return PrivateKey(priv), PublicKey(pub)
+	return PublicKey(pub), PrivateKey(priv)
 }
 
-func Sign(sk PrivateKey, data []byte) Sig {
-	return ed25519.Sign(ed25519.PrivateKey(sk), data)
+func (priv PrivateKey) Sign(message []byte) Sig {
+	return ed25519.Sign(ed25519.PrivateKey(priv), message)
 }
 
-func Verify(pk PublicKey, data, sig Sig) bool {
-	return ed25519.Verify(ed25519.PublicKey(pk), data, sig)
+func (pub PublicKey) Verify(message []byte, sig Sig) bool {
+	return ed25519.Verify(ed25519.PublicKey(pub), message, sig)
 }

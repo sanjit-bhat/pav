@@ -29,9 +29,9 @@ func TestHashDiff(t *testing.T) {
 
 func TestVerifyTrue(t *testing.T) {
 	d := []byte("d")
-	sk, vk := MakeKeys()
-	sig := Sign(sk, d)
-	if !Verify(vk, d, sig) {
+	pk, sk := GenerateKey()
+	sig := sk.Sign(d)
+	if !pk.Verify(d, sig) {
 		t.Fatal()
 	}
 	if uint64(len(sig)) != SigLen {
@@ -42,9 +42,9 @@ func TestVerifyTrue(t *testing.T) {
 func TestVerifyFalse(t *testing.T) {
 	d1 := []byte("d1")
 	d2 := []byte("d2")
-	sk, vk := MakeKeys()
-	sig := Sign(sk, d1)
-	if Verify(vk, d2, sig) {
+	pk, sk := GenerateKey()
+	sig := sk.Sign(d1)
+	if pk.Verify(d2, sig) {
 		t.Fatal()
 	}
 }

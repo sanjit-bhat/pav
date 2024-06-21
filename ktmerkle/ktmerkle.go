@@ -105,7 +105,7 @@ type server struct {
 }
 
 func newServer() (*server, cryptoffi.PublicKey) {
-	sk, pk := cryptoffi.MakeKeys()
+	pk, sk := cryptoffi.GenerateKey()
 	mu := new(sync.Mutex)
 	nextTr := &merkle.Tree{}
 	changed := make(map[string]bool)
@@ -117,7 +117,7 @@ func newServer() (*server, cryptoffi.PublicKey) {
 	chain.put(emptyTr.Digest())
 	link := chain.getCommit(1)
 	enc := (&servSepLink{link: link}).encode()
-	sig := cryptoffi.Sign(sk, enc)
+	sig := sk.Sign(enc)
 	var sigs []cryptoffi.Sig
 	sigs = append(sigs, sig)
 	return &server{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: chain, linkSigs: sigs, changed: changed}, pk
@@ -135,7 +135,7 @@ func (s *server) updateEpoch() {
 	s.chain.put(dig)
 	link := s.chain.getCommit(numTrees)
 	enc := (&servSepLink{link: link}).encode()
-	sig := cryptoffi.Sign(s.sk, enc)
+	sig := s.sk.Sign(enc)
 	s.linkSigs = append(s.linkSigs, sig)
 	s.mu.Unlock()
 }
@@ -165,7 +165,7 @@ func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 	linkSig := s.linkSigs[currEpoch]
 
 	putPre := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
-	putSig := cryptoffi.Sign(s.sk, putPre)
+	putSig := s.sk.Sign(putPre)
 	s.mu.Unlock()
 	return &servPutReply{putEpoch: currEpoch + 1, prev2Link: prev2Link, prevDig: prevDig, linkSig: linkSig, putSig: putSig, error: errNone}
 }
@@ -232,7 +232,7 @@ type auditor struct {
 }
 
 func newAuditor(servPk cryptoffi.PublicKey) (*auditor, cryptoffi.PublicKey) {
-	sk, pk := cryptoffi.MakeKeys()
+	pk, sk := cryptoffi.GenerateKey()
 	return &auditor{mu: new(sync.Mutex), sk: sk, servPk: servPk, log: nil}, pk
 }
 
@@ -257,14 +257,14 @@ func (a *auditor) put(prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig)
 	linkSep := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
 	link := cryptoffi.Hash(linkSep)
 	servSep := (&servSepLink{link: link}).encode()
-	servOk := cryptoffi.Verify(a.servPk, servSep, servSig)
+	servOk := a.servPk.Verify(servSep, servSig)
 	if !servOk {
 		a.mu.Unlock()
 		return errSome
 	}
 
 	adtrSep := (&adtrSepLink{link: link}).encode()
-	adtrSig := cryptoffi.Sign(a.sk, adtrSep)
+	adtrSig := a.sk.Sign(adtrSep)
 	entry := &adtrLinkSigs{prevLink: prevLink, dig: dig, link: link, servSig: servSig, adtrSig: adtrSig}
 	a.log = append(a.log, entry)
 	a.mu.Unlock()
@@ -328,7 +328,7 @@ func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
 	linkSep0 := (&chainSepSome{epoch: e.epoch0, prevLink: e.prevLink0, data: e.dig0}).encode()
 	link0 := cryptoffi.Hash(linkSep0)
 	enc0 := (&servSepLink{link: link0}).encode()
-	ok0 := cryptoffi.Verify(servPk, enc0, e.sig0)
+	ok0 := servPk.Verify(enc0, e.sig0)
 	if !ok0 {
 		return errSome
 	}
@@ -336,7 +336,7 @@ func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
 	linkSep1 := (&chainSepSome{epoch: e.epoch1, prevLink: e.prevLink1, data: e.dig1}).encode()
 	link1 := cryptoffi.Hash(linkSep1)
 	enc1 := (&servSepLink{link: link1}).encode()
-	ok1 := cryptoffi.Verify(servPk, enc1, e.sig1)
+	ok1 := servPk.Verify(enc1, e.sig1)
 	if !ok1 {
 		return errSome
 	}
@@ -355,7 +355,7 @@ func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig 
 	link := cryptoffi.Hash(linkSep)
 	// Check that link sig verifies.
 	preSig := (&servSepLink{link: link}).encode()
-	ok0 := cryptoffi.Verify(c.servPk, preSig, sig)
+	ok0 := c.servPk.Verify(preSig, sig)
 	if !ok0 {
 		return nil, errSome
 	}
@@ -399,7 +399,7 @@ func (c *client) put(val merkle.Val) (epochTy, *evidServLink, errorTy) {
 	}
 
 	prePut := (&servSepPut{epoch: reply.putEpoch, id: c.id, val: val}).encode()
-	ok := cryptoffi.Verify(c.servPk, prePut, reply.putSig)
+	ok := c.servPk.Verify(prePut, reply.putSig)
 	if !ok {
 		return 0, nil, errSome
 	}
@@ -498,14 +498,14 @@ func (c *client) audit(adtrAddr grove_ffi.Address, adtrPk cryptoffi.PublicKey) (
 	adtrLink := cryptoffi.Hash(preAdtrLink)
 	preAdtrSig := (&adtrSepLink{link: adtrLink}).encode()
 	// Check adtr sig.
-	adtrOk := cryptoffi.Verify(adtrPk, preAdtrSig, reply.adtrSig)
+	adtrOk := adtrPk.Verify(preAdtrSig, reply.adtrSig)
 	if !adtrOk {
 		return 0, nil, errSome
 	}
 
 	// Check serv sig.
 	preServSig := (&servSepLink{link: adtrLink}).encode()
-	servOk := cryptoffi.Verify(c.servPk, preServSig, reply.servSig)
+	servOk := c.servPk.Verify(preServSig, reply.servSig)
 	if !servOk {
 		return 0, nil, errSome
 	}
@@ -540,14 +540,14 @@ func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
 	preLink := (&chainSepSome{epoch: e.epoch, prevLink: e.prevLink, data: e.dig}).encode()
 	link := cryptoffi.Hash(preLink)
 	preLinkSig := (&servSepLink{link: link}).encode()
-	linkOk := cryptoffi.Verify(servPk, preLinkSig, e.linkSig)
+	linkOk := servPk.Verify(preLinkSig, e.linkSig)
 	if !linkOk {
 		return errSome
 	}
 
 	// Proof of signing the put promise.
 	prePut := (&servSepPut{epoch: e.epoch, id: e.id, val: e.val0}).encode()
-	putOk := cryptoffi.Verify(servPk, prePut, e.putSig)
+	putOk := servPk.Verify(prePut, e.putSig)
 	if !putOk {
 		return errSome
 	}
