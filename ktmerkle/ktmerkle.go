@@ -14,8 +14,9 @@ type linkTy = []byte
 type errorTy = bool
 
 const (
-	errNone errorTy = false
-	errSome errorTy = true
+	errNone   errorTy = false
+	errSome   errorTy = true
+	maxUint64 uint64  = 1<<64 - 1
 )
 
 // hashChain supports fast commitments to prefixes of a list.
@@ -80,13 +81,12 @@ func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool)
 	var boundary bool
 
 	for _, te := range *ts {
-		if te.time > epoch {
-			continue
+		if te.time <= epoch {
+			latest = te.val
+			init = true
+			sig = te.sig
+			boundary = te.time == epoch
 		}
-		latest = te.val
-		init = true
-		sig = te.sig
-		boundary = te.time == epoch
 	}
 	return latest, init, sig, boundary
 }
@@ -368,17 +368,15 @@ func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig 
 	}
 
 	// Check if epoch-1 already exists.
-	if epoch != 0 {
-		cachedPrevLink, ok2 := c.links[epoch-1]
-		if ok2 && !std.BytesEqual(cachedPrevLink.link, prevLink) {
-			evid := &evidServLink{epoch0: epoch - 1, prevLink0: cachedPrevLink.prevLink, dig0: cachedPrevLink.dig, sig0: cachedPrevLink.sig, epoch1: epoch, prevLink1: prevLink, dig1: dig, sig1: sig}
-			return evid, errSome
-		}
+	cachedPrevLink, ok2 := c.links[epoch-1]
+	if epoch > 0 && ok2 && !std.BytesEqual(cachedPrevLink.link, prevLink) {
+		evid := &evidServLink{epoch0: epoch - 1, prevLink0: cachedPrevLink.prevLink, dig0: cachedPrevLink.dig, sig0: cachedPrevLink.sig, epoch1: epoch, prevLink1: prevLink, dig1: dig, sig1: sig}
+		return evid, errSome
 	}
 
 	// Check if epoch+1 already exists.
 	cachedNextLink, ok3 := c.links[epoch+1]
-	if ok3 && !std.BytesEqual(link, cachedNextLink.prevLink) {
+	if epoch < maxUint64 && ok3 && !std.BytesEqual(link, cachedNextLink.prevLink) {
 		evid := &evidServLink{epoch0: epoch, prevLink0: link, dig0: dig, sig0: sig, epoch1: epoch + 1, prevLink1: cachedNextLink.prevLink, dig1: cachedNextLink.dig, sig1: cachedNextLink.sig}
 		return evid, errSome
 	}
