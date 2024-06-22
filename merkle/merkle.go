@@ -89,9 +89,9 @@ type Digest = []byte
 // Binds an id down the tree to a particular node hash.
 type pathProof struct {
 	id          Id
-	NodeHash    []byte
-	Digest      Digest
-	ChildHashes [][][]byte
+	nodeHash    []byte
+	digest      Digest
+	childHashes [][][]byte
 }
 
 type Proof = [][][]byte
@@ -108,14 +108,14 @@ func isValidHashSl(data [][]byte) bool {
 
 func (p *pathProof) check() errorTy {
 	var err = errNone
-	var currHash []byte = p.NodeHash
-	proofLen := uint64(len(p.ChildHashes))
+	var currHash []byte = p.nodeHash
+	proofLen := uint64(len(p.childHashes))
 	// Goose doesn't support general loops, so re-write this way.
 	// TODO: try writing with general loop syntax.
 	var loopIdx = uint64(0)
 	for ; loopIdx < proofLen; loopIdx++ {
 		pathIdx := proofLen - 1 - loopIdx
-		children := p.ChildHashes[pathIdx]
+		children := p.childHashes[pathIdx]
 		if uint64(len(children)) != numChildren-1 {
 			err = errSome
 			continue
@@ -139,7 +139,7 @@ func (p *pathProof) check() errorTy {
 	if err {
 		return errSome
 	}
-	if !std.BytesEqual(currHash, p.Digest) {
+	if !std.BytesEqual(currHash, p.digest) {
 		return errSome
 	}
 	return errNone
@@ -175,9 +175,9 @@ func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) err
 
 	pathProof := &pathProof{
 		id:          idPref,
-		NodeHash:    nodeHash,
-		Digest:      digest,
-		ChildHashes: proof,
+		nodeHash:    nodeHash,
+		digest:      digest,
+		childHashes: proof,
 	}
 	return pathProof.check()
 }
