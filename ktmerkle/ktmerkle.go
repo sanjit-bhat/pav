@@ -214,14 +214,6 @@ func (s *server) getLink(epoch epochTy) *servGetLinkReply {
 
 // KT auditor.
 
-type adtrLinkSigs struct {
-	prevLink linkTy
-	dig      merkle.Digest
-	link     linkTy
-	servSig  cryptoffi.Sig
-	adtrSig  cryptoffi.Sig
-}
-
 // auditor is an append-only log of server signed links.
 // e.g., the S3 auditor in WhatsApp's deployment.
 type auditor struct {
@@ -229,6 +221,14 @@ type auditor struct {
 	sk     cryptoffi.PrivateKey
 	servPk cryptoffi.PublicKey
 	log    []*adtrLinkSigs
+}
+
+type adtrLinkSigs struct {
+	prevLink linkTy
+	dig      merkle.Digest
+	link     linkTy
+	servSig  cryptoffi.Sig
+	adtrSig  cryptoffi.Sig
 }
 
 func newAuditor(servPk cryptoffi.PublicKey) (*auditor, cryptoffi.PublicKey) {
@@ -287,13 +287,6 @@ func (a *auditor) get(epoch epochTy) *adtrGetReply {
 
 // KT client.
 
-type cliSigLink struct {
-	prevLink linkTy
-	dig      merkle.Digest
-	sig      cryptoffi.Sig
-	link     linkTy
-}
-
 type client struct {
 	id     merkle.Id
 	myVals timeSeries
@@ -302,52 +295,17 @@ type client struct {
 	servPk cryptoffi.PublicKey
 }
 
+type cliSigLink struct {
+	prevLink linkTy
+	dig      merkle.Digest
+	sig      cryptoffi.Sig
+	link     linkTy
+}
+
 func newClient(id merkle.Id, servAddr grove_ffi.Address, servPk cryptoffi.PublicKey) *client {
 	serv := urpc.MakeClient(servAddr)
 	digs := make(map[epochTy]*cliSigLink)
 	return &client{id: id, myVals: nil, links: digs, serv: serv, servPk: servPk}
-}
-
-// evidServLink is evidence that the server signed two conflicting links,
-// either zero or one epochs away.
-type evidServLink struct {
-	epoch0    epochTy
-	prevLink0 linkTy
-	dig0      merkle.Digest
-	sig0      cryptoffi.Sig
-
-	epoch1    epochTy
-	prevLink1 linkTy
-	dig1      merkle.Digest
-	sig1      cryptoffi.Sig
-}
-
-// check returns an error if the evidence does not check out.
-// otherwise, it proves that the server was dishonest.
-func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
-	linkSep0 := (&chainSepSome{epoch: e.epoch0, prevLink: e.prevLink0, data: e.dig0}).encode()
-	link0 := cryptoffi.Hash(linkSep0)
-	enc0 := (&servSepLink{link: link0}).encode()
-	ok0 := servPk.Verify(enc0, e.sig0)
-	if !ok0 {
-		return errSome
-	}
-
-	linkSep1 := (&chainSepSome{epoch: e.epoch1, prevLink: e.prevLink1, data: e.dig1}).encode()
-	link1 := cryptoffi.Hash(linkSep1)
-	enc1 := (&servSepLink{link: link1}).encode()
-	ok1 := servPk.Verify(enc1, e.sig1)
-	if !ok1 {
-		return errSome
-	}
-
-	if e.epoch0 == e.epoch1 {
-		return std.BytesEqual(link0, link1)
-	}
-	if e.epoch0+1 == e.epoch1 {
-		return std.BytesEqual(link0, e.prevLink1)
-	}
-	return errSome
 }
 
 func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig cryptoffi.Sig) (*evidServLink, errorTy) {
@@ -516,52 +474,6 @@ func (c *client) audit(adtrAddr grove_ffi.Address, adtrPk cryptoffi.PublicKey) (
 		return 0, evid, errSome
 	}
 	return epoch, nil, errNone
-}
-
-// evidServPut is evidence when a server promises to put a value at a certain
-// epoch but actually there's a different value (as evidenced by a merkle proof).
-type evidServPut struct {
-	epoch epochTy
-	// For signed link.
-	prevLink linkTy
-	dig      merkle.Digest
-	linkSig  cryptoffi.Sig
-	// For signed put.
-	id     merkle.Id
-	val0   merkle.Val
-	putSig cryptoffi.Sig
-	// For merkle inclusion.
-	val1  merkle.Val
-	proof merkle.Proof
-}
-
-func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
-	// Proof of signing the link.
-	preLink := (&chainSepSome{epoch: e.epoch, prevLink: e.prevLink, data: e.dig}).encode()
-	link := cryptoffi.Hash(preLink)
-	preLinkSig := (&servSepLink{link: link}).encode()
-	linkOk := servPk.Verify(preLinkSig, e.linkSig)
-	if !linkOk {
-		return errSome
-	}
-
-	// Proof of signing the put promise.
-	prePut := (&servSepPut{epoch: e.epoch, id: e.id, val: e.val0}).encode()
-	putOk := servPk.Verify(prePut, e.putSig)
-	if !putOk {
-		return errSome
-	}
-
-	// Proof of merkle inclusion of the other val.
-	err0 := merkle.CheckProof(merkle.MembProofTy, e.proof, e.id, e.val1, e.dig)
-	if err0 {
-		return errSome
-	}
-
-	if std.BytesEqual(e.val0, e.val1) {
-		return errSome
-	}
-	return errNone
 }
 
 func (c *client) selfCheckAt(epoch epochTy) (*evidServLink, *evidServPut, errorTy) {
