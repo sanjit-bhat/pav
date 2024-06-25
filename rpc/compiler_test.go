@@ -1,11 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"flag"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 	"os/exec"
 	"path"
@@ -17,8 +13,6 @@ const (
 )
 
 var update = flag.Bool("update", false, "update golden files")
-
-var dump = flag.Bool("dump", false, "dump golden ast [for dev]")
 
 type entry struct {
 	source, golden string
@@ -55,16 +49,6 @@ func tmpWrite(t *testing.T, data []byte) string {
 }
 
 func check(t *testing.T, source, golden string) {
-	if *dump {
-		gld, err := os.ReadFile(golden)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		res := printAst(t, gld)
-		t.Logf("golden ast dump:\n%s", res)
-	}
-
 	res := compile(source)
 	actual := tmpWrite(t, res)
 
@@ -99,15 +83,4 @@ func TestFiles(t *testing.T) {
 			}
 		})
 	}
-}
-
-func printAst(t *testing.T, src []byte) []byte {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "", src, parser.ParseComments|parser.SkipObjectResolution)
-	if err != nil {
-		t.Error(err)
-	}
-	res := new(bytes.Buffer)
-	ast.Fprint(res, fset, f, ast.NotNilFilter)
-	return res.Bytes()
 }
