@@ -14,7 +14,7 @@ var dump = flag.String("dump", "", "dump ast of the provided file [for dev]")
 
 func main() {
 	log.SetFlags(log.Lshortfile)
-    flag.Parse()
+	flag.Parse()
 	if *dump == "" {
 		return
 	}
