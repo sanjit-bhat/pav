@@ -16,39 +16,39 @@ func (o *chainSepSome) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 1)
 	b = marshal.WriteInt(b, o.epoch)
-	b = marshal.WriteBytes(b, o.prevLink)
+	b = marshalutil.WriteSlice1D(b, o.prevLink)
 	b = marshalutil.WriteSlice1D(b, o.data)
 	return b
 }
 func (o *adtrSepLink) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 0)
-	b = marshal.WriteBytes(b, o.link)
+	b = marshalutil.WriteSlice1D(b, o.link)
 	return b
 }
 func (o *servSepLink) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 0)
-	b = marshal.WriteBytes(b, o.link)
+	b = marshalutil.WriteSlice1D(b, o.link)
 	return b
 }
 func (o *servSepPut) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshalutil.WriteByte(b, 1)
 	b = marshal.WriteInt(b, o.epoch)
-	b = marshal.WriteBytes(b, o.id)
+	b = marshalutil.WriteSlice1D(b, o.id)
 	b = marshalutil.WriteSlice1D(b, o.val)
 	return b
 }
 func (o *servPutArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.id)
+	b = marshalutil.WriteSlice1D(b, o.id)
 	b = marshalutil.WriteSlice1D(b, o.val)
 	return b
 }
 func (o *servPutArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := marshalutil.ReadBytes(b, 32)
+	id, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
@@ -63,10 +63,10 @@ func (o *servPutArg) decode(b0 []byte) ([]byte, errorTy) {
 func (o *servPutReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.putEpoch)
-	b = marshal.WriteBytes(b, o.prev2Link)
-	b = marshal.WriteBytes(b, o.prevDig)
-	b = marshal.WriteBytes(b, o.linkSig)
-	b = marshal.WriteBytes(b, o.putSig)
+	b = marshalutil.WriteSlice1D(b, o.prev2Link)
+	b = marshalutil.WriteSlice1D(b, o.prevDig)
+	b = marshalutil.WriteSlice1D(b, o.linkSig)
+	b = marshalutil.WriteSlice1D(b, o.putSig)
 	b = marshal.WriteBool(b, o.error)
 	return b
 }
@@ -76,19 +76,19 @@ func (o *servPutReply) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	prev2Link, b, err := marshalutil.ReadBytes(b, 32)
+	prev2Link, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	prevDig, b, err := marshalutil.ReadBytes(b, 32)
+	prevDig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	linkSig, b, err := marshalutil.ReadBytes(b, 64)
+	linkSig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	putSig, b, err := marshalutil.ReadBytes(b, 64)
+	putSig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
@@ -106,13 +106,13 @@ func (o *servPutReply) decode(b0 []byte) ([]byte, errorTy) {
 }
 func (o *servGetIdAtArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.id)
+	b = marshalutil.WriteSlice1D(b, o.id)
 	b = marshal.WriteInt(b, o.epoch)
 	return b
 }
 func (o *servGetIdAtArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	id, b, err := marshalutil.ReadBytes(b, 32)
+	id, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
@@ -126,9 +126,9 @@ func (o *servGetIdAtArg) decode(b0 []byte) ([]byte, errorTy) {
 }
 func (o *servGetIdAtReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.prevLink)
-	b = marshal.WriteBytes(b, o.dig)
-	b = marshal.WriteBytes(b, o.sig)
+	b = marshalutil.WriteSlice1D(b, o.prevLink)
+	b = marshalutil.WriteSlice1D(b, o.dig)
+	b = marshalutil.WriteSlice1D(b, o.sig)
 	b = marshalutil.WriteSlice1D(b, o.val)
 	b = marshal.WriteBool(b, o.proofTy)
 	b = marshalutil.WriteSlice3D(b, o.proof)
@@ -137,15 +137,15 @@ func (o *servGetIdAtReply) encode() []byte {
 }
 func (o *servGetIdAtReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	prevLink, b, err := marshalutil.ReadBytes(b, 32)
+	prevLink, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	dig, b, err := marshalutil.ReadBytes(b, 32)
+	dig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.ReadBytes(b, 64)
+	sig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
@@ -190,23 +190,23 @@ func (o *servGetLinkArg) decode(b0 []byte) ([]byte, errorTy) {
 }
 func (o *servGetLinkReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.prevLink)
-	b = marshal.WriteBytes(b, o.dig)
-	b = marshal.WriteBytes(b, o.sig)
+	b = marshalutil.WriteSlice1D(b, o.prevLink)
+	b = marshalutil.WriteSlice1D(b, o.dig)
+	b = marshalutil.WriteSlice1D(b, o.sig)
 	b = marshal.WriteBool(b, o.error)
 	return b
 }
 func (o *servGetLinkReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	prevLink, b, err := marshalutil.ReadBytes(b, 32)
+	prevLink, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	dig, b, err := marshalutil.ReadBytes(b, 32)
+	dig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	sig, b, err := marshalutil.ReadBytes(b, 64)
+	sig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
@@ -222,22 +222,22 @@ func (o *servGetLinkReply) decode(b0 []byte) ([]byte, errorTy) {
 }
 func (o *adtrPutArg) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.prevLink)
-	b = marshal.WriteBytes(b, o.dig)
-	b = marshal.WriteBytes(b, o.servSig)
+	b = marshalutil.WriteSlice1D(b, o.prevLink)
+	b = marshalutil.WriteSlice1D(b, o.dig)
+	b = marshalutil.WriteSlice1D(b, o.servSig)
 	return b
 }
 func (o *adtrPutArg) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	prevLink, b, err := marshalutil.ReadBytes(b, 32)
+	prevLink, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	dig, b, err := marshalutil.ReadBytes(b, 32)
+	dig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	servSig, b, err := marshalutil.ReadBytes(b, 64)
+	servSig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
@@ -276,28 +276,28 @@ func (o *adtrGetArg) decode(b0 []byte) ([]byte, errorTy) {
 }
 func (o *adtrGetReply) encode() []byte {
 	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.prevLink)
-	b = marshal.WriteBytes(b, o.dig)
-	b = marshal.WriteBytes(b, o.servSig)
-	b = marshal.WriteBytes(b, o.adtrSig)
+	b = marshalutil.WriteSlice1D(b, o.prevLink)
+	b = marshalutil.WriteSlice1D(b, o.dig)
+	b = marshalutil.WriteSlice1D(b, o.servSig)
+	b = marshalutil.WriteSlice1D(b, o.adtrSig)
 	b = marshal.WriteBool(b, o.error)
 	return b
 }
 func (o *adtrGetReply) decode(b0 []byte) ([]byte, errorTy) {
 	var b = b0
-	prevLink, b, err := marshalutil.ReadBytes(b, 32)
+	prevLink, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	dig, b, err := marshalutil.ReadBytes(b, 32)
+	dig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	servSig, b, err := marshalutil.ReadBytes(b, 64)
+	servSig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	adtrSig, b, err := marshalutil.ReadBytes(b, 64)
+	adtrSig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
