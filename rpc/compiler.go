@@ -285,10 +285,16 @@ func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 	if node.Doc == nil {
 		return false, ""
 	}
-	comm := node.Doc.List[0].Text
-	comm = strings.TrimPrefix(comm, "// rpc: invariant: len ")
-	comm = strings.TrimRight(comm, ".")
-	return true, comm
+	for _, comm := range node.Doc.List {
+		text := comm.Text
+		text, found0 := strings.CutPrefix(text, "// rpc: invariant: len ")
+		text, found1 := strings.CutSuffix(text, ".")
+		if found0 && found1 {
+			isFixed = true
+			length = text
+		}
+	}
+	return
 }
 
 func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
@@ -338,10 +344,16 @@ func (c *compiler) getConst(pos token.Pos) (isCst bool, cst string) {
 	if node.Doc == nil {
 		return false, ""
 	}
-	comm := node.Doc.List[0].Text
-	comm = strings.TrimPrefix(comm, "// rpc: invariant: const ")
-	comm = strings.TrimRight(comm, ".")
-	return true, comm
+	for _, comm := range node.Doc.List {
+		text := comm.Text
+		text, found0 := strings.CutPrefix(text, "// rpc: invariant: const ")
+		text, found1 := strings.CutSuffix(text, ".")
+		if found0 && found1 {
+			isCst = true
+			cst = text
+		}
+	}
+	return
 }
 
 func genStdFieldWriteArgs(name string) []ast.Expr {
