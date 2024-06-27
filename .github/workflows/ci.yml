@@ -14,23 +14,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: Setup
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
-      - name: Go test
+      - name: Test
         run: go test -v ./...
 
-      - name: Go format
+      - name: Format
         run: |
           gofmt -w -s .
           git diff --exit-code
 
-      - name: Go vet
+      - name: Vet
         run: go vet ./...
 
-      - name: Go lint
+      - name: Lint
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@v0.4.7
           staticcheck -f stylish ./...
@@ -40,13 +40,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Python lint
-        uses: chartboost/ruff-action@v1
-
-      - name: Python format
+      - name: Format
         uses: chartboost/ruff-action@v1
         with:
           args: 'format --check'
+
+      - name: Lint
+        uses: chartboost/ruff-action@v1
 
   other:
     runs-on: ubuntu-latest
