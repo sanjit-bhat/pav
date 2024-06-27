@@ -88,8 +88,5 @@ func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
 		return errSome
 	}
 
-	if std.BytesEqual(e.val0, e.val1) {
-		return errSome
-	}
-	return errNone
+	return std.BytesEqual(e.val0, e.val1)
 }
