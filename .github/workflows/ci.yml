@@ -35,7 +35,7 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@v0.4.7
           staticcheck -f stylish ./...
 
-  other:
+  python:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,10 +48,15 @@ jobs:
         with:
           args: 'format --check'
 
+  other:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Other tests
+      - name: Run extra CI checks
         run: python etc/ci-check.py
