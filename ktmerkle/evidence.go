@@ -42,7 +42,7 @@ func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
 	if e.epoch0 == e.epoch1 {
 		return std.BytesEqual(link0, link1)
 	}
-	if e.epoch0+1 == e.epoch1 {
+	if e.epoch0 == e.epoch1-1 {
 		return std.BytesEqual(link0, e.prevLink1)
 	}
 	return errSome
