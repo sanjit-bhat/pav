@@ -146,26 +146,29 @@ func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 	errReply := &servPutReply{}
 	errReply.error = errSome
 
+	// Should only change id once per epoch, otherwise bad things happen.
 	idS := string(id)
-	changed, ok := s.changed[idS]
-	if ok && changed {
+	_, ok := s.changed[idS]
+	if ok {
 		s.mu.Unlock()
 		return errReply
 	}
-	s.changed[idS] = true
+
 	_, _, err := s.nextTr.Put(id, val)
 	if err {
 		s.mu.Unlock()
 		return errReply
 	}
 
+	// Put promise declares that we'll apply this change at the next epoch update.
+	s.changed[idS] = true
 	currEpoch := uint64(len(s.trees)) - 1
+	putPre := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
+	putSig := s.sk.Sign(putPre)
+
 	prev2Link := s.chain.getCommit(currEpoch)
 	prevDig := s.trees[currEpoch].Digest()
 	linkSig := s.linkSigs[currEpoch]
-
-	putPre := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
-	putSig := s.sk.Sign(putPre)
 	s.mu.Unlock()
 	return &servPutReply{putEpoch: currEpoch + 1, prev2Link: prev2Link, prevDig: prevDig, linkSig: linkSig, putSig: putSig, error: errNone}
 }
