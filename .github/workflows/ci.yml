@@ -58,5 +58,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: Run extra CI checks
         run: python etc/ci-check.py
