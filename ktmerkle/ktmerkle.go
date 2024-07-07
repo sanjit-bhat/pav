@@ -6,6 +6,7 @@ import (
 	"github.com/mit-pdos/gokv/urpc"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
+	"github.com/tchajed/goose/machine"
 	"sync"
 )
 
@@ -39,7 +40,8 @@ func (c *hashChain) put(data []byte) {
 	*c = append(chain, link)
 }
 
-func (c hashChain) getCommit(length uint64) linkTy {
+// getLink fetches a link (commitment) over the first `length` data entries.
+func (c hashChain) getLink(length uint64) linkTy {
 	return c[length]
 }
 
@@ -94,46 +96,56 @@ func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool)
 // KT server.
 
 type server struct {
-	sk       cryptoffi.PrivateKey
-	mu       *sync.Mutex
-	trees    []*merkle.Tree
-	nextTr   *merkle.Tree
+	sk    cryptoffi.PrivateKey
+	mu    *sync.Mutex
+	trees []*merkle.Tree
+	// updates just for the current epoch.
+	updates  map[string][]byte
 	chain    hashChain
 	linkSigs []cryptoffi.Sig
-	// Whether an ID has been changed in the next epoch.
-	changed map[string]bool
 }
 
 func newServer() (*server, cryptoffi.PublicKey) {
 	pk, sk := cryptoffi.GenerateKey()
 	mu := new(sync.Mutex)
-	nextTr := &merkle.Tree{}
-	changed := make(map[string]bool)
+	updates := make(map[string][]byte)
 
-	// epoch 0 is empty tree so we can serve early get reqs.
+	// Make epoch 0 the empty tree so we can serve early get reqs.
 	emptyTr := &merkle.Tree{}
 	trees := []*merkle.Tree{emptyTr}
 	chain := newHashChain()
 	chain.put(emptyTr.Digest())
-	link := chain.getCommit(1)
+	link := chain.getLink(1)
 	enc := (&servSepLink{link: link}).encode()
 	sig := sk.Sign(enc)
 	var sigs []cryptoffi.Sig
 	sigs = append(sigs, sig)
-	return &server{sk: sk, mu: mu, trees: trees, nextTr: nextTr, chain: chain, linkSigs: sigs, changed: changed}, pk
+	return &server{sk: sk, mu: mu, trees: trees, chain: chain, linkSigs: sigs, updates: updates}, pk
+}
+
+// applyUpdates returns a new merkle tree with the updates applied to the current tree.
+func applyUpdates(currTr *merkle.Tree, updates map[string][]byte) *merkle.Tree {
+	nextTr := currTr.DeepCopy()
+	for id, val := range updates {
+		idB := []byte(id)
+		_, _, err := nextTr.Put(idB, val)
+		// Put checks that all IDs have valid len, so there shouldn't be any errors.
+		machine.Assume(!err)
+	}
+	return nextTr
 }
 
 func (s *server) updateEpoch() {
 	s.mu.Lock()
-	commitTr := s.nextTr
-	s.nextTr = commitTr.DeepCopy()
-	s.trees = append(s.trees, commitTr)
+	currTr := s.trees[uint64(len(s.trees))-1]
+	nextTr := applyUpdates(currTr, s.updates)
+	dig := nextTr.Digest()
+	s.trees = append(s.trees, nextTr)
 	numTrees := uint64(len(s.trees))
-	s.changed = make(map[string]bool)
+	s.updates = make(map[string][]byte)
 
-	dig := commitTr.Digest()
 	s.chain.put(dig)
-	link := s.chain.getCommit(numTrees)
+	link := s.chain.getLink(numTrees)
 	enc := (&servSepLink{link: link}).encode()
 	sig := s.sk.Sign(enc)
 	s.linkSigs = append(s.linkSigs, sig)
@@ -146,27 +158,29 @@ func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 	errReply := &servPutReply{}
 	errReply.error = errSome
 
-	// Should only change id once per epoch, otherwise bad things happen.
+	// After establishing this invariant, guaranteed that merkle tree
+	// put will go thru.
+	if uint64(len(id)) != cryptoffi.HashLen {
+		s.mu.Unlock()
+		return errReply
+	}
+
+	// Changing the same key twice per epoch might violate put promise.
 	idS := string(id)
-	_, ok := s.changed[idS]
+	_, ok := s.updates[idS]
 	if ok {
 		s.mu.Unlock()
 		return errReply
 	}
-
-	_, _, err := s.nextTr.Put(id, val)
-	if err {
-		s.mu.Unlock()
-		return errReply
-	}
+	s.updates[idS] = val
 
 	// Put promise declares that we'll apply this change at the next epoch update.
-	s.changed[idS] = true
 	currEpoch := uint64(len(s.trees)) - 1
 	putPre := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
 	putSig := s.sk.Sign(putPre)
 
-	prev2Link := s.chain.getCommit(currEpoch)
+	// Pin the server down a little more by giving the previous chain.
+	prev2Link := s.chain.getLink(currEpoch)
 	prevDig := s.trees[currEpoch].Digest()
 	linkSig := s.linkSigs[currEpoch]
 	s.mu.Unlock()
@@ -181,7 +195,7 @@ func (s *server) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
 		s.mu.Unlock()
 		return errReply
 	}
-	prevLink := s.chain.getCommit(epoch)
+	prevLink := s.chain.getLink(epoch)
 	sig := s.linkSigs[epoch]
 	reply := s.trees[epoch].Get(id)
 	s.mu.Unlock()
@@ -208,7 +222,7 @@ func (s *server) getLink(epoch epochTy) *servGetLinkReply {
 		s.mu.Unlock()
 		return errReply
 	}
-	prevLink := s.chain.getCommit(epoch)
+	prevLink := s.chain.getLink(epoch)
 	dig := s.trees[epoch].Digest()
 	sig := s.linkSigs[epoch]
 	s.mu.Unlock()
