@@ -65,6 +65,7 @@ func (h *helpersTy) put(c *client, val merkle.Val) epochTy {
 	if evidAlLink0 != nil {
 		err := evidAlLink0.check(h.servPk)
 		machine.Assert(!err)
+		// TODO: machine.Exit whenever we have evidence.
 	} else {
 		machine.Assume(!err0)
 	}

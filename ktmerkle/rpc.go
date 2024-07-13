@@ -34,6 +34,7 @@ type adtrSepLink struct {
 
 // rpc: no decode needed.
 type servSepLink struct {
+	// TODO: get rid of tag field.
 	//lint:ignore U1000 a const is still inserted into the rpc msg.
 	// rpc: invariant: const 0.
 	tag  byte
