@@ -21,28 +21,30 @@ const (
 )
 
 // hashChain supports fast commitments to prefixes of a list.
-type hashChain []linkTy
+type hashChain struct {
+	links []linkTy
+}
 
-func newHashChain() hashChain {
+func newHashChain() *hashChain {
 	enc := (&chainSepNone{}).encode()
 	h := cryptoffi.Hash(enc)
-	var c hashChain
-	c = append(c, h)
-	return c
+	var links []linkTy
+	links = append(links, h)
+	return &hashChain{links: links}
 }
 
 func (c *hashChain) put(data []byte) {
-	chain := *c
-	chainLen := uint64(len(chain))
-	prevLink := chain[chainLen-1]
+	links := c.links
+	chainLen := uint64(len(links))
+	prevLink := links[chainLen-1]
 	linkSep := (&chainSepSome{epoch: chainLen - 1, prevLink: prevLink, data: data}).encode()
 	link := cryptoffi.Hash(linkSep)
-	*c = append(chain, link)
+	c.links = append(links, link)
 }
 
 // getLink fetches a link (commitment) over the first `length` data entries.
-func (c hashChain) getLink(length uint64) linkTy {
-	return c[length]
+func (c *hashChain) getLink(length uint64) linkTy {
+	return c.links[length]
 }
 
 type timeEntry struct {
@@ -120,7 +122,7 @@ func newServer() (*server, cryptoffi.PublicKey) {
 	sig := sk.Sign(enc)
 	var sigs []cryptoffi.Sig
 	sigs = append(sigs, sig)
-	return &server{sk: sk, mu: mu, trees: trees, chain: chain, linkSigs: sigs, updates: updates}, pk
+	return &server{sk: sk, mu: mu, trees: trees, chain: *chain, linkSigs: sigs, updates: updates}, pk
 }
 
 // applyUpdates returns a new merkle tree with the updates applied to the current tree.
