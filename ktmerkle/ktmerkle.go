@@ -103,7 +103,7 @@ type server struct {
 	trees []*merkle.Tree
 	// updates just for the current epoch.
 	updates  map[string][]byte
-	chain    hashChain
+	chain    *hashChain
 	linkSigs []cryptoffi.Sig
 }
 
@@ -122,7 +122,7 @@ func newServer() (*server, cryptoffi.PublicKey) {
 	sig := sk.Sign(enc)
 	var sigs []cryptoffi.Sig
 	sigs = append(sigs, sig)
-	return &server{sk: sk, mu: mu, trees: trees, chain: *chain, linkSigs: sigs, updates: updates}, pk
+	return &server{sk: sk, mu: mu, trees: trees, chain: chain, linkSigs: sigs, updates: updates}, pk
 }
 
 // applyUpdates returns a new merkle tree with the updates applied to the current tree.
