@@ -21,10 +21,10 @@ const (
 )
 
 type epochChain struct {
-	epochs []*epochInfoTy
+	epochs []*epochInfo
 }
 
-type epochInfoTy struct {
+type epochInfo struct {
 	tree     *merkle.Tree
 	prevLink linkTy
 	dig      merkle.Digest
@@ -49,7 +49,7 @@ func (c *epochChain) put(tree *merkle.Tree, sk cryptoffi.PrivateKey) {
 	sigSep := (&servSepLink{link: link}).encode()
 	sig := sk.Sign(sigSep)
 
-	epoch := &epochInfoTy{tree: tree, prevLink: prevLink, dig: dig, link: link, linkSig: sig}
+	epoch := &epochInfo{tree: tree, prevLink: prevLink, dig: dig, link: link, linkSig: sig}
 	c.epochs = append(c.epochs, epoch)
 }
 
