@@ -20,79 +20,37 @@ const (
 	maxUint64 uint64  = 1<<64 - 1
 )
 
-// hashChain supports fast commitments to prefixes of a list.
-type hashChain struct {
-	links []linkTy
+type epochChain struct {
+	epochs []*epochInfo
 }
 
-func newHashChain() *hashChain {
-	enc := (&chainSepNone{}).encode()
-	h := cryptoffi.Hash(enc)
-	var links []linkTy
-	links = append(links, h)
-	return &hashChain{links: links}
+type epochInfo struct {
+	tree     *merkle.Tree
+	prevLink linkTy
+	dig      merkle.Digest
+	link     linkTy
+	linkSig  cryptoffi.Sig
 }
 
-func (c *hashChain) put(data []byte) {
-	links := c.links
-	chainLen := uint64(len(links))
-	prevLink := links[chainLen-1]
-	linkSep := (&chainSepSome{epoch: chainLen - 1, prevLink: prevLink, data: data}).encode()
+func (c *epochChain) put(tree *merkle.Tree, sk cryptoffi.PrivateKey) {
+	chainLen := uint64(len(c.epochs))
+	var prevLink linkTy
+	if chainLen > 0 {
+		lastEpoch := c.epochs[chainLen-1]
+		prevLink = lastEpoch.link
+	} else {
+		prevLinkSep := (&chainSepNone{}).encode()
+		prevLink = cryptoffi.Hash(prevLinkSep)
+	}
+
+	dig := tree.Digest()
+	linkSep := (&chainSepSome{epoch: chainLen, prevLink: prevLink, data: dig}).encode()
 	link := cryptoffi.Hash(linkSep)
-	c.links = append(links, link)
-}
+	sigSep := (&servSepLink{link: link}).encode()
+	sig := sk.Sign(sigSep)
 
-// getLink fetches a link (commitment) over the first `length` data entries.
-func (c *hashChain) getLink(length uint64) linkTy {
-	return c.links[length]
-}
-
-type timeEntry struct {
-	time epochTy
-	val  merkle.Val
-	// Type servSigSepPut.
-	sig cryptoffi.Sig
-}
-
-// timeSeries converts a series of value updates into a view of the latest value
-// at any given time.
-type timeSeries []timeEntry
-
-// put returns error if given old entry.
-func (ts *timeSeries) put(epoch epochTy, val merkle.Val, sig cryptoffi.Sig) errorTy {
-	entries := *ts
-	length := uint64(len(entries))
-	if length == 0 {
-		*ts = append(entries, timeEntry{time: epoch, val: val, sig: sig})
-		return errNone
-	}
-	last := entries[length-1].time
-	if epoch < last {
-		return errSome
-	}
-	*ts = append(entries, timeEntry{time: epoch, val: val, sig: sig})
-	return errNone
-}
-
-// get returns val, isInit, putPromise sig, isBoundary.
-// val is the latest update val for time t.
-// if no update happened before t, isInit = false and val = nil.
-// if the epoch was an update boundary, isBoundary = true and putPromise is set.
-func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool) {
-	var latest merkle.Val
-	var init bool
-	var sig cryptoffi.Sig
-	var boundary bool
-
-	for _, te := range *ts {
-		if te.time <= epoch {
-			latest = te.val
-			init = true
-			sig = te.sig
-			boundary = te.time == epoch
-		}
-	}
-	return latest, init, sig, boundary
+	epoch := &epochInfo{tree: tree, prevLink: prevLink, dig: dig, link: link, linkSig: sig}
+	c.epochs = append(c.epochs, epoch)
 }
 
 // KT server.
@@ -100,11 +58,9 @@ func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool)
 type server struct {
 	sk    cryptoffi.PrivateKey
 	mu    *sync.Mutex
-	trees []*merkle.Tree
+	chain *epochChain
 	// updates just for the current epoch.
-	updates  map[string][]byte
-	chain    *hashChain
-	linkSigs []cryptoffi.Sig
+	updates map[string][]byte
 }
 
 func newServer() (*server, cryptoffi.PublicKey) {
@@ -114,15 +70,9 @@ func newServer() (*server, cryptoffi.PublicKey) {
 
 	// Make epoch 0 the empty tree so we can serve early get reqs.
 	emptyTr := &merkle.Tree{}
-	trees := []*merkle.Tree{emptyTr}
-	chain := newHashChain()
-	chain.put(emptyTr.Digest())
-	link := chain.getLink(1)
-	enc := (&servSepLink{link: link}).encode()
-	sig := sk.Sign(enc)
-	var sigs []cryptoffi.Sig
-	sigs = append(sigs, sig)
-	return &server{sk: sk, mu: mu, trees: trees, chain: chain, linkSigs: sigs, updates: updates}, pk
+	chain := &epochChain{}
+	chain.put(emptyTr, sk)
+	return &server{sk: sk, mu: mu, chain: chain, updates: updates}, pk
 }
 
 // applyUpdates returns a new merkle tree with the updates applied to the current tree.
@@ -139,18 +89,10 @@ func applyUpdates(currTr *merkle.Tree, updates map[string][]byte) *merkle.Tree {
 
 func (s *server) updateEpoch() {
 	s.mu.Lock()
-	currTr := s.trees[uint64(len(s.trees))-1]
+	currTr := s.chain.epochs[uint64(len(s.chain.epochs))-1].tree
 	nextTr := applyUpdates(currTr, s.updates)
-	dig := nextTr.Digest()
-	s.trees = append(s.trees, nextTr)
-	numTrees := uint64(len(s.trees))
+	s.chain.put(nextTr, s.sk)
 	s.updates = make(map[string][]byte)
-
-	s.chain.put(dig)
-	link := s.chain.getLink(numTrees)
-	enc := (&servSepLink{link: link}).encode()
-	sig := s.sk.Sign(enc)
-	s.linkSigs = append(s.linkSigs, sig)
 	s.mu.Unlock()
 }
 
@@ -177,58 +119,44 @@ func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 	s.updates[idS] = val
 
 	// Put promise declares that we'll apply this change at the next epoch update.
-	currEpoch := uint64(len(s.trees)) - 1
+	currEpoch := uint64(len(s.chain.epochs)) - 1
 	putPre := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
 	putSig := s.sk.Sign(putPre)
 
 	// Pin the server down a little more by giving the previous chain.
-	prev2Link := s.chain.getLink(currEpoch)
-	prevDig := s.trees[currEpoch].Digest()
-	linkSig := s.linkSigs[currEpoch]
+	// Re-interpreting currEpoch as length, which gives commitment
+	// through currEpoch (as index) - 1.
+	info := s.chain.epochs[currEpoch]
 	s.mu.Unlock()
-	return &servPutReply{putEpoch: currEpoch + 1, prev2Link: prev2Link, prevDig: prevDig, linkSig: linkSig, putSig: putSig, error: errNone}
+	// TODO: rename this to prevLink and currDig. it's at the current info.
+	return &servPutReply{putEpoch: currEpoch + 1, prev2Link: info.prevLink, prevDig: info.dig, linkSig: info.linkSig, putSig: putSig, error: errNone}
 }
 
 func (s *server) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
 	s.mu.Lock()
 	errReply := &servGetIdAtReply{}
 	errReply.error = errSome
-	if epoch >= uint64(len(s.trees)) {
+	if epoch >= uint64(len(s.chain.epochs)) {
 		s.mu.Unlock()
 		return errReply
 	}
-	prevLink := s.chain.getLink(epoch)
-	sig := s.linkSigs[epoch]
-	reply := s.trees[epoch].Get(id)
+	info := s.chain.epochs[epoch]
+	reply := info.tree.Get(id)
 	s.mu.Unlock()
-	return &servGetIdAtReply{prevLink: prevLink, dig: reply.Digest, sig: sig, val: reply.Val, proofTy: reply.ProofTy, proof: reply.Proof, error: reply.Error}
+	return &servGetIdAtReply{prevLink: info.prevLink, dig: info.dig, sig: info.linkSig, val: reply.Val, proofTy: reply.ProofTy, proof: reply.Proof, error: reply.Error}
 }
-
-/*
-func (s *serv) getIdNow(id merkle.Id) *servGetIdNowReply {
-	s.mu.Lock()
-	epoch := uint64(len(s.trees)) - 1
-	prevLink := s.chain.getCommit(epoch)
-	sig := s.linkSigs[epoch]
-	reply := s.trees[epoch].Get(id)
-	s.mu.Unlock()
-	return &servGetIdNowReply{epoch: epoch, prevLink: prevLink, dig: reply.Digest, sig: sig, val: reply.Val, proofTy: reply.ProofTy, proof: reply.Proof, error: reply.Error}
-}
-*/
 
 func (s *server) getLink(epoch epochTy) *servGetLinkReply {
 	s.mu.Lock()
-	if epoch >= uint64(len(s.trees)) {
+	if epoch >= uint64(len(s.chain.epochs)) {
 		errReply := &servGetLinkReply{}
 		errReply.error = errSome
 		s.mu.Unlock()
 		return errReply
 	}
-	prevLink := s.chain.getLink(epoch)
-	dig := s.trees[epoch].Digest()
-	sig := s.linkSigs[epoch]
+	info := s.chain.epochs[epoch]
 	s.mu.Unlock()
-	return &servGetLinkReply{prevLink: prevLink, dig: dig, sig: sig, error: errNone}
+	return &servGetLinkReply{prevLink: info.prevLink, dig: info.dig, sig: info.linkSig, error: errNone}
 }
 
 // KT auditor.
@@ -552,4 +480,54 @@ func (c *client) selfCheck() (epochTy, *evidServLink, *evidServPut, errorTy) {
 		return 0, evidLink, evidPut, err
 	}
 	return epoch, nil, nil, errNone
+}
+
+// timeSeries converts a series of value updates into a view of the latest value
+// at any given time.
+// TODO: this is a bad abstraction. Too complicated of an API for what it provides.
+// Fix when I get to proving the selfCheck function.
+type timeSeries []timeEntry
+
+type timeEntry struct {
+	time epochTy
+	val  merkle.Val
+	// Type servSigSepPut.
+	sig cryptoffi.Sig
+}
+
+// put returns error if given old entry.
+func (ts *timeSeries) put(epoch epochTy, val merkle.Val, sig cryptoffi.Sig) errorTy {
+	entries := *ts
+	length := uint64(len(entries))
+	if length == 0 {
+		*ts = append(entries, timeEntry{time: epoch, val: val, sig: sig})
+		return errNone
+	}
+	last := entries[length-1].time
+	if epoch < last {
+		return errSome
+	}
+	*ts = append(entries, timeEntry{time: epoch, val: val, sig: sig})
+	return errNone
+}
+
+// get returns val, isInit, putPromise sig, isBoundary.
+// val is the latest update val for time t.
+// if no update happened before t, isInit = false and val = nil.
+// if the epoch was an update boundary, isBoundary = true and putPromise is set.
+func (ts *timeSeries) get(epoch epochTy) (merkle.Val, bool, cryptoffi.Sig, bool) {
+	var latest merkle.Val
+	var init bool
+	var sig cryptoffi.Sig
+	var boundary bool
+
+	for _, te := range *ts {
+		if te.time <= epoch {
+			latest = te.val
+			init = true
+			sig = te.sig
+			boundary = te.time == epoch
+		}
+	}
+	return latest, init, sig, boundary
 }
