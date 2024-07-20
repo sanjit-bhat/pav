@@ -4,11 +4,11 @@ package ktmerkle
 // but I haven't gotten around to that yet.
 
 import (
+	"github.com/goose-lang/goose/machine"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
-	"github.com/tchajed/goose/machine"
 )
 
 const (
