@@ -2,15 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [ 'main' ]
+    branches: ["main"]
   pull_request:
-    branches: [ 'main' ]
+    branches: ["main"]
   schedule:
-    # 08:00 on Saturday.
-    - cron: '0 8 * * 6'
+    # 08:00 UTC on Saturday.
+    - cron: "0 8 * * 6"
 
 jobs:
   go:
+    strategy:
+      matrix:
+        go: ["1.22"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +21,7 @@ jobs:
       - name: Setup
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: ${{ matrix.go }}
 
       - name: Test
         run: go test -v ./...
@@ -34,8 +37,10 @@ jobs:
       - name: Lint
         uses: dominikh/staticcheck-action@v1
         with:
-          version: 'v0.4.7'
+          version: "v0.4.7"
+          min-go-version: ${{ matrix.go }}
           install-go: false
+          cache-key: ${{ matrix.go }}
 
   python:
     runs-on: ubuntu-latest
@@ -45,7 +50,7 @@ jobs:
       - name: Format
         uses: chartboost/ruff-action@v1
         with:
-          args: 'format --check'
+          args: "format --check"
 
       - name: Lint
         uses: chartboost/ruff-action@v1
@@ -58,12 +63,12 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: "1.22"
 
       - name: Run extra CI checks
         run: python etc/ci-check.py
