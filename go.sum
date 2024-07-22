@@ -6,8 +6,8 @@ github.com/goose-lang/primitive v0.1.0 h1:JReOdFzUdGD7f8nWTC/uOlNpBdVFU4q8HzMSgn
 github.com/goose-lang/primitive v0.1.0/go.mod h1:sDE72zVH81ASwPXc1m9OgSfaaY0aZHu4Ty19FgONpOc=
 github.com/goose-lang/std v0.4.1 h1:ezoEYbvePtF2TD8vuUUTt5lO893CA6QTgoBX896F8BU=
 github.com/goose-lang/std v0.4.1/go.mod h1:bnKHDHwU0lHf99eMI5PVM77UweRyu6qgM/h43qGBRto=
-github.com/mit-pdos/gokv v0.1.0 h1:0Y7muYhEbJhwO4wGX1gizi/TokeWXK2jvimkv0waNLM=
-github.com/mit-pdos/gokv v0.1.0/go.mod h1:cZ/pnhQcotfojoaBEu4rQuYeS8rwsyaiqqIQR3zTkuU=
+github.com/mit-pdos/gokv v0.1.1 h1:fNQieoq6yV3I7ebs0Al/u/uxEIM3KYKVyvv1WOn0K1s=
+github.com/mit-pdos/gokv v0.1.1/go.mod h1:ZLlOibv49aW6WzNYy/kyew+xwSOLk94LY8qYjheZHJ8=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=

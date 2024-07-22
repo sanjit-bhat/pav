@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/goose-lang/goose v0.7.1
 	github.com/goose-lang/std v0.4.1
-	github.com/mit-pdos/gokv v0.1.0
+	github.com/mit-pdos/gokv v0.1.1
 	github.com/tchajed/marshal v0.6.2
 	golang.org/x/tools v0.23.0
 )
