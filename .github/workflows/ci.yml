@@ -75,8 +75,7 @@ jobs:
 
   # Workaround for defining ruleset across matrix.
   # See https://github.com/orgs/community/discussions/26822.
-  complete:
-    name: Complete CI
+  go-results:
     needs: [go]
     if: ${{ always() }}
     runs-on: ubuntu-latest
