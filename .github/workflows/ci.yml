@@ -72,3 +72,17 @@ jobs:
 
       - name: Run extra CI checks
         run: python etc/ci-check.py
+
+  # Workaround for defining ruleset across matrix.
+  # See https://github.com/orgs/community/discussions/26822.
+  go-results:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    needs: [go]
+    steps:
+      - run: exit 1
+        if: >-
+          ${{
+               contains(needs.*.result, "failure")
+            || contains(needs.*.result, "cancelled")
+          }}
