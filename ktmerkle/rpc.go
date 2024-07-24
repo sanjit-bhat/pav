@@ -57,12 +57,12 @@ type servPutArg struct {
 }
 
 type servPutReply struct {
-	putEpoch  epochTy
-	prev2Link linkTy
-	prevDig   merkle.Digest
-	linkSig   cryptoffi.Sig
-	putSig    cryptoffi.Sig
-	error     errorTy
+	putEpoch epochTy
+	prevLink linkTy
+	dig      merkle.Digest
+	linkSig  cryptoffi.Sig
+	putSig   cryptoffi.Sig
+	error    errorTy
 }
 
 type servGetIdAtArg struct {
