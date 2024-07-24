@@ -129,7 +129,7 @@ func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 	info := s.chain.epochs[currEpoch]
 	s.mu.Unlock()
 	// TODO: rename this to prevLink and currDig. it's at the current info.
-	return &servPutReply{putEpoch: currEpoch + 1, prev2Link: info.prevLink, prevDig: info.dig, linkSig: info.linkSig, putSig: putSig, error: errNone}
+	return &servPutReply{putEpoch: currEpoch + 1, prevLink: info.prevLink, dig: info.dig, linkSig: info.linkSig, putSig: putSig, error: errNone}
 }
 
 func (s *server) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
@@ -298,7 +298,7 @@ func (c *client) put(val merkle.Val) (epochTy, *evidServLink, errorTy) {
 		return 0, nil, reply.error
 	}
 
-	evid, err0 := c.addLink(reply.putEpoch-1, reply.prev2Link, reply.prevDig, reply.linkSig)
+	evid, err0 := c.addLink(reply.putEpoch-1, reply.prevLink, reply.dig, reply.linkSig)
 	if err0 {
 		return 0, evid, err0
 	}

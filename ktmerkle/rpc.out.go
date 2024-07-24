@@ -63,8 +63,8 @@ func (o *servPutArg) decode(b0 []byte) ([]byte, errorTy) {
 func (o *servPutReply) encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.putEpoch)
-	b = marshalutil.WriteSlice1D(b, o.prev2Link)
-	b = marshalutil.WriteSlice1D(b, o.prevDig)
+	b = marshalutil.WriteSlice1D(b, o.prevLink)
+	b = marshalutil.WriteSlice1D(b, o.dig)
 	b = marshalutil.WriteSlice1D(b, o.linkSig)
 	b = marshalutil.WriteSlice1D(b, o.putSig)
 	b = marshal.WriteBool(b, o.error)
@@ -76,11 +76,11 @@ func (o *servPutReply) decode(b0 []byte) ([]byte, errorTy) {
 	if err {
 		return nil, err
 	}
-	prev2Link, b, err := marshalutil.ReadSlice1D(b)
+	prevLink, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
-	prevDig, b, err := marshalutil.ReadSlice1D(b)
+	dig, b, err := marshalutil.ReadSlice1D(b)
 	if err {
 		return nil, err
 	}
@@ -97,8 +97,8 @@ func (o *servPutReply) decode(b0 []byte) ([]byte, errorTy) {
 		return nil, err
 	}
 	o.putEpoch = putEpoch
-	o.prev2Link = prev2Link
-	o.prevDig = prevDig
+	o.prevLink = prevLink
+	o.dig = dig
 	o.linkSig = linkSig
 	o.putSig = putSig
 	o.error = error
