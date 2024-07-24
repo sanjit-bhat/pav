@@ -123,12 +123,9 @@ func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 	putPre := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
 	putSig := s.sk.Sign(putPre)
 
-	// Pin the server down a little more by giving the previous chain.
-	// Re-interpreting currEpoch as length, which gives commitment
-	// through currEpoch (as index) - 1.
+	// Pin the server down a little more by giving the current chain.
 	info := s.chain.epochs[currEpoch]
 	s.mu.Unlock()
-	// TODO: rename this to prevLink and currDig. it's at the current info.
 	return &servPutReply{putEpoch: currEpoch + 1, prevLink: info.prevLink, dig: info.dig, linkSig: info.linkSig, putSig: putSig, error: errNone}
 }
 
