@@ -125,8 +125,11 @@ func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 
 	// Pin the server down a little more by giving the current chain.
 	info := s.chain.epochs[currEpoch]
+	prevLink := info.prevLink
+	dig := info.dig
+	linkSig := info.linkSig
 	s.mu.Unlock()
-	return &servPutReply{putEpoch: currEpoch + 1, prevLink: info.prevLink, dig: info.dig, linkSig: info.linkSig, putSig: putSig, error: errNone}
+	return &servPutReply{putEpoch: currEpoch + 1, prevLink: prevLink, dig: dig, linkSig: linkSig, putSig: putSig, error: errNone}
 }
 
 func (s *server) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
