@@ -82,7 +82,7 @@ func applyUpdates(currTr *merkle.Tree, updates map[string][]byte) *merkle.Tree {
 		idB := []byte(id)
 		_, _, err := nextTr.Put(idB, val)
 		// Put checks that all IDs have valid len, so there shouldn't be any errors.
-		machine.Assume(!err)
+		machine.Assert(!err)
 	}
 	return nextTr
 }
