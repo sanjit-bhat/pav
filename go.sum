@@ -4,8 +4,8 @@ github.com/goose-lang/goose v0.7.1 h1:o2XGywsaQgQmNyMsPDT4dwFBDAxeAflFQo+zGuF9OG
 github.com/goose-lang/goose v0.7.1/go.mod h1:Yf+T8Mii3tuRE+cKuN80JZlDkKdRIOm9+4k2kj0rBew=
 github.com/goose-lang/primitive v0.1.0 h1:JReOdFzUdGD7f8nWTC/uOlNpBdVFU4q8HzMSgn8edaY=
 github.com/goose-lang/primitive v0.1.0/go.mod h1:sDE72zVH81ASwPXc1m9OgSfaaY0aZHu4Ty19FgONpOc=
-github.com/goose-lang/std v0.4.1 h1:ezoEYbvePtF2TD8vuUUTt5lO893CA6QTgoBX896F8BU=
-github.com/goose-lang/std v0.4.1/go.mod h1:bnKHDHwU0lHf99eMI5PVM77UweRyu6qgM/h43qGBRto=
+github.com/goose-lang/std v0.5.0 h1:S3Ra8eKGIfPLV6EuE+7/kq2LXmEJiEn5WvhS4LTrlZI=
+github.com/goose-lang/std v0.5.0/go.mod h1:bnKHDHwU0lHf99eMI5PVM77UweRyu6qgM/h43qGBRto=
 github.com/mit-pdos/gokv v0.1.1 h1:fNQieoq6yV3I7ebs0Al/u/uxEIM3KYKVyvv1WOn0K1s=
 github.com/mit-pdos/gokv v0.1.1/go.mod h1:ZLlOibv49aW6WzNYy/kyew+xwSOLk94LY8qYjheZHJ8=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
