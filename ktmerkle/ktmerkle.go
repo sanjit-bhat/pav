@@ -264,25 +264,29 @@ func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig 
 	if !ok0 {
 		return nil, errSome
 	}
+	newSigLn := &signedLink{epoch: epoch, prevLink: prevLink, dig: dig, sig: sig}
 
 	// Check if epoch already exists.
 	cachedLink, ok1 := c.links[epoch]
 	if ok1 && !std.BytesEqual(cachedLink.link, link) {
-		evid := &evidServLink{epoch0: epoch, prevLink0: cachedLink.prevLink, dig0: cachedLink.dig, sig0: cachedLink.sig, epoch1: epoch, prevLink1: prevLink, dig1: dig, sig1: sig}
+		cachedSigLn := &signedLink{epoch: epoch, prevLink: cachedLink.prevLink, dig: cachedLink.dig, sig: cachedLink.sig}
+		evid := &evidServLink{sln0: newSigLn, sln1: cachedSigLn}
 		return evid, errSome
 	}
 
 	// Check if epoch-1 already exists.
 	cachedPrevLink, ok2 := c.links[epoch-1]
 	if epoch > 0 && ok2 && !std.BytesEqual(cachedPrevLink.link, prevLink) {
-		evid := &evidServLink{epoch0: epoch - 1, prevLink0: cachedPrevLink.prevLink, dig0: cachedPrevLink.dig, sig0: cachedPrevLink.sig, epoch1: epoch, prevLink1: prevLink, dig1: dig, sig1: sig}
+		cachedSigLn := &signedLink{epoch: epoch - 1, prevLink: cachedLink.prevLink, dig: cachedLink.dig, sig: cachedLink.sig}
+		evid := &evidServLink{sln0: cachedSigLn, sln1: newSigLn}
 		return evid, errSome
 	}
 
 	// Check if epoch+1 already exists.
 	cachedNextLink, ok3 := c.links[epoch+1]
 	if epoch < maxUint64 && ok3 && !std.BytesEqual(link, cachedNextLink.prevLink) {
-		evid := &evidServLink{epoch0: epoch, prevLink0: link, dig0: dig, sig0: sig, epoch1: epoch + 1, prevLink1: cachedNextLink.prevLink, dig1: cachedNextLink.dig, sig1: cachedNextLink.sig}
+		cachedSigLn := &signedLink{epoch: epoch + 1, prevLink: cachedLink.prevLink, dig: cachedLink.dig, sig: cachedLink.sig}
+		evid := &evidServLink{sln0: newSigLn, sln1: cachedSigLn}
 		return evid, errSome
 	}
 
@@ -372,6 +376,8 @@ func (c *client) fetchLink(epoch epochTy) (*evidServLink, errorTy) {
 // there could be lots of errors, but currently, we mainly
 // return an error if there's evidence.
 // TODO: maybe change err handling, in selfCheck as well.
+// TODO: maybe split cross-epoch consistency check into sep routine.
+// it seems nice to have (but not necessary) for both audit and selfCheck.
 func (c *client) audit(adtrAddr grove_ffi.Address, adtrPk cryptoffi.PublicKey) (epochTy, *evidServLink, errorTy) {
 	// Note: potential attack.
 	// Key serv refuses to fill in a hole, even though we have bigger digests.
@@ -417,7 +423,9 @@ func (c *client) audit(adtrAddr grove_ffi.Address, adtrPk cryptoffi.PublicKey) (
 
 	// Check if our chain diverges from adtr.
 	if !std.BytesEqual(lastLink.link, adtrLink) {
-		evid := &evidServLink{epoch0: lastEpoch, prevLink0: lastLink.prevLink, dig0: lastLink.dig, sig0: lastLink.sig, epoch1: lastEpoch, prevLink1: reply.prevLink, dig1: reply.dig, sig1: reply.servSig}
+		adtrSigLn := &signedLink{epoch: lastEpoch, prevLink: reply.prevLink, dig: reply.dig, sig: reply.servSig}
+		mySigLn := &signedLink{epoch: lastEpoch, prevLink: lastLink.prevLink, dig: lastLink.dig, sig: lastLink.sig}
+		evid := &evidServLink{sln0: adtrSigLn, sln1: mySigLn}
 		return 0, evid, errSome
 	}
 	return epoch, nil, errNone
@@ -449,7 +457,9 @@ func (c *client) selfCheckAt(epoch epochTy) (*evidServLink, *evidServPut, errorT
 	if !std.BytesEqual(expVal, reply.val) {
 		// The put promise is only valid on a boundary epoch.
 		if isBoundary {
-			ev := &evidServPut{epoch: epoch, prevLink: reply.prevLink, dig: reply.dig, linkSig: reply.sig, id: c.id, val0: expVal, putSig: putSig, val1: reply.val, proof: reply.proof}
+			sigLn := &signedLink{epoch: epoch, prevLink: reply.prevLink, dig: reply.dig, sig: reply.sig}
+			sigPut := &signedPut{epoch: epoch, id: c.id, val: expVal, sig: putSig}
+			ev := &evidServPut{sln: sigLn, sp: sigPut, val: reply.val, proof: reply.proof}
 			return nil, ev, errSome
 		} else {
 			return nil, nil, errSome

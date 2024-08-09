@@ -6,44 +6,59 @@ import (
 	"github.com/mit-pdos/pav/merkle"
 )
 
+type signedLink struct {
+	epoch    epochTy
+	prevLink linkTy
+	dig      merkle.Digest
+	sig      cryptoffi.Sig
+}
+
+func (o *signedLink) check(pk cryptoffi.PublicKey) (linkTy, errorTy) {
+	preLink := (&chainSepSome{epoch: o.epoch, prevLink: o.prevLink, data: o.dig}).encode()
+	link := cryptoffi.Hash(preLink)
+	sepLink := (&servSepLink{link: link}).encode()
+	ok := pk.Verify(sepLink, o.sig)
+	return link, !ok
+}
+
+type signedPut struct {
+	epoch epochTy
+	id    merkle.Id
+	val   merkle.Val
+	sig   cryptoffi.Sig
+}
+
+func (o *signedPut) check(pk cryptoffi.PublicKey) errorTy {
+	sepPut := (&servSepPut{epoch: o.epoch, id: o.id, val: o.val}).encode()
+	okPut := pk.Verify(sepPut, o.sig)
+	return !okPut
+}
+
 // evidServLink is evidence that the server signed two conflicting links,
 // either zero or one epochs away.
 type evidServLink struct {
-	epoch0    epochTy
-	prevLink0 linkTy
-	dig0      merkle.Digest
-	sig0      cryptoffi.Sig
-
-	epoch1    epochTy
-	prevLink1 linkTy
-	dig1      merkle.Digest
-	sig1      cryptoffi.Sig
+	sln0 *signedLink
+	sln1 *signedLink
 }
 
 // check returns an error if the evidence does not check out.
 // otherwise, it proves that the server was dishonest.
 func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
-	linkSep0 := (&chainSepSome{epoch: e.epoch0, prevLink: e.prevLink0, data: e.dig0}).encode()
-	link0 := cryptoffi.Hash(linkSep0)
-	enc0 := (&servSepLink{link: link0}).encode()
-	ok0 := servPk.Verify(enc0, e.sig0)
-	if !ok0 {
+	link0, err0 := e.sln0.check(servPk)
+	if err0 {
 		return errSome
 	}
 
-	linkSep1 := (&chainSepSome{epoch: e.epoch1, prevLink: e.prevLink1, data: e.dig1}).encode()
-	link1 := cryptoffi.Hash(linkSep1)
-	enc1 := (&servSepLink{link: link1}).encode()
-	ok1 := servPk.Verify(enc1, e.sig1)
-	if !ok1 {
+	link1, err1 := e.sln1.check(servPk)
+	if err1 {
 		return errSome
 	}
 
-	if e.epoch0 == e.epoch1 {
+	if e.sln0.epoch == e.sln1.epoch {
 		return std.BytesEqual(link0, link1)
 	}
-	if e.epoch0 == e.epoch1-1 {
-		return std.BytesEqual(link0, e.prevLink1)
+	if e.sln0.epoch == e.sln1.epoch-1 {
+		return std.BytesEqual(link0, e.sln1.prevLink)
 	}
 	return errSome
 }
@@ -51,42 +66,32 @@ func (e *evidServLink) check(servPk cryptoffi.PublicKey) errorTy {
 // evidServPut is evidence when a server promises to put a value at a certain
 // epoch but actually there's a different value (as evidenced by a merkle proof).
 type evidServPut struct {
-	epoch epochTy
-	// For signed link.
-	prevLink linkTy
-	dig      merkle.Digest
-	linkSig  cryptoffi.Sig
-	// For signed put.
-	id     merkle.Id
-	val0   merkle.Val
-	putSig cryptoffi.Sig
-	// For merkle inclusion.
-	val1  merkle.Val
+	sln *signedLink
+	sp  *signedPut
+	// merkle inclusion.
+	val   merkle.Val
 	proof merkle.Proof
 }
 
 func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
-	// Proof of signing the link.
-	preLink := (&chainSepSome{epoch: e.epoch, prevLink: e.prevLink, data: e.dig}).encode()
-	link := cryptoffi.Hash(preLink)
-	preLinkSig := (&servSepLink{link: link}).encode()
-	linkOk := servPk.Verify(preLinkSig, e.linkSig)
-	if !linkOk {
-		return errSome
-	}
-
-	// Proof of signing the put promise.
-	prePut := (&servSepPut{epoch: e.epoch, id: e.id, val: e.val0}).encode()
-	putOk := servPk.Verify(prePut, e.putSig)
-	if !putOk {
-		return errSome
-	}
-
-	// Proof of merkle inclusion of the other val.
-	err0 := merkle.CheckProof(merkle.MembProofTy, e.proof, e.id, e.val1, e.dig)
+	_, err0 := e.sln.check(servPk)
 	if err0 {
 		return errSome
 	}
 
-	return std.BytesEqual(e.val0, e.val1)
+	err1 := e.sp.check(servPk)
+	if err1 {
+		return errSome
+	}
+
+	// merkle inclusion of the other val.
+	err2 := merkle.CheckProof(merkle.MembProofTy, e.proof, e.sp.id, e.val, e.sln.dig)
+	if err2 {
+		return errSome
+	}
+
+	if e.sln.epoch != e.sp.epoch {
+		return errSome
+	}
+	return std.BytesEqual(e.sp.val, e.val)
 }
