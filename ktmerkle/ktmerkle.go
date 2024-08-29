@@ -270,7 +270,7 @@ func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig 
 	cachedLink, ok1 := c.links[epoch]
 	if ok1 && !std.BytesEqual(cachedLink.link, link) {
 		cachedSigLn := &signedLink{epoch: epoch, prevLink: cachedLink.prevLink, dig: cachedLink.dig, sig: cachedLink.sig}
-		evid := &evidServLink{sln0: newSigLn, sln1: cachedSigLn}
+		evid := &evidServLink{sigLn0: newSigLn, sigLn1: cachedSigLn}
 		return evid, errSome
 	}
 
@@ -278,7 +278,7 @@ func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig 
 	cachedPrevLink, ok2 := c.links[epoch-1]
 	if epoch > 0 && ok2 && !std.BytesEqual(cachedPrevLink.link, prevLink) {
 		cachedSigLn := &signedLink{epoch: epoch - 1, prevLink: cachedLink.prevLink, dig: cachedLink.dig, sig: cachedLink.sig}
-		evid := &evidServLink{sln0: cachedSigLn, sln1: newSigLn}
+		evid := &evidServLink{sigLn0: cachedSigLn, sigLn1: newSigLn}
 		return evid, errSome
 	}
 
@@ -286,7 +286,7 @@ func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig 
 	cachedNextLink, ok3 := c.links[epoch+1]
 	if epoch < maxUint64 && ok3 && !std.BytesEqual(link, cachedNextLink.prevLink) {
 		cachedSigLn := &signedLink{epoch: epoch + 1, prevLink: cachedLink.prevLink, dig: cachedLink.dig, sig: cachedLink.sig}
-		evid := &evidServLink{sln0: newSigLn, sln1: cachedSigLn}
+		evid := &evidServLink{sigLn0: newSigLn, sigLn1: cachedSigLn}
 		return evid, errSome
 	}
 
@@ -425,7 +425,7 @@ func (c *client) audit(adtrAddr grove_ffi.Address, adtrPk cryptoffi.PublicKey) (
 	if !std.BytesEqual(lastLink.link, adtrLink) {
 		adtrSigLn := &signedLink{epoch: lastEpoch, prevLink: reply.prevLink, dig: reply.dig, sig: reply.servSig}
 		mySigLn := &signedLink{epoch: lastEpoch, prevLink: lastLink.prevLink, dig: lastLink.dig, sig: lastLink.sig}
-		evid := &evidServLink{sln0: adtrSigLn, sln1: mySigLn}
+		evid := &evidServLink{sigLn0: adtrSigLn, sigLn1: mySigLn}
 		return 0, evid, errSome
 	}
 	return epoch, nil, errNone
@@ -459,8 +459,8 @@ func (c *client) selfCheckAt(epoch epochTy) (*evidServLink, *evidServPut, errorT
 		if isBoundary {
 			sigLn := &signedLink{epoch: epoch, prevLink: reply.prevLink, dig: reply.dig, sig: reply.sig}
 			sigPut := &signedPut{epoch: epoch, id: c.id, val: expVal, sig: putSig}
-			ev := &evidServPut{sln: sigLn, sp: sigPut, val: reply.val, proof: reply.proof}
-			return nil, ev, errSome
+			evid := &evidServPut{sigLn: sigLn, sigPut: sigPut, val: reply.val, proof: reply.proof}
+			return nil, evid, errSome
 		} else {
 			return nil, nil, errSome
 		}
