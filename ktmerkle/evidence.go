@@ -84,7 +84,6 @@ func (e *evidServPut) check(servPk cryptoffi.PublicKey) errorTy {
 		return errSome
 	}
 
-	// merkle inclusion of the other val.
 	err2 := merkle.CheckProof(merkle.MembProofTy, e.proof, e.sigPut.id, e.val, e.sigLn.dig)
 	if err2 {
 		return errSome
