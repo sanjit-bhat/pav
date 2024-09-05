@@ -1,4 +1,4 @@
-package ktmerkle
+package kt
 
 import (
 	"github.com/mit-pdos/pav/cryptoffi"

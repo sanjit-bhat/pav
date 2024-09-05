@@ -1,4 +1,4 @@
-package ktmerkle
+package kt
 
 import (
 	"fmt"
