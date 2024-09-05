@@ -6,8 +6,8 @@ proj_root = Path(__file__).parents[1]
 
 
 class Tests(unittest.TestCase):
-    def test_ktmerkle_compiled(self):
-        cmd = "go run ./rpc --in ktmerkle/rpc.go && git diff --exit-code ktmerkle/rpc.out.go"
+    def test_kt_rpc_compiled(self):
+        cmd = "go run ./rpc --in kt/rpc.go && git diff --exit-code kt/rpc.out.go"
         res = subprocess.run(
             cmd, cwd=proj_root, shell=True, capture_output=True, text=True
         )

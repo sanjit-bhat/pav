@@ -1,4 +1,4 @@
-package ktmerkle
+package kt
 
 // This file has code that probably should be auto-generated,
 // but I haven't gotten around to that yet.

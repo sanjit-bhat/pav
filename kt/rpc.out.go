@@ -1,6 +1,6 @@
-// Auto-generated from spec "github.com/mit-pdos/pav/ktmerkle/rpc.go"
+// Auto-generated from spec "github.com/mit-pdos/pav/kt/rpc.go"
 // using compiler "github.com/mit-pdos/pav/rpc".
-package ktmerkle
+package kt
 
 import (
 	"github.com/mit-pdos/pav/marshalutil"
