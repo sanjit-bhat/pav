@@ -25,7 +25,7 @@ type epochChain struct {
 }
 
 type epochInfo struct {
-	tree     *merkle.Tree
+	keyMap   *merkle.Tree
 	prevLink linkTy
 	dig      merkle.Digest
 	link     linkTy
@@ -39,17 +39,17 @@ func (c *epochChain) put(tree *merkle.Tree, sk cryptoffi.PrivateKey) {
 		lastEpoch := c.epochs[chainLen-1]
 		prevLink = lastEpoch.link
 	} else {
-		prevLinkSep := (&chainSepNone{}).encode()
-		prevLink = cryptoffi.Hash(prevLinkSep)
+		prePrevLink := (&chainSepNone{}).encode()
+		prevLink = cryptoffi.Hash(prePrevLink)
 	}
 
 	dig := tree.Digest()
-	linkSep := (&chainSepSome{epoch: chainLen, prevLink: prevLink, data: dig}).encode()
-	link := cryptoffi.Hash(linkSep)
-	sigSep := (&servSepLink{link: link}).encode()
-	sig := sk.Sign(sigSep)
+	preLink := (&chainSepSome{epoch: chainLen, prevLink: prevLink, data: dig}).encode()
+	link := cryptoffi.Hash(preLink)
+	sepLink := (&servSepLink{link: link}).encode()
+	sig := sk.Sign(sepLink)
 
-	epoch := &epochInfo{tree: tree, prevLink: prevLink, dig: dig, link: link, linkSig: sig}
+	epoch := &epochInfo{keyMap: tree, prevLink: prevLink, dig: dig, link: link, linkSig: sig}
 	c.epochs = append(c.epochs, epoch)
 }
 
@@ -68,30 +68,30 @@ func newServer() (*server, cryptoffi.PublicKey) {
 	mu := new(sync.Mutex)
 	updates := make(map[string][]byte)
 
-	// Make epoch 0 the empty tree so we can serve early get reqs.
-	emptyTr := &merkle.Tree{}
+	// Make epoch 0 the empty map so we can serve early get reqs.
+	emptyMap := &merkle.Tree{}
 	chain := &epochChain{}
-	chain.put(emptyTr, sk)
+	chain.put(emptyMap, sk)
 	return &server{sk: sk, mu: mu, chain: chain, updates: updates}, pk
 }
 
-// applyUpdates returns a new merkle tree with the updates applied to the current tree.
-func applyUpdates(currTr *merkle.Tree, updates map[string][]byte) *merkle.Tree {
-	nextTr := currTr.DeepCopy()
+// applyUpdates returns a new map with the updates applied to the current map.
+func applyUpdates(currMap *merkle.Tree, updates map[string][]byte) *merkle.Tree {
+	nextMap := currMap.DeepCopy()
 	for id, val := range updates {
 		idB := []byte(id)
-		_, _, err := nextTr.Put(idB, val)
+		_, _, err := nextMap.Put(idB, val)
 		// Put checks that all IDs have valid len, so there shouldn't be any errors.
 		machine.Assert(!err)
 	}
-	return nextTr
+	return nextMap
 }
 
 func (s *server) updateEpoch() {
 	s.mu.Lock()
-	currTr := s.chain.epochs[uint64(len(s.chain.epochs))-1].tree
-	nextTr := applyUpdates(currTr, s.updates)
-	s.chain.put(nextTr, s.sk)
+	currMap := s.chain.epochs[uint64(len(s.chain.epochs))-1].keyMap
+	nextMap := applyUpdates(currMap, s.updates)
+	s.chain.put(nextMap, s.sk)
 	s.updates = make(map[string][]byte)
 	s.mu.Unlock()
 }
@@ -120,8 +120,8 @@ func (s *server) put(id merkle.Id, val merkle.Val) *servPutReply {
 
 	// Put promise declares that we'll apply this change at the next epoch update.
 	currEpoch := uint64(len(s.chain.epochs)) - 1
-	putPre := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
-	putSig := s.sk.Sign(putPre)
+	sepPut := (&servSepPut{epoch: currEpoch + 1, id: id, val: val}).encode()
+	putSig := s.sk.Sign(sepPut)
 
 	// Pin the server down a little more by giving the current chain.
 	info := s.chain.epochs[currEpoch]
@@ -141,7 +141,7 @@ func (s *server) getIdAt(id merkle.Id, epoch epochTy) *servGetIdAtReply {
 		return errReply
 	}
 	info := s.chain.epochs[epoch]
-	reply := info.tree.Get(id)
+	reply := info.keyMap.Get(id)
 	s.mu.Unlock()
 	return &servGetIdAtReply{prevLink: info.prevLink, dig: info.dig, sig: info.linkSig, val: reply.Val, proofTy: reply.ProofTy, proof: reply.Proof, error: reply.Error}
 }
@@ -191,8 +191,8 @@ func (a *auditor) put(prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig)
 	epoch := uint64(len(a.log))
 	var cachedPrevLink linkTy
 	if epoch == 0 {
-		linkSep := (&chainSepNone{}).encode()
-		cachedPrevLink = cryptoffi.Hash(linkSep)
+		preLink := (&chainSepNone{}).encode()
+		cachedPrevLink = cryptoffi.Hash(preLink)
 	} else {
 		cachedPrevLink = a.log[epoch-1].link
 	}
@@ -201,17 +201,16 @@ func (a *auditor) put(prevLink linkTy, dig merkle.Digest, servSig cryptoffi.Sig)
 		return errSome
 	}
 
-	linkSep := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
-	link := cryptoffi.Hash(linkSep)
-	servSep := (&servSepLink{link: link}).encode()
-	servOk := a.servPk.Verify(servSep, servSig)
+	preLink := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
+	link := cryptoffi.Hash(preLink)
+	sepLink := (&servSepLink{link: link}).encode()
+	servOk := a.servPk.Verify(sepLink, servSig)
 	if !servOk {
 		a.mu.Unlock()
 		return errSome
 	}
 
-	adtrSep := (&adtrSepLink{link: link}).encode()
-	adtrSig := a.sk.Sign(adtrSep)
+	adtrSig := a.sk.Sign(sepLink)
 	entry := &adtrLinkSigs{prevLink: prevLink, dig: dig, link: link, servSig: servSig, adtrSig: adtrSig}
 	a.log = append(a.log, entry)
 	a.mu.Unlock()
@@ -256,11 +255,11 @@ func newClient(id merkle.Id, servAddr grove_ffi.Address, servPk cryptoffi.Public
 }
 
 func (c *client) addLink(epoch epochTy, prevLink linkTy, dig merkle.Digest, sig cryptoffi.Sig) (*evidServLink, errorTy) {
-	linkSep := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
-	link := cryptoffi.Hash(linkSep)
+	preLink := (&chainSepSome{epoch: epoch, prevLink: prevLink, data: dig}).encode()
+	link := cryptoffi.Hash(preLink)
 	// Check that link sig verifies.
-	preSig := (&servSepLink{link: link}).encode()
-	ok0 := c.servPk.Verify(preSig, sig)
+	sepLink := (&servSepLink{link: link}).encode()
+	ok0 := c.servPk.Verify(sepLink, sig)
 	if !ok0 {
 		return nil, errSome
 	}
@@ -307,8 +306,8 @@ func (c *client) put(val merkle.Val) (epochTy, *evidServLink, errorTy) {
 		return 0, evid, err0
 	}
 
-	prePut := (&servSepPut{epoch: reply.putEpoch, id: c.id, val: val}).encode()
-	ok := c.servPk.Verify(prePut, reply.putSig)
+	sepPut := (&servSepPut{epoch: reply.putEpoch, id: c.id, val: val}).encode()
+	ok := c.servPk.Verify(sepPut, reply.putSig)
 	if !ok {
 		return 0, nil, errSome
 	}
