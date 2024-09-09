@@ -1,7 +1,7 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/goose-lang/goose v0.7.1 h1:o2XGywsaQgQmNyMsPDT4dwFBDAxeAflFQo+zGuF9OGw=
-github.com/goose-lang/goose v0.7.1/go.mod h1:Yf+T8Mii3tuRE+cKuN80JZlDkKdRIOm9+4k2kj0rBew=
+github.com/goose-lang/goose v0.9.0 h1:503HvtIquoGXTCg1OzEz6HKMPcYpkpLwVrQRH7RMDac=
+github.com/goose-lang/goose v0.9.0/go.mod h1:Yf+T8Mii3tuRE+cKuN80JZlDkKdRIOm9+4k2kj0rBew=
 github.com/goose-lang/primitive v0.1.0 h1:JReOdFzUdGD7f8nWTC/uOlNpBdVFU4q8HzMSgn8edaY=
 github.com/goose-lang/primitive v0.1.0/go.mod h1:sDE72zVH81ASwPXc1m9OgSfaaY0aZHu4Ty19FgONpOc=
 github.com/goose-lang/std v0.5.0 h1:S3Ra8eKGIfPLV6EuE+7/kq2LXmEJiEn5WvhS4LTrlZI=
