@@ -3,19 +3,14 @@ package kt
 import (
 	"fmt"
 	"github.com/mit-pdos/gokv/grove_ffi"
-	"sync"
+	"math/rand/v2"
 	"testing"
 )
 
-var port = 6060
-var portMu = new(sync.Mutex)
-
 func makeUniqueAddr() uint64 {
-	portMu.Lock()
+	port := rand.IntN(4000) + 6000
 	ip := fmt.Sprintf("0.0.0.0:%d", port)
 	addr := grove_ffi.MakeAddress(ip)
-	port++
-	portMu.Unlock()
 	return addr
 }
 
