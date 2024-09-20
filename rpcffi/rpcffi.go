@@ -1,6 +1,8 @@
 package rpcffi
 
 import (
+	"bytes"
+	"encoding/gob"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"net"
 	"net/http"
@@ -37,6 +39,19 @@ func NewClient(addr grove_ffi.Address) (*Client, errorT) {
 }
 
 // TODO: Goose doesn't support any.
+// TODO: net/rpc uses gob. check if gob satisfies our security requirements,
+// both for adversarial rpc and for hash fn encoding.
 func (c *Client) Call(method string, args any, reply any) errorT {
 	return c.c.Call(method, args, reply) != nil
+}
+
+// TODO: Goose doesn't support any.
+func Encode(e any) ([]byte, errorT) {
+	b := new(bytes.Buffer)
+	enc := gob.NewEncoder(b)
+	err := enc.Encode(e)
+	if err != nil {
+		return nil, true
+	}
+	return b.Bytes(), false
 }
