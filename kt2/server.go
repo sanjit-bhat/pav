@@ -60,20 +60,17 @@ func firstLink() linkTy {
 }
 
 func nextLink(epoch epochTy, prevLink, data []byte) []byte {
-	var pl []byte = prevLink
-	if epoch == 0 {
-		pl = firstLink()
-	}
-	pre := rpcffi.Encode(&chainSepSome{tag: chainSepSomeTag, epoch: epoch, prevLink: pl, data: data})
+	pre := rpcffi.Encode(&chainSepSome{tag: chainSepSomeTag, epoch: epoch, prevLink: prevLink, data: data})
 	return cryptoffi.Hash(pre)
 }
 
 func (c *epochChain) put(updates []*mapEntry, dig merkle.Digest, sk cryptoffi.PrivateKey) {
 	chainLen := uint64(len(c.epochs))
 	var prevLink linkTy
-	if chainLen > 0 {
-		lastEpoch := c.epochs[chainLen-1]
-		prevLink = lastEpoch.link
+	if chainLen == 0 {
+		prevLink = firstLink()
+	} else {
+		prevLink = c.epochs[chainLen-1].link
 	}
 	link := nextLink(chainLen, prevLink, dig)
 	// no need for server sig domain sep since there's only one msg type.
@@ -100,13 +97,6 @@ type PutArgs struct {
 	pk  []byte
 }
 
-type signedLink struct {
-	epoch    epochTy
-	prevLink linkTy
-	dig      merkle.Digest
-	sig      cryptoffi.Sig
-}
-
 type histMembProof struct {
 	label     []byte
 	vrfProof  []byte
@@ -121,7 +111,7 @@ type histNonMembProof struct {
 }
 
 type histProof struct {
-	sigLn   *signedLink
+	sigLn   *SignedLink
 	membs   []*histMembProof
 	nonMemb *histNonMembProof
 }
@@ -137,7 +127,7 @@ func (s *Server) getHistProof(uid uint64) *histProof {
 	// get signed link.
 	numEpochs := uint64(len(s.chain.epochs))
 	lastInfo := s.chain.epochs[numEpochs-1]
-	sigLn := &signedLink{epoch: numEpochs - 1, prevLink: lastInfo.prevLink, dig: lastInfo.dig, sig: lastInfo.linkSig}
+	sigLn := &SignedLink{epoch: numEpochs - 1, prevLink: lastInfo.prevLink, dig: lastInfo.dig, sig: lastInfo.linkSig}
 
 	// get memb proofs for all existing versions.
 	var membs []*histMembProof
@@ -210,6 +200,19 @@ func (s *Server) Audit(epoch *uint64, reply *AuditUpd) error {
 	inf := s.chain.epochs[*epoch]
 	reply.updates = inf.updates
 	reply.linkSig = inf.linkSig
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *Server) Links(unused *struct{}, reply *[]*SignedLink) error {
+	s.mu.Lock()
+	var sigLinks []*SignedLink
+	for ep, inf := range s.chain.epochs {
+		epoch := uint64(ep)
+		sigLn := &SignedLink{epoch: epoch, prevLink: inf.prevLink, dig: inf.dig, sig: inf.linkSig}
+		sigLinks = append(sigLinks, sigLn)
+	}
+	*reply = sigLinks
 	s.mu.Unlock()
 	return nil
 }

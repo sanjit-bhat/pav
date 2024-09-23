@@ -41,6 +41,7 @@ func (priv PrivateKey) Sign(message []byte) Sig {
 	return ed25519.Sign(ed25519.PrivateKey(priv), message)
 }
 
+// Verify rets okay if proof verifies.
 func (pub PublicKey) Verify(message []byte, sig Sig) bool {
 	return ed25519.Verify(ed25519.PublicKey(pub), message, sig)
 }
@@ -67,6 +68,7 @@ func (priv VRFPrivateKey) Hash(data []byte) ([]byte, []byte) {
 	return h[:], proof
 }
 
+// Verify rets okay if proof verifies.
 func (pub VRFPublicKey) Verify(data, hash, proof []byte) bool {
 	h, err := pub.pk.ProofToHash(data, proof)
 	if err != nil {

@@ -8,9 +8,11 @@ import (
 )
 
 type adtrEpochInfo struct {
-	link    linkTy
-	servSig cryptoffi.Sig
-	adtrSig cryptoffi.Sig
+	prevLink []byte
+	dig      []byte
+	link     []byte
+	servSig  cryptoffi.Sig
+	adtrSig  cryptoffi.Sig
 }
 
 type Auditor struct {
@@ -62,10 +64,13 @@ func (a *Auditor) Update(args *AuditUpd, unused *struct{}) error {
 
 	// re-compute link and check sig.
 	var prevLink []byte
-	if numEpochs > 0 {
+	if numEpochs == 0 {
+		prevLink = firstLink()
+	} else {
 		prevLink = a.sigLinks[numEpochs-1].link
 	}
-	link := nextLink(numEpochs, prevLink, a.keyMap.Digest())
+	dig := a.keyMap.Digest()
+	link := nextLink(numEpochs, prevLink, dig)
 	ok0 := a.servPk.Verify(link, args.linkSig)
 	if !ok0 {
 		a.mu.Unlock()
@@ -74,7 +79,7 @@ func (a *Auditor) Update(args *AuditUpd, unused *struct{}) error {
 
 	// sign new link.
 	sig := a.sk.Sign(link)
-	inf := &adtrEpochInfo{link: link, servSig: args.linkSig, adtrSig: sig}
+	inf := &adtrEpochInfo{prevLink: prevLink, dig: dig, link: link, servSig: args.linkSig, adtrSig: sig}
 	a.sigLinks = append(a.sigLinks, inf)
 	a.mu.Unlock()
 	return nil
