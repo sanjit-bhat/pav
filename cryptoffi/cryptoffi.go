@@ -62,6 +62,8 @@ func VRFGenerateKey() (*VRFPublicKey, *VRFPrivateKey) {
 
 func (priv VRFPrivateKey) Hash(data []byte) ([]byte, []byte) {
 	h, proof := priv.sk.Evaluate(data)
+	// TODO: check that proof doesn't have h inside it.
+	// that'd be a waste of space.
 	return h[:], proof
 }
 

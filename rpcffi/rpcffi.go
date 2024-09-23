@@ -3,6 +3,7 @@ package rpcffi
 import (
 	"bytes"
 	"encoding/gob"
+	"github.com/goose-lang/goose/machine"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"net"
 	"net/http"
@@ -46,12 +47,10 @@ func (c *Client) Call(method string, args any, reply any) errorT {
 }
 
 // TODO: Goose doesn't support any.
-func Encode(e any) ([]byte, errorT) {
+func Encode(e any) []byte {
 	b := new(bytes.Buffer)
 	enc := gob.NewEncoder(b)
 	err := enc.Encode(e)
-	if err != nil {
-		return nil, true
-	}
-	return b.Bytes(), false
+	machine.Assume(err == nil)
+	return b.Bytes()
 }
