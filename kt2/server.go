@@ -1,7 +1,9 @@
 package kt2
 
 import (
-	"github.com/goose-lang/goose/machine"
+	"errors"
+	"github.com/goose-lang/primitive"
+	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
 	"github.com/mit-pdos/pav/rpcffi"
@@ -143,10 +145,10 @@ func (s *Server) getHistProof(uid uint64) *histProof {
 	for ver := uint64(0); ver < nextVer; ver++ {
 		label, vrfProof := compMapLabel(uid, ver, s.vrfSk)
 		getReply := s.keyMap.Get(label)
-		machine.Assert(!getReply.Error)
-		machine.Assert(getReply.ProofTy)
+		primitive.Assert(!getReply.Error)
+		primitive.Assert(getReply.ProofTy)
 		pk, ok := s.fullKeyMap[string(label)]
-		machine.Assert(ok)
+		primitive.Assert(ok)
 		newMemb := &histMembProof{label: label, vrfProof: vrfProof, pk: pk, merkProof: getReply.Proof}
 		membs = append(membs, newMemb)
 	}
@@ -154,8 +156,8 @@ func (s *Server) getHistProof(uid uint64) *histProof {
 	// get non-memb proof for next version.
 	nextLabel, nextVrfProof := compMapLabel(uid, nextVer, s.vrfSk)
 	nextReply := s.keyMap.Get(nextLabel)
-	machine.Assert(!nextReply.Error)
-	machine.Assert(!nextReply.ProofTy)
+	primitive.Assert(!nextReply.Error)
+	primitive.Assert(!nextReply.ProofTy)
 	nonMemb := &histNonMembProof{label: nextLabel, vrfProof: nextVrfProof, merkProof: nextReply.Proof}
 
 	return &histProof{sigLn: sigLn, membs: membs, nonMemb: nonMemb}
@@ -168,10 +170,11 @@ func (s *Server) Put(args *PutArgs, reply *histProof) error {
 	label, _ := compMapLabel(args.uid, ver, s.vrfSk)
 	val := cryptoffi.Hash(args.pk)
 	dig, _, err0 := s.keyMap.Put(label, val)
-	machine.Assert(!err0)
+	primitive.Assert(!err0)
 
 	// update supporting stores.
-	s.uidVer[args.uid] = ver + 1
+	// assume that we'll run out of mem before running out of versions.
+	s.uidVer[args.uid] = std.SumAssumeNoOverflow(ver, 1)
 	s.fullKeyMap[string(label)] = args.pk
 
 	// sign new dig.
@@ -191,9 +194,22 @@ func (s *Server) Get(uid *uint64, reply *histProof) error {
 	return nil
 }
 
-func (s *Server) Audit(unused *struct{}, reply *epochChain) error {
+type AuditUpd struct {
+	// epoch set by caller, not by server.
+	epoch   epochTy
+	updates []*mapEntry
+	linkSig []byte
+}
+
+func (s *Server) Audit(epoch *uint64, reply *AuditUpd) error {
 	s.mu.Lock()
-	*reply = *s.chain
+	if *epoch >= uint64(len(s.chain.epochs)) {
+		s.mu.Unlock()
+		return errors.New("Audit")
+	}
+	inf := s.chain.epochs[*epoch]
+	reply.updates = inf.updates
+	reply.linkSig = inf.linkSig
 	s.mu.Unlock()
 	return nil
 }
