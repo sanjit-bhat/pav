@@ -3,47 +3,48 @@ package kt2
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/merkle"
+	"github.com/mit-pdos/pav/rpcffi"
 )
 
-type SignedLink struct {
-	epoch    epochTy
-	prevLink linkTy
-	dig      merkle.Digest
-	sig      cryptoffi.Sig
+// pre-img of digest signature.
+type PreDigSig struct {
+	Epoch uint64
+	Dig   []byte
 }
 
-func (o *SignedLink) check(pk cryptoffi.PublicKey) (linkTy, errorTy) {
-	link := nextLink(o.epoch, o.prevLink, o.dig)
-	ok0 := pk.Verify(link, o.sig)
-	return link, !ok0
+// signed digest.
+type SigDig struct {
+	Epoch uint64
+	Dig   []byte
+	Sig   []byte
 }
 
-// Evid is evidence that the server signed two conflicting links,
-// either zero or one epochs away.
+// Check rets err if signed dig does not validate.
+func (o *SigDig) Check(pk cryptoffi.PublicKey) bool {
+	pre := &PreDigSig{Epoch: o.Epoch, Dig: o.Dig}
+	preByt := rpcffi.Encode(pre)
+	return !pk.Verify(preByt, o.Sig)
+}
+
+// Evid is evidence that the server signed two conflicting digs.
 type Evid struct {
-	sigLn0 *SignedLink
-	sigLn1 *SignedLink
+	sigDig0 *SigDig
+	sigDig1 *SigDig
 }
 
-// Check returns an error if the evidence does not Check out.
+// Check returns an error if the evidence does not check out.
 // otherwise, it proves that the server was dishonest.
-func (e *Evid) Check(servPk cryptoffi.PublicKey) errorTy {
-	link0, err0 := e.sigLn0.check(servPk)
+func (e *Evid) Check(servPk cryptoffi.PublicKey) bool {
+	err0 := e.sigDig0.Check(servPk)
 	if err0 {
 		return true
 	}
-
-	link1, err1 := e.sigLn1.check(servPk)
+	err1 := e.sigDig1.Check(servPk)
 	if err1 {
 		return true
 	}
-
-	if e.sigLn0.epoch == e.sigLn1.epoch {
-		return std.BytesEqual(link0, link1)
+	if e.sigDig0.Epoch != e.sigDig1.Epoch {
+		return true
 	}
-	if e.sigLn1.epoch > 0 && e.sigLn0.epoch == e.sigLn1.epoch-1 {
-		return std.BytesEqual(link0, e.sigLn1.prevLink)
-	}
-	return true
+	return std.BytesEqual(e.sigDig0.Dig, e.sigDig1.Dig)
 }
