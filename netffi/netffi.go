@@ -9,37 +9,8 @@ import (
 	"github.com/tchajed/marshal"
 	"io"
 	"net"
-	"strconv"
-	"strings"
 	"sync"
 )
-
-func MakeAddress(ipStr string) uint64 {
-	// TODO: manually parsing is pretty silly; couldn't figure out how to make
-	// this work cleanly net.IP
-	ipPort := strings.Split(ipStr, ":")
-	if len(ipPort) != 2 {
-		panic(fmt.Sprintf("Not ipv4:port %s", ipStr))
-	}
-	port, err := strconv.ParseUint(ipPort[1], 10, 16)
-	if err != nil {
-		panic(err)
-	}
-
-	ss := strings.Split(ipPort[0], ".")
-	if len(ss) != 4 {
-		panic(fmt.Sprintf("Not ipv4:port %s", ipStr))
-	}
-	ip := make([]byte, 4)
-	for i, s := range ss {
-		a, err := strconv.ParseInt(s, 10, 8)
-		if err != nil {
-			panic(err)
-		}
-		ip[i] = byte(a)
-	}
-	return (uint64(ip[0]) | uint64(ip[1])<<8 | uint64(ip[2])<<16 | uint64(ip[3])<<24 | uint64(port)<<32)
-}
 
 func AddressToStr(addr uint64) string {
 	a0 := byte(addr & 0xff)
@@ -57,18 +28,16 @@ func AddressToStr(addr uint64) string {
 // # Conn
 
 type Conn struct {
-	conn net.Conn
-	// guarding *sending* on [conn].
+	c      net.Conn
 	sendMu *sync.Mutex
-	// guarding *receiving* on [conn].
 	recvMu *sync.Mutex
 }
 
 func makeConn(conn net.Conn) *Conn {
-	return &Conn{conn: conn, sendMu: new(sync.Mutex), recvMu: new(sync.Mutex)}
+	return &Conn{c: conn, sendMu: new(sync.Mutex), recvMu: new(sync.Mutex)}
 }
 
-// Dial returns new connection and error on fail.
+// Dial returns new connection and errors on fail.
 func Dial(addr uint64) (*Conn, bool) {
 	conn, err := net.Dial("tcp", AddressToStr(addr))
 	if err != nil {
@@ -78,7 +47,7 @@ func Dial(addr uint64) (*Conn, bool) {
 }
 
 func Send(c *Conn, data []byte) bool {
-	// Encode message
+	// encoding: len(data) ++ data.
 	e := marshal.NewEnc(8 + uint64(len(data)))
 	e.PutInt(uint64(len(data)))
 	e.PutBytes(data)
@@ -86,45 +55,41 @@ func Send(c *Conn, data []byte) bool {
 
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
-
-	// message format: [dataLen] ++ data
-	// Writing in a single call is faster than 2 calls despite the unnecessary copy.
-	_, err := c.conn.Write(msg)
-	// If there was an error, make sure we never send anything on this channel again...
-	// there might have been a partial write!
+	_, err := c.c.Write(msg)
 	if err != nil {
-		c.conn.Close()
+		// prevent sending on this conn again.
+		c.c.Close()
+		return true
 	}
-	return err != nil
+	return false
 }
 
-// Receive returns data and error on fail.
+// Receive returns data and errors on fail.
 func Receive(c *Conn) ([]byte, bool) {
 	c.recvMu.Lock()
 	defer c.recvMu.Unlock()
 
-	// message format: [dataLen] ++ data
+	// encoding: len(data) ++ data.
 	header := make([]byte, 8)
-	_, err := io.ReadFull(c.conn, header)
-	if err != nil {
+	_, err0 := io.ReadFull(c.c, header)
+	if err0 != nil {
 		// Looks like this connection is dead.
 		// This can legitimately happen when the other side "hung up", so do not panic.
 		// But also, we clearly lost track here of where in the protocol we are,
 		// so close it.
-		c.conn.Close()
+		c.c.Close()
 		return nil, true
 	}
 	d := marshal.NewDec(header)
 	dataLen := d.GetInt()
 
 	data := make([]byte, dataLen)
-	_, err2 := io.ReadFull(c.conn, data)
-	if err2 != nil {
-		// See other comment.
-		c.conn.Close()
+	_, err1 := io.ReadFull(c.c, data)
+	if err1 != nil {
+		// prevent sending on this conn again.
+		c.c.Close()
 		return nil, true
 	}
-
 	return data, false
 }
 
@@ -137,9 +102,7 @@ type Listener struct {
 func Listen(addr uint64) *Listener {
 	l, err := net.Listen("tcp", AddressToStr(addr))
 	if err != nil {
-		// Assume() no error on Listen.
-		// This should fail loud and early, retrying makes little sense
-		// (likely the port is already used).
+		// assume no Listen err. likely, port is already in use.
 		panic(err)
 	}
 	return &Listener{l}
@@ -148,9 +111,8 @@ func Listen(addr uint64) *Listener {
 func Accept(l *Listener) *Conn {
 	conn, err := l.l.Accept()
 	if err != nil {
-		// This should not usually happen... something seems wrong.
+		// assume no Accept err.
 		panic(err)
 	}
-
 	return makeConn(conn)
 }
