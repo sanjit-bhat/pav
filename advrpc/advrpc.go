@@ -3,7 +3,7 @@ package rpcffi
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/goose-lang/goose/machine"
+	"github.com/goose-lang/primitive"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"net"
 	"net/http"
@@ -51,6 +51,6 @@ func Encode(e any) []byte {
 	b := new(bytes.Buffer)
 	enc := gob.NewEncoder(b)
 	err := enc.Encode(e)
-	machine.Assume(err == nil)
+	primitive.Assume(err == nil)
 	return b.Bytes()
 }

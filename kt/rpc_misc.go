@@ -4,7 +4,7 @@ package kt
 // but I haven't gotten around to that yet.
 
 import (
-	"github.com/goose-lang/goose/machine"
+	"github.com/goose-lang/primitive"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
 	"github.com/mit-pdos/pav/cryptoffi"
@@ -26,14 +26,14 @@ func callServUpdateEpoch(cli *urpc.Client) {
 	argB := make([]byte, 0)
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcServUpdateEpoch, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
+	primitive.Assume(err0 == urpc.ErrNone)
 }
 
 func callServPut(cli *urpc.Client, id merkle.Id, val merkle.Val) *servPutReply {
 	argB := (&servPutArg{id: id, val: val}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcServPut, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
+	primitive.Assume(err0 == urpc.ErrNone)
 	reply := &servPutReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
@@ -48,7 +48,7 @@ func callServGetIdAt(cli *urpc.Client, id merkle.Id, epoch epochTy) *servGetIdAt
 	argB := (&servGetIdAtArg{id: id, epoch: epoch}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcServGetIdAt, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
+	primitive.Assume(err0 == urpc.ErrNone)
 	reply := &servGetIdAtReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
@@ -64,7 +64,7 @@ func callServGetIdNow(cli *urpc.Client, id merkle.Id) *servGetIdNowReply {
 	argB := (&servGetIdNowArg{id: id}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcServGetIdNow, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
+	primitive.Assume(err0 == urpc.ErrNone)
 	reply := &servGetIdNowReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
@@ -80,7 +80,7 @@ func callServGetLink(cli *urpc.Client, epoch epochTy) *servGetLinkReply {
 	argB := (&servGetLinkArg{epoch: epoch}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcServGetLink, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
+	primitive.Assume(err0 == urpc.ErrNone)
 	reply := &servGetLinkReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
@@ -160,7 +160,7 @@ func callAdtrPut(cli *urpc.Client, prevLink linkTy, dig merkle.Digest, servSig c
 	argB := (&adtrPutArg{prevLink: prevLink, dig: dig, servSig: servSig}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcAdtrPut, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
+	primitive.Assume(err0 == urpc.ErrNone)
 	reply := &adtrPutReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {
@@ -173,7 +173,7 @@ func callAdtrGet(cli *urpc.Client, epoch epochTy) *adtrGetReply {
 	argB := (&adtrGetArg{epoch: epoch}).encode()
 	replyB := make([]byte, 0)
 	err0 := cli.Call(rpcAdtrGet, argB, &replyB, 100)
-	machine.Assume(err0 == urpc.ErrNone)
+	primitive.Assume(err0 == urpc.ErrNone)
 	reply := &adtrGetReply{}
 	_, err1 := reply.decode(replyB)
 	if err1 {

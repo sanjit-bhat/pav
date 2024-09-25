@@ -1,7 +1,7 @@
 package kt
 
 import (
-	"github.com/goose-lang/goose/machine"
+	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
@@ -24,7 +24,7 @@ func testAgreement(servAddr, adtr0Addr, adtr1Addr grove_ffi.Address) {
 	go func() {
 		adtr1.start(adtr1Addr)
 	}()
-	machine.Sleep(1_000_000)
+	primitive.Sleep(1_000_000)
 	servCli := urpc.MakeClient(servAddr)
 	adtr0Cli := urpc.MakeClient(adtr0Addr)
 	adtr1Cli := urpc.MakeClient(adtr1Addr)
@@ -53,7 +53,7 @@ func testAgreement(servAddr, adtr0Addr, adtr1Addr grove_ffi.Address) {
 	helpers.auditThru(bobCli, adtr1Addr, adtr1Pk, putEp)
 
 	// Final assert. Bob got the same key Alice put.
-	machine.Assert(std.BytesEqual(aliceKey0, aliceKey1))
+	primitive.Assert(std.BytesEqual(aliceKey0, aliceKey1))
 }
 
 type helpersTy struct {
@@ -64,10 +64,10 @@ func (h *helpersTy) put(c *client, val merkle.Val) epochTy {
 	putEp, evidAlLink0, err0 := c.put(val)
 	if evidAlLink0 != nil {
 		err := evidAlLink0.check(h.servPk)
-		machine.Assert(!err)
-		// TODO: machine.Exit whenever we have evidence.
+		primitive.Assert(!err)
+		// TODO: primitive.Exit whenever we have evidence.
 	} else {
-		machine.Assume(!err0)
+		primitive.Assume(!err0)
 	}
 	return putEp
 }
@@ -75,9 +75,9 @@ func (h *helpersTy) put(c *client, val merkle.Val) epochTy {
 func updateAdtr(servCli, adtrCli *urpc.Client, numEpochs uint64) {
 	for i := uint64(0); i < numEpochs; i++ {
 		reply := callServGetLink(servCli, i)
-		machine.Assume(!reply.error)
+		primitive.Assume(!reply.error)
 		err := callAdtrPut(adtrCli, reply.prevLink, reply.dig, reply.sig)
-		machine.Assume(!err)
+		primitive.Assume(!err)
 	}
 }
 
@@ -85,34 +85,34 @@ func (h *helpersTy) selfCheckThru(c *client, thru epochTy) {
 	selfEp, evidLink, evidAlPut, err0 := c.selfCheck()
 	if evidLink != nil {
 		err := evidLink.check(h.servPk)
-		machine.Assert(!err)
+		primitive.Assert(!err)
 	} else if evidAlPut != nil {
 		err := evidAlPut.check(h.servPk)
-		machine.Assert(!err)
+		primitive.Assert(!err)
 	} else {
-		machine.Assume(!err0)
+		primitive.Assume(!err0)
 	}
-	machine.Assume(thru < selfEp)
+	primitive.Assume(thru < selfEp)
 }
 
 func (h *helpersTy) auditThru(c *client, adtrAddr grove_ffi.Address, adtrPk cryptoffi.PublicKey, thru epochTy) {
 	auditEp, evidLink, err0 := c.audit(adtrAddr, adtrPk)
 	if evidLink != nil {
 		err := evidLink.check(h.servPk)
-		machine.Assert(!err)
+		primitive.Assert(!err)
 	} else {
-		machine.Assume(!err0)
+		primitive.Assume(!err0)
 	}
-	machine.Assume(thru < auditEp)
+	primitive.Assume(thru < auditEp)
 }
 
 func (h *helpersTy) getAt(c *client, id merkle.Id, epoch epochTy) merkle.Val {
 	retVal, evidLink, err0 := c.getAt(id, epoch)
 	if evidLink != nil {
 		err := evidLink.check(h.servPk)
-		machine.Assert(!err)
+		primitive.Assert(!err)
 	} else {
-		machine.Assume(!err0)
+		primitive.Assume(!err0)
 	}
 	return retVal
 }

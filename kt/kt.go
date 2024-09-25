@@ -1,7 +1,7 @@
 package kt
 
 import (
-	"github.com/goose-lang/goose/machine"
+	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/gokv/grove_ffi"
 	"github.com/mit-pdos/gokv/urpc"
@@ -82,7 +82,7 @@ func applyUpdates(currMap *merkle.Tree, updates map[string][]byte) *merkle.Tree 
 		idB := []byte(id)
 		_, _, err := nextMap.Put(idB, val)
 		// Put checks that all IDs have valid len, so there shouldn't be any errors.
-		machine.Assert(!err)
+		primitive.Assert(!err)
 	}
 	return nextMap
 }
