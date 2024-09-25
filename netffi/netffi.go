@@ -1,8 +1,8 @@
 package netffi
 
-// Our net FFI started from the [gokv net FFI].
+// Our net FFI started from [grove].
 //
-// [gokv net FFI]: https://github.com/mit-pdos/gokv/blob/05f31d837641498c3ca5d72f7ea9a6e6b2263e2c/grove_ffi/network.go
+// [grove]: https://github.com/mit-pdos/gokv/blob/05f31d837641498c3ca5d72f7ea9a6e6b2263e2c/grove_ffi/network.go
 
 import (
 	"fmt"
