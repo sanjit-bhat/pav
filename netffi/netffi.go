@@ -1,6 +1,9 @@
 package netffi
 
-// Our net FFI started from [grove].
+// This net FFI started from [grove].
+// It provides a TCP-like network for testing, although its formal model
+// is a network where [Conn.Send] might not deliver bytes,
+// and [Conn.Receive] returns arbitrary bytes.
 //
 // [grove]: https://github.com/mit-pdos/gokv/blob/05f31d837641498c3ca5d72f7ea9a6e6b2263e2c/grove_ffi/network.go
 
@@ -33,20 +36,16 @@ type Conn struct {
 	recvMu *sync.Mutex
 }
 
-func makeConn(conn net.Conn) *Conn {
-	return &Conn{c: conn, sendMu: new(sync.Mutex), recvMu: new(sync.Mutex)}
-}
-
 // Dial returns new connection and errors on fail.
 func Dial(addr uint64) (*Conn, bool) {
 	conn, err := net.Dial("tcp", AddressToStr(addr))
 	if err != nil {
 		return nil, true
 	}
-	return makeConn(conn), false
+	return newConn(conn), false
 }
 
-func Send(c *Conn, data []byte) bool {
+func (c *Conn) Send(data []byte) bool {
 	// encoding: len(data) ++ data.
 	e := marshal.NewEnc(8 + uint64(len(data)))
 	e.PutInt(uint64(len(data)))
@@ -64,8 +63,12 @@ func Send(c *Conn, data []byte) bool {
 	return false
 }
 
+func newConn(conn net.Conn) *Conn {
+	return &Conn{c: conn, sendMu: new(sync.Mutex), recvMu: new(sync.Mutex)}
+}
+
 // Receive returns data and errors on fail.
-func Receive(c *Conn) ([]byte, bool) {
+func (c *Conn) Receive() ([]byte, bool) {
 	c.recvMu.Lock()
 	defer c.recvMu.Unlock()
 
@@ -108,11 +111,11 @@ func Listen(addr uint64) *Listener {
 	return &Listener{l}
 }
 
-func Accept(l *Listener) *Conn {
+func (l *Listener) Accept() *Conn {
 	conn, err := l.l.Accept()
 	if err != nil {
 		// assume no Accept err.
 		panic(err)
 	}
-	return makeConn(conn)
+	return newConn(conn)
 }
