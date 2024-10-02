@@ -3,6 +3,7 @@ package cryptoffi
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha512"
 	"github.com/google/keytransparency/core/crypto/vrf"
 	"github.com/google/keytransparency/core/crypto/vrf/p256"
@@ -16,14 +17,14 @@ const (
 	SigLen  uint64 = 64
 )
 
-// Hash.
+// # Hash
 
 func Hash(data []byte) []byte {
 	h := sha512.Sum512_256(data)
 	return h[:]
 }
 
-// Signature.
+// # Signature
 
 type PrivateKey ed25519.PrivateKey
 
@@ -46,7 +47,7 @@ func (pub PublicKey) Verify(message []byte, sig Sig) bool {
 	return ed25519.Verify(ed25519.PublicKey(pub), message, sig)
 }
 
-// VRF.
+// # VRF
 
 type VRFPrivateKey struct {
 	sk vrf.PrivateKey
@@ -75,4 +76,17 @@ func (pub VRFPublicKey) Verify(data, hash, proof []byte) bool {
 		return false
 	}
 	return bytes.Equal(hash, h[:])
+}
+
+// # Random
+
+// RandBytes returns [n] random bytes.
+func RandBytes(n uint64) []byte {
+	b := make([]byte, n)
+	_, err := rand.Read(b)
+	// don't care about recovering from crypto/rand failures.
+	if err != nil {
+		panic("crypto/rand call failed")
+	}
+	return b
 }
