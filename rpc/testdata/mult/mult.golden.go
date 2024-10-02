@@ -7,31 +7,29 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func (o *arg1) encode() []byte {
+func (o *arg1) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.x)
 	return b
 }
-func (o *arg1) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	x, b, err := marshalutil.ReadInt(b)
-	if err {
-		return nil, err
+func (o *arg1) Decode(b0 []byte) ([]byte, bool) {
+	x, b1, err1 := marshalutil.ReadInt(b0)
+	if err1 {
+		return nil, true
 	}
 	o.x = x
-	return b, errNone
+	return b1, false
 }
-func (o *arg2) encode() []byte {
+func (o *arg2) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.y)
 	return b
 }
-func (o *arg2) decode(b0 []byte) ([]byte, errorTy) {
-	var b = b0
-	y, b, err := marshalutil.ReadInt(b)
-	if err {
-		return nil, err
+func (o *arg2) Decode(b0 []byte) ([]byte, bool) {
+	y, b1, err1 := marshalutil.ReadInt(b0)
+	if err1 {
+		return nil, true
 	}
 	o.y = y
-	return b, errNone
+	return b1, false
 }
