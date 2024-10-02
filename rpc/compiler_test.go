@@ -52,10 +52,10 @@ func check(t *testing.T, source, golden string) {
 	res := compile(source)
 	actual := tmpWrite(t, res)
 
-	cmd := exec.Command("diff", "--unified", actual, golden)
+	cmd := exec.Command("diff", "--unified", "--color=always", golden, actual)
 	diff, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Errorf("actual output diff from golden:\n%s", diff)
+		t.Errorf("diff from golden to actual output:\n%s", diff)
 	}
 
 	err = os.Remove(actual)
