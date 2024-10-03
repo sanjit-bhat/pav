@@ -171,18 +171,14 @@ func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	funcTy := &ast.FuncType{
 		Results: &ast.FieldList{
 			List: []*ast.Field{{
-				Type: &ast.ArrayType{
-					Elt: &ast.Ident{Name: "byte"},
-				},
+				Type: &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}},
 			}},
 		},
 	}
 	callMake := &ast.CallExpr{
 		Fun: &ast.Ident{Name: "make"},
 		Args: []ast.Expr{
-			&ast.ArrayType{
-				Elt: &ast.Ident{Name: "byte"},
-			},
+			&ast.ArrayType{Elt: &ast.Ident{Name: "byte"}},
 			&ast.BasicLit{Kind: token.INT, Value: "0"},
 		},
 	}
@@ -354,11 +350,8 @@ func (c *compiler) genStructWrite(field *types.Var) *ast.CallExpr {
 		Sel: &ast.Ident{Name: "WriteBytes"},
 	}
 	return &ast.CallExpr{
-		Fun: fun,
-		Args: []ast.Expr{
-			&ast.Ident{Name: "b"},
-			enc,
-		},
+		Fun:  fun,
+		Args: []ast.Expr{&ast.Ident{Name: "b"}, enc},
 	}
 }
 
