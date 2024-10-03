@@ -14,7 +14,7 @@ func (o *args) Encode() []byte {
 	b = marshal.WriteInt(b, 3)
 	return b
 }
-func (o *args) Decode(b0 []byte) ([]byte, bool) {
+func argsDecode(b0 []byte) (*args, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadConstBool(b0, true)
 	if err1 {
 		return nil, true
@@ -27,8 +27,5 @@ func (o *args) Decode(b0 []byte) ([]byte, bool) {
 	if err3 {
 		return nil, true
 	}
-	o.a1 = a1
-	o.a2 = a2
-	o.a3 = a3
-	return b3, false
+	return &args{a1: a1, a2: a2, a3: a3}, b3, false
 }

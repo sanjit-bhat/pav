@@ -228,13 +228,16 @@ func genRcvr(name string) *ast.FieldList {
 func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 	var call *ast.CallExpr
 	switch fTy := field.Type().Underlying().(type) {
+	case *types.Basic:
+		call = c.genBasicWrite(field)
 	case *types.Slice:
 		call = &ast.CallExpr{
 			Fun:  c.genSliceWrite(field.Pos(), fTy, 1),
 			Args: genStdFieldWriteArgs(field.Name()),
 		}
-	case *types.Basic:
-		call = c.genBasicWrite(field)
+	case *types.Pointer:
+		_ = fTy.Elem().(*types.Named).Underlying().(*types.Struct)
+		call = c.genStructWrite(field)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
@@ -242,6 +245,45 @@ func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 		Lhs: []ast.Expr{&ast.Ident{Name: "b"}},
 		Tok: token.ASSIGN,
 		Rhs: []ast.Expr{call},
+	}
+}
+
+func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
+	var fun *ast.SelectorExpr
+	basic := field.Type().Underlying().(*types.Basic)
+	switch basic.Kind() {
+	case types.Bool:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshal"},
+			Sel: &ast.Ident{Name: "WriteBool"},
+		}
+	case types.Byte:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: "WriteByte"},
+		}
+	case types.Uint64:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshal"},
+			Sel: &ast.Ident{Name: "WriteInt"},
+		}
+	default:
+		log.Panic("unsupported type: ", basic.Name())
+	}
+	isCst, cst := c.getConst(field.Pos())
+	if isCst {
+		return &ast.CallExpr{
+			Fun: fun,
+			Args: []ast.Expr{
+				&ast.Ident{Name: "b"},
+				&ast.BasicLit{Kind: token.INT, Value: cst},
+			},
+		}
+	} else {
+		return &ast.CallExpr{
+			Fun:  fun,
+			Args: genStdFieldWriteArgs(field.Name()),
+		}
 	}
 }
 
@@ -297,42 +339,26 @@ func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 	return
 }
 
-func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
-	var fun *ast.SelectorExpr
-	basic := field.Type().Underlying().(*types.Basic)
-	switch basic.Kind() {
-	case types.Bool:
-		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshal"},
-			Sel: &ast.Ident{Name: "WriteBool"},
-		}
-	case types.Byte:
-		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
-			Sel: &ast.Ident{Name: "WriteByte"},
-		}
-	case types.Uint64:
-		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshal"},
-			Sel: &ast.Ident{Name: "WriteInt"},
-		}
-	default:
-		log.Panic("unsupported type: ", basic.Name())
-	}
-	isCst, cst := c.getConst(field.Pos())
-	if isCst {
-		return &ast.CallExpr{
-			Fun: fun,
-			Args: []ast.Expr{
-				&ast.Ident{Name: "b"},
-				&ast.BasicLit{Kind: token.INT, Value: cst},
+func (c *compiler) genStructWrite(field *types.Var) *ast.CallExpr {
+	enc := &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X: &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "o"},
+				Sel: &ast.Ident{Name: field.Name()},
 			},
-		}
-	} else {
-		return &ast.CallExpr{
-			Fun:  fun,
-			Args: genStdFieldWriteArgs(field.Name()),
-		}
+			Sel: &ast.Ident{Name: "Encode"},
+		},
+	}
+	fun := &ast.SelectorExpr{
+		X:   &ast.Ident{Name: "marshal"},
+		Sel: &ast.Ident{Name: "WriteBytes"},
+	}
+	return &ast.CallExpr{
+		Fun: fun,
+		Args: []ast.Expr{
+			&ast.Ident{Name: "b"},
+			enc,
+		},
 	}
 }
 
@@ -374,24 +400,15 @@ func (c *compiler) genDecode(o types.Object) *ast.FuncDecl {
 		Params: &ast.FieldList{
 			List: []*ast.Field{{
 				Names: []*ast.Ident{{Name: "b0"}},
-				Type: &ast.ArrayType{
-					Elt: &ast.Ident{Name: "byte"},
-				},
+				Type:  &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}},
 			}},
 		},
 		Results: &ast.FieldList{
 			List: []*ast.Field{
-				{Type: &ast.ArrayType{
-					Elt: &ast.Ident{Name: "byte"},
-				}},
+				{Type: &ast.StarExpr{X: &ast.Ident{Name: name}}},
+				{Type: &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}}},
 				{Type: &ast.Ident{Name: "bool"}},
 			},
-		},
-	}
-	ret := &ast.ReturnStmt{
-		Results: []ast.Expr{
-			&ast.Ident{Name: fmt.Sprintf("b%v", st.NumFields())},
-			&ast.Ident{Name: "false"},
 		},
 	}
 	body := []ast.Stmt{}
@@ -399,14 +416,32 @@ func (c *compiler) genDecode(o types.Object) *ast.FuncDecl {
 		field := st.Field(i)
 		body = append(body, c.genFieldRead(field, i)...)
 	}
+	var fieldsInit []ast.Expr
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
-		body = append(body, genFieldAssign(field))
+		init := &ast.KeyValueExpr{
+			Key:   &ast.Ident{Name: field.Name()},
+			Value: &ast.Ident{Name: fmt.Sprintf("a%v", i+1)},
+		}
+		fieldsInit = append(fieldsInit, init)
+	}
+	objInit := &ast.UnaryExpr{
+		Op: token.AND,
+		X: &ast.CompositeLit{
+			Type: &ast.Ident{Name: name},
+			Elts: fieldsInit,
+		},
+	}
+	ret := &ast.ReturnStmt{
+		Results: []ast.Expr{
+			objInit,
+			&ast.Ident{Name: fmt.Sprintf("b%v", st.NumFields())},
+			&ast.Ident{Name: "false"},
+		},
 	}
 	body = append(body, ret)
 	return &ast.FuncDecl{
-		Recv: genRcvr(name),
-		Name: &ast.Ident{Name: "Decode"},
+		Name: &ast.Ident{Name: fmt.Sprintf("%vDecode", name)},
 		Type: funcTy,
 		Body: &ast.BlockStmt{List: body},
 	}
@@ -425,22 +460,26 @@ func genFieldAssign(field *types.Var) ast.Stmt {
 }
 
 func (c *compiler) genFieldRead(field *types.Var, fieldNum int) []ast.Stmt {
-	name := field.Name()
 	var call *ast.CallExpr
 	oldB := fmt.Sprintf("b%v", fieldNum)
 	switch fTy := field.Type().Underlying().(type) {
-	case *types.Slice:
-		call = c.genSliceRead(oldB, field.Pos(), fTy, 1)
 	case *types.Basic:
 		call = c.genBasicRead(field, oldB)
+	case *types.Slice:
+		call = c.genSliceRead(oldB, field.Pos(), fTy, 1)
+	case *types.Pointer:
+		n := fTy.Elem().(*types.Named)
+		_ = n.Underlying().(*types.Struct)
+		call = c.genStructRead(n.Obj().Name(), oldB)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
+	newX := fmt.Sprintf("a%v", fieldNum+1)
 	newB := fmt.Sprintf("b%v", fieldNum+1)
 	newErr := fmt.Sprintf("err%v", fieldNum+1)
 	assign := &ast.AssignStmt{
 		Lhs: []ast.Expr{
-			&ast.Ident{Name: name},
+			&ast.Ident{Name: newX},
 			&ast.Ident{Name: newB},
 			&ast.Ident{Name: newErr},
 		},
@@ -459,6 +498,48 @@ func (c *compiler) genFieldRead(field *types.Var, fieldNum int) []ast.Stmt {
 		}},
 	}
 	return []ast.Stmt{assign, err}
+}
+
+func (c *compiler) genBasicRead(field *types.Var, slReadId string) *ast.CallExpr {
+	var cstFuncMod string
+	var args []ast.Expr
+	isCst, cst := c.getConst(field.Pos())
+	if isCst {
+		cstFuncMod = "Const"
+		args = []ast.Expr{
+			&ast.Ident{Name: slReadId},
+			&ast.BasicLit{Kind: token.INT, Value: cst},
+		}
+	} else {
+		args = []ast.Expr{&ast.Ident{Name: slReadId}}
+	}
+
+	var fun *ast.SelectorExpr
+	basic := field.Type().Underlying().(*types.Basic)
+	switch basic.Kind() {
+	case types.Bool:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sBool", cstFuncMod)},
+		}
+	case types.Byte:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sByte", cstFuncMod)},
+		}
+	case types.Uint64:
+		fun = &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sInt", cstFuncMod)},
+		}
+	default:
+		log.Panic("unsupported type: ", basic.Name())
+	}
+
+	return &ast.CallExpr{
+		Fun:  fun,
+		Args: args,
+	}
 }
 
 func (c *compiler) genSliceRead(slReadId string, pos token.Pos, ty1 *types.Slice, depth int) *ast.CallExpr {
@@ -502,45 +583,10 @@ func (c *compiler) genSliceRead(slReadId string, pos token.Pos, ty1 *types.Slice
 	return nil
 }
 
-func (c *compiler) genBasicRead(field *types.Var, slReadId string) *ast.CallExpr {
-	var cstFuncMod string
-	var args []ast.Expr
-	isCst, cst := c.getConst(field.Pos())
-	if isCst {
-		cstFuncMod = "Const"
-		args = []ast.Expr{
-			&ast.Ident{Name: slReadId},
-			&ast.BasicLit{Kind: token.INT, Value: cst},
-		}
-	} else {
-		args = []ast.Expr{&ast.Ident{Name: slReadId}}
-	}
-
-	var fun *ast.SelectorExpr
-	basic := field.Type().Underlying().(*types.Basic)
-	switch basic.Kind() {
-	case types.Bool:
-		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
-			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sBool", cstFuncMod)},
-		}
-	case types.Byte:
-		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
-			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sByte", cstFuncMod)},
-		}
-	case types.Uint64:
-		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
-			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sInt", cstFuncMod)},
-		}
-	default:
-		log.Panic("unsupported type: ", basic.Name())
-	}
-
+func (c *compiler) genStructRead(stName string, slReadId string) *ast.CallExpr {
 	return &ast.CallExpr{
-		Fun:  fun,
-		Args: args,
+		Fun:  &ast.Ident{Name: fmt.Sprintf("%vDecode", stName)},
+		Args: []ast.Expr{&ast.Ident{Name: slReadId}},
 	}
 }
 

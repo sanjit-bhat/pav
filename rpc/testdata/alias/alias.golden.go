@@ -13,16 +13,14 @@ func (o *arg) Encode() []byte {
 	b = marshal.WriteInt(b, o.y)
 	return b
 }
-func (o *arg) Decode(b0 []byte) ([]byte, bool) {
-	x, b1, err1 := marshalutil.ReadInt(b0)
+func argDecode(b0 []byte) (*arg, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, true
 	}
-	y, b2, err2 := marshalutil.ReadInt(b1)
+	a2, b2, err2 := marshalutil.ReadInt(b1)
 	if err2 {
 		return nil, true
 	}
-	o.x = x
-	o.y = y
-	return b2, false
+	return &arg{x: a1, y: a2}, b2, false
 }

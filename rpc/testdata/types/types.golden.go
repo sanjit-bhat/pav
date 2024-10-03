@@ -18,7 +18,7 @@ func (o *args) Encode() []byte {
 	b = marshalutil.WriteSlice3D(b, o.a7)
 	return b
 }
-func (o *args) Decode(b0 []byte) ([]byte, bool) {
+func argsDecode(b0 []byte) (*args, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadBool(b0)
 	if err1 {
 		return nil, true
@@ -47,12 +47,5 @@ func (o *args) Decode(b0 []byte) ([]byte, bool) {
 	if err7 {
 		return nil, true
 	}
-	o.a1 = a1
-	o.a2 = a2
-	o.a3 = a3
-	o.a4 = a4
-	o.a5 = a5
-	o.a6 = a6
-	o.a7 = a7
-	return b7, false
+	return &args{a1: a1, a2: a2, a3: a3, a4: a4, a5: a5, a6: a6, a7: a7}, b7, false
 }

@@ -12,24 +12,22 @@ func (o *arg1) Encode() []byte {
 	b = marshal.WriteInt(b, o.x)
 	return b
 }
-func (o *arg1) Decode(b0 []byte) ([]byte, bool) {
-	x, b1, err1 := marshalutil.ReadInt(b0)
+func arg1Decode(b0 []byte) (*arg1, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, true
 	}
-	o.x = x
-	return b1, false
+	return &arg1{x: a1}, b1, false
 }
 func (o *arg2) Encode() []byte {
 	var b = make([]byte, 0)
 	b = marshal.WriteInt(b, o.y)
 	return b
 }
-func (o *arg2) Decode(b0 []byte) ([]byte, bool) {
-	y, b1, err1 := marshalutil.ReadInt(b0)
+func arg2Decode(b0 []byte) (*arg2, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, true
 	}
-	o.y = y
-	return b1, false
+	return &arg2{y: a1}, b1, false
 }
