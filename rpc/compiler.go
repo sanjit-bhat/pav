@@ -279,7 +279,7 @@ func (c *compiler) genBasicEnc(field *types.Var) *ast.CallExpr {
 	}
 }
 
-func (c *compiler) genSliceEnc(ty1 *types.Slice, depth int) *ast.SelectorExpr {
+func (c *compiler) genSliceEnc(ty1 *types.Slice, depth int) ast.Expr {
 	if depth > 3 {
 		log.Panic("unsupported slice nesting beyond depth 3")
 	}
@@ -294,6 +294,11 @@ func (c *compiler) genSliceEnc(ty1 *types.Slice, depth int) *ast.SelectorExpr {
 			X:   &ast.Ident{Name: "marshalutil"},
 			Sel: &ast.Ident{Name: fmt.Sprintf("WriteSlice%vD", depth)},
 		}
+	case *types.Pointer:
+		n := ty2.Elem().(*types.Named)
+		_ = n.Underlying().(*types.Struct)
+		stName := n.Obj().Name()
+		return &ast.Ident{Name: fmt.Sprintf("%vSlice%vDEncode", stName, depth)}
 	default:
 		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
 	}
@@ -418,7 +423,10 @@ func (c *compiler) genFieldDec(field *types.Var, fieldNum int) []ast.Stmt {
 	case *types.Basic:
 		call = c.genBasicDec(field, oldB)
 	case *types.Slice:
-		call = c.genSliceDec(oldB, fTy, 1)
+		call = &ast.CallExpr{
+			Fun:  c.genSliceDec(fTy, 1),
+			Args: []ast.Expr{&ast.Ident{Name: oldB}},
+		}
 	case *types.Pointer:
 		n := fTy.Elem().(*types.Named)
 		_ = n.Underlying().(*types.Struct)
@@ -494,24 +502,26 @@ func (c *compiler) genBasicDec(field *types.Var, inBytsId string) *ast.CallExpr 
 	}
 }
 
-func (c *compiler) genSliceDec(inBytsId string, ty1 *types.Slice, depth int) *ast.CallExpr {
+func (c *compiler) genSliceDec(ty1 *types.Slice, depth int) ast.Expr {
 	if depth > 3 {
 		log.Panic("unsupported slice nesting beyond depth 3")
 	}
 	switch ty2 := ty1.Elem().Underlying().(type) {
 	case *types.Slice:
-		return c.genSliceDec(inBytsId, ty2, depth+1)
+		return c.genSliceDec(ty2, depth+1)
 	case *types.Basic:
 		if ty2.Kind() != types.Byte {
 			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
 		}
-		return &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: fmt.Sprintf("ReadSlice%vD", depth)},
-			},
-			Args: []ast.Expr{&ast.Ident{Name: inBytsId}},
+		return &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("ReadSlice%vD", depth)},
 		}
+	case *types.Pointer:
+		n := ty2.Elem().(*types.Named)
+		_ = n.Underlying().(*types.Struct)
+		stName := n.Obj().Name()
+		return &ast.Ident{Name: fmt.Sprintf("%vSlice%vDDecode", stName, depth)}
 	default:
 		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
 	}

@@ -22,6 +22,7 @@ func innerDecode(b0 []byte) (*inner, []byte, bool) {
 func outerEncode(b0 []byte, o *outer) []byte {
 	var b = b0
 	b = innerEncode(b, o.a1)
+	b = innerSlice1DEncode(b, o.a2)
 	return b
 }
 func outerDecode(b0 []byte) (*outer, []byte, bool) {
@@ -29,5 +30,9 @@ func outerDecode(b0 []byte) (*outer, []byte, bool) {
 	if err1 {
 		return nil, true
 	}
-	return &outer{a1: a1}, b1, false
+	a2, b2, err2 := innerSlice1DDecode(b1)
+	if err2 {
+		return nil, true
+	}
+	return &outer{a1: a1, a2: a2}, b2, false
 }

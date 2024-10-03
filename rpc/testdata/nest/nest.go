@@ -6,4 +6,5 @@ type inner struct {
 
 type outer struct {
 	a1 *inner
+	a2 []*inner
 }
