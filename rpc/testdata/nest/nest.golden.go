@@ -23,6 +23,7 @@ func outerEncode(b0 []byte, o *outer) []byte {
 	var b = b0
 	b = innerEncode(b, o.a1)
 	b = innerSlice1DEncode(b, o.a2)
+	b = Mapuint64innerEncode(b, o.a3)
 	return b
 }
 func outerDecode(b0 []byte) (*outer, []byte, bool) {
@@ -34,5 +35,9 @@ func outerDecode(b0 []byte) (*outer, []byte, bool) {
 	if err2 {
 		return nil, true
 	}
-	return &outer{a1: a1, a2: a2}, b2, false
+	a3, b3, err3 := Mapuint64innerDecode(b2)
+	if err3 {
+		return nil, true
+	}
+	return &outer{a1: a1, a2: a2, a3: a3}, b3, false
 }

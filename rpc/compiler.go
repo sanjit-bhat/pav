@@ -230,6 +230,8 @@ func (c *compiler) genFieldEnc(field *types.Var) ast.Stmt {
 	case *types.Pointer:
 		_ = fTy.Elem().(*types.Named).Underlying().(*types.Struct)
 		call = c.genStructEnc(field)
+	case *types.Map:
+		call = c.genMapEnc(field)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
@@ -308,15 +310,43 @@ func (c *compiler) genSliceEnc(ty1 *types.Slice, depth int) ast.Expr {
 func (c *compiler) genStructEnc(field *types.Var) *ast.CallExpr {
 	stName := field.Type().Underlying().(*types.Pointer).Elem().(*types.Named).Obj().Name()
 	return &ast.CallExpr{
-		Fun: &ast.Ident{Name: fmt.Sprintf("%vEncode", stName)},
-		Args: []ast.Expr{
-			&ast.Ident{Name: "b"},
-			&ast.SelectorExpr{
-				X:   &ast.Ident{Name: "o"},
-				Sel: &ast.Ident{Name: field.Name()},
-			},
-		},
+		Fun:  &ast.Ident{Name: fmt.Sprintf("%vEncode", stName)},
+		Args: genStdFieldEncArgs(field.Name()),
 	}
+}
+
+// TODO: maybe make this an abstraction that gets the handler name
+// for any type that we need a compiled / user-supplied handler.
+// TODO: if we took out the const feature, could maybe factor out the args
+// for all these CallExpr's.
+func (c *compiler) genMapEnc(field *types.Var) *ast.CallExpr {
+	fTy := field.Type().Underlying()
+	canon := getCanonTyName(fTy)
+	return &ast.CallExpr{
+		Fun:  &ast.Ident{Name: fmt.Sprintf("%vEncode", canon)},
+		Args: genStdFieldEncArgs(field.Name()),
+	}
+}
+
+// TODO: right now this is definitely not canonical,
+// especially with nested types.
+func getCanonTyName(ty1 types.Type) string {
+	switch ty2 := ty1.(type) {
+	case *types.Basic:
+		return ty2.Name()
+	case *types.Slice:
+		return "Sl" + getCanonTyName(ty2.Elem().Underlying())
+	case *types.Map:
+		return "Map" + getCanonTyName(ty2.Key().Underlying()) + getCanonTyName(ty2.Elem().Underlying())
+	case *types.Pointer:
+		n := ty2.Elem().(*types.Named)
+		// currently, only support pointers to structs.
+		_ = n.Underlying().(*types.Struct)
+		return n.Obj().Name()
+	default:
+		log.Panicf("unsupported ty: %s", ty2)
+	}
+	return ""
 }
 
 // getConst uses ast pos to check if field has special constant comment.
@@ -431,6 +461,8 @@ func (c *compiler) genFieldDec(field *types.Var, fieldNum int) []ast.Stmt {
 		n := fTy.Elem().(*types.Named)
 		_ = n.Underlying().(*types.Struct)
 		call = c.genStructDec(n.Obj().Name(), oldB)
+	case *types.Map:
+		call = c.genMapDec(field, oldB)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
@@ -531,6 +563,15 @@ func (c *compiler) genSliceDec(ty1 *types.Slice, depth int) ast.Expr {
 func (c *compiler) genStructDec(stName string, inBytsId string) *ast.CallExpr {
 	return &ast.CallExpr{
 		Fun:  &ast.Ident{Name: fmt.Sprintf("%vDecode", stName)},
+		Args: []ast.Expr{&ast.Ident{Name: inBytsId}},
+	}
+}
+
+func (c *compiler) genMapDec(field *types.Var, inBytsId string) *ast.CallExpr {
+	fTy := field.Type().Underlying()
+	canon := getCanonTyName(fTy)
+	return &ast.CallExpr{
+		Fun:  &ast.Ident{Name: fmt.Sprintf("%vDecode", canon)},
 		Args: []ast.Expr{&ast.Ident{Name: inBytsId}},
 	}
 }
