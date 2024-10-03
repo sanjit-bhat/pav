@@ -224,7 +224,7 @@ func (c *compiler) genFieldEnc(field *types.Var) ast.Stmt {
 		call = c.genBasicEnc(field)
 	case *types.Slice:
 		call = &ast.CallExpr{
-			Fun:  c.genSliceEnc(field.Pos(), fTy, 1),
+			Fun:  c.genSliceEnc(fTy, 1),
 			Args: genStdFieldEncArgs(field.Name()),
 		}
 	case *types.Pointer:
@@ -279,27 +279,16 @@ func (c *compiler) genBasicEnc(field *types.Var) *ast.CallExpr {
 	}
 }
 
-func (c *compiler) genSliceEnc(pos token.Pos, ty1 *types.Slice, depth int) *ast.SelectorExpr {
+func (c *compiler) genSliceEnc(ty1 *types.Slice, depth int) *ast.SelectorExpr {
 	if depth > 3 {
 		log.Panic("unsupported slice nesting beyond depth 3")
 	}
 	switch ty2 := ty1.Elem().Underlying().(type) {
 	case *types.Slice:
-		return c.genSliceEnc(pos, ty2, depth+1)
+		return c.genSliceEnc(ty2, depth+1)
 	case *types.Basic:
 		if ty2.Kind() != types.Byte {
 			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
-		}
-		isFixed, _ := c.getFixedLen(pos)
-		if isFixed {
-			if depth == 1 {
-				return &ast.SelectorExpr{
-					X:   &ast.Ident{Name: "marshal"},
-					Sel: &ast.Ident{Name: "WriteBytes"},
-				}
-			} else {
-				log.Panicf("unsupported fixed len outside depth 1 slices")
-			}
 		}
 		return &ast.SelectorExpr{
 			X:   &ast.Ident{Name: "marshalutil"},
@@ -309,26 +298,6 @@ func (c *compiler) genSliceEnc(pos token.Pos, ty1 *types.Slice, depth int) *ast.
 		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
 	}
 	return nil
-}
-
-// getFixedLen uses field pos to check if has special fixed len comment.
-func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
-	p, _ := astutil.PathEnclosingInterval(c.file, pos, pos)
-	// First node is ident, then there's field.
-	node := p[1].(*ast.Field)
-	if node.Doc == nil {
-		return false, ""
-	}
-	for _, comm := range node.Doc.List {
-		text := comm.Text
-		text, found0 := strings.CutPrefix(text, "// rpc: invariant: len ")
-		text, found1 := strings.CutSuffix(text, ".")
-		if found0 && found1 {
-			isFixed = true
-			length = text
-		}
-	}
-	return
 }
 
 func (c *compiler) genStructEnc(field *types.Var) *ast.CallExpr {
@@ -449,7 +418,7 @@ func (c *compiler) genFieldDec(field *types.Var, fieldNum int) []ast.Stmt {
 	case *types.Basic:
 		call = c.genBasicDec(field, oldB)
 	case *types.Slice:
-		call = c.genSliceDec(oldB, field.Pos(), fTy, 1)
+		call = c.genSliceDec(oldB, fTy, 1)
 	case *types.Pointer:
 		n := fTy.Elem().(*types.Named)
 		_ = n.Underlying().(*types.Struct)
@@ -525,33 +494,16 @@ func (c *compiler) genBasicDec(field *types.Var, inBytsId string) *ast.CallExpr 
 	}
 }
 
-func (c *compiler) genSliceDec(inBytsId string, pos token.Pos, ty1 *types.Slice, depth int) *ast.CallExpr {
+func (c *compiler) genSliceDec(inBytsId string, ty1 *types.Slice, depth int) *ast.CallExpr {
 	if depth > 3 {
 		log.Panic("unsupported slice nesting beyond depth 3")
 	}
 	switch ty2 := ty1.Elem().Underlying().(type) {
 	case *types.Slice:
-		return c.genSliceDec(inBytsId, pos, ty2, depth+1)
+		return c.genSliceDec(inBytsId, ty2, depth+1)
 	case *types.Basic:
 		if ty2.Kind() != types.Byte {
 			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
-		}
-		isFixed, length := c.getFixedLen(pos)
-		if isFixed {
-			if depth == 1 {
-				return &ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   &ast.Ident{Name: "marshalutil"},
-						Sel: &ast.Ident{Name: "ReadBytes"},
-					},
-					Args: []ast.Expr{
-						&ast.Ident{Name: inBytsId},
-						&ast.BasicLit{Kind: token.INT, Value: length},
-					},
-				}
-			} else {
-				log.Panicf("unsupported fixed len outside depth 1 slices")
-			}
 		}
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
