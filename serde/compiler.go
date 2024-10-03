@@ -131,7 +131,7 @@ func genFileHeader(pkgName, fileId string) *ast.File {
 	}
 	comm2 := &ast.Comment{
 		Slash: commPos,
-		Text:  "// using compiler \"github.com/mit-pdos/pav/rpc\".",
+		Text:  "// using compiler \"github.com/mit-pdos/pav/serde\".",
 	}
 	file := &ast.File{
 		Doc:     &ast.CommentGroup{List: []*ast.Comment{comm1, comm2}},
@@ -154,10 +154,10 @@ func (c *compiler) shouldGen(o types.Object) (encode bool, decode bool) {
 		return
 	}
 	for _, comm := range d.Doc.List {
-		if comm.Text == "// rpc: no encode needed." {
+		if comm.Text == "// serde: no encode needed." {
 			encode = false
 		}
-		if comm.Text == "// rpc: no decode needed." {
+		if comm.Text == "// serde: no decode needed." {
 			decode = false
 		}
 	}
@@ -359,7 +359,7 @@ func (c *compiler) getConst(pos token.Pos) (isCst bool, cst string) {
 	}
 	for _, comm := range node.Doc.List {
 		text := comm.Text
-		text, found0 := strings.CutPrefix(text, "// rpc: invariant: const ")
+		text, found0 := strings.CutPrefix(text, "// serde: invariant: const ")
 		text, found1 := strings.CutSuffix(text, ".")
 		if found0 && found1 {
 			isCst = true

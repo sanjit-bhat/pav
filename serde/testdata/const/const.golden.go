@@ -1,6 +1,6 @@
-// Auto-generated from spec "github.com/mit-pdos/pav/rpc/testdata/const/const.go"
-// using compiler "github.com/mit-pdos/pav/rpc".
-package rpc
+// Auto-generated from spec "github.com/mit-pdos/pav/serde/testdata/const/const.go"
+// using compiler "github.com/mit-pdos/pav/serde".
+package serde
 
 import (
 	"github.com/mit-pdos/pav/marshalutil"

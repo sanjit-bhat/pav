@@ -1,4 +1,4 @@
-package rpc
+package serde
 
 type inner struct {
 	a1 uint64

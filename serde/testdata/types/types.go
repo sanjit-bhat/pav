@@ -1,4 +1,4 @@
-package rpc
+package serde
 
 type args struct {
 	a1 bool
