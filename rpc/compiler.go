@@ -193,7 +193,7 @@ func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	body = append(body, varDecl)
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
-		body = append(body, c.genFieldWrite(field))
+		body = append(body, c.genFieldEnc(field))
 	}
 	retStmt := &ast.ReturnStmt{
 		Results: []ast.Expr{
@@ -217,19 +217,19 @@ func genRcvr(name string) *ast.FieldList {
 	}
 }
 
-func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
+func (c *compiler) genFieldEnc(field *types.Var) ast.Stmt {
 	var call *ast.CallExpr
 	switch fTy := field.Type().Underlying().(type) {
 	case *types.Basic:
-		call = c.genBasicWrite(field)
+		call = c.genBasicEnc(field)
 	case *types.Slice:
 		call = &ast.CallExpr{
-			Fun:  c.genSliceWrite(field.Pos(), fTy, 1),
-			Args: genStdFieldWriteArgs(field.Name()),
+			Fun:  c.genSliceEnc(field.Pos(), fTy, 1),
+			Args: genStdFieldEncArgs(field.Name()),
 		}
 	case *types.Pointer:
 		_ = fTy.Elem().(*types.Named).Underlying().(*types.Struct)
-		call = c.genStructWrite(field)
+		call = c.genStructEnc(field)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
@@ -240,7 +240,7 @@ func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 	}
 }
 
-func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
+func (c *compiler) genBasicEnc(field *types.Var) *ast.CallExpr {
 	var fun *ast.SelectorExpr
 	basic := field.Type().Underlying().(*types.Basic)
 	switch basic.Kind() {
@@ -274,18 +274,18 @@ func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
 	} else {
 		return &ast.CallExpr{
 			Fun:  fun,
-			Args: genStdFieldWriteArgs(field.Name()),
+			Args: genStdFieldEncArgs(field.Name()),
 		}
 	}
 }
 
-func (c *compiler) genSliceWrite(pos token.Pos, ty1 *types.Slice, depth int) *ast.SelectorExpr {
+func (c *compiler) genSliceEnc(pos token.Pos, ty1 *types.Slice, depth int) *ast.SelectorExpr {
 	if depth > 3 {
 		log.Panic("unsupported slice nesting beyond depth 3")
 	}
 	switch ty2 := ty1.Elem().Underlying().(type) {
 	case *types.Slice:
-		return c.genSliceWrite(pos, ty2, depth+1)
+		return c.genSliceEnc(pos, ty2, depth+1)
 	case *types.Basic:
 		if ty2.Kind() != types.Byte {
 			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
@@ -331,7 +331,7 @@ func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 	return
 }
 
-func (c *compiler) genStructWrite(field *types.Var) *ast.CallExpr {
+func (c *compiler) genStructEnc(field *types.Var) *ast.CallExpr {
 	stName := field.Type().Underlying().(*types.Pointer).Elem().(*types.Named).Obj().Name()
 	return &ast.CallExpr{
 		Fun: &ast.Ident{Name: fmt.Sprintf("%vEncode", stName)},
@@ -365,7 +365,7 @@ func (c *compiler) getConst(pos token.Pos) (isCst bool, cst string) {
 	return
 }
 
-func genStdFieldWriteArgs(name string) []ast.Expr {
+func genStdFieldEncArgs(name string) []ast.Expr {
 	return []ast.Expr{
 		&ast.Ident{Name: "b"},
 		&ast.SelectorExpr{
@@ -397,7 +397,7 @@ func (c *compiler) genDecode(o types.Object) *ast.FuncDecl {
 	body := []ast.Stmt{}
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
-		body = append(body, c.genFieldRead(field, i)...)
+		body = append(body, c.genFieldDec(field, i)...)
 	}
 	var fieldsInit []ast.Expr
 	for i := 0; i < st.NumFields(); i++ {
@@ -442,18 +442,18 @@ func genFieldAssign(field *types.Var) ast.Stmt {
 	}
 }
 
-func (c *compiler) genFieldRead(field *types.Var, fieldNum int) []ast.Stmt {
+func (c *compiler) genFieldDec(field *types.Var, fieldNum int) []ast.Stmt {
 	var call *ast.CallExpr
 	oldB := fmt.Sprintf("b%v", fieldNum)
 	switch fTy := field.Type().Underlying().(type) {
 	case *types.Basic:
-		call = c.genBasicRead(field, oldB)
+		call = c.genBasicDec(field, oldB)
 	case *types.Slice:
-		call = c.genSliceRead(oldB, field.Pos(), fTy, 1)
+		call = c.genSliceDec(oldB, field.Pos(), fTy, 1)
 	case *types.Pointer:
 		n := fTy.Elem().(*types.Named)
 		_ = n.Underlying().(*types.Struct)
-		call = c.genStructRead(n.Obj().Name(), oldB)
+		call = c.genStructDec(n.Obj().Name(), oldB)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
@@ -483,18 +483,18 @@ func (c *compiler) genFieldRead(field *types.Var, fieldNum int) []ast.Stmt {
 	return []ast.Stmt{assign, err}
 }
 
-func (c *compiler) genBasicRead(field *types.Var, slReadId string) *ast.CallExpr {
+func (c *compiler) genBasicDec(field *types.Var, inBytsId string) *ast.CallExpr {
 	var cstFuncMod string
 	var args []ast.Expr
 	isCst, cst := c.getConst(field.Pos())
 	if isCst {
 		cstFuncMod = "Const"
 		args = []ast.Expr{
-			&ast.Ident{Name: slReadId},
+			&ast.Ident{Name: inBytsId},
 			&ast.BasicLit{Kind: token.INT, Value: cst},
 		}
 	} else {
-		args = []ast.Expr{&ast.Ident{Name: slReadId}}
+		args = []ast.Expr{&ast.Ident{Name: inBytsId}}
 	}
 
 	var fun *ast.SelectorExpr
@@ -525,13 +525,13 @@ func (c *compiler) genBasicRead(field *types.Var, slReadId string) *ast.CallExpr
 	}
 }
 
-func (c *compiler) genSliceRead(slReadId string, pos token.Pos, ty1 *types.Slice, depth int) *ast.CallExpr {
+func (c *compiler) genSliceDec(inBytsId string, pos token.Pos, ty1 *types.Slice, depth int) *ast.CallExpr {
 	if depth > 3 {
 		log.Panic("unsupported slice nesting beyond depth 3")
 	}
 	switch ty2 := ty1.Elem().Underlying().(type) {
 	case *types.Slice:
-		return c.genSliceRead(slReadId, pos, ty2, depth+1)
+		return c.genSliceDec(inBytsId, pos, ty2, depth+1)
 	case *types.Basic:
 		if ty2.Kind() != types.Byte {
 			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
@@ -545,7 +545,7 @@ func (c *compiler) genSliceRead(slReadId string, pos token.Pos, ty1 *types.Slice
 						Sel: &ast.Ident{Name: "ReadBytes"},
 					},
 					Args: []ast.Expr{
-						&ast.Ident{Name: slReadId},
+						&ast.Ident{Name: inBytsId},
 						&ast.BasicLit{Kind: token.INT, Value: length},
 					},
 				}
@@ -558,7 +558,7 @@ func (c *compiler) genSliceRead(slReadId string, pos token.Pos, ty1 *types.Slice
 				X:   &ast.Ident{Name: "marshalutil"},
 				Sel: &ast.Ident{Name: fmt.Sprintf("ReadSlice%vD", depth)},
 			},
-			Args: []ast.Expr{&ast.Ident{Name: slReadId}},
+			Args: []ast.Expr{&ast.Ident{Name: inBytsId}},
 		}
 	default:
 		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
@@ -566,10 +566,10 @@ func (c *compiler) genSliceRead(slReadId string, pos token.Pos, ty1 *types.Slice
 	return nil
 }
 
-func (c *compiler) genStructRead(stName string, slReadId string) *ast.CallExpr {
+func (c *compiler) genStructDec(stName string, inBytsId string) *ast.CallExpr {
 	return &ast.CallExpr{
 		Fun:  &ast.Ident{Name: fmt.Sprintf("%vDecode", stName)},
-		Args: []ast.Expr{&ast.Ident{Name: slReadId}},
+		Args: []ast.Expr{&ast.Ident{Name: inBytsId}},
 	}
 }
 
