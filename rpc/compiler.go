@@ -484,6 +484,7 @@ func (c *compiler) genFieldDec(field *types.Var, fieldNum int) []ast.Stmt {
 			&ast.ReturnStmt{
 				Results: []ast.Expr{
 					&ast.Ident{Name: "nil"},
+					&ast.Ident{Name: "nil"},
 					&ast.Ident{Name: "true"},
 				},
 			},

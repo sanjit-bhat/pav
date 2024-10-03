@@ -16,11 +16,11 @@ func argEncode(b0 []byte, o *arg) []byte {
 func argDecode(b0 []byte) (*arg, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
-		return nil, true
+		return nil, nil, true
 	}
 	a2, b2, err2 := marshalutil.ReadInt(b1)
 	if err2 {
-		return nil, true
+		return nil, nil, true
 	}
 	return &arg{x: a1, y: a2}, b2, false
 }

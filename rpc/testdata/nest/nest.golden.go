@@ -15,7 +15,7 @@ func innerEncode(b0 []byte, o *inner) []byte {
 func innerDecode(b0 []byte) (*inner, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
-		return nil, true
+		return nil, nil, true
 	}
 	return &inner{a1: a1}, b1, false
 }
@@ -29,15 +29,15 @@ func outerEncode(b0 []byte, o *outer) []byte {
 func outerDecode(b0 []byte) (*outer, []byte, bool) {
 	a1, b1, err1 := innerDecode(b0)
 	if err1 {
-		return nil, true
+		return nil, nil, true
 	}
 	a2, b2, err2 := innerSlice1DDecode(b1)
 	if err2 {
-		return nil, true
+		return nil, nil, true
 	}
 	a3, b3, err3 := Mapuint64innerDecode(b2)
 	if err3 {
-		return nil, true
+		return nil, nil, true
 	}
 	return &outer{a1: a1, a2: a2, a3: a3}, b3, false
 }
