@@ -7,8 +7,8 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func (o *inner) Encode() []byte {
-	var b = make([]byte, 0)
+func innerEncode(b0 []byte, o *inner) []byte {
+	var b = b0
 	b = marshal.WriteInt(b, o.a1)
 	return b
 }
@@ -19,9 +19,9 @@ func innerDecode(b0 []byte) (*inner, []byte, bool) {
 	}
 	return &inner{a1: a1}, b1, false
 }
-func (o *outer) Encode() []byte {
-	var b = make([]byte, 0)
-	b = marshal.WriteBytes(b, o.a1.Encode())
+func outerEncode(b0 []byte, o *outer) []byte {
+	var b = b0
+	b = innerEncode(b, o.a1)
 	return b
 }
 func outerDecode(b0 []byte) (*outer, []byte, bool) {

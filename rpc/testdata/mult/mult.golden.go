@@ -7,8 +7,8 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func (o *arg1) Encode() []byte {
-	var b = make([]byte, 0)
+func arg1Encode(b0 []byte, o *arg1) []byte {
+	var b = b0
 	b = marshal.WriteInt(b, o.x)
 	return b
 }
@@ -19,8 +19,8 @@ func arg1Decode(b0 []byte) (*arg1, []byte, bool) {
 	}
 	return &arg1{x: a1}, b1, false
 }
-func (o *arg2) Encode() []byte {
-	var b = make([]byte, 0)
+func arg2Encode(b0 []byte, o *arg2) []byte {
+	var b = b0
 	b = marshal.WriteInt(b, o.y)
 	return b
 }

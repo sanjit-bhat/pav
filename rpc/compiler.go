@@ -167,33 +167,30 @@ func (c *compiler) shouldGen(o types.Object) (encode bool, decode bool) {
 func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	name := o.Name()
 	st := o.Type().(*types.Named).Underlying().(*types.Struct)
-
 	funcTy := &ast.FuncType{
-		Results: &ast.FieldList{
-			List: []*ast.Field{{
-				Type: &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}},
-			}},
-		},
-	}
-	callMake := &ast.CallExpr{
-		Fun: &ast.Ident{Name: "make"},
-		Args: []ast.Expr{
-			&ast.ArrayType{Elt: &ast.Ident{Name: "byte"}},
-			&ast.BasicLit{Kind: token.INT, Value: "0"},
-		},
-	}
-	makeByteSl := &ast.DeclStmt{
-		Decl: &ast.GenDecl{
-			Tok: token.VAR,
-			Specs: []ast.Spec{
-				&ast.ValueSpec{
-					Names:  []*ast.Ident{{Name: "b"}},
-					Values: []ast.Expr{callMake},
-				},
+		Params: &ast.FieldList{List: []*ast.Field{
+			{
+				Names: []*ast.Ident{{Name: "b0"}},
+				Type:  &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}},
 			},
+			{
+				Names: []*ast.Ident{{Name: "o"}},
+				Type:  &ast.StarExpr{X: &ast.Ident{Name: name}},
+			},
+		}},
+		Results: &ast.FieldList{List: []*ast.Field{{
+			Type: &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}}}},
 		},
 	}
-	body := []ast.Stmt{makeByteSl}
+	body := make([]ast.Stmt, 0)
+	varDecl := &ast.DeclStmt{Decl: &ast.GenDecl{
+		Tok: token.VAR,
+		Specs: []ast.Spec{&ast.ValueSpec{
+			Names:  []*ast.Ident{{Name: "b"}},
+			Values: []ast.Expr{&ast.Ident{Name: "b0"}},
+		}},
+	}}
+	body = append(body, varDecl)
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
 		body = append(body, c.genFieldWrite(field))
@@ -205,8 +202,7 @@ func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	}
 	body = append(body, retStmt)
 	return &ast.FuncDecl{
-		Recv: genRcvr(name),
-		Name: &ast.Ident{Name: "Encode"},
+		Name: &ast.Ident{Name: fmt.Sprintf("%vEncode", name)},
 		Type: funcTy,
 		Body: &ast.BlockStmt{List: body},
 	}
@@ -336,22 +332,16 @@ func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
 }
 
 func (c *compiler) genStructWrite(field *types.Var) *ast.CallExpr {
-	enc := &ast.CallExpr{
-		Fun: &ast.SelectorExpr{
-			X: &ast.SelectorExpr{
+	stName := field.Type().Underlying().(*types.Pointer).Elem().(*types.Named).Obj().Name()
+	return &ast.CallExpr{
+		Fun: &ast.Ident{Name: fmt.Sprintf("%vEncode", stName)},
+		Args: []ast.Expr{
+			&ast.Ident{Name: "b"},
+			&ast.SelectorExpr{
 				X:   &ast.Ident{Name: "o"},
 				Sel: &ast.Ident{Name: field.Name()},
 			},
-			Sel: &ast.Ident{Name: "Encode"},
 		},
-	}
-	fun := &ast.SelectorExpr{
-		X:   &ast.Ident{Name: "marshal"},
-		Sel: &ast.Ident{Name: "WriteBytes"},
-	}
-	return &ast.CallExpr{
-		Fun:  fun,
-		Args: []ast.Expr{&ast.Ident{Name: "b"}, enc},
 	}
 }
 

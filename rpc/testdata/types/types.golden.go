@@ -7,8 +7,8 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func (o *args) Encode() []byte {
-	var b = make([]byte, 0)
+func argsEncode(b0 []byte, o *args) []byte {
+	var b = b0
 	b = marshal.WriteBool(b, o.a1)
 	b = marshalutil.WriteByte(b, o.a2)
 	b = marshal.WriteInt(b, o.a3)
