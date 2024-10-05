@@ -17,12 +17,12 @@ type Server struct {
 }
 
 func (s *Server) handle(conn *netffi.Conn, rpcId uint64, data []byte) {
-	resp := new([]byte)
 	f, ok0 := s.handlers[rpcId]
 	if !ok0 {
 		// adv gave bad rpcId.
 		return
 	}
+	resp := new([]byte)
 	f(data, resp)
 	// ignore errors. if err, client will timeout, then retry.
 	conn.Send(*resp)

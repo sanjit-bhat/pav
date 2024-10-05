@@ -3,26 +3,12 @@ package kt2
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/rpcffi"
 )
 
-// pre-img of digest signature.
-type PreDigSig struct {
-	Epoch uint64
-	Dig   []byte
-}
-
-// signed digest.
-type SigDig struct {
-	Epoch uint64
-	Dig   []byte
-	Sig   []byte
-}
-
 // Check rets err if signed dig does not validate.
-func (o *SigDig) Check(pk cryptoffi.PublicKey) bool {
-	pre := &PreDigSig{Epoch: o.Epoch, Dig: o.Dig}
-	preByt := rpcffi.Encode(pre)
+func CheckSigDig(o *SigDig, pk cryptoffi.PublicKey) bool {
+	pre := &PreSigDig{Epoch: o.Epoch, Dig: o.Dig}
+	preByt := PreSigDigEncode(make([]byte, 0), pre)
 	return !pk.Verify(preByt, o.Sig)
 }
 
@@ -35,11 +21,11 @@ type Evid struct {
 // Check returns an error if the evidence does not check out.
 // otherwise, it proves that the server was dishonest.
 func (e *Evid) Check(servPk cryptoffi.PublicKey) bool {
-	err0 := e.sigDig0.Check(servPk)
+	err0 := CheckSigDig(e.sigDig0, servPk)
 	if err0 {
 		return true
 	}
-	err1 := e.sigDig1.Check(servPk)
+	err1 := CheckSigDig(e.sigDig1, servPk)
 	if err1 {
 		return true
 	}

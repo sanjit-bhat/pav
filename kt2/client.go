@@ -52,7 +52,7 @@ func (c *Client) checkFreshEpoch(epoch uint64) bool {
 
 // checkVrfProof errors on fail.
 func (c *Client) checkVrfProof(uid uint64, ver uint64, label []byte, proof []byte) bool {
-	preLabel := rpcffi.Encode(&mapLabel{uid: uid, ver: ver})
+	preLabel := rpcffi.Encode(&mapLabelPre{uid: uid, ver: ver})
 	return !c.servVrfPk.Verify(preLabel, label, proof)
 }
 
@@ -121,7 +121,7 @@ func (c *Client) Get(uid uint64) ([]byte, uint64, *Evid, bool) {
 	}
 	pk, epoch, evid, err1 := c.checkHistProof(uid, histProof)
 	if err1 {
-		return nil, 0, evid, err1
+		return nil, 0, evid, true
 	}
 	return pk, epoch, nil, false
 }

@@ -1,69 +1,67 @@
 package kt2
 
 import (
-	"errors"
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
-	"github.com/mit-pdos/pav/rpcffi"
 	"sync"
 )
 
-type mapLabel struct {
-	uid uint64
-	ver uint64
+// compMapLabel rets mapLabel (VRF(uid || ver)) and a VRF proof.
+func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VRFPrivateKey) ([]byte, []byte) {
+	l := &MapLabelPre{Uid: uid, Ver: ver}
+	lByt := MapLabelPreEncode(make([]byte, 0), l)
+	h, p := sk.Hash(lByt)
+	return h, p
+}
+
+// compMapVal rets mapVal (epoch || commitment) and a commitment opening,
+// where commitment = Hash(pk || randBytes).
+func compMapVal(epoch uint64, pk []byte) ([]byte, *PkCommOpen) {
+	// from 8.12 of [Boneh-Shoup] v0.6, a 512-bit rand space provides statistical
+	// hiding for this sha256-based commitment scheme.
+	// [Boneh-Shoup]: https://toc.cryptobook.us
+	r := cryptoffi.RandBytes(2 * cryptoffi.HashLen)
+	open := &PkCommOpen{Pk: pk, R: r}
+	openByt := PkCommOpenEncode(make([]byte, 0), open)
+	comm := cryptoffi.Hash(openByt)
+	v := &MapValPre{Epoch: epoch, PkComm: comm}
+	vByt := MapValPreEncode(make([]byte, 0), v)
+	return vByt, open
 }
 
 type servEpochInfo struct {
-	// updates stores (string(label), val) keyMap updates.
+	// updates stores (mapLabel, mapVal) keyMap updates.
 	updates map[string][]byte
 	dig     []byte
 	sig     []byte
 }
 
 type Server struct {
-	mu       *sync.Mutex
-	sigSk    cryptoffi.PrivateKey
-	vrfSk    *cryptoffi.VRFPrivateKey
-	histInfo []*servEpochInfo
-	// keyMap stores (VRF(uid, version), Hash(pk)).
+	mu    *sync.Mutex
+	sigSk cryptoffi.PrivateKey
+	vrfSk *cryptoffi.VRFPrivateKey
+	// keyMap stores (mapLabel, mapVal) entries.
 	keyMap *merkle.Tree
-	// fullKeyMap stores (VRF(uid, version), pk).
-	fullKeyMap map[string][]byte
-	// uidVer stores (uid, next version #).
-	uidVer map[uint64]uint64
+	// histInfo stores info about prior epochs.
+	histInfo []*servEpochInfo
+	// pkCommOpens stores pk commitment openings for a particular mapLabel.
+	pkCommOpens map[string]*PkCommOpen
+	// nextVers stores next version #'s for a particular uid.
+	nextVers map[uint64]uint64
 }
 
-type PutArgs struct {
-	uid uint64
-	pk  []byte
-}
-
-type histMembProof struct {
-	label     []byte
-	vrfProof  []byte
-	pk        []byte
-	merkProof [][][]byte
-}
-
-type histNonMembProof struct {
-	label     []byte
-	vrfProof  []byte
-	merkProof [][][]byte
-}
-
-type HistProof struct {
-	sigDig  *SigDig
-	membs   []*histMembProof
-	nonMemb *histNonMembProof
-}
-
-func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VRFPrivateKey) ([]byte, []byte) {
-	l := &mapLabel{uid: uid, ver: ver}
-	lByt := rpcffi.Encode(l)
-	h, p := sk.Hash(lByt)
-	return h, p
+func (s *Server) getMembProof(uid, ver uint64) *MembProof {
+	label, vrfProof := compMapLabel(uid, ver, s.vrfSk)
+	getReply := s.keyMap.Get(label)
+	primitive.Assert(!getReply.Error)
+	primitive.Assert(getReply.ProofTy)
+	valPre, _, err0 := MapValPreDecode(getReply.Val)
+	primitive.Assert(!err0)
+	open, ok0 := s.pkCommOpens[string(label)]
+	primitive.Assert(ok0)
+	return &MembProof{Label: label, VrfProof: vrfProof, EpochAdded: valPre.Epoch, CommOpen: open, MerkProof: getReply.Proof}
 }
 
 func (s *Server) getHistProof(uid uint64) *HistProof {
@@ -73,17 +71,10 @@ func (s *Server) getHistProof(uid uint64) *HistProof {
 	sigDig := &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
 
 	// get memb proofs for all existing versions.
-	var membs []*histMembProof
-	nextVer := s.uidVer[uid]
+	var membs []*MembProof
+	nextVer := s.nextVers[uid]
 	for ver := uint64(0); ver < nextVer; ver++ {
-		label, vrfProof := compMapLabel(uid, ver, s.vrfSk)
-		getReply := s.keyMap.Get(label)
-		primitive.Assert(!getReply.Error)
-		primitive.Assert(getReply.ProofTy)
-		pk, ok := s.fullKeyMap[string(label)]
-		primitive.Assert(ok)
-		newMemb := &histMembProof{label: label, vrfProof: vrfProof, pk: pk, merkProof: getReply.Proof}
-		membs = append(membs, newMemb)
+		membs = append(membs, s.getMembProof(uid, ver))
 	}
 
 	// get non-memb proof for next version.
@@ -91,65 +82,59 @@ func (s *Server) getHistProof(uid uint64) *HistProof {
 	nextReply := s.keyMap.Get(nextLabel)
 	primitive.Assert(!nextReply.Error)
 	primitive.Assert(!nextReply.ProofTy)
-	nonMemb := &histNonMembProof{label: nextLabel, vrfProof: nextVrfProof, merkProof: nextReply.Proof}
+	nonMemb := &NonMembProof{Label: nextLabel, VrfProof: nextVrfProof, MerkProof: nextReply.Proof}
 
-	return &HistProof{sigDig: sigDig, membs: membs, nonMemb: nonMemb}
+	return &HistProof{SigDig: sigDig, Membs: membs, NonMemb: nonMemb}
 }
 
-func (s *Server) Put(args *PutArgs, reply *HistProof) error {
+func (s *Server) Put(uid uint64, pk []byte) *HistProof {
 	s.mu.Lock()
 	// add to keyMap.
-	ver, _ := s.uidVer[args.uid]
-	label, _ := compMapLabel(args.uid, ver, s.vrfSk)
-	val := cryptoffi.Hash(args.pk)
+	ver, _ := s.nextVers[uid]
+	label, _ := compMapLabel(uid, ver, s.vrfSk)
+	nextEpoch := uint64(len(s.histInfo))
+	val, open := compMapVal(nextEpoch, pk)
 	dig, _, err0 := s.keyMap.Put(label, val)
 	primitive.Assert(!err0)
 
 	// update supporting stores.
-	// assume that we'll run out of mem before running out of versions.
-	s.uidVer[args.uid] = std.SumAssumeNoOverflow(ver, 1)
-	s.fullKeyMap[string(label)] = args.pk
+	s.pkCommOpens[string(label)] = open
+	// assume OOM before running out of versions.
+	s.nextVers[uid] = std.SumAssumeNoOverflow(ver, 1)
 
 	// sign new dig.
-	updates := map[string][]byte{
-		string(label): val,
-	}
-	nextEpoch := uint64(len(s.histInfo))
-	preSig := &PreDigSig{Epoch: nextEpoch, Dig: dig}
-	sig := s.sigSk.Sign(rpcffi.Encode(preSig))
+	updates := make(map[string][]byte)
+	updates[string(label)] = val
+	preSig := &PreSigDig{Epoch: nextEpoch, Dig: dig}
+	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
+	sig := s.sigSk.Sign(preSigByt)
 	newInfo := &servEpochInfo{updates: updates, dig: dig, sig: sig}
 	s.histInfo = append(s.histInfo, newInfo)
 
 	// get history proof.
-	*reply = *s.getHistProof(args.uid)
+	histProof := s.getHistProof(uid)
 	s.mu.Unlock()
-	return nil
+	return histProof
 }
 
-func (s *Server) Get(uid *uint64, reply *HistProof) error {
+func (s *Server) Get(uid uint64) *HistProof {
 	s.mu.Lock()
-	*reply = *s.getHistProof(*uid)
+	p := s.getHistProof(uid)
 	s.mu.Unlock()
-	return nil
+	return p
 }
 
-type UpdateProof struct {
-	epoch   uint64
-	updates map[string][]byte
-	sig     []byte
-}
-
-func (s *Server) Audit(epoch *uint64, reply *UpdateProof) error {
+// Audit returns an err on fail.
+func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	s.mu.Lock()
-	if *epoch >= uint64(len(s.histInfo)) {
+	if epoch >= uint64(len(s.histInfo)) {
 		s.mu.Unlock()
-		return errors.New("Audit")
+		return nil, true
 	}
-	inf := s.histInfo[*epoch]
-	reply.updates = inf.updates
-	reply.sig = inf.sig
+	info := s.histInfo[epoch]
 	s.mu.Unlock()
-	return nil
+	p := &UpdateProof{Updates: info.updates, Sig: info.sig}
+	return p, false
 }
 
 func newServer() (*Server, cryptoffi.PublicKey, *cryptoffi.VRFPublicKey) {
@@ -157,7 +142,7 @@ func newServer() (*Server, cryptoffi.PublicKey, *cryptoffi.VRFPublicKey) {
 	sigPk, sigSk := cryptoffi.GenerateKey()
 	vrfPk, vrfSk := cryptoffi.VRFGenerateKey()
 	m := &merkle.Tree{}
-	fullM := make(map[string][]byte)
-	verM := make(map[uint64]uint64)
-	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, keyMap: m, fullKeyMap: fullM, uidVer: verM}, sigPk, vrfPk
+	opens := make(map[string]*PkCommOpen)
+	vers := make(map[uint64]uint64)
+	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, keyMap: m, pkCommOpens: opens, nextVers: vers}, sigPk, vrfPk
 }

@@ -1,34 +1,34 @@
 package kt2
 
 import (
-	"errors"
 	"github.com/goose-lang/primitive"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
-	"github.com/mit-pdos/pav/rpcffi"
 	"sync"
 )
-
-type adtrEpochInfo struct {
-	dig     []byte
-	servSig cryptoffi.Sig
-	adtrSig cryptoffi.Sig
-}
 
 type Auditor struct {
 	mu        *sync.Mutex
 	sk        cryptoffi.PrivateKey
 	servSigPk cryptoffi.PublicKey
-	histInfo  []*adtrEpochInfo
 	keyMap    *merkle.Tree
+	histInfo  []*AdtrEpochInfo
 }
 
-// checkUpd checks that updates are safe to apply, and errors on fail.
+// checkUpd checks that updates are okay to apply, and errors on fail.
 func (a *Auditor) checkUpd(upd map[string][]byte) bool {
+	nextEpoch := uint64(len(a.histInfo))
 	var err0 bool
-	for label := range upd {
-		getReply := a.keyMap.Get([]byte(label))
+	for mapLabel, mapVal := range upd {
+		getReply := a.keyMap.Get([]byte(mapLabel))
 		if getReply.Error || getReply.ProofTy {
+			err0 = true
+			break
+		}
+		// as long as we store the entire mapVal, don't think it matters
+		// if it has more bytes past the MapValPre.
+		valPre, _, err1 := MapValPreDecode(mapVal)
+		if err1 || valPre.Epoch != nextEpoch {
 			err0 = true
 			break
 		}
@@ -44,51 +44,47 @@ func (a *Auditor) applyUpd(upd map[string][]byte) {
 	}
 }
 
-// Update checks new epoch updates and applies them.
-func (a *Auditor) Update(args *UpdateProof, unused *struct{}) error {
+// Update checks new epoch updates, applies them, and rets err on fail.
+func (a *Auditor) Update(proof *UpdateProof) bool {
 	a.mu.Lock()
 	nextEpoch := uint64(len(a.histInfo))
-	if args.epoch != nextEpoch {
+	if a.checkUpd(proof.Updates) {
 		a.mu.Unlock()
-		return errors.New("Auditor.Update")
+		return true
 	}
-	if a.checkUpd(args.updates) {
-		a.mu.Unlock()
-		return errors.New("Auditor.Update")
-	}
-	a.applyUpd(args.updates)
+	a.applyUpd(proof.Updates)
 
 	// check dig sig.
 	dig := a.keyMap.Digest()
-	preSig := &PreDigSig{Epoch: nextEpoch, Dig: dig}
-	preSigByt := rpcffi.Encode(preSig)
-	ok0 := a.servSigPk.Verify(preSigByt, args.sig)
+	preSig := &PreSigDig{Epoch: nextEpoch, Dig: dig}
+	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
+	ok0 := a.servSigPk.Verify(preSigByt, proof.Sig)
 	if !ok0 {
 		a.mu.Unlock()
-		return errors.New("Auditor.Update")
+		return true
 	}
 
 	// sign dig.
 	sig := a.sk.Sign(preSigByt)
-	newInfo := &adtrEpochInfo{dig: dig, servSig: args.sig, adtrSig: sig}
+	newInfo := &AdtrEpochInfo{Dig: dig, ServSig: proof.Sig, AdtrSig: sig}
 	a.histInfo = append(a.histInfo, newInfo)
 	a.mu.Unlock()
-	return nil
+	return false
 }
 
-// Get returns the auditor's known link for a particular epoch.
-func (a *Auditor) Get(epoch *uint64, reply *adtrEpochInfo) error {
+// Get returns the auditor's known link for a particular epoch,
+// and errs on fail.
+func (a *Auditor) Get(epoch uint64) (*AdtrEpochInfo, bool) {
 	a.mu.Lock()
 	numEpochs := uint64(len(a.histInfo))
-	if *epoch >= numEpochs {
+	if epoch >= numEpochs {
 		a.mu.Unlock()
-		return errors.New("Auditor.Get")
+		return nil, true
 	}
 
-	inf := a.histInfo[*epoch]
-	*reply = *inf
+	info := a.histInfo[epoch]
 	a.mu.Unlock()
-	return nil
+	return info, false
 }
 
 func newAuditor(servPk cryptoffi.PublicKey) (*Auditor, cryptoffi.PublicKey) {
