@@ -3,74 +3,84 @@ package kt2
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
+	"github.com/mit-pdos/pav/advrpc"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
-	"github.com/mit-pdos/pav/rpcffi"
 )
 
 type Client struct {
 	uid       uint64
-	myKeys    [][]byte
-	servCli   *rpcffi.Client
+	nextVer   uint64
+	servCli   *advrpc.Client
 	servSigPk cryptoffi.PublicKey
-	servVrfPk cryptoffi.VRFPublicKey
+	servVrfPk cryptoffi.VrfPublicKey
 	// seenDigs stores, for an epoch, if we've gotten a commitment for it.
 	seenDigs map[uint64]*SigDig
 	// nextEpoch is the min epoch that we haven't yet seen, an UB on seenDigs.
 	nextEpoch uint64
 }
 
-// checkDig checks a new dig against seen digs, and evid / err on fail.
-func (c *Client) checkDig(sigDig *SigDig) (*Evid, bool) {
-	err0 := sigDig.Check(c.servSigPk)
+// checkDig checks for freshness and prior vals, and evid / err on fail.
+func (c *Client) checkDig(dig *SigDig) (*Evid, bool) {
+	// check sig.
+	err0 := CheckSigDig(dig, c.servSigPk)
 	if err0 {
 		return nil, true
 	}
-	seenDig, ok0 := c.seenDigs[sigDig.Epoch]
-	if ok0 && !std.BytesEqual(seenDig.Dig, sigDig.Dig) {
-		evid := &Evid{sigDig0: sigDig, sigDig1: seenDig}
-		return evid, true
+	// ret early if we've already seen this epoch before.
+	seenDig, ok0 := c.seenDigs[dig.Epoch]
+	if ok0 {
+		if !std.BytesEqual(seenDig.Dig, dig.Dig) {
+			evid := &Evid{sigDig0: dig, sigDig1: seenDig}
+			return evid, true
+		} else {
+			return nil, false
+		}
 	}
-	if !ok0 {
-		c.seenDigs[sigDig.Epoch] = sigDig
+	// check for freshness.
+	if c.nextEpoch != 0 && dig.Epoch < c.nextEpoch-1 {
+		return nil, true
 	}
+	// check epoch not too high, which would overflow c.nextEpoch.
+	if c.nextEpoch+1 == 0 {
+		return nil, true
+	}
+	c.seenDigs[dig.Epoch] = dig
+	c.nextEpoch = dig.Epoch + 1
 	return nil, false
 }
 
-// checkFreshEpoch errors on fail.
-func (c *Client) checkFreshEpoch(epoch uint64) bool {
-	if c.nextEpoch != 0 && epoch < c.nextEpoch-1 {
-		return true
-	}
-	// update max epoch. err if too high.
-	if epoch+1 == 0 {
-		return true
-	}
-	c.nextEpoch = epoch + 1
-	return false
-}
-
 // checkVrfProof errors on fail.
-func (c *Client) checkVrfProof(uid uint64, ver uint64, label []byte, proof []byte) bool {
-	preLabel := rpcffi.Encode(&mapLabelPre{uid: uid, ver: ver})
-	return !c.servVrfPk.Verify(preLabel, label, proof)
+// TODO: if VRF pubkey is bad, does VRF.Verify still mean something?
+func (c *Client) checkVrf(uid uint64, ver uint64, label []byte, proof []byte) bool {
+	pre := &MapLabelPre{Uid: uid, Ver: ver}
+	preByt := MapLabelPreEncode(make([]byte, 0), pre)
+	return !c.servVrfPk.Verify(preByt, label, proof)
 }
 
-// checkMembProof errors on fail.
-func (c *Client) checkMembProof(uid uint64, ver uint64, dig []byte, memb *histMembProof) bool {
-	if c.checkVrfProof(uid, ver, memb.label, memb.vrfProof) {
+// checkMemb errors on fail.
+func (c *Client) checkMemb(uid uint64, ver uint64, dig []byte, memb *Memb) bool {
+	if c.checkVrf(uid, ver, memb.Label, memb.VrfProof) {
 		return true
 	}
-	pkHash := cryptoffi.Hash(memb.pk)
-	return merkle.CheckProof(true, memb.merkProof, memb.label, pkHash, dig)
+	mapVal := compMapVal(memb.EpochAdded, memb.CommOpen)
+	return merkle.CheckProof(true, memb.MerkProof, memb.Label, mapVal, dig)
 }
 
-// checkMembProofs errors on fail.
-func (c *Client) checkMembProofs(uid uint64, dig []byte, membs []*histMembProof) bool {
+// checkMembHide errors on fail.
+func (c *Client) checkMembHide(uid uint64, ver uint64, dig []byte, memb *MembHide) bool {
+	if c.checkVrf(uid, ver, memb.Label, memb.VrfProof) {
+		return true
+	}
+	return merkle.CheckProof(true, memb.MerkProof, memb.Label, memb.MapVal, dig)
+}
+
+// checkHist errors on fail.
+func (c *Client) checkHist(uid uint64, dig []byte, membs []*MembHide) bool {
 	var err0 bool
-	for verS, memb := range membs {
-		ver := uint64(verS)
-		if c.checkMembProof(uid, ver, dig, memb) {
+	for ver0, memb := range membs {
+		ver := uint64(ver0)
+		if c.checkMembHide(uid, ver, dig, memb) {
 			err0 = true
 			break
 		}
@@ -78,141 +88,127 @@ func (c *Client) checkMembProofs(uid uint64, dig []byte, membs []*histMembProof)
 	return err0
 }
 
-// checkNonMembProof errors on fail.
-func (c *Client) checkNonMembProof(uid uint64, ver uint64, dig []byte, nonMemb *histNonMembProof) bool {
-	if c.checkVrfProof(uid, ver, nonMemb.label, nonMemb.vrfProof) {
+// checkNonMemb errors on fail.
+func (c *Client) checkNonMemb(uid uint64, ver uint64, dig []byte, nonMemb *NonMemb) bool {
+	if c.checkVrf(uid, ver, nonMemb.Label, nonMemb.VrfProof) {
 		return true
 	}
-	return merkle.CheckProof(false, nonMemb.merkProof, nonMemb.label, nil, dig)
-}
-
-// checkHistProof checks the history proof and rets the latest val and epoch,
-// and an err / evid if check fails.
-func (c *Client) checkHistProof(uid uint64, proof *HistProof) ([]byte, uint64, *Evid, bool) {
-	evid, err0 := c.checkDig(proof.sigDig)
-	if err0 {
-		return nil, 0, evid, err0
-	}
-	epoch := proof.sigDig.Epoch
-	dig := proof.sigDig.Dig
-	if c.checkFreshEpoch(epoch) {
-		return nil, 0, nil, true
-	}
-	if c.checkMembProofs(uid, dig, proof.membs) {
-		return nil, 0, nil, true
-	}
-	nextVer := uint64(len(proof.membs))
-	if c.checkNonMembProof(uid, nextVer, dig, proof.nonMemb) {
-		return nil, 0, nil, true
-	}
-	var lastPk []byte
-	if nextVer > 0 {
-		lastPk = proof.membs[nextVer-1].pk
-	}
-	return lastPk, epoch, nil, false
-}
-
-// Get returns a pubkey and the epoch at which it was seen, or an error / evid.
-func (c *Client) Get(uid uint64) ([]byte, uint64, *Evid, bool) {
-	histProof := &HistProof{}
-	err0 := c.servCli.Call("Server.Get", &uid, histProof)
-	if err0 {
-		return nil, 0, nil, true
-	}
-	pk, epoch, evid, err1 := c.checkHistProof(uid, histProof)
-	if err1 {
-		return nil, 0, evid, true
-	}
-	return pk, epoch, nil, false
-}
-
-// checkMyHist checks a history proof against our own pk's,
-// and errors on fail.
-func (c *Client) checkMyHist(proof *HistProof) bool {
-	if uint64(len(c.myKeys)) != uint64(len(proof.membs)) {
-		return true
-	}
-	var err0 bool
-	for ver := uint64(0); ver < uint64(len(c.myKeys)); ver++ {
-		myKey := c.myKeys[ver]
-		otherKey := proof.membs[ver].pk
-		if !std.BytesEqual(myKey, otherKey) {
-			err0 = true
-			break
-		}
-	}
-	return err0
+	return merkle.CheckProof(false, nonMemb.MerkProof, nonMemb.Label, nil, dig)
 }
 
 // Put rets the epoch at which the key was put, and evid / error on fail.
 func (c *Client) Put(pk []byte) (uint64, *Evid, bool) {
-	putArgs := &PutArgs{uid: c.uid, pk: pk}
-	histProof := &HistProof{}
-	err0 := c.servCli.Call("Server.Put", putArgs, histProof)
+	dig, latest, bound, err0 := callServPut(c.servCli, c.uid, pk)
 	if err0 {
 		return 0, nil, true
 	}
-	_, epoch, evid, err1 := c.checkHistProof(c.uid, histProof)
+	evid, err1 := c.checkDig(dig)
 	if err1 {
 		return 0, evid, true
 	}
-	c.myKeys = append(c.myKeys, pk)
-	err2 := c.checkMyHist(histProof)
-	if err2 {
+	// check latest entry has right ver, epoch, pk.
+	if c.checkMemb(c.uid, c.nextVer, dig.Dig, latest) {
 		return 0, nil, true
 	}
-	return epoch, nil, false
+	if dig.Epoch != latest.EpochAdded {
+		return 0, nil, true
+	}
+	if !std.BytesEqual(pk, latest.CommOpen.Pk) {
+		return 0, nil, true
+	}
+	// check bound has right ver.
+	if c.checkNonMemb(c.uid, c.nextVer+1, dig.Dig, bound) {
+		return 0, nil, true
+	}
+	c.nextVer++
+	return dig.Epoch, nil, false
+}
+
+// Get returns if the pk was registered, the pk, and the epoch
+// at which it was seen, or an error / evid.
+// Note: interaction of isReg and hist is a potential source of bugs.
+// e.g., if don't track vers properly, bound could be off.
+// e.g., if don't check isReg alignment with hist, could have fraud non-exis key.
+func (c *Client) Get(uid uint64) (bool, []byte, uint64, *Evid, bool) {
+	dig, hist, isReg, latest, bound, err0 := callServGet(c.servCli, c.uid)
+	if err0 {
+		return false, nil, 0, nil, true
+	}
+	evid, err1 := c.checkDig(dig)
+	if err1 {
+		return false, nil, 0, evid, err1
+	}
+	if c.checkHist(uid, dig.Dig, hist) {
+		return false, nil, 0, nil, true
+	}
+	numHistVers := uint64(len(hist))
+	// check isReg aligned with hist.
+	if numHistVers > 0 && !isReg {
+		return false, nil, 0, nil, true
+	}
+	// check latest has right ver.
+	if isReg && c.checkMemb(uid, numHistVers, dig.Dig, latest) {
+		return false, nil, 0, nil, true
+	}
+	// check bound has right ver.
+	var boundVer uint64
+	// if not reg, bound should have ver = 0.
+	if isReg {
+		boundVer = numHistVers + 1
+	}
+	if c.checkNonMemb(uid, boundVer, dig.Dig, bound) {
+		return false, nil, 0, nil, true
+	}
+	return isReg, latest.CommOpen.Pk, dig.Epoch, nil, false
 }
 
 // SelfMon self-monitors for the client's own key, and returns the epoch
 // through which it succeeds, or evid / error on fail.
 func (c *Client) SelfMon() (uint64, *Evid, bool) {
-	histProof := &HistProof{}
-	err0 := c.servCli.Call("Server.Get", &c.uid, histProof)
+	dig, bound, err0 := callServSelfMon(c.servCli, c.uid)
 	if err0 {
 		return 0, nil, true
 	}
-	_, epoch, evid, err1 := c.checkHistProof(c.uid, histProof)
+	evid, err1 := c.checkDig(dig)
 	if err1 {
-		return 0, evid, err1
+		return 0, evid, true
 	}
-	err2 := c.checkMyHist(histProof)
-	if err2 {
+	if c.checkNonMemb(c.uid, c.nextVer, dig.Dig, bound) {
 		return 0, nil, true
 	}
-	return epoch, nil, false
+	return dig.Epoch, nil, false
 }
 
 // auditEpoch checks a single epoch against an auditor, and evid / error on fail.
-func (c *Client) auditEpoch(epoch uint64, adtrCli *rpcffi.Client, adtrPk cryptoffi.PublicKey) (*Evid, bool) {
-	adtrInfo := &adtrEpochInfo{}
-	err0 := adtrCli.Call("Auditor.Get", &epoch, adtrInfo)
+// pre-cond: we've seen this epoch.
+func (c *Client) auditEpoch(epoch uint64, adtrCli *advrpc.Client, adtrPk cryptoffi.PublicKey) (*Evid, bool) {
+	adtrInfo, err0 := callAdtrGet(adtrCli, epoch)
 	if err0 {
 		return nil, true
 	}
 
 	// check sigs.
-	servSigDig := &SigDig{Epoch: epoch, Dig: adtrInfo.dig, Sig: adtrInfo.servSig}
-	adtrSigDig := &SigDig{Epoch: epoch, Dig: adtrInfo.dig, Sig: adtrInfo.adtrSig}
-	if servSigDig.Check(c.servSigPk) {
+	servDig := &SigDig{Epoch: epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.ServSig}
+	adtrDig := &SigDig{Epoch: epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.AdtrSig}
+	if CheckSigDig(servDig, c.servSigPk) {
 		return nil, true
 	}
-	if adtrSigDig.Check(adtrPk) {
+	if CheckSigDig(adtrDig, adtrPk) {
 		return nil, true
 	}
 
 	// compare against our dig.
 	seenDig, ok0 := c.seenDigs[epoch]
 	primitive.Assert(ok0)
-	if !std.BytesEqual(adtrInfo.dig, seenDig.Dig) {
-		evid := &Evid{sigDig0: servSigDig, sigDig1: seenDig}
+	if !std.BytesEqual(adtrInfo.Dig, seenDig.Dig) {
+		evid := &Evid{sigDig0: servDig, sigDig1: seenDig}
 		return evid, true
 	}
 	return nil, false
 }
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.PublicKey) (*Evid, bool) {
-	adtrCli, err0 := rpcffi.NewClient(adtrAddr)
+	adtrCli, err0 := advrpc.Dial(adtrAddr)
 	if err0 {
 		return nil, true
 	}

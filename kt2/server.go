@@ -9,26 +9,30 @@ import (
 )
 
 // compMapLabel rets mapLabel (VRF(uid || ver)) and a VRF proof.
-func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VRFPrivateKey) ([]byte, []byte) {
+func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
 	l := &MapLabelPre{Uid: uid, Ver: ver}
 	lByt := MapLabelPreEncode(make([]byte, 0), l)
 	h, p := sk.Hash(lByt)
 	return h, p
 }
 
-// compMapVal rets mapVal (epoch || commitment) and a commitment opening,
+func compMapVal(epoch uint64, open *PkCommOpen) []byte {
+	openByt := PkCommOpenEncode(make([]byte, 0), open)
+	comm := cryptoffi.Hash(openByt)
+	v := &MapValPre{Epoch: epoch, PkComm: comm}
+	vByt := MapValPreEncode(make([]byte, 0), v)
+	return vByt
+}
+
+// genValComm rets mapVal (epoch || commitment) and a commitment opening,
 // where commitment = Hash(pk || randBytes).
-func compMapVal(epoch uint64, pk []byte) ([]byte, *PkCommOpen) {
+func genValComm(epoch uint64, pk []byte) ([]byte, *PkCommOpen) {
 	// from 8.12 of [Boneh-Shoup] v0.6, a 512-bit rand space provides statistical
 	// hiding for this sha256-based commitment scheme.
 	// [Boneh-Shoup]: https://toc.cryptobook.us
 	r := cryptoffi.RandBytes(2 * cryptoffi.HashLen)
 	open := &PkCommOpen{Pk: pk, R: r}
-	openByt := PkCommOpenEncode(make([]byte, 0), open)
-	comm := cryptoffi.Hash(openByt)
-	v := &MapValPre{Epoch: epoch, PkComm: comm}
-	vByt := MapValPreEncode(make([]byte, 0), v)
-	return vByt, open
+	return compMapVal(epoch, open), open
 }
 
 type servEpochInfo struct {
@@ -41,7 +45,7 @@ type servEpochInfo struct {
 type Server struct {
 	mu    *sync.Mutex
 	sigSk cryptoffi.PrivateKey
-	vrfSk *cryptoffi.VRFPrivateKey
+	vrfSk *cryptoffi.VrfPrivateKey
 	// keyMap stores (mapLabel, mapVal) entries.
 	keyMap *merkle.Tree
 	// histInfo stores info about prior epochs.
@@ -117,7 +121,7 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	ver, _ := s.nextVers[uid]
 	label, _ := compMapLabel(uid, ver, s.vrfSk)
 	nextEpoch := uint64(len(s.histInfo))
-	val, open := compMapVal(nextEpoch, pk)
+	val, open := genValComm(nextEpoch, pk)
 	dig, _, err0 := s.keyMap.Put(label, val)
 	primitive.Assert(!err0)
 
@@ -187,10 +191,10 @@ func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	return p, false
 }
 
-func newServer() (*Server, cryptoffi.PublicKey, *cryptoffi.VRFPublicKey) {
+func newServer() (*Server, cryptoffi.PublicKey, *cryptoffi.VrfPublicKey) {
 	mu := new(sync.Mutex)
 	sigPk, sigSk := cryptoffi.GenerateKey()
-	vrfPk, vrfSk := cryptoffi.VRFGenerateKey()
+	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
 	m := &merkle.Tree{}
 	opens := make(map[string]*PkCommOpen)
 	vers := make(map[uint64]uint64)
