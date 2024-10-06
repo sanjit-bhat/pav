@@ -26,7 +26,7 @@ type MapValPre struct {
 	PkComm []byte
 }
 
-type MembProof struct {
+type Memb struct {
 	Label      []byte
 	VrfProof   []byte
 	EpochAdded uint64
@@ -34,15 +34,17 @@ type MembProof struct {
 	MerkProof  [][][]byte
 }
 
-type NonMembProof struct {
+type MembHide struct {
 	Label     []byte
 	VrfProof  []byte
+	MapVal    []byte
 	MerkProof [][][]byte
 }
 
-type UpdateProof struct {
-	Updates map[string][]byte
-	Sig     []byte
+type NonMemb struct {
+	Label     []byte
+	VrfProof  []byte
+	MerkProof [][][]byte
 }
 
 type ServerPutArg struct {
@@ -52,8 +54,8 @@ type ServerPutArg struct {
 
 type ServerPutReply struct {
 	Dig    *SigDig
-	Latest *MembProof
-	Bound  *NonMembProof
+	Latest *Memb
+	Bound  *NonMemb
 }
 
 type ServerGetArg struct {
@@ -61,9 +63,11 @@ type ServerGetArg struct {
 }
 
 type ServerGetReply struct {
-	Dig   *SigDig
-	Hist  []*MembProof
-	Bound *NonMembProof
+	Dig    *SigDig
+	Hist   []*MembHide
+	IsReg  bool
+	Latest *Memb
+	Bound  *NonMemb
 }
 
 type ServerSelfMonArg struct {
@@ -72,11 +76,16 @@ type ServerSelfMonArg struct {
 
 type ServerSelfMonReply struct {
 	Dig   *SigDig
-	Bound *NonMembProof
+	Bound *NonMemb
 }
 
 type ServerAuditArg struct {
 	Epoch uint64
+}
+
+type UpdateProof struct {
+	Updates map[string][]byte
+	Sig     []byte
 }
 
 type ServerAuditReply struct {

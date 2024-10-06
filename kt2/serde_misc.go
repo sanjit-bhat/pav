@@ -5,25 +5,25 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func MembProofSlice1DEncode(b0 []byte, o []*MembProof) []byte {
+func MembHideSlice1DEncode(b0 []byte, o []*MembHide) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, uint64(len(o)))
 	for _, e := range o {
-		b = MembProofEncode(b, e)
+		b = MembHideEncode(b, e)
 	}
 	return b
 }
 
-func MembProofSlice1DDecode(b0 []byte) ([]*MembProof, []byte, bool) {
+func MembHideSlice1DDecode(b0 []byte) ([]*MembHide, []byte, bool) {
 	length, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	loopO := make([]*MembProof, 0, length)
+	loopO := make([]*MembHide, 0, length)
 	var loopErr bool
 	var loopB = b1
 	for i := uint64(0); i < length; i++ {
-		a2, loopB1, err2 := MembProofDecode(loopB)
+		a2, loopB1, err2 := MembHideDecode(loopB)
 		loopB = loopB1
 		if err2 {
 			loopErr = true

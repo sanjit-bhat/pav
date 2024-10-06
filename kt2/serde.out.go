@@ -97,7 +97,7 @@ func MapValPreDecode(b0 []byte) (*MapValPre, []byte, bool) {
 	}
 	return &MapValPre{Epoch: a1, PkComm: a2}, b2, false
 }
-func MembProofEncode(b0 []byte, o *MembProof) []byte {
+func MembEncode(b0 []byte, o *Memb) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.Label)
 	b = marshalutil.WriteSlice1D(b, o.VrfProof)
@@ -106,7 +106,7 @@ func MembProofEncode(b0 []byte, o *MembProof) []byte {
 	b = marshalutil.WriteSlice3D(b, o.MerkProof)
 	return b
 }
-func MembProofDecode(b0 []byte) (*MembProof, []byte, bool) {
+func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
@@ -127,16 +127,43 @@ func MembProofDecode(b0 []byte) (*MembProof, []byte, bool) {
 	if err5 {
 		return nil, nil, true
 	}
-	return &MembProof{Label: a1, VrfProof: a2, EpochAdded: a3, CommOpen: a4, MerkProof: a5}, b5, false
+	return &Memb{Label: a1, VrfProof: a2, EpochAdded: a3, CommOpen: a4, MerkProof: a5}, b5, false
 }
-func NonMembProofEncode(b0 []byte, o *NonMembProof) []byte {
+func MembHideEncode(b0 []byte, o *MembHide) []byte {
+	var b = b0
+	b = marshalutil.WriteSlice1D(b, o.Label)
+	b = marshalutil.WriteSlice1D(b, o.VrfProof)
+	b = marshalutil.WriteSlice1D(b, o.MapVal)
+	b = marshalutil.WriteSlice3D(b, o.MerkProof)
+	return b
+}
+func MembHideDecode(b0 []byte) (*MembHide, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	if err3 {
+		return nil, nil, true
+	}
+	a4, b4, err4 := marshalutil.ReadSlice3D(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	return &MembHide{Label: a1, VrfProof: a2, MapVal: a3, MerkProof: a4}, b4, false
+}
+func NonMembEncode(b0 []byte, o *NonMemb) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.Label)
 	b = marshalutil.WriteSlice1D(b, o.VrfProof)
 	b = marshalutil.WriteSlice3D(b, o.MerkProof)
 	return b
 }
-func NonMembProofDecode(b0 []byte) (*NonMembProof, []byte, bool) {
+func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
@@ -149,24 +176,7 @@ func NonMembProofDecode(b0 []byte) (*NonMembProof, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &NonMembProof{Label: a1, VrfProof: a2, MerkProof: a3}, b3, false
-}
-func UpdateProofEncode(b0 []byte, o *UpdateProof) []byte {
-	var b = b0
-	b = MapstringSlbyteEncode(b, o.Updates)
-	b = marshalutil.WriteSlice1D(b, o.Sig)
-	return b
-}
-func UpdateProofDecode(b0 []byte) (*UpdateProof, []byte, bool) {
-	a1, b1, err1 := MapstringSlbyteDecode(b0)
-	if err1 {
-		return nil, nil, true
-	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
-	if err2 {
-		return nil, nil, true
-	}
-	return &UpdateProof{Updates: a1, Sig: a2}, b2, false
+	return &NonMemb{Label: a1, VrfProof: a2, MerkProof: a3}, b3, false
 }
 func ServerPutArgEncode(b0 []byte, o *ServerPutArg) []byte {
 	var b = b0
@@ -188,8 +198,8 @@ func ServerPutArgDecode(b0 []byte) (*ServerPutArg, []byte, bool) {
 func ServerPutReplyEncode(b0 []byte, o *ServerPutReply) []byte {
 	var b = b0
 	b = SigDigEncode(b, o.Dig)
-	b = MembProofEncode(b, o.Latest)
-	b = NonMembProofEncode(b, o.Bound)
+	b = MembEncode(b, o.Latest)
+	b = NonMembEncode(b, o.Bound)
 	return b
 }
 func ServerPutReplyDecode(b0 []byte) (*ServerPutReply, []byte, bool) {
@@ -197,11 +207,11 @@ func ServerPutReplyDecode(b0 []byte) (*ServerPutReply, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := MembProofDecode(b1)
+	a2, b2, err2 := MembDecode(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := NonMembProofDecode(b2)
+	a3, b3, err3 := NonMembDecode(b2)
 	if err3 {
 		return nil, nil, true
 	}
@@ -222,8 +232,10 @@ func ServerGetArgDecode(b0 []byte) (*ServerGetArg, []byte, bool) {
 func ServerGetReplyEncode(b0 []byte, o *ServerGetReply) []byte {
 	var b = b0
 	b = SigDigEncode(b, o.Dig)
-	b = MembProofSlice1DEncode(b, o.Hist)
-	b = NonMembProofEncode(b, o.Bound)
+	b = MembHideSlice1DEncode(b, o.Hist)
+	b = marshal.WriteBool(b, o.IsReg)
+	b = MembEncode(b, o.Latest)
+	b = NonMembEncode(b, o.Bound)
 	return b
 }
 func ServerGetReplyDecode(b0 []byte) (*ServerGetReply, []byte, bool) {
@@ -231,15 +243,23 @@ func ServerGetReplyDecode(b0 []byte) (*ServerGetReply, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := MembProofSlice1DDecode(b1)
+	a2, b2, err2 := MembHideSlice1DDecode(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := NonMembProofDecode(b2)
+	a3, b3, err3 := marshalutil.ReadBool(b2)
 	if err3 {
 		return nil, nil, true
 	}
-	return &ServerGetReply{Dig: a1, Hist: a2, Bound: a3}, b3, false
+	a4, b4, err4 := MembDecode(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	a5, b5, err5 := NonMembDecode(b4)
+	if err5 {
+		return nil, nil, true
+	}
+	return &ServerGetReply{Dig: a1, Hist: a2, IsReg: a3, Latest: a4, Bound: a5}, b5, false
 }
 func ServerSelfMonArgEncode(b0 []byte, o *ServerSelfMonArg) []byte {
 	var b = b0
@@ -256,7 +276,7 @@ func ServerSelfMonArgDecode(b0 []byte) (*ServerSelfMonArg, []byte, bool) {
 func ServerSelfMonReplyEncode(b0 []byte, o *ServerSelfMonReply) []byte {
 	var b = b0
 	b = SigDigEncode(b, o.Dig)
-	b = NonMembProofEncode(b, o.Bound)
+	b = NonMembEncode(b, o.Bound)
 	return b
 }
 func ServerSelfMonReplyDecode(b0 []byte) (*ServerSelfMonReply, []byte, bool) {
@@ -264,7 +284,7 @@ func ServerSelfMonReplyDecode(b0 []byte) (*ServerSelfMonReply, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := NonMembProofDecode(b1)
+	a2, b2, err2 := NonMembDecode(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -281,6 +301,23 @@ func ServerAuditArgDecode(b0 []byte) (*ServerAuditArg, []byte, bool) {
 		return nil, nil, true
 	}
 	return &ServerAuditArg{Epoch: a1}, b1, false
+}
+func UpdateProofEncode(b0 []byte, o *UpdateProof) []byte {
+	var b = b0
+	b = MapstringSlbyteEncode(b, o.Updates)
+	b = marshalutil.WriteSlice1D(b, o.Sig)
+	return b
+}
+func UpdateProofDecode(b0 []byte) (*UpdateProof, []byte, bool) {
+	a1, b1, err1 := MapstringSlbyteDecode(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	return &UpdateProof{Updates: a1, Sig: a2}, b2, false
 }
 func ServerAuditReplyEncode(b0 []byte, o *ServerAuditReply) []byte {
 	var b = b0

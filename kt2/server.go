@@ -53,7 +53,8 @@ type Server struct {
 }
 
 // getMemb pre-cond that (uid, ver) in-bounds.
-func (s *Server) getMemb(uid, ver uint64) *MembProof {
+func (s *Server) getMemb(uid, ver uint64) *Memb {
+	// VRF is determ, so get same label as prev runs.
 	label, vrfProof := compMapLabel(uid, ver, s.vrfSk)
 	getReply := s.keyMap.Get(label)
 	primitive.Assert(!getReply.Error)
@@ -62,33 +63,46 @@ func (s *Server) getMemb(uid, ver uint64) *MembProof {
 	primitive.Assert(!err0)
 	open, ok0 := s.pkCommOpens[string(label)]
 	primitive.Assert(ok0)
-	return &MembProof{Label: label, VrfProof: vrfProof, EpochAdded: valPre.Epoch, CommOpen: open, MerkProof: getReply.Proof}
+	return &Memb{Label: label, VrfProof: vrfProof, EpochAdded: valPre.Epoch, CommOpen: open, MerkProof: getReply.Proof}
 }
 
-func (s *Server) getHist(uid uint64) []*MembProof {
-	var membs []*MembProof
+// getMembHide pre-cond that (uid, ver) in-bounds.
+func (s *Server) getMembHide(uid, ver uint64) *MembHide {
+	label, vrfProof := compMapLabel(uid, ver, s.vrfSk)
+	getReply := s.keyMap.Get(label)
+	primitive.Assert(!getReply.Error)
+	primitive.Assert(getReply.ProofTy)
+	return &MembHide{Label: label, VrfProof: vrfProof, MapVal: getReply.Val, MerkProof: getReply.Proof}
+}
+
+func (s *Server) getHist(uid uint64) []*MembHide {
+	var membs []*MembHide
 	nextVer := s.nextVers[uid]
-	for ver := uint64(0); ver < nextVer; ver++ {
-		membs = append(membs, s.getMemb(uid, ver))
+	if nextVer == 0 {
+		return membs
+	}
+	latVer := nextVer - 1
+	for ver := uint64(0); ver < latVer; ver++ {
+		membs = append(membs, s.getMembHide(uid, ver))
 	}
 	return membs
 }
 
 // getLatest pre-cond that uid has some versions.
-func (s *Server) getLatest(uid uint64) *MembProof {
+func (s *Server) getLatest(uid uint64) *Memb {
 	nextVer := s.nextVers[uid]
 	primitive.Assert(nextVer != 0)
 	latVer := nextVer - 1
 	return s.getMemb(uid, latVer)
 }
 
-func (s *Server) getBound(uid uint64) *NonMembProof {
+func (s *Server) getBound(uid uint64) *NonMemb {
 	nextVer := s.nextVers[uid]
 	nextLabel, nextVrfProof := compMapLabel(uid, nextVer, s.vrfSk)
 	nextReply := s.keyMap.Get(nextLabel)
 	primitive.Assert(!nextReply.Error)
 	primitive.Assert(!nextReply.ProofTy)
-	return &NonMembProof{Label: nextLabel, VrfProof: nextVrfProof, MerkProof: nextReply.Proof}
+	return &NonMemb{Label: nextLabel, VrfProof: nextVrfProof, MerkProof: nextReply.Proof}
 }
 
 func (s *Server) getDig() *SigDig {
@@ -97,7 +111,7 @@ func (s *Server) getDig() *SigDig {
 	return &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
 }
 
-func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *MembProof, *NonMembProof) {
+func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	s.mu.Lock()
 	// add to key map.
 	ver, _ := s.nextVers[uid]
@@ -129,16 +143,24 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *MembProof, *NonMembProof)
 	return sigDig, latest, bound
 }
 
-func (s *Server) Get(uid uint64) (*SigDig, []*MembProof, *NonMembProof) {
+// Get rets, among others, whether the uid has been registered,
+// and if so, a complete latest memb proof.
+func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 	s.mu.Lock()
 	dig := s.getDig()
 	hist := s.getHist(uid)
 	bound := s.getBound(uid)
+	nextVer := s.nextVers[uid]
+	if nextVer == 0 {
+		s.mu.Unlock()
+		return dig, hist, false, &Memb{}, bound
+	}
+	latest := s.getLatest(uid)
 	s.mu.Unlock()
-	return dig, hist, bound
+	return dig, hist, true, latest, bound
 }
 
-func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMembProof) {
+func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
 	s.mu.Lock()
 	dig := s.getDig()
 	bound := s.getBound(uid)
@@ -146,12 +168,18 @@ func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMembProof) {
 	return dig, bound
 }
 
+func newUpdateProof() *UpdateProof {
+	upd := make(map[string][]byte)
+	return &UpdateProof{Updates: upd}
+}
+
 // Audit returns an err on fail.
 func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	s.mu.Lock()
 	if epoch >= uint64(len(s.histInfo)) {
 		s.mu.Unlock()
-		return nil, true
+		// serde lib expects non-nil structs.
+		return newUpdateProof(), true
 	}
 	info := s.histInfo[epoch]
 	s.mu.Unlock()

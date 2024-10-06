@@ -72,6 +72,9 @@ func TestVRF(t *testing.T) {
 	if !pk0.Verify(d1, h2, p2) {
 		t.Fatal()
 	}
+	if bytes.Equal(h0, h2) {
+		t.Fatal()
+	}
 
 	// check verify false if use bad pk.
 	pk1, _ := VRFGenerateKey()
