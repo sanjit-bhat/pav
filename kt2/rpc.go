@@ -13,7 +13,7 @@ const (
 	AdtrGetRpc       uint64 = 1
 )
 
-func newRPCServer(s *Server) *advrpc.Server {
+func newRpcServer(s *Server) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
 	h[ServerPutRpc] = func(arg []byte, reply *[]byte) {
 		argObj, _, err0 := ServerPutArgDecode(arg)
@@ -54,7 +54,7 @@ func newRPCServer(s *Server) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func newRPCAuditor(a *Auditor) *advrpc.Server {
+func newRpcAuditor(a *Auditor) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
 	h[AdtrUpdateRpc] = func(arg []byte, reply *[]byte) {
 		argObj, _, err0 := AdtrUpdateArgDecode(arg)

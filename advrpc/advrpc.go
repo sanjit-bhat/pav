@@ -69,12 +69,9 @@ type Client struct {
 	conn *netffi.Conn
 }
 
-func Dial(addr uint64) (*Client, bool) {
-	c, err := netffi.Dial(addr)
-	if err {
-		return nil, true
-	}
-	return &Client{conn: c}, false
+func Dial(addr uint64) *Client {
+	c := netffi.Dial(addr)
+	return &Client{conn: c}
 }
 
 // Call does an rpc, and returns error on fail.

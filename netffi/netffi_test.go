@@ -10,10 +10,7 @@ func TestNet(t *testing.T) {
 	addr := makeUniqueAddr()
 	l := Listen(addr)
 
-	c0, err0 := Dial(addr)
-	if err0 {
-		t.Fatal()
-	}
+	c0 := Dial(addr)
 	d0 := []byte{1, 2}
 	err1 := c0.Send(d0)
 	if err1 {

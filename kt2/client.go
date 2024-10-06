@@ -13,7 +13,7 @@ type Client struct {
 	nextVer   uint64
 	servCli   *advrpc.Client
 	servSigPk cryptoffi.PublicKey
-	servVrfPk cryptoffi.VrfPublicKey
+	servVrfPk *cryptoffi.VrfPublicKey
 	// seenDigs stores, for an epoch, if we've gotten a commitment for it.
 	seenDigs map[uint64]*SigDig
 	// nextEpoch is the min epoch that we haven't yet seen, an UB on seenDigs.
@@ -208,11 +208,7 @@ func (c *Client) auditEpoch(epoch uint64, adtrCli *advrpc.Client, adtrPk cryptof
 }
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.PublicKey) (*Evid, bool) {
-	adtrCli, err0 := advrpc.Dial(adtrAddr)
-	if err0 {
-		return nil, true
-	}
-
+	adtrCli := advrpc.Dial(adtrAddr)
 	// check all epochs that we've seen before.
 	var evid0 *Evid
 	var err1 bool
@@ -225,4 +221,10 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.PublicKey) (*Evid, bool
 		}
 	}
 	return evid0, err1
+}
+
+func newClient(uid, servAddr uint64, servSigPk cryptoffi.PublicKey, servVrfPk *cryptoffi.VrfPublicKey) *Client {
+	cli := advrpc.Dial(servAddr)
+	digs := make(map[uint64]*SigDig)
+	return &Client{uid: uid, servCli: cli, servSigPk: servSigPk, servVrfPk: servVrfPk, seenDigs: digs}
 }

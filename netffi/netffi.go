@@ -37,12 +37,13 @@ type Conn struct {
 }
 
 // Dial returns new connection and errors on fail.
-func Dial(addr uint64) (*Conn, bool) {
+func Dial(addr uint64) *Conn {
 	conn, err := net.Dial("tcp", AddressToStr(addr))
 	if err != nil {
-		return nil, true
+		// hard for client's to recover if there's an addr err, so fail loudly.
+		panic("could not dial addr")
 	}
-	return newConn(conn), false
+	return newConn(conn)
 }
 
 func (c *Conn) Send(data []byte) bool {

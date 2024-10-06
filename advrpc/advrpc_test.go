@@ -66,10 +66,7 @@ func TestRPC(t *testing.T) {
 	addr := makeUniqueAddr()
 	s.Serve(addr)
 
-	c, err0 := Dial(addr)
-	if err0 {
-		t.Fatal()
-	}
+	c := Dial(addr)
 	args0 := &Args{A: 7, B: 8}
 	args1 := encArgs(args0)
 	reply0 := new([]byte)
