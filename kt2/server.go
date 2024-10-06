@@ -52,7 +52,8 @@ type Server struct {
 	nextVers map[uint64]uint64
 }
 
-func (s *Server) getMembProof(uid, ver uint64) *MembProof {
+// getMemb pre-cond that (uid, ver) in-bounds.
+func (s *Server) getMemb(uid, ver uint64) *MembProof {
 	label, vrfProof := compMapLabel(uid, ver, s.vrfSk)
 	getReply := s.keyMap.Get(label)
 	primitive.Assert(!getReply.Error)
@@ -64,32 +65,41 @@ func (s *Server) getMembProof(uid, ver uint64) *MembProof {
 	return &MembProof{Label: label, VrfProof: vrfProof, EpochAdded: valPre.Epoch, CommOpen: open, MerkProof: getReply.Proof}
 }
 
-func (s *Server) getHistProof(uid uint64) *HistProof {
-	// get signed dig.
-	numEpochs := uint64(len(s.histInfo))
-	lastInfo := s.histInfo[numEpochs-1]
-	sigDig := &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
-
-	// get memb proofs for all existing versions.
+func (s *Server) getHist(uid uint64) []*MembProof {
 	var membs []*MembProof
 	nextVer := s.nextVers[uid]
 	for ver := uint64(0); ver < nextVer; ver++ {
-		membs = append(membs, s.getMembProof(uid, ver))
+		membs = append(membs, s.getMemb(uid, ver))
 	}
+	return membs
+}
 
-	// get non-memb proof for next version.
+// getLatest pre-cond that uid has some versions.
+func (s *Server) getLatest(uid uint64) *MembProof {
+	nextVer := s.nextVers[uid]
+	primitive.Assert(nextVer != 0)
+	latVer := nextVer - 1
+	return s.getMemb(uid, latVer)
+}
+
+func (s *Server) getBound(uid uint64) *NonMembProof {
+	nextVer := s.nextVers[uid]
 	nextLabel, nextVrfProof := compMapLabel(uid, nextVer, s.vrfSk)
 	nextReply := s.keyMap.Get(nextLabel)
 	primitive.Assert(!nextReply.Error)
 	primitive.Assert(!nextReply.ProofTy)
-	nonMemb := &NonMembProof{Label: nextLabel, VrfProof: nextVrfProof, MerkProof: nextReply.Proof}
-
-	return &HistProof{SigDig: sigDig, Membs: membs, NonMemb: nonMemb}
+	return &NonMembProof{Label: nextLabel, VrfProof: nextVrfProof, MerkProof: nextReply.Proof}
 }
 
-func (s *Server) Put(uid uint64, pk []byte) *HistProof {
+func (s *Server) getDig() *SigDig {
+	numEpochs := uint64(len(s.histInfo))
+	lastInfo := s.histInfo[numEpochs-1]
+	return &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
+}
+
+func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *MembProof, *NonMembProof) {
 	s.mu.Lock()
-	// add to keyMap.
+	// add to key map.
 	ver, _ := s.nextVers[uid]
 	label, _ := compMapLabel(uid, ver, s.vrfSk)
 	nextEpoch := uint64(len(s.histInfo))
@@ -111,17 +121,29 @@ func (s *Server) Put(uid uint64, pk []byte) *HistProof {
 	newInfo := &servEpochInfo{updates: updates, dig: dig, sig: sig}
 	s.histInfo = append(s.histInfo, newInfo)
 
-	// get history proof.
-	histProof := s.getHistProof(uid)
+	// get proofs.
+	sigDig := s.getDig()
+	latest := s.getLatest(uid)
+	bound := s.getBound(uid)
 	s.mu.Unlock()
-	return histProof
+	return sigDig, latest, bound
 }
 
-func (s *Server) Get(uid uint64) *HistProof {
+func (s *Server) Get(uid uint64) (*SigDig, []*MembProof, *NonMembProof) {
 	s.mu.Lock()
-	p := s.getHistProof(uid)
+	dig := s.getDig()
+	hist := s.getHist(uid)
+	bound := s.getBound(uid)
 	s.mu.Unlock()
-	return p
+	return dig, hist, bound
+}
+
+func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMembProof) {
+	s.mu.Lock()
+	dig := s.getDig()
+	bound := s.getBound(uid)
+	s.mu.Unlock()
+	return dig, bound
 }
 
 // Audit returns an err on fail.

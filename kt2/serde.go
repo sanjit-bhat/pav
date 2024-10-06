@@ -40,12 +40,6 @@ type NonMembProof struct {
 	MerkProof [][][]byte
 }
 
-type HistProof struct {
-	SigDig  *SigDig
-	Membs   []*MembProof
-	NonMemb *NonMembProof
-}
-
 type UpdateProof struct {
 	Updates map[string][]byte
 	Sig     []byte
@@ -57,7 +51,9 @@ type ServerPutArg struct {
 }
 
 type ServerPutReply struct {
-	P *HistProof
+	Dig    *SigDig
+	Latest *MembProof
+	Bound  *NonMembProof
 }
 
 type ServerGetArg struct {
@@ -65,7 +61,18 @@ type ServerGetArg struct {
 }
 
 type ServerGetReply struct {
-	P *HistProof
+	Dig   *SigDig
+	Hist  []*MembProof
+	Bound *NonMembProof
+}
+
+type ServerSelfMonArg struct {
+	Uid uint64
+}
+
+type ServerSelfMonReply struct {
+	Dig   *SigDig
+	Bound *NonMembProof
 }
 
 type ServerAuditArg struct {

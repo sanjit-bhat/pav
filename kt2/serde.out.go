@@ -151,28 +151,6 @@ func NonMembProofDecode(b0 []byte) (*NonMembProof, []byte, bool) {
 	}
 	return &NonMembProof{Label: a1, VrfProof: a2, MerkProof: a3}, b3, false
 }
-func HistProofEncode(b0 []byte, o *HistProof) []byte {
-	var b = b0
-	b = SigDigEncode(b, o.SigDig)
-	b = MembProofSlice1DEncode(b, o.Membs)
-	b = NonMembProofEncode(b, o.NonMemb)
-	return b
-}
-func HistProofDecode(b0 []byte) (*HistProof, []byte, bool) {
-	a1, b1, err1 := SigDigDecode(b0)
-	if err1 {
-		return nil, nil, true
-	}
-	a2, b2, err2 := MembProofSlice1DDecode(b1)
-	if err2 {
-		return nil, nil, true
-	}
-	a3, b3, err3 := NonMembProofDecode(b2)
-	if err3 {
-		return nil, nil, true
-	}
-	return &HistProof{SigDig: a1, Membs: a2, NonMemb: a3}, b3, false
-}
 func UpdateProofEncode(b0 []byte, o *UpdateProof) []byte {
 	var b = b0
 	b = MapstringSlbyteEncode(b, o.Updates)
@@ -209,15 +187,25 @@ func ServerPutArgDecode(b0 []byte) (*ServerPutArg, []byte, bool) {
 }
 func ServerPutReplyEncode(b0 []byte, o *ServerPutReply) []byte {
 	var b = b0
-	b = HistProofEncode(b, o.P)
+	b = SigDigEncode(b, o.Dig)
+	b = MembProofEncode(b, o.Latest)
+	b = NonMembProofEncode(b, o.Bound)
 	return b
 }
 func ServerPutReplyDecode(b0 []byte) (*ServerPutReply, []byte, bool) {
-	a1, b1, err1 := HistProofDecode(b0)
+	a1, b1, err1 := SigDigDecode(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	return &ServerPutReply{P: a1}, b1, false
+	a2, b2, err2 := MembProofDecode(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	a3, b3, err3 := NonMembProofDecode(b2)
+	if err3 {
+		return nil, nil, true
+	}
+	return &ServerPutReply{Dig: a1, Latest: a2, Bound: a3}, b3, false
 }
 func ServerGetArgEncode(b0 []byte, o *ServerGetArg) []byte {
 	var b = b0
@@ -233,15 +221,54 @@ func ServerGetArgDecode(b0 []byte) (*ServerGetArg, []byte, bool) {
 }
 func ServerGetReplyEncode(b0 []byte, o *ServerGetReply) []byte {
 	var b = b0
-	b = HistProofEncode(b, o.P)
+	b = SigDigEncode(b, o.Dig)
+	b = MembProofSlice1DEncode(b, o.Hist)
+	b = NonMembProofEncode(b, o.Bound)
 	return b
 }
 func ServerGetReplyDecode(b0 []byte) (*ServerGetReply, []byte, bool) {
-	a1, b1, err1 := HistProofDecode(b0)
+	a1, b1, err1 := SigDigDecode(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	return &ServerGetReply{P: a1}, b1, false
+	a2, b2, err2 := MembProofSlice1DDecode(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	a3, b3, err3 := NonMembProofDecode(b2)
+	if err3 {
+		return nil, nil, true
+	}
+	return &ServerGetReply{Dig: a1, Hist: a2, Bound: a3}, b3, false
+}
+func ServerSelfMonArgEncode(b0 []byte, o *ServerSelfMonArg) []byte {
+	var b = b0
+	b = marshal.WriteInt(b, o.Uid)
+	return b
+}
+func ServerSelfMonArgDecode(b0 []byte) (*ServerSelfMonArg, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadInt(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	return &ServerSelfMonArg{Uid: a1}, b1, false
+}
+func ServerSelfMonReplyEncode(b0 []byte, o *ServerSelfMonReply) []byte {
+	var b = b0
+	b = SigDigEncode(b, o.Dig)
+	b = NonMembProofEncode(b, o.Bound)
+	return b
+}
+func ServerSelfMonReplyDecode(b0 []byte) (*ServerSelfMonReply, []byte, bool) {
+	a1, b1, err1 := SigDigDecode(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := NonMembProofDecode(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	return &ServerSelfMonReply{Dig: a1, Bound: a2}, b2, false
 }
 func ServerAuditArgEncode(b0 []byte, o *ServerAuditArg) []byte {
 	var b = b0
