@@ -208,15 +208,6 @@ func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	}
 }
 
-func genRcvr(name string) *ast.FieldList {
-	return &ast.FieldList{
-		List: []*ast.Field{{
-			Names: []*ast.Ident{{Name: "o"}},
-			Type:  &ast.StarExpr{X: &ast.Ident{Name: name}},
-		}},
-	}
-}
-
 func (c *compiler) genFieldEnc(field *types.Var) ast.Stmt {
 	var call *ast.CallExpr
 	switch fTy := field.Type().Underlying().(type) {
@@ -431,18 +422,6 @@ func (c *compiler) genDecode(o types.Object) *ast.FuncDecl {
 		Name: &ast.Ident{Name: fmt.Sprintf("%vDecode", name)},
 		Type: funcTy,
 		Body: &ast.BlockStmt{List: body},
-	}
-}
-
-func genFieldAssign(field *types.Var) ast.Stmt {
-	name := field.Name()
-	return &ast.AssignStmt{
-		Lhs: []ast.Expr{&ast.SelectorExpr{
-			X:   &ast.Ident{Name: "o"},
-			Sel: &ast.Ident{Name: name},
-		}},
-		Tok: token.ASSIGN,
-		Rhs: []ast.Expr{&ast.Ident{Name: name}},
 	}
 }
 

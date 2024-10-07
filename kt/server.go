@@ -118,7 +118,7 @@ func (s *Server) getDig() *SigDig {
 func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	s.mu.Lock()
 	// add to key map.
-	ver, _ := s.nextVers[uid]
+	ver := s.nextVers[uid]
 	label, _ := compMapLabel(uid, ver, s.vrfSk)
 	nextEpoch := uint64(len(s.histInfo))
 	val, open := genValComm(nextEpoch, pk)
