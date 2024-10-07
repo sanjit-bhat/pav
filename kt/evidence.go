@@ -1,4 +1,4 @@
-package kt2
+package kt
 
 import (
 	"github.com/goose-lang/std"

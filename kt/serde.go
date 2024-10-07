@@ -1,4 +1,4 @@
-package kt2
+package kt
 
 type PreSigDig struct {
 	Epoch uint64

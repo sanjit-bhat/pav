@@ -1,4 +1,4 @@
-package kt2
+package kt
 
 // set global timing such that:
 // - chaos interlaces enough with alice.
