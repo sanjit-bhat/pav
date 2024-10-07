@@ -19,7 +19,7 @@ func MembHideSlice1DDecode(b0 []byte) ([]*MembHide, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	loopO := make([]*MembHide, 0, length)
+	var loopO = make([]*MembHide, 0, length)
 	var loopErr bool
 	var loopB = b1
 	for i := uint64(0); i < length; i++ {

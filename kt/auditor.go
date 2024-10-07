@@ -15,22 +15,27 @@ type Auditor struct {
 	histInfo  []*AdtrEpochInfo
 }
 
+func (a *Auditor) checkOneUpd(nextEpoch uint64, mapLabel, mapVal []byte) bool {
+	getReply := a.keyMap.Get([]byte(mapLabel))
+	if getReply.Error || getReply.ProofTy {
+		return true
+	}
+	// as long as we store the entire mapVal, don't think it matters
+	// if it has more bytes past the MapValPre.
+	valPre, _, err1 := MapValPreDecode(mapVal)
+	if err1 || valPre.Epoch != nextEpoch {
+		return true
+	}
+	return false
+}
+
 // checkUpd checks that updates are okay to apply, and errors on fail.
 func (a *Auditor) checkUpd(upd map[string][]byte) bool {
 	nextEpoch := uint64(len(a.histInfo))
 	var err0 bool
 	for mapLabel, mapVal := range upd {
-		getReply := a.keyMap.Get([]byte(mapLabel))
-		if getReply.Error || getReply.ProofTy {
+		if a.checkOneUpd(nextEpoch, []byte(mapLabel), mapVal) {
 			err0 = true
-			break
-		}
-		// as long as we store the entire mapVal, don't think it matters
-		// if it has more bytes past the MapValPre.
-		valPre, _, err1 := MapValPreDecode(mapVal)
-		if err1 || valPre.Epoch != nextEpoch {
-			err0 = true
-			break
 		}
 	}
 	return err0

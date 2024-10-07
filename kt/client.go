@@ -82,7 +82,6 @@ func (c *Client) checkHist(uid uint64, dig []byte, membs []*MembHide) bool {
 		ver := uint64(ver0)
 		if c.checkMembHide(uid, ver, dig, memb) {
 			err0 = true
-			break
 		}
 	}
 	return err0
@@ -120,7 +119,7 @@ func (c *Client) Put(pk []byte) (uint64, *Evid, bool) {
 	if c.checkNonMemb(c.uid, c.nextVer+1, dig.Dig, bound) {
 		return 0, nil, true
 	}
-	c.nextVer++
+	c.nextVer += 1
 	return dig.Epoch, nil, false
 }
 
@@ -217,7 +216,6 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.PublicKey) (*Evid, bool
 		if err2 {
 			evid0 = evid1
 			err1 = true
-			break
 		}
 	}
 	return evid0, err1

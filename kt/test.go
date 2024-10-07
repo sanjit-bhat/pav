@@ -128,9 +128,7 @@ func GetTimeSeries(o []*TimeSeriesEntry, epoch uint64) (bool, []byte) {
 		if e.Epoch <= epoch {
 			isReg = true
 			val = e.TSVal
-			continue
 		}
-		break
 	}
 	return isReg, val
 }
