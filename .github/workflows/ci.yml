@@ -37,7 +37,7 @@ jobs:
       - name: Lint
         uses: dominikh/staticcheck-action@v1
         with:
-          version: "v0.4.7"
+          version: "v0.5.1"
           min-go-version: ${{ matrix.go }}
           install-go: false
           cache-key: ${{ matrix.go }}
