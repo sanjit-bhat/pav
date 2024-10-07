@@ -13,7 +13,7 @@ jobs:
   go:
     strategy:
       matrix:
-        go: ["1.22"]
+        go: ["1.23"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.23"
 
       - name: Run extra CI checks
         run: python etc/ci-check.py
