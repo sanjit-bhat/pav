@@ -130,7 +130,7 @@ func (c *Client) Put(pk []byte) (uint64, *Evid, bool) {
 // e.g., if don't track vers properly, bound could be off.
 // e.g., if don't check isReg alignment with hist, could have fraud non-exis key.
 func (c *Client) Get(uid uint64) (bool, []byte, uint64, *Evid, bool) {
-	dig, hist, isReg, latest, bound, err0 := callServGet(c.servCli, c.uid)
+	dig, hist, isReg, latest, bound, err0 := callServGet(c.servCli, uid)
 	if err0 {
 		return false, nil, 0, nil, true
 	}

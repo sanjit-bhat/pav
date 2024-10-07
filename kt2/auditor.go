@@ -79,7 +79,7 @@ func (a *Auditor) Get(epoch uint64) (*AdtrEpochInfo, bool) {
 	numEpochs := uint64(len(a.histInfo))
 	if epoch >= numEpochs {
 		a.mu.Unlock()
-		return nil, true
+		return &AdtrEpochInfo{}, true
 	}
 
 	info := a.histInfo[epoch]

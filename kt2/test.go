@@ -1,13 +1,10 @@
 package kt2
 
-// global timing, not relev to proofs, but relev to execution:
-// - chaos every 5ms.
-// - auditor sync every 1ms.
-// - alice put 20 times, every 3ms.
-// - bob wait 35ms (just after half of alice's times), then get.
-//   should be somewhere in middle of alice's puts.
-// - both wait 5ms for auditors to update.
-// - alice SelfMon. both Audit. then assert pk equal.
+// set global timing such that:
+// - chaos interlaces enough with alice.
+// - chaos mostly has up-to-date audits.
+// - bob queries somewhere around halfway thru alice's puts.
+// - before alice and bob finally check keys, the auditor has caught up.
 
 import (
 	"github.com/goose-lang/primitive"
@@ -68,7 +65,7 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 	bobMu.Lock()
 
 	// alice SelfMon + Audit. bob Audit. ordering irrelevant.
-	primitive.Sleep(5_000_000)
+	primitive.Sleep(1000_000_000)
 	_, _, err0 := aliceCli.SelfMon()
 	primitive.Assume(!err0)
 	_, err1 := aliceCli.Audit(adtr0Addr, adtr0Pk)
@@ -94,7 +91,7 @@ type alice struct {
 
 func (a *alice) run(cli *Client) {
 	for i := byte(0); i < byte(20); i++ {
-		primitive.Sleep(3_000_000)
+		primitive.Sleep(50_000_000)
 		pk := []byte{i}
 		epoch, _, err0 := cli.Put(pk)
 		primitive.Assume(!err0)
@@ -109,7 +106,7 @@ type bob struct {
 }
 
 func (b *bob) run(cli *Client) {
-	primitive.Sleep(35_000_000)
+	primitive.Sleep(550_000_000)
 	isReg, pk, epoch, _, err0 := cli.Get(aliceUid)
 	primitive.Assume(!err0)
 	b.epoch = epoch
@@ -128,7 +125,7 @@ func GetTimeSeries(o []*TimeSeriesEntry, epoch uint64) (bool, []byte) {
 	var val []byte
 	// entries inv: ordered by epoch field.
 	for _, e := range o {
-		if e.Epoch >= epoch {
+		if e.Epoch <= epoch {
 			isReg = true
 			val = e.TSVal
 			continue
@@ -138,10 +135,10 @@ func GetTimeSeries(o []*TimeSeriesEntry, epoch uint64) (bool, []byte) {
 	return isReg, val
 }
 
-// chaos comes from Charlie running all the ops.
+// chaos from Charlie running all the ops.
 func chaos(charlie *Client, adtr0Addr, adtr1Addr uint64, adtr0Pk, adtr1Pk cryptoffi.PublicKey) {
 	for {
-		primitive.Sleep(5_000_000)
+		primitive.Sleep(40_000_000)
 		pk := []byte{2}
 		_, _, err0 := charlie.Put(pk)
 		primitive.Assume(!err0)
@@ -149,10 +146,9 @@ func chaos(charlie *Client, adtr0Addr, adtr1Addr uint64, adtr0Pk, adtr1Pk crypto
 		primitive.Assume(!err1)
 		_, _, err2 := charlie.SelfMon()
 		primitive.Assume(!err2)
-		_, err3 := charlie.Audit(adtr0Addr, adtr0Pk)
-		primitive.Assume(!err3)
-		_, err4 := charlie.Audit(adtr1Addr, adtr1Pk)
-		primitive.Assume(!err4)
+		// TODO: maybe change API? auditors might not be fully updated.
+		charlie.Audit(adtr0Addr, adtr0Pk)
+		charlie.Audit(adtr1Addr, adtr1Pk)
 	}
 }
 

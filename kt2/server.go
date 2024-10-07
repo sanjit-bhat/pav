@@ -157,7 +157,7 @@ func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 	nextVer := s.nextVers[uid]
 	if nextVer == 0 {
 		s.mu.Unlock()
-		return dig, hist, false, &Memb{}, bound
+		return dig, hist, false, &Memb{CommOpen: &PkCommOpen{}}, bound
 	}
 	latest := s.getLatest(uid)
 	s.mu.Unlock()
@@ -172,18 +172,12 @@ func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
 	return dig, bound
 }
 
-func newUpdateProof() *UpdateProof {
-	upd := make(map[string][]byte)
-	return &UpdateProof{Updates: upd}
-}
-
 // Audit returns an err on fail.
 func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	s.mu.Lock()
 	if epoch >= uint64(len(s.histInfo)) {
 		s.mu.Unlock()
-		// serde lib expects non-nil structs.
-		return newUpdateProof(), true
+		return &UpdateProof{Updates: make(map[string][]byte)}, true
 	}
 	info := s.histInfo[epoch]
 	s.mu.Unlock()
@@ -198,5 +192,16 @@ func newServer() (*Server, cryptoffi.PublicKey, *cryptoffi.VrfPublicKey) {
 	m := &merkle.Tree{}
 	opens := make(map[string]*PkCommOpen)
 	vers := make(map[uint64]uint64)
-	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, keyMap: m, pkCommOpens: opens, nextVers: vers}, sigPk, vrfPk
+
+	// commit to init epoch.
+	dig := m.Digest()
+	updates := make(map[string][]byte)
+	// TODO: maybe factor this out along with Put code.
+	preSig := &PreSigDig{Epoch: 0, Dig: dig}
+	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
+	sig := sigSk.Sign(preSigByt)
+	newInfo := &servEpochInfo{updates: updates, dig: dig, sig: sig}
+	var hist []*servEpochInfo
+	hist = append(hist, newInfo)
+	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, keyMap: m, histInfo: hist, pkCommOpens: opens, nextVers: vers}, sigPk, vrfPk
 }

@@ -1,7 +1,7 @@
 package kt2
 
 import (
-	"math/rand/v2"
+	"net"
 	"testing"
 )
 
@@ -12,8 +12,23 @@ func TestAll(t *testing.T) {
 	testAll(serverAddr, adtr0Addr, adtr1Addr)
 }
 
+func getFreePort() (port uint64, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close()
+			return uint64(l.Addr().(*net.TCPAddr).Port), nil
+		}
+	}
+	return
+}
+
 func makeUniqueAddr() uint64 {
-	port := uint64(rand.IntN(4000)) + 6000
+	port, err := getFreePort()
+	if err != nil {
+		panic("bad port")
+	}
 	// left shift to make IP 0.0.0.0.
 	return port << 32
 }
