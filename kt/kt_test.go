@@ -1,27 +1,34 @@
 package kt
 
 import (
-	"fmt"
-	"github.com/mit-pdos/gokv/grove_ffi"
-	"sync"
+	"net"
 	"testing"
 )
 
-var port = 6060
-var portMu = new(sync.Mutex)
-
-func makeUniqueAddr() uint64 {
-	portMu.Lock()
-	ip := fmt.Sprintf("0.0.0.0:%d", port)
-	addr := grove_ffi.MakeAddress(ip)
-	port++
-	portMu.Unlock()
-	return addr
-}
-
-func TestAgreement(t *testing.T) {
-	servAddr := makeUniqueAddr()
+func TestAll(t *testing.T) {
+	serverAddr := makeUniqueAddr()
 	adtr0Addr := makeUniqueAddr()
 	adtr1Addr := makeUniqueAddr()
-	testAgreement(servAddr, adtr0Addr, adtr1Addr)
+	testAll(serverAddr, adtr0Addr, adtr1Addr)
+}
+
+func getFreePort() (port uint64, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close()
+			return uint64(l.Addr().(*net.TCPAddr).Port), nil
+		}
+	}
+	return
+}
+
+func makeUniqueAddr() uint64 {
+	port, err := getFreePort()
+	if err != nil {
+		panic("bad port")
+	}
+	// left shift to make IP 0.0.0.0.
+	return port << 32
 }

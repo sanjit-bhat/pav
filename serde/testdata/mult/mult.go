@@ -1,4 +1,4 @@
-package rpc
+package serde
 
 type arg1 struct {
 	x uint64

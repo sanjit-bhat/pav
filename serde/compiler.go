@@ -131,7 +131,7 @@ func genFileHeader(pkgName, fileId string) *ast.File {
 	}
 	comm2 := &ast.Comment{
 		Slash: commPos,
-		Text:  "// using compiler \"github.com/mit-pdos/pav/rpc\".",
+		Text:  "// using compiler \"github.com/mit-pdos/pav/serde\".",
 	}
 	file := &ast.File{
 		Doc:     &ast.CommentGroup{List: []*ast.Comment{comm1, comm2}},
@@ -154,10 +154,10 @@ func (c *compiler) shouldGen(o types.Object) (encode bool, decode bool) {
 		return
 	}
 	for _, comm := range d.Doc.List {
-		if comm.Text == "// rpc: no encode needed." {
+		if comm.Text == "// serde: no encode needed." {
 			encode = false
 		}
-		if comm.Text == "// rpc: no decode needed." {
+		if comm.Text == "// serde: no decode needed." {
 			decode = false
 		}
 	}
@@ -167,40 +167,33 @@ func (c *compiler) shouldGen(o types.Object) (encode bool, decode bool) {
 func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	name := o.Name()
 	st := o.Type().(*types.Named).Underlying().(*types.Struct)
-
 	funcTy := &ast.FuncType{
-		Results: &ast.FieldList{
-			List: []*ast.Field{{
-				Type: &ast.ArrayType{
-					Elt: &ast.Ident{Name: "byte"},
-				},
-			}},
-		},
-	}
-	callMake := &ast.CallExpr{
-		Fun: &ast.Ident{Name: "make"},
-		Args: []ast.Expr{
-			&ast.ArrayType{
-				Elt: &ast.Ident{Name: "byte"},
+		Params: &ast.FieldList{List: []*ast.Field{
+			{
+				Names: []*ast.Ident{{Name: "b0"}},
+				Type:  &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}},
 			},
-			&ast.BasicLit{Kind: token.INT, Value: "0"},
-		},
-	}
-	makeByteSl := &ast.DeclStmt{
-		Decl: &ast.GenDecl{
-			Tok: token.VAR,
-			Specs: []ast.Spec{
-				&ast.ValueSpec{
-					Names:  []*ast.Ident{{Name: "b"}},
-					Values: []ast.Expr{callMake},
-				},
+			{
+				Names: []*ast.Ident{{Name: "o"}},
+				Type:  &ast.StarExpr{X: &ast.Ident{Name: name}},
 			},
+		}},
+		Results: &ast.FieldList{List: []*ast.Field{{
+			Type: &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}}}},
 		},
 	}
-	body := []ast.Stmt{makeByteSl}
+	body := make([]ast.Stmt, 0)
+	varDecl := &ast.DeclStmt{Decl: &ast.GenDecl{
+		Tok: token.VAR,
+		Specs: []ast.Spec{&ast.ValueSpec{
+			Names:  []*ast.Ident{{Name: "b"}},
+			Values: []ast.Expr{&ast.Ident{Name: "b0"}},
+		}},
+	}}
+	body = append(body, varDecl)
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
-		body = append(body, c.genFieldWrite(field))
+		body = append(body, c.genFieldEnc(field))
 	}
 	retStmt := &ast.ReturnStmt{
 		Results: []ast.Expr{
@@ -209,32 +202,27 @@ func (c *compiler) genEncode(o types.Object) *ast.FuncDecl {
 	}
 	body = append(body, retStmt)
 	return &ast.FuncDecl{
-		Recv: genRcvr(name),
-		Name: &ast.Ident{Name: "encode"},
+		Name: &ast.Ident{Name: fmt.Sprintf("%vEncode", name)},
 		Type: funcTy,
 		Body: &ast.BlockStmt{List: body},
 	}
 }
 
-func genRcvr(name string) *ast.FieldList {
-	return &ast.FieldList{
-		List: []*ast.Field{{
-			Names: []*ast.Ident{{Name: "o"}},
-			Type:  &ast.StarExpr{X: &ast.Ident{Name: name}},
-		}},
-	}
-}
-
-func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
+func (c *compiler) genFieldEnc(field *types.Var) ast.Stmt {
 	var call *ast.CallExpr
 	switch fTy := field.Type().Underlying().(type) {
+	case *types.Basic:
+		call = c.genBasicEnc(field)
 	case *types.Slice:
 		call = &ast.CallExpr{
-			Fun:  c.genSliceWrite(field.Pos(), fTy, 1),
-			Args: genStdFieldWriteArgs(field.Name()),
+			Fun:  c.genSliceEnc(fTy, 1),
+			Args: genStdFieldEncArgs(field.Name()),
 		}
-	case *types.Basic:
-		call = c.genBasicWrite(field)
+	case *types.Pointer:
+		_ = fTy.Elem().(*types.Named).Underlying().(*types.Struct)
+		call = c.genStructEnc(field)
+	case *types.Map:
+		call = c.genMapEnc(field)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
@@ -245,59 +233,7 @@ func (c *compiler) genFieldWrite(field *types.Var) ast.Stmt {
 	}
 }
 
-func (c *compiler) genSliceWrite(pos token.Pos, ty1 *types.Slice, depth int) *ast.SelectorExpr {
-	if depth > 3 {
-		log.Panic("unsupported slice nesting beyond depth 3")
-	}
-	switch ty2 := ty1.Elem().Underlying().(type) {
-	case *types.Slice:
-		return c.genSliceWrite(pos, ty2, depth+1)
-	case *types.Basic:
-		if ty2.Kind() != types.Byte {
-			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
-		}
-		isFixed, _ := c.getFixedLen(pos)
-		if isFixed {
-			if depth == 1 {
-				return &ast.SelectorExpr{
-					X:   &ast.Ident{Name: "marshal"},
-					Sel: &ast.Ident{Name: "WriteBytes"},
-				}
-			} else {
-				log.Panicf("unsupported fixed len outside depth 1 slices")
-			}
-		}
-		return &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
-			Sel: &ast.Ident{Name: fmt.Sprintf("WriteSlice%vD", depth)},
-		}
-	default:
-		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
-	}
-	return nil
-}
-
-// getFixedLen uses field pos to check if has special fixed len comment.
-func (c *compiler) getFixedLen(pos token.Pos) (isFixed bool, length string) {
-	p, _ := astutil.PathEnclosingInterval(c.file, pos, pos)
-	// First node is ident, then there's field.
-	node := p[1].(*ast.Field)
-	if node.Doc == nil {
-		return false, ""
-	}
-	for _, comm := range node.Doc.List {
-		text := comm.Text
-		text, found0 := strings.CutPrefix(text, "// rpc: invariant: len ")
-		text, found1 := strings.CutSuffix(text, ".")
-		if found0 && found1 {
-			isFixed = true
-			length = text
-		}
-	}
-	return
-}
-
-func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
+func (c *compiler) genBasicEnc(field *types.Var) *ast.CallExpr {
 	var fun *ast.SelectorExpr
 	basic := field.Type().Underlying().(*types.Basic)
 	switch basic.Kind() {
@@ -331,9 +267,77 @@ func (c *compiler) genBasicWrite(field *types.Var) *ast.CallExpr {
 	} else {
 		return &ast.CallExpr{
 			Fun:  fun,
-			Args: genStdFieldWriteArgs(field.Name()),
+			Args: genStdFieldEncArgs(field.Name()),
 		}
 	}
+}
+
+func (c *compiler) genSliceEnc(ty1 *types.Slice, depth int) ast.Expr {
+	if depth > 3 {
+		log.Panic("unsupported slice nesting beyond depth 3")
+	}
+	switch ty2 := ty1.Elem().Underlying().(type) {
+	case *types.Slice:
+		return c.genSliceEnc(ty2, depth+1)
+	case *types.Basic:
+		if ty2.Kind() != types.Byte {
+			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
+		}
+		return &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("WriteSlice%vD", depth)},
+		}
+	case *types.Pointer:
+		n := ty2.Elem().(*types.Named)
+		_ = n.Underlying().(*types.Struct)
+		stName := n.Obj().Name()
+		return &ast.Ident{Name: fmt.Sprintf("%vSlice%vDEncode", stName, depth)}
+	default:
+		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
+	}
+	return nil
+}
+
+func (c *compiler) genStructEnc(field *types.Var) *ast.CallExpr {
+	stName := field.Type().Underlying().(*types.Pointer).Elem().(*types.Named).Obj().Name()
+	return &ast.CallExpr{
+		Fun:  &ast.Ident{Name: fmt.Sprintf("%vEncode", stName)},
+		Args: genStdFieldEncArgs(field.Name()),
+	}
+}
+
+// TODO: maybe make this an abstraction that gets the handler name
+// for any type that we need a compiled / user-supplied handler.
+// TODO: if we took out the const feature, could maybe factor out the args
+// for all these CallExpr's.
+func (c *compiler) genMapEnc(field *types.Var) *ast.CallExpr {
+	fTy := field.Type().Underlying()
+	canon := getCanonTyName(fTy)
+	return &ast.CallExpr{
+		Fun:  &ast.Ident{Name: fmt.Sprintf("%vEncode", canon)},
+		Args: genStdFieldEncArgs(field.Name()),
+	}
+}
+
+// TODO: right now this is definitely not canonical,
+// especially with nested types.
+func getCanonTyName(ty1 types.Type) string {
+	switch ty2 := ty1.(type) {
+	case *types.Basic:
+		return ty2.Name()
+	case *types.Slice:
+		return "Sl" + getCanonTyName(ty2.Elem().Underlying())
+	case *types.Map:
+		return "Map" + getCanonTyName(ty2.Key().Underlying()) + getCanonTyName(ty2.Elem().Underlying())
+	case *types.Pointer:
+		n := ty2.Elem().(*types.Named)
+		// currently, only support pointers to structs.
+		_ = n.Underlying().(*types.Struct)
+		return n.Obj().Name()
+	default:
+		log.Panicf("unsupported ty: %s", ty2)
+	}
+	return ""
 }
 
 // getConst uses ast pos to check if field has special constant comment.
@@ -346,7 +350,7 @@ func (c *compiler) getConst(pos token.Pos) (isCst bool, cst string) {
 	}
 	for _, comm := range node.Doc.List {
 		text := comm.Text
-		text, found0 := strings.CutPrefix(text, "// rpc: invariant: const ")
+		text, found0 := strings.CutPrefix(text, "// serde: invariant: const ")
 		text, found1 := strings.CutSuffix(text, ".")
 		if found0 && found1 {
 			isCst = true
@@ -356,7 +360,7 @@ func (c *compiler) getConst(pos token.Pos) (isCst bool, cst string) {
 	return
 }
 
-func genStdFieldWriteArgs(name string) []ast.Expr {
+func genStdFieldEncArgs(name string) []ast.Expr {
 	return []ast.Expr{
 		&ast.Ident{Name: "b"},
 		&ast.SelectorExpr{
@@ -374,94 +378,93 @@ func (c *compiler) genDecode(o types.Object) *ast.FuncDecl {
 		Params: &ast.FieldList{
 			List: []*ast.Field{{
 				Names: []*ast.Ident{{Name: "b0"}},
-				Type: &ast.ArrayType{
-					Elt: &ast.Ident{Name: "byte"},
-				},
+				Type:  &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}},
 			}},
 		},
 		Results: &ast.FieldList{
 			List: []*ast.Field{
-				{Type: &ast.ArrayType{
-					Elt: &ast.Ident{Name: "byte"},
-				}},
-				{Type: &ast.Ident{Name: "errorTy"}},
+				{Type: &ast.StarExpr{X: &ast.Ident{Name: name}}},
+				{Type: &ast.ArrayType{Elt: &ast.Ident{Name: "byte"}}},
+				{Type: &ast.Ident{Name: "bool"}},
 			},
 		},
 	}
-	varDecl := &ast.DeclStmt{
-		Decl: &ast.GenDecl{
-			Tok: token.VAR,
-			Specs: []ast.Spec{
-				&ast.ValueSpec{
-					Names:  []*ast.Ident{{Name: "b"}},
-					Values: []ast.Expr{&ast.Ident{Name: "b0"}},
-				},
-			},
+	body := []ast.Stmt{}
+	for i := 0; i < st.NumFields(); i++ {
+		field := st.Field(i)
+		body = append(body, c.genFieldDec(field, i)...)
+	}
+	var fieldsInit []ast.Expr
+	for i := 0; i < st.NumFields(); i++ {
+		field := st.Field(i)
+		init := &ast.KeyValueExpr{
+			Key:   &ast.Ident{Name: field.Name()},
+			Value: &ast.Ident{Name: fmt.Sprintf("a%v", i+1)},
+		}
+		fieldsInit = append(fieldsInit, init)
+	}
+	objInit := &ast.UnaryExpr{
+		Op: token.AND,
+		X: &ast.CompositeLit{
+			Type: &ast.Ident{Name: name},
+			Elts: fieldsInit,
 		},
 	}
 	ret := &ast.ReturnStmt{
 		Results: []ast.Expr{
-			&ast.Ident{Name: "b"},
-			&ast.Ident{Name: "errNone"},
+			objInit,
+			&ast.Ident{Name: fmt.Sprintf("b%v", st.NumFields())},
+			&ast.Ident{Name: "false"},
 		},
-	}
-	body := []ast.Stmt{varDecl}
-	for i := 0; i < st.NumFields(); i++ {
-		field := st.Field(i)
-		body = append(body, c.genFieldRead(field)...)
-	}
-	for i := 0; i < st.NumFields(); i++ {
-		field := st.Field(i)
-		body = append(body, genFieldAssign(field))
 	}
 	body = append(body, ret)
 	return &ast.FuncDecl{
-		Recv: genRcvr(name),
-		Name: &ast.Ident{Name: "decode"},
+		Name: &ast.Ident{Name: fmt.Sprintf("%vDecode", name)},
 		Type: funcTy,
 		Body: &ast.BlockStmt{List: body},
 	}
 }
 
-func genFieldAssign(field *types.Var) ast.Stmt {
-	name := field.Name()
-	return &ast.AssignStmt{
-		Lhs: []ast.Expr{&ast.SelectorExpr{
-			X:   &ast.Ident{Name: "o"},
-			Sel: &ast.Ident{Name: name},
-		}},
-		Tok: token.ASSIGN,
-		Rhs: []ast.Expr{&ast.Ident{Name: name}},
-	}
-}
-
-func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
-	name := field.Name()
+func (c *compiler) genFieldDec(field *types.Var, fieldNum int) []ast.Stmt {
 	var call *ast.CallExpr
+	oldB := fmt.Sprintf("b%v", fieldNum)
 	switch fTy := field.Type().Underlying().(type) {
-	case *types.Slice:
-		call = c.genSliceRead(field.Pos(), fTy, 1)
 	case *types.Basic:
-		call = c.genBasicRead(field)
+		call = c.genBasicDec(field, oldB)
+	case *types.Slice:
+		call = &ast.CallExpr{
+			Fun:  c.genSliceDec(fTy, 1),
+			Args: []ast.Expr{&ast.Ident{Name: oldB}},
+		}
+	case *types.Pointer:
+		n := fTy.Elem().(*types.Named)
+		_ = n.Underlying().(*types.Struct)
+		call = c.genStructDec(n.Obj().Name(), oldB)
+	case *types.Map:
+		call = c.genMapDec(field, oldB)
 	default:
 		log.Panic("unsupported type: ", fTy)
 	}
+	newX := fmt.Sprintf("a%v", fieldNum+1)
+	newB := fmt.Sprintf("b%v", fieldNum+1)
+	newErr := fmt.Sprintf("err%v", fieldNum+1)
 	assign := &ast.AssignStmt{
 		Lhs: []ast.Expr{
-			&ast.Ident{Name: name},
-			&ast.Ident{Name: "b"},
-			&ast.Ident{Name: "err"},
+			&ast.Ident{Name: newX},
+			&ast.Ident{Name: newB},
+			&ast.Ident{Name: newErr},
 		},
 		Tok: token.DEFINE,
 		Rhs: []ast.Expr{call},
 	}
 	err := &ast.IfStmt{
-		Cond: &ast.Ident{Name: "err"},
+		Cond: &ast.Ident{Name: newErr},
 		Body: &ast.BlockStmt{List: []ast.Stmt{
 			&ast.ReturnStmt{
 				Results: []ast.Expr{
 					&ast.Ident{Name: "nil"},
-					&ast.Ident{Name: "err"},
+					&ast.Ident{Name: "nil"},
+					&ast.Ident{Name: "true"},
 				},
 			},
 		}},
@@ -469,59 +472,18 @@ func (c *compiler) genFieldRead(field *types.Var) []ast.Stmt {
 	return []ast.Stmt{assign, err}
 }
 
-func (c *compiler) genSliceRead(pos token.Pos, ty1 *types.Slice, depth int) *ast.CallExpr {
-	if depth > 3 {
-		log.Panic("unsupported slice nesting beyond depth 3")
-	}
-	switch ty2 := ty1.Elem().Underlying().(type) {
-	case *types.Slice:
-		return c.genSliceRead(pos, ty2, depth+1)
-	case *types.Basic:
-		if ty2.Kind() != types.Byte {
-			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
-		}
-		isFixed, length := c.getFixedLen(pos)
-		if isFixed {
-			if depth == 1 {
-				return &ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X:   &ast.Ident{Name: "marshalutil"},
-						Sel: &ast.Ident{Name: "ReadBytes"},
-					},
-					Args: []ast.Expr{
-						&ast.Ident{Name: "b"},
-						&ast.BasicLit{Kind: token.INT, Value: length},
-					},
-				}
-			} else {
-				log.Panicf("unsupported fixed len outside depth 1 slices")
-			}
-		}
-		return &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   &ast.Ident{Name: "marshalutil"},
-				Sel: &ast.Ident{Name: fmt.Sprintf("ReadSlice%vD", depth)},
-			},
-			Args: []ast.Expr{&ast.Ident{Name: "b"}},
-		}
-	default:
-		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
-	}
-	return nil
-}
-
-func (c *compiler) genBasicRead(field *types.Var) *ast.CallExpr {
+func (c *compiler) genBasicDec(field *types.Var, inBytsId string) *ast.CallExpr {
 	var cstFuncMod string
 	var args []ast.Expr
 	isCst, cst := c.getConst(field.Pos())
 	if isCst {
 		cstFuncMod = "Const"
 		args = []ast.Expr{
-			&ast.Ident{Name: "b"},
+			&ast.Ident{Name: inBytsId},
 			&ast.BasicLit{Kind: token.INT, Value: cst},
 		}
 	} else {
-		args = []ast.Expr{&ast.Ident{Name: "b"}}
+		args = []ast.Expr{&ast.Ident{Name: inBytsId}}
 	}
 
 	var fun *ast.SelectorExpr
@@ -549,6 +511,48 @@ func (c *compiler) genBasicRead(field *types.Var) *ast.CallExpr {
 	return &ast.CallExpr{
 		Fun:  fun,
 		Args: args,
+	}
+}
+
+func (c *compiler) genSliceDec(ty1 *types.Slice, depth int) ast.Expr {
+	if depth > 3 {
+		log.Panic("unsupported slice nesting beyond depth 3")
+	}
+	switch ty2 := ty1.Elem().Underlying().(type) {
+	case *types.Slice:
+		return c.genSliceDec(ty2, depth+1)
+	case *types.Basic:
+		if ty2.Kind() != types.Byte {
+			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
+		}
+		return &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "marshalutil"},
+			Sel: &ast.Ident{Name: fmt.Sprintf("ReadSlice%vD", depth)},
+		}
+	case *types.Pointer:
+		n := ty2.Elem().(*types.Named)
+		_ = n.Underlying().(*types.Struct)
+		stName := n.Obj().Name()
+		return &ast.Ident{Name: fmt.Sprintf("%vSlice%vDDecode", stName, depth)}
+	default:
+		log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
+	}
+	return nil
+}
+
+func (c *compiler) genStructDec(stName string, inBytsId string) *ast.CallExpr {
+	return &ast.CallExpr{
+		Fun:  &ast.Ident{Name: fmt.Sprintf("%vDecode", stName)},
+		Args: []ast.Expr{&ast.Ident{Name: inBytsId}},
+	}
+}
+
+func (c *compiler) genMapDec(field *types.Var, inBytsId string) *ast.CallExpr {
+	fTy := field.Type().Underlying()
+	canon := getCanonTyName(fTy)
+	return &ast.CallExpr{
+		Fun:  &ast.Ident{Name: fmt.Sprintf("%vDecode", canon)},
+		Args: []ast.Expr{&ast.Ident{Name: inBytsId}},
 	}
 }
 

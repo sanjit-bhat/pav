@@ -48,3 +48,44 @@ func TestVerifyFalse(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestVRF(t *testing.T) {
+	pk0, sk0 := VrfGenerateKey()
+
+	// check same hashes for same input.
+	d0 := []byte("d0")
+	h0, p0 := sk0.Hash(d0)
+	if !pk0.Verify(d0, h0, p0) {
+		t.Fatal()
+	}
+	h1, p1 := sk0.Hash(d0)
+	if !pk0.Verify(d0, h1, p1) {
+		t.Fatal()
+	}
+	if !bytes.Equal(h0, h1) {
+		t.Fatal()
+	}
+
+	// check diff hashes for diff inputs.
+	d1 := []byte("d1")
+	h2, p2 := sk0.Hash(d1)
+	if !pk0.Verify(d1, h2, p2) {
+		t.Fatal()
+	}
+	if bytes.Equal(h0, h2) {
+		t.Fatal()
+	}
+
+	// check verify false if use bad pk.
+	pk1, _ := VrfGenerateKey()
+	if pk1.Verify(d1, h2, p2) {
+		t.Fatal()
+	}
+
+	// check verify false on bad proof.
+	p3 := bytes.Clone(p2)
+	p3[0] = ^p3[0]
+	if pk0.Verify(d1, h2, p3) {
+		t.Fatal()
+	}
+}

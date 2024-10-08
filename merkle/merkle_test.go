@@ -206,3 +206,25 @@ func TestAttackPutNilEmptyNode(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+// had a bug where a 255 label would overflow the proof fetching code.
+// check for underflow as well.
+func TestLabelOverflow(t *testing.T) {
+	label := []byte{}
+	for i := 0; i < int(cryptoffi.HashLen/2); i++ {
+		label = append(label, 0)
+	}
+	for i := 0; i < int(cryptoffi.HashLen/2); i++ {
+		label = append(label, 255)
+	}
+	val := []byte{1}
+
+	tr := &Tree{}
+	dig, proof, err := tr.Put(label, val)
+	if err {
+		t.Fatal()
+	}
+	if CheckProof(true, proof, label, val, dig) {
+		t.Fatal()
+	}
+}

@@ -20,11 +20,12 @@ type entry struct {
 }
 
 var data = []entry{
-	{"types/types.go", "types/types.golden", 1},
-	{"alias/alias.go", "alias/alias.golden", 1},
-	{"mult/mult.go", "mult/mult.golden", 3},
-	{"nogen/nogen.go", "nogen/nogen.golden", 1},
-	{"const/const.go", "const/const.golden", 1},
+	{"types/types.go", "types/types.golden.go", 1},
+	{"alias/alias.go", "alias/alias.golden.go", 1},
+	{"mult/mult.go", "mult/mult.golden.go", 3},
+	{"nogen/nogen.go", "nogen/nogen.golden.go", 1},
+	{"const/const.go", "const/const.golden.go", 1},
+	{"nest/nest.go", "nest/nest.golden.go", 1},
 }
 
 // tmpWrite writes data to a tmp file and returns the tmp file name.
@@ -52,10 +53,10 @@ func check(t *testing.T, source, golden string) {
 	res := compile(source)
 	actual := tmpWrite(t, res)
 
-	cmd := exec.Command("diff", "--unified", actual, golden)
+	cmd := exec.Command("diff", "--unified", "--color=always", golden, actual)
 	diff, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Errorf("actual output diff from golden:\n%s", diff)
+		t.Errorf("diff from golden to actual output:\n%s", diff)
 	}
 
 	err = os.Remove(actual)

@@ -61,6 +61,7 @@ func (n *node) deepCopy() *node {
 
 func (n *node) updateLeafHash() {
 	var h cryptoutil.Hasher
+	// TODO: tag needs to go before val?
 	cryptoutil.HasherWrite(&h, n.val)
 	cryptoutil.HasherWrite(&h, []byte{leafNodeTag})
 	n.hash = cryptoutil.HasherSum(h, nil)
@@ -206,7 +207,8 @@ func getChildHashes(nodePath []*node, id Id) [][][]byte {
 	childHashes := make([][][]byte, len(nodePath)-1)
 	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath))-1; pathIdx++ {
 		children := nodePath[pathIdx].children
-		pos := id[pathIdx]
+		// had a bug where w/o uint64, pos+1 would overflow byte.
+		pos := uint64(id[pathIdx])
 		var proofChildren [][]byte
 		appendNode2D(&proofChildren, children[:pos])
 		appendNode2D(&proofChildren, children[pos+1:])
