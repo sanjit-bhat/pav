@@ -10,8 +10,6 @@ import (
 	"log"
 )
 
-type Sig = []byte
-
 const (
 	HashLen uint64 = 32
 	SigLen  uint64 = 64
@@ -38,12 +36,12 @@ func GenerateKey() (PublicKey, PrivateKey) {
 	return PublicKey(pub), PrivateKey(priv)
 }
 
-func (priv PrivateKey) Sign(message []byte) Sig {
+func (priv PrivateKey) Sign(message []byte) []byte {
 	return ed25519.Sign(ed25519.PrivateKey(priv), message)
 }
 
 // Verify rets okay if proof verifies.
-func (pub PublicKey) Verify(message []byte, sig Sig) bool {
+func (pub PublicKey) Verify(message []byte, sig []byte) bool {
 	return ed25519.Verify(ed25519.PublicKey(pub), message, sig)
 }
 

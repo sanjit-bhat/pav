@@ -64,10 +64,11 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 	aliceMu.Lock()
 	bobMu.Lock()
 
-	// alice SelfMon + Audit. bob Audit. ordering irrelevant.
+	// alice SelfMon + Audit. bob Audit. ordering irrelevant across clients.
 	primitive.Sleep(1000_000_000)
-	_, _, err0 := aliceCli.SelfMon()
+	selfMonEp, _, err0 := aliceCli.SelfMon()
 	primitive.Assume(!err0)
+	primitive.Assume(bob.epoch <= selfMonEp)
 	_, err1 := aliceCli.Audit(adtr0Addr, adtr0Pk)
 	primitive.Assume(!err1)
 	_, err2 := aliceCli.Audit(adtr1Addr, adtr1Pk)
@@ -112,25 +113,6 @@ func (b *bob) run(cli *Client) {
 	b.epoch = epoch
 	b.isReg = isReg
 	b.alicePk = pk
-}
-
-type TimeSeriesEntry struct {
-	Epoch uint64
-	TSVal []byte
-}
-
-// GetTimeSeries rets whether a val is registered at the time and, if so, the val.
-func GetTimeSeries(o []*TimeSeriesEntry, epoch uint64) (bool, []byte) {
-	var isReg bool
-	var val []byte
-	// entries inv: ordered by epoch field.
-	for _, e := range o {
-		if e.Epoch <= epoch {
-			isReg = true
-			val = e.TSVal
-		}
-	}
-	return isReg, val
 }
 
 // chaos from Charlie running all the ops.

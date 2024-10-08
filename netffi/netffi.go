@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-func AddressToStr(addr uint64) string {
+func addrToStr(addr uint64) string {
 	a0 := byte(addr & 0xff)
 	addr = addr >> 8
 	a1 := byte(addr & 0xff)
@@ -38,7 +38,7 @@ type Conn struct {
 
 // Dial returns new connection and errors on fail.
 func Dial(addr uint64) *Conn {
-	conn, err := net.Dial("tcp", AddressToStr(addr))
+	conn, err := net.Dial("tcp", addrToStr(addr))
 	if err != nil {
 		// hard for client's to recover if there's an addr err, so fail loudly.
 		panic("could not dial addr")
@@ -104,7 +104,7 @@ type Listener struct {
 }
 
 func Listen(addr uint64) *Listener {
-	l, err := net.Listen("tcp", AddressToStr(addr))
+	l, err := net.Listen("tcp", addrToStr(addr))
 	if err != nil {
 		// assume no Listen err. likely, port is already in use.
 		panic(err)
