@@ -22,8 +22,8 @@ func testBasic(servAddr, adtr0Addr, adtr1Addr uint64) {
 	// alice put.
 	alice := newClient(aliceUid, servAddr, servSigPk, servVrfPk)
 	pk0 := []byte{3}
-	ep0, _, err0 := alice.Put(pk0)
-	primitive.Assume(!err0)
+	ep0, err0 := alice.Put(pk0)
+	primitive.Assume(!err0.err)
 
 	// update auditors.
 	servCli := advrpc.Dial(servAddr)
@@ -44,21 +44,21 @@ func testBasic(servAddr, adtr0Addr, adtr1Addr uint64) {
 
 	// bob get.
 	bob := newClient(bobUid, servAddr, servSigPk, servVrfPk)
-	isReg, pk1, ep1, _, err7 := bob.Get(aliceUid)
-	primitive.Assume(!err7)
+	isReg, pk1, ep1, err7 := bob.Get(aliceUid)
+	primitive.Assume(!err7.err)
 	primitive.Assume(isReg)
 	// same epoch to avoid timeseries for basic TC.
 	primitive.Assume(ep0 == ep1)
 
 	// alice and bob audit.
-	_, err8 := alice.Audit(adtr0Addr, adtr0Pk)
-	primitive.Assume(!err8)
-	_, err9 := alice.Audit(adtr1Addr, adtr1Pk)
-	primitive.Assume(!err9)
-	_, err10 := bob.Audit(adtr0Addr, adtr0Pk)
-	primitive.Assume(!err10)
-	_, err11 := bob.Audit(adtr1Addr, adtr1Pk)
-	primitive.Assume(!err11)
+	err8 := alice.Audit(adtr0Addr, adtr0Pk)
+	primitive.Assume(!err8.err)
+	err9 := alice.Audit(adtr1Addr, adtr1Pk)
+	primitive.Assume(!err9.err)
+	err10 := bob.Audit(adtr0Addr, adtr0Pk)
+	primitive.Assume(!err10.err)
+	err11 := bob.Audit(adtr1Addr, adtr1Pk)
+	primitive.Assume(!err11.err)
 
 	// assert keys equal.
 	primitive.Assert(std.BytesEqual(pk0, pk1))
