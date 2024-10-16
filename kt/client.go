@@ -20,6 +20,8 @@ type Client struct {
 	nextEpoch uint64
 }
 
+// clientErr abstracts errors in the KT client.
+// maybe there's an error. if so, maybe there's irrefutable evidence.
 type clientErr struct {
 	evid *Evid
 	err  bool
