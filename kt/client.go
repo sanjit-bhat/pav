@@ -29,7 +29,7 @@ type clientErr struct {
 
 // checkDig checks for freshness and prior vals, and evid / err on fail.
 func (c *Client) checkDig(dig *SigDig) *clientErr {
-	stdErr := &clientErr{nil, true}
+	stdErr := &clientErr{evid: nil, err: true}
 	// check sig.
 	err0 := CheckSigDig(dig, c.servSigPk)
 	if err0 {
@@ -40,9 +40,9 @@ func (c *Client) checkDig(dig *SigDig) *clientErr {
 	if ok0 {
 		if !std.BytesEqual(seenDig.Dig, dig.Dig) {
 			evid := &Evid{sigDig0: dig, sigDig1: seenDig}
-			return &clientErr{evid, true}
+			return &clientErr{evid: evid, err: true}
 		} else {
-			return &clientErr{nil, false}
+			return &clientErr{evid: nil, err: false}
 		}
 	}
 	// check for freshness.
@@ -55,7 +55,7 @@ func (c *Client) checkDig(dig *SigDig) *clientErr {
 	}
 	c.seenDigs[dig.Epoch] = dig
 	c.nextEpoch = dig.Epoch + 1
-	return &clientErr{nil, false}
+	return &clientErr{evid: nil, err: false}
 }
 
 // checkVrfProof errors on fail.
@@ -105,7 +105,7 @@ func (c *Client) checkNonMemb(uid uint64, ver uint64, dig []byte, nonMemb *NonMe
 
 // Put rets the epoch at which the key was put, and evid / error on fail.
 func (c *Client) Put(pk []byte) (uint64, *clientErr) {
-	stdErr := &clientErr{nil, true}
+	stdErr := &clientErr{evid: nil, err: true}
 	dig, latest, bound, err0 := callServPut(c.servCli, c.uid, pk)
 	if err0 {
 		return 0, stdErr
@@ -129,7 +129,7 @@ func (c *Client) Put(pk []byte) (uint64, *clientErr) {
 		return 0, stdErr
 	}
 	c.nextVer += 1
-	return dig.Epoch, &clientErr{nil, false}
+	return dig.Epoch, &clientErr{evid: nil, err: false}
 }
 
 // Get returns if the pk was registered, the pk, and the epoch
@@ -138,7 +138,7 @@ func (c *Client) Put(pk []byte) (uint64, *clientErr) {
 // e.g., if don't track vers properly, bound could be off.
 // e.g., if don't check isReg alignment with hist, could have fraud non-exis key.
 func (c *Client) Get(uid uint64) (bool, []byte, uint64, *clientErr) {
-	stdErr := &clientErr{nil, true}
+	stdErr := &clientErr{evid: nil, err: true}
 	dig, hist, isReg, latest, bound, err0 := callServGet(c.servCli, uid)
 	if err0 {
 		return false, nil, 0, stdErr
@@ -168,13 +168,13 @@ func (c *Client) Get(uid uint64) (bool, []byte, uint64, *clientErr) {
 	if c.checkNonMemb(uid, boundVer, dig.Dig, bound) {
 		return false, nil, 0, stdErr
 	}
-	return isReg, latest.CommOpen.Pk, dig.Epoch, &clientErr{nil, false}
+	return isReg, latest.CommOpen.Pk, dig.Epoch, &clientErr{evid: nil, err: false}
 }
 
 // SelfMon self-monitors for the client's own key, and returns the epoch
 // through which it succeeds, or evid / error on fail.
 func (c *Client) SelfMon() (uint64, *clientErr) {
-	stdErr := &clientErr{nil, true}
+	stdErr := &clientErr{evid: nil, err: true}
 	dig, bound, err0 := callServSelfMon(c.servCli, c.uid)
 	if err0 {
 		return 0, stdErr
@@ -186,13 +186,13 @@ func (c *Client) SelfMon() (uint64, *clientErr) {
 	if c.checkNonMemb(c.uid, c.nextVer, dig.Dig, bound) {
 		return 0, stdErr
 	}
-	return dig.Epoch, &clientErr{nil, false}
+	return dig.Epoch, &clientErr{evid: nil, err: false}
 }
 
 // auditEpoch checks a single epoch against an auditor, and evid / error on fail.
 // pre-cond: we've seen this epoch.
 func (c *Client) auditEpoch(epoch uint64, adtrCli *advrpc.Client, adtrPk cryptoffi.PublicKey) *clientErr {
-	stdErr := &clientErr{nil, true}
+	stdErr := &clientErr{evid: nil, err: true}
 	adtrInfo, err0 := callAdtrGet(adtrCli, epoch)
 	if err0 {
 		return stdErr
@@ -213,15 +213,15 @@ func (c *Client) auditEpoch(epoch uint64, adtrCli *advrpc.Client, adtrPk cryptof
 	primitive.Assert(ok0)
 	if !std.BytesEqual(adtrInfo.Dig, seenDig.Dig) {
 		evid := &Evid{sigDig0: servDig, sigDig1: seenDig}
-		return &clientErr{evid, true}
+		return &clientErr{evid: evid, err: true}
 	}
-	return &clientErr{nil, false}
+	return &clientErr{evid: nil, err: false}
 }
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.PublicKey) *clientErr {
 	adtrCli := advrpc.Dial(adtrAddr)
 	// check all epochs that we've seen before.
-	var err0 = &clientErr{nil, false}
+	var err0 = &clientErr{evid: nil, err: false}
 	for ep := range c.seenDigs {
 		err1 := c.auditEpoch(ep, adtrCli, adtrPk)
 		if err1.err {
