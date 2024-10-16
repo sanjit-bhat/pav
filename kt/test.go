@@ -68,6 +68,7 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 	primitive.Sleep(1000_000_000)
 	selfMonEp, _, err0 := aliceCli.SelfMon()
 	primitive.Assume(!err0)
+	// could also state this as bob.epoch <= last epoch in TS.
 	primitive.Assume(bob.epoch <= selfMonEp)
 	_, err1 := aliceCli.Audit(adtr0Addr, adtr0Pk)
 	primitive.Assume(!err1)
@@ -126,7 +127,6 @@ func chaos(charlie *Client, adtr0Addr, adtr1Addr uint64, adtr0Pk, adtr1Pk crypto
 		primitive.Assume(!err1)
 		_, _, err2 := charlie.SelfMon()
 		primitive.Assume(!err2)
-		// TODO: maybe change API? auditors might not be fully updated.
 		charlie.Audit(adtr0Addr, adtr0Pk)
 		charlie.Audit(adtr1Addr, adtr1Pk)
 	}
