@@ -66,18 +66,18 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 
 	// alice SelfMon + Audit. bob Audit. ordering irrelevant across clients.
 	primitive.Sleep(1000_000_000)
-	selfMonEp, _, err0 := aliceCli.SelfMon()
-	primitive.Assume(!err0)
+	selfMonEp, err0 := aliceCli.SelfMon()
+	primitive.Assume(!err0.err)
 	// could also state this as bob.epoch <= last epoch in TS.
 	primitive.Assume(bob.epoch <= selfMonEp)
-	_, err1 := aliceCli.Audit(adtr0Addr, adtr0Pk)
-	primitive.Assume(!err1)
-	_, err2 := aliceCli.Audit(adtr1Addr, adtr1Pk)
-	primitive.Assume(!err2)
-	_, err3 := bobCli.Audit(adtr0Addr, adtr0Pk)
-	primitive.Assume(!err3)
-	_, err4 := bobCli.Audit(adtr1Addr, adtr1Pk)
-	primitive.Assume(!err4)
+	err1 := aliceCli.Audit(adtr0Addr, adtr0Pk)
+	primitive.Assume(!err1.err)
+	err2 := aliceCli.Audit(adtr1Addr, adtr1Pk)
+	primitive.Assume(!err2.err)
+	err3 := bobCli.Audit(adtr0Addr, adtr0Pk)
+	primitive.Assume(!err3.err)
+	err4 := bobCli.Audit(adtr1Addr, adtr1Pk)
+	primitive.Assume(!err4.err)
 
 	// final check. bob got the right key.
 	isReg, aliceKey := GetTimeSeries(alice.pks, bob.epoch)
@@ -95,8 +95,8 @@ func (a *alice) run(cli *Client) {
 	for i := byte(0); i < byte(20); i++ {
 		primitive.Sleep(50_000_000)
 		pk := []byte{i}
-		epoch, _, err0 := cli.Put(pk)
-		primitive.Assume(!err0)
+		epoch, err0 := cli.Put(pk)
+		primitive.Assume(!err0.err)
 		a.pks = append(a.pks, &TimeSeriesEntry{Epoch: epoch, TSVal: pk})
 	}
 }
@@ -109,8 +109,8 @@ type bob struct {
 
 func (b *bob) run(cli *Client) {
 	primitive.Sleep(550_000_000)
-	isReg, pk, epoch, _, err0 := cli.Get(aliceUid)
-	primitive.Assume(!err0)
+	isReg, pk, epoch, err0 := cli.Get(aliceUid)
+	primitive.Assume(!err0.err)
 	b.epoch = epoch
 	b.isReg = isReg
 	b.alicePk = pk
@@ -121,12 +121,12 @@ func chaos(charlie *Client, adtr0Addr, adtr1Addr uint64, adtr0Pk, adtr1Pk crypto
 	for {
 		primitive.Sleep(40_000_000)
 		pk := []byte{2}
-		_, _, err0 := charlie.Put(pk)
-		primitive.Assume(!err0)
-		_, _, _, _, err1 := charlie.Get(aliceUid)
-		primitive.Assume(!err1)
-		_, _, err2 := charlie.SelfMon()
-		primitive.Assume(!err2)
+		_, err0 := charlie.Put(pk)
+		primitive.Assume(!err0.err)
+		_, _, _, err1 := charlie.Get(aliceUid)
+		primitive.Assume(!err1.err)
+		_, err2 := charlie.SelfMon()
+		primitive.Assume(!err2.err)
 		charlie.Audit(adtr0Addr, adtr0Pk)
 		charlie.Audit(adtr1Addr, adtr1Pk)
 	}
