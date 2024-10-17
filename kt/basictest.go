@@ -46,7 +46,6 @@ func testBasic(servAddr, adtr0Addr, adtr1Addr uint64) {
 	bob := newClient(bobUid, servAddr, servSigPk, servVrfPk)
 	isReg, pk1, ep1, err7 := bob.Get(aliceUid)
 	primitive.Assume(!err7.err)
-	primitive.Assume(isReg)
 	// same epoch to avoid timeseries for basic TC.
 	primitive.Assume(ep0 == ep1)
 
@@ -61,5 +60,6 @@ func testBasic(servAddr, adtr0Addr, adtr1Addr uint64) {
 	primitive.Assume(!err11.err)
 
 	// assert keys equal.
+	primitive.Assert(isReg)
 	primitive.Assert(std.BytesEqual(pk0, pk1))
 }
