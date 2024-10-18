@@ -1,5 +1,6 @@
 package kt
 
+// TODO: rename to history.
 type TimeSeriesEntry struct {
 	Epoch uint64
 	TSVal []byte
