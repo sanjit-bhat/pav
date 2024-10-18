@@ -11,27 +11,30 @@ type setupParams struct {
 	servAddr  uint64
 	servSigPk cryptoffi.PublicKey
 	servVrfPk *cryptoffi.VrfPublicKey
-	adtr0Addr uint64
-	adtr0Pk   cryptoffi.PublicKey
-	adtr1Addr uint64
-	adtr1Pk   cryptoffi.PublicKey
+	adtrAddrs []uint64
+	adtrPks   []cryptoffi.PublicKey
+}
+
+func testBasicFull(servAddr uint64, adtrAddrs []uint64) {
+	testBasic(setup(servAddr, adtrAddrs))
 }
 
 // setup starts server and auditors. it's mainly a logical convenience.
 // it consolidates the external parties, letting us more easily describe
 // different adversary configs.
-func setup(servAddr, adtr0Addr, adtr1Addr uint64) *setupParams {
+func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
 	serv, servSigPk, servVrfPk := newServer()
 	servRpc := newRpcServer(serv)
 	servRpc.Serve(servAddr)
-	adtr0, adtr0Pk := newAuditor(servSigPk)
-	adtr0Rpc := newRpcAuditor(adtr0)
-	adtr0Rpc.Serve(adtr0Addr)
-	adtr1, adtr1Pk := newAuditor(servSigPk)
-	adtr1Rpc := newRpcAuditor(adtr1)
-	adtr1Rpc.Serve(adtr1Addr)
+	var adtrPks []cryptoffi.PublicKey
+	for _, adtrAddr := range adtrAddrs {
+		adtr, adtrPk := newAuditor(servSigPk)
+		adtrRpc := newRpcAuditor(adtr)
+		adtrRpc.Serve(adtrAddr)
+		adtrPks = append(adtrPks, adtrPk)
+	}
 	primitive.Sleep(1_000_000)
-	return &setupParams{servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPk, adtr0Addr: adtr0Addr, adtr0Pk: adtr0Pk, adtr1Addr: adtr1Addr, adtr1Pk: adtr1Pk}
+	return &setupParams{servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPk, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
 }
 
 func testBasic(setup *setupParams) {
@@ -43,39 +46,52 @@ func testBasic(setup *setupParams) {
 
 	// update auditors.
 	servCli := advrpc.Dial(setup.servAddr)
-	adtr0Cli := advrpc.Dial(setup.adtr0Addr)
-	adtr1Cli := advrpc.Dial(setup.adtr1Addr)
 	upd0, err1 := callServAudit(servCli, 0)
 	primitive.Assume(!err1)
 	upd1, err2 := callServAudit(servCli, 1)
 	primitive.Assume(!err2)
-	err3 := callAdtrUpdate(adtr0Cli, upd0)
-	primitive.Assume(!err3)
-	err4 := callAdtrUpdate(adtr0Cli, upd1)
-	primitive.Assume(!err4)
-	err5 := callAdtrUpdate(adtr1Cli, upd0)
-	primitive.Assume(!err5)
-	err6 := callAdtrUpdate(adtr1Cli, upd1)
-	primitive.Assume(!err6)
+
+	adtrs := mkRpcClients(setup.adtrAddrs)
+	updAdtrs(upd0, adtrs)
+	updAdtrs(upd1, adtrs)
 
 	// bob get.
 	bob := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	isReg, pk1, ep1, err7 := bob.Get(aliceUid)
-	primitive.Assume(!err7.err)
+	isReg, pk1, ep1, err3 := bob.Get(aliceUid)
+	primitive.Assume(!err3.err)
 	// same epoch to avoid timeseries for basic TC.
 	primitive.Assume(ep0 == ep1)
 
 	// alice and bob audit.
-	err8 := alice.Audit(setup.adtr0Addr, setup.adtr0Pk)
-	primitive.Assume(!err8.err)
-	err9 := alice.Audit(setup.adtr1Addr, setup.adtr1Pk)
-	primitive.Assume(!err9.err)
-	err10 := bob.Audit(setup.adtr0Addr, setup.adtr0Pk)
-	primitive.Assume(!err10.err)
-	err11 := bob.Audit(setup.adtr1Addr, setup.adtr1Pk)
-	primitive.Assume(!err11.err)
+	doAudits(alice, setup.adtrAddrs, setup.adtrPks)
+	doAudits(bob, setup.adtrAddrs, setup.adtrPks)
 
 	// assert keys equal.
 	primitive.Assert(isReg)
 	primitive.Assert(std.BytesEqual(pk0, pk1))
+}
+
+func mkRpcClients(addrs []uint64) []*advrpc.Client {
+	var c []*advrpc.Client
+	for _, addr := range addrs {
+		cli := advrpc.Dial(addr)
+		c = append(c, cli)
+	}
+	return c
+}
+
+func updAdtrs(upd *UpdateProof, adtrs []*advrpc.Client) {
+	for _, cli := range adtrs {
+		err := callAdtrUpdate(cli, upd)
+		primitive.Assume(!err)
+	}
+}
+
+func doAudits(cli *Client, adtrAddrs []uint64, adtrPks []cryptoffi.PublicKey) {
+	for i := uint64(0); i < uint64(len(adtrAddrs)); i++ {
+		addr := adtrAddrs[i]
+		pk := adtrPks[i]
+		err := cli.Audit(addr, pk)
+		primitive.Assume(!err.err)
+	}
 }
