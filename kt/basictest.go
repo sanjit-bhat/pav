@@ -88,7 +88,8 @@ func updAdtrs(upd *UpdateProof, adtrs []*advrpc.Client) {
 }
 
 func doAudits(cli *Client, adtrAddrs []uint64, adtrPks []cryptoffi.PublicKey) {
-	for i := uint64(0); i < uint64(len(adtrAddrs)); i++ {
+	numAdtrs := uint64(len(adtrAddrs))
+	for i := uint64(0); i < numAdtrs; i++ {
 		addr := adtrAddrs[i]
 		pk := adtrPks[i]
 		err := cli.Audit(addr, pk)
