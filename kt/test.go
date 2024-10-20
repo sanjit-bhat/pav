@@ -68,7 +68,7 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 	primitive.Sleep(1000_000_000)
 	selfMonEp, err0 := aliceCli.SelfMon()
 	primitive.Assume(!err0.err)
-	// could also state this as bob.epoch <= last epoch in TS.
+	// could also state this as bob.epoch <= last epoch in history.
 	primitive.Assume(bob.epoch <= selfMonEp)
 	err1 := aliceCli.Audit(adtr0Addr, adtr0Pk)
 	primitive.Assume(!err1.err)
@@ -80,7 +80,7 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 	primitive.Assume(!err4.err)
 
 	// final check. bob got the right key.
-	isReg, aliceKey := GetTimeSeries(alice.pks, bob.epoch)
+	isReg, aliceKey := GetHist(alice.hist, bob.epoch)
 	primitive.Assert(isReg == bob.isReg)
 	if isReg {
 		primitive.Assert(std.BytesEqual(aliceKey, bob.alicePk))
@@ -88,7 +88,7 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 }
 
 type alice struct {
-	pks []*TimeSeriesEntry
+	hist []*HistEntry
 }
 
 func (a *alice) run(cli *Client) {
@@ -97,7 +97,7 @@ func (a *alice) run(cli *Client) {
 		pk := []byte{i}
 		epoch, err0 := cli.Put(pk)
 		primitive.Assume(!err0.err)
-		a.pks = append(a.pks, &TimeSeriesEntry{Epoch: epoch, TSVal: pk})
+		a.hist = append(a.hist, &HistEntry{Epoch: epoch, HistVal: pk})
 	}
 }
 
