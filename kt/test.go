@@ -10,7 +10,6 @@ import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/advrpc"
-	"github.com/mit-pdos/pav/cryptoffi"
 	"sync"
 )
 
@@ -20,33 +19,25 @@ const (
 	charlieUid uint64 = 2
 )
 
-func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
-	// start server and auditors.
-	serv, servSigPk, servVrfPk := newServer()
-	servRpc := newRpcServer(serv)
-	servRpc.Serve(servAddr)
-	adtr0, adtr0Pk := newAuditor(servSigPk)
-	adtr0Rpc := newRpcAuditor(adtr0)
-	adtr0Rpc.Serve(adtr0Addr)
-	adtr1, adtr1Pk := newAuditor(servSigPk)
-	adtr1Rpc := newRpcAuditor(adtr1)
-	adtr1Rpc.Serve(adtr1Addr)
-	primitive.Sleep(1_000_000)
+func testAllFull(servAddr uint64, adtrAddrs []uint64) {
+	testAll(setup(servAddr, adtrAddrs))
+}
 
+func testAll(setup *setupParams) {
 	// run background threads.
 	go func() {
-		charlie := newClient(charlieUid, servAddr, servSigPk, servVrfPk)
-		chaos(charlie, adtr0Addr, adtr1Addr, adtr0Pk, adtr1Pk)
+		charlie := newClient(charlieUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+		chaos(charlie)
 	}()
 	go func() {
-		syncAdtr(servAddr, adtr0Addr, adtr1Addr)
+		syncAdtrs(setup.servAddr, setup.adtrAddrs)
 	}()
 
 	// run alice and bob.
 	alice := &alice{}
 	aliceMu := new(sync.Mutex)
 	aliceMu.Lock()
-	aliceCli := newClient(aliceUid, servAddr, servSigPk, servVrfPk)
+	aliceCli := newClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	go func() {
 		alice.run(aliceCli)
 		aliceMu.Unlock()
@@ -54,7 +45,7 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 	bob := &bob{}
 	bobMu := new(sync.Mutex)
 	bobMu.Lock()
-	bobCli := newClient(bobUid, servAddr, servSigPk, servVrfPk)
+	bobCli := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	go func() {
 		bob.run(bobCli)
 		bobMu.Unlock()
@@ -64,20 +55,18 @@ func testAll(servAddr, adtr0Addr, adtr1Addr uint64) {
 	aliceMu.Lock()
 	bobMu.Lock()
 
-	// alice SelfMon + Audit. bob Audit. ordering irrelevant across clients.
-	primitive.Sleep(1000_000_000)
+	// alice self monitor. in real world, she'll come on-line at times and do this.
 	selfMonEp, err0 := aliceCli.SelfMon()
 	primitive.Assume(!err0.err)
-	// could also state this as bob.epoch <= last epoch in history.
+	// this last self monitor will be our history bound.
 	primitive.Assume(bob.epoch <= selfMonEp)
-	err1 := aliceCli.Audit(adtr0Addr, adtr0Pk)
-	primitive.Assume(!err1.err)
-	err2 := aliceCli.Audit(adtr1Addr, adtr1Pk)
-	primitive.Assume(!err2.err)
-	err3 := bobCli.Audit(adtr0Addr, adtr0Pk)
-	primitive.Assume(!err3.err)
-	err4 := bobCli.Audit(adtr1Addr, adtr1Pk)
-	primitive.Assume(!err4.err)
+
+	// wait for auditors to catch all updates.
+	primitive.Sleep(1000_000_000)
+
+	// alice and bob Audit. ordering irrelevant across clients.
+	doAudits(aliceCli, setup.adtrAddrs, setup.adtrPks)
+	doAudits(bobCli, setup.adtrAddrs, setup.adtrPks)
 
 	// final check. bob got the right key.
 	isReg, aliceKey := GetHist(alice.hist, bob.epoch)
@@ -92,9 +81,9 @@ type alice struct {
 }
 
 func (a *alice) run(cli *Client) {
-	for i := byte(0); i < byte(20); i++ {
+	for i := uint64(0); i < uint64(20); i++ {
 		primitive.Sleep(50_000_000)
-		pk := []byte{i}
+		pk := []byte{byte(i)}
 		epoch, err0 := cli.Put(pk)
 		primitive.Assume(!err0.err)
 		a.hist = append(a.hist, &HistEntry{Epoch: epoch, HistVal: pk})
@@ -116,8 +105,8 @@ func (b *bob) run(cli *Client) {
 	b.alicePk = pk
 }
 
-// chaos from Charlie running all the ops.
-func chaos(charlie *Client, adtr0Addr, adtr1Addr uint64, adtr0Pk, adtr1Pk cryptoffi.PublicKey) {
+// chaos from Charlie running ops.
+func chaos(charlie *Client) {
 	for {
 		primitive.Sleep(40_000_000)
 		pk := []byte{2}
@@ -127,26 +116,20 @@ func chaos(charlie *Client, adtr0Addr, adtr1Addr uint64, adtr0Pk, adtr1Pk crypto
 		primitive.Assume(!err1.err)
 		_, err2 := charlie.SelfMon()
 		primitive.Assume(!err2.err)
-		charlie.Audit(adtr0Addr, adtr0Pk)
-		charlie.Audit(adtr1Addr, adtr1Pk)
 	}
 }
 
-func syncAdtr(servAddr, adtr0Addr, adtr1Addr uint64) {
+func syncAdtrs(servAddr uint64, adtrAddrs []uint64) {
 	servCli := advrpc.Dial(servAddr)
-	adtr0Cli := advrpc.Dial(adtr0Addr)
-	adtr1Cli := advrpc.Dial(adtr1Addr)
+	adtrs := mkRpcClients(adtrAddrs)
 	var epoch uint64
 	for {
 		primitive.Sleep(1_000_000)
-		upd, err0 := callServAudit(servCli, epoch)
-		if err0 {
+		upd, err := callServAudit(servCli, epoch)
+		if err {
 			continue
 		}
-		err1 := callAdtrUpdate(adtr0Cli, upd)
-		primitive.Assume(!err1)
-		err2 := callAdtrUpdate(adtr1Cli, upd)
-		primitive.Assume(!err2)
+		updAdtrs(upd, adtrs)
 		epoch++
 	}
 }

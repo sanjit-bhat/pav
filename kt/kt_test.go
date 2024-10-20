@@ -6,10 +6,9 @@ import (
 )
 
 func TestAll(t *testing.T) {
-	serverAddr := makeUniqueAddr()
-	adtr0Addr := makeUniqueAddr()
-	adtr1Addr := makeUniqueAddr()
-	testAll(serverAddr, adtr0Addr, adtr1Addr)
+	servAddr := makeUniqueAddr()
+	adtrAddrs := []uint64{makeUniqueAddr(), makeUniqueAddr()}
+	testAllFull(servAddr, adtrAddrs)
 }
 
 func TestBasic(t *testing.T) {
