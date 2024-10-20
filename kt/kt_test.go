@@ -14,10 +14,8 @@ func TestAll(t *testing.T) {
 
 func TestBasic(t *testing.T) {
 	servAddr := makeUniqueAddr()
-	adtr0Addr := makeUniqueAddr()
-	adtr1Addr := makeUniqueAddr()
-	p := setup(servAddr, adtr0Addr, adtr1Addr)
-	testBasic(p)
+	adtrAddrs := []uint64{makeUniqueAddr(), makeUniqueAddr()}
+	testBasicFull(servAddr, adtrAddrs)
 }
 
 func getFreePort() (port uint64, err error) {
