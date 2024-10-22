@@ -1,11 +1,5 @@
 package kt
 
-// set global timing such that:
-// - chaos interlaces enough with alice.
-// - chaos mostly has up-to-date audits.
-// - bob queries somewhere around halfway thru alice's puts.
-// - before alice and bob finally check keys, the auditor has caught up.
-
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
@@ -14,9 +8,8 @@ import (
 )
 
 const (
-	aliceUid   uint64 = 0
-	bobUid     uint64 = 1
-	charlieUid uint64 = 2
+	aliceUid uint64 = 0
+	bobUid   uint64 = 1
 )
 
 func testAllFull(servAddr uint64, adtrAddrs []uint64) {
@@ -24,25 +17,16 @@ func testAllFull(servAddr uint64, adtrAddrs []uint64) {
 }
 
 func testAll(setup *setupParams) {
-	// run background threads.
-	go func() {
-		charlie := newClient(charlieUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-		chaos(charlie)
-	}()
-	go func() {
-		syncAdtrs(setup.servAddr, setup.adtrAddrs)
-	}()
-
 	// alice does a bunch of puts.
 	aliceCli := newClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	alice := &alice{cli: aliceCli}
-	// TODO: if this works, change the other ones as well.
 	alice.mu = new(sync.Mutex)
 	alice.mu.Lock()
 	go func() {
 		alice.run()
 	}()
-	// bob does a get.
+
+	// bob does a get at some time in the middle of alice's puts.
 	bobCli := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	bob := &bob{cli: bobCli}
 	bob.mu = new(sync.Mutex)
@@ -61,8 +45,8 @@ func testAll(setup *setupParams) {
 	// this last self monitor will be our history bound.
 	primitive.Assume(bob.epoch <= selfMonEp)
 
-	// wait for auditors to catch all updates.
-	primitive.Sleep(1000_000_000)
+	// sync auditors. in real world, this'll happen periodically.
+	updAdtrsAll(setup.servAddr, setup.adtrAddrs)
 
 	// alice and bob audit. ordering irrelevant across clients.
 	doAudits(alice.cli, setup.adtrAddrs, setup.adtrPks)
@@ -84,7 +68,7 @@ type alice struct {
 
 func (a *alice) run() {
 	for i := uint64(0); i < uint64(20); i++ {
-		primitive.Sleep(50_000_000)
+		primitive.Sleep(5_000_000)
 		pk := []byte{byte(i)}
 		epoch, err0 := a.cli.Put(pk)
 		primitive.Assume(!err0.err)
@@ -102,7 +86,7 @@ type bob struct {
 }
 
 func (b *bob) run() {
-	primitive.Sleep(550_000_000)
+	primitive.Sleep(120_000_000)
 	isReg, pk, epoch, err0 := b.cli.Get(aliceUid)
 	primitive.Assume(!err0.err)
 	b.epoch = epoch
@@ -111,31 +95,16 @@ func (b *bob) run() {
 	b.mu.Unlock()
 }
 
-// chaos from Charlie running ops.
-func chaos(charlie *Client) {
-	for {
-		primitive.Sleep(40_000_000)
-		pk := []byte{2}
-		_, err0 := charlie.Put(pk)
-		primitive.Assume(!err0.err)
-		_, _, _, err1 := charlie.Get(aliceUid)
-		primitive.Assume(!err1.err)
-		_, err2 := charlie.SelfMon()
-		primitive.Assume(!err2.err)
-	}
-}
-
-func syncAdtrs(servAddr uint64, adtrAddrs []uint64) {
+func updAdtrsAll(servAddr uint64, adtrAddrs []uint64) {
 	servCli := advrpc.Dial(servAddr)
 	adtrs := mkRpcClients(adtrAddrs)
 	var epoch uint64
 	for {
-		primitive.Sleep(1_000_000)
 		upd, err := callServAudit(servCli, epoch)
 		if err {
-			continue
+			break
 		}
-		updAdtrs(upd, adtrs)
+		updAdtrsOnce(upd, adtrs)
 		epoch++
 	}
 }
