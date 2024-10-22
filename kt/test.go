@@ -35,14 +35,17 @@ func testAll(setup *setupParams) {
 
 	// alice does a bunch of puts.
 	aliceCli := newClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	alice := &alice{mu: new(sync.Mutex), cli: aliceCli, hist: nil}
+	alice := &alice{cli: aliceCli}
+	// TODO: if this works, change the other ones as well.
+	alice.mu = new(sync.Mutex)
 	alice.mu.Lock()
 	go func() {
 		alice.run()
 	}()
 	// bob does a get.
 	bobCli := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	bob := &bob{mu: new(sync.Mutex), cli: bobCli, epoch: 0, isReg: false, alicePk: nil}
+	bob := &bob{cli: bobCli}
+	bob.mu = new(sync.Mutex)
 	bob.mu.Lock()
 	go func() {
 		bob.run()
