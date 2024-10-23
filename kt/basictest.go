@@ -52,8 +52,8 @@ func testBasic(setup *setupParams) {
 	primitive.Assume(!err2)
 
 	adtrs := mkRpcClients(setup.adtrAddrs)
-	updAdtrs(upd0, adtrs)
-	updAdtrs(upd1, adtrs)
+	updAdtrsOnce(upd0, adtrs)
+	updAdtrsOnce(upd1, adtrs)
 
 	// bob get.
 	bob := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
@@ -80,7 +80,7 @@ func mkRpcClients(addrs []uint64) []*advrpc.Client {
 	return c
 }
 
-func updAdtrs(upd *UpdateProof, adtrs []*advrpc.Client) {
+func updAdtrsOnce(upd *UpdateProof, adtrs []*advrpc.Client) {
 	for _, cli := range adtrs {
 		err := callAdtrUpdate(cli, upd)
 		primitive.Assume(!err)
