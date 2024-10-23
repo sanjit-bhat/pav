@@ -17,27 +17,28 @@ func testAllFull(servAddr uint64, adtrAddrs []uint64) {
 }
 
 func testAll(setup *setupParams) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	wg.Add(1)
+
 	// alice does a bunch of puts.
 	aliceCli := newClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	alice := &alice{cli: aliceCli}
-	alice.mu = new(sync.Mutex)
-	alice.mu.Lock()
 	go func() {
 		alice.run()
+		wg.Done()
 	}()
 
 	// bob does a get at some time in the middle of alice's puts.
 	bobCli := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	bob := &bob{cli: bobCli}
-	bob.mu = new(sync.Mutex)
-	bob.mu.Lock()
 	go func() {
 		bob.run()
+		wg.Done()
 	}()
 
 	// wait for alice and bob to finish.
-	alice.mu.Lock()
-	bob.mu.Lock()
+	wg.Wait()
 
 	// alice self monitor. in real world, she'll come on-line at times and do this.
 	selfMonEp, err0 := alice.cli.SelfMon()
@@ -61,7 +62,6 @@ func testAll(setup *setupParams) {
 }
 
 type alice struct {
-	mu   *sync.Mutex
 	cli  *Client
 	hist []*HistEntry
 }
@@ -74,11 +74,9 @@ func (a *alice) run() {
 		primitive.Assume(!err0.err)
 		a.hist = append(a.hist, &HistEntry{Epoch: epoch, HistVal: pk})
 	}
-	a.mu.Unlock()
 }
 
 type bob struct {
-	mu      *sync.Mutex
 	cli     *Client
 	epoch   uint64
 	isReg   bool
@@ -92,7 +90,6 @@ func (b *bob) run() {
 	b.epoch = epoch
 	b.isReg = isReg
 	b.alicePk = pk
-	b.mu.Unlock()
 }
 
 func updAdtrsAll(servAddr uint64, adtrAddrs []uint64) {
