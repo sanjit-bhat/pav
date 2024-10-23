@@ -17,7 +17,7 @@ func testAllFull(servAddr uint64, adtrAddrs []uint64) {
 }
 
 func testAll(setup *setupParams) {
-	var wg sync.WaitGroup
+	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	wg.Add(1)
 
