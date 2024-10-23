@@ -17,27 +17,24 @@ func testAllFull(servAddr uint64, adtrAddrs []uint64) {
 }
 
 func testAll(setup *setupParams) {
+	aliceCli := newClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	alice := &alice{cli: aliceCli}
+	bobCli := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	bob := &bob{cli: bobCli}
+
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	wg.Add(1)
-
 	// alice does a bunch of puts.
-	aliceCli := newClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	alice := &alice{cli: aliceCli}
 	go func() {
 		alice.run()
 		wg.Done()
 	}()
-
 	// bob does a get at some time in the middle of alice's puts.
-	bobCli := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	bob := &bob{cli: bobCli}
 	go func() {
 		bob.run()
 		wg.Done()
 	}()
-
-	// wait for alice and bob to finish.
 	wg.Wait()
 
 	// alice self monitor. in real world, she'll come on-line at times and do this.
