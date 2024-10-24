@@ -51,10 +51,10 @@ func testAll(setup *setupParams) {
 	doAudits(bob.cli, setup.adtrAddrs, setup.adtrPks)
 
 	// final check. bob got the right key.
-	isReg, aliceKey := GetHist(alice.hist, bob.epoch)
+	isReg, alicePk := GetHist(alice.hist, bob.epoch)
 	primitive.Assert(isReg == bob.isReg)
 	if isReg {
-		primitive.Assert(std.BytesEqual(aliceKey, bob.alicePk))
+		primitive.Assert(std.BytesEqual(alicePk, bob.alicePk))
 	}
 }
 

@@ -8,11 +8,10 @@ import (
 )
 
 type Auditor struct {
-	mu        *sync.Mutex
-	sk        cryptoffi.PrivateKey
-	servSigPk cryptoffi.PublicKey
-	keyMap    *merkle.Tree
-	histInfo  []*AdtrEpochInfo
+	mu       *sync.Mutex
+	sk       cryptoffi.PrivateKey
+	keyMap   *merkle.Tree
+	histInfo []*AdtrEpochInfo
 }
 
 func (a *Auditor) checkOneUpd(nextEpoch uint64, mapLabel, mapVal []byte) bool {
@@ -59,17 +58,10 @@ func (a *Auditor) Update(proof *UpdateProof) bool {
 	}
 	a.applyUpd(proof.Updates)
 
-	// check dig sig.
+	// sign dig.
 	dig := a.keyMap.Digest()
 	preSig := &PreSigDig{Epoch: nextEpoch, Dig: dig}
 	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
-	ok0 := a.servSigPk.Verify(preSigByt, proof.Sig)
-	if !ok0 {
-		a.mu.Unlock()
-		return true
-	}
-
-	// sign dig.
 	sig := a.sk.Sign(preSigByt)
 	newInfo := &AdtrEpochInfo{Dig: dig, ServSig: proof.Sig, AdtrSig: sig}
 	a.histInfo = append(a.histInfo, newInfo)
@@ -92,9 +84,9 @@ func (a *Auditor) Get(epoch uint64) (*AdtrEpochInfo, bool) {
 	return info, false
 }
 
-func newAuditor(servPk cryptoffi.PublicKey) (*Auditor, cryptoffi.PublicKey) {
+func newAuditor() (*Auditor, cryptoffi.PublicKey) {
 	mu := new(sync.Mutex)
 	pk, sk := cryptoffi.GenerateKey()
 	m := &merkle.Tree{}
-	return &Auditor{mu: mu, sk: sk, servSigPk: servPk, keyMap: m}, pk
+	return &Auditor{mu: mu, sk: sk, keyMap: m}, pk
 }

@@ -28,7 +28,7 @@ func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
 	servRpc.Serve(servAddr)
 	var adtrPks []cryptoffi.PublicKey
 	for _, adtrAddr := range adtrAddrs {
-		adtr, adtrPk := newAuditor(servSigPk)
+		adtr, adtrPk := newAuditor()
 		adtrRpc := newRpcAuditor(adtr)
 		adtrRpc.Serve(adtrAddr)
 		adtrPks = append(adtrPks, adtrPk)
