@@ -66,7 +66,7 @@ type alice struct {
 func (a *alice) run() {
 	for i := uint64(0); i < uint64(20); i++ {
 		primitive.Sleep(5_000_000)
-		pk := []byte{byte(i)}
+		pk := []byte{1}
 		epoch, err0 := a.cli.Put(pk)
 		primitive.Assume(!err0.err)
 		a.hist = append(a.hist, &HistEntry{Epoch: epoch, HistVal: pk})
