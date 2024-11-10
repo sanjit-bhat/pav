@@ -3,7 +3,6 @@ package kt
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/pav/advrpc"
 	"sync"
 )
 
@@ -87,18 +86,4 @@ func (b *bob) run() {
 	b.epoch = epoch
 	b.isReg = isReg
 	b.alicePk = pk
-}
-
-func updAdtrsAll(servAddr uint64, adtrAddrs []uint64) {
-	servCli := advrpc.Dial(servAddr)
-	adtrs := mkRpcClients(adtrAddrs)
-	var epoch uint64
-	for {
-		upd, err := callServAudit(servCli, epoch)
-		if err {
-			break
-		}
-		updAdtrsOnce(upd, adtrs)
-		epoch++
-	}
 }
