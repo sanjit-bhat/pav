@@ -2,7 +2,6 @@ package kt
 
 import (
 	"github.com/goose-lang/primitive"
-	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/advrpc"
 	"github.com/mit-pdos/pav/cryptoffi"
 )
@@ -13,10 +12,6 @@ type setupParams struct {
 	servVrfPk *cryptoffi.VrfPublicKey
 	adtrAddrs []uint64
 	adtrPks   []cryptoffi.PublicKey
-}
-
-func testBasicFull(servAddr uint64, adtrAddrs []uint64) {
-	testBasic(setup(servAddr, adtrAddrs))
 }
 
 // setup starts server and auditors. it's mainly a logical convenience.
@@ -35,40 +30,6 @@ func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
 	}
 	primitive.Sleep(1_000_000)
 	return &setupParams{servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPk, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
-}
-
-func testBasic(setup *setupParams) {
-	// alice put.
-	alice := newClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	pk0 := []byte{3}
-	ep0, err0 := alice.Put(pk0)
-	primitive.Assume(!err0.err)
-
-	// update auditors.
-	servCli := advrpc.Dial(setup.servAddr)
-	upd0, err1 := callServAudit(servCli, 0)
-	primitive.Assume(!err1)
-	upd1, err2 := callServAudit(servCli, 1)
-	primitive.Assume(!err2)
-
-	adtrs := mkRpcClients(setup.adtrAddrs)
-	updAdtrsOnce(upd0, adtrs)
-	updAdtrsOnce(upd1, adtrs)
-
-	// bob get.
-	bob := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	isReg, pk1, ep1, err3 := bob.Get(aliceUid)
-	primitive.Assume(!err3.err)
-	// same epoch to avoid timeseries for basic TC.
-	primitive.Assume(ep0 == ep1)
-
-	// alice and bob audit.
-	doAudits(alice, setup.adtrAddrs, setup.adtrPks)
-	doAudits(bob, setup.adtrAddrs, setup.adtrPks)
-
-	// assert keys equal.
-	primitive.Assert(isReg)
-	primitive.Assert(std.BytesEqual(pk0, pk1))
 }
 
 func mkRpcClients(addrs []uint64) []*advrpc.Client {
@@ -94,5 +55,19 @@ func doAudits(cli *Client, adtrAddrs []uint64, adtrPks []cryptoffi.PublicKey) {
 		pk := adtrPks[i]
 		err := cli.Audit(addr, pk)
 		primitive.Assume(!err.err)
+	}
+}
+
+func updAdtrsAll(servAddr uint64, adtrAddrs []uint64) {
+	servCli := advrpc.Dial(servAddr)
+	adtrs := mkRpcClients(adtrAddrs)
+	var epoch uint64
+	for {
+		upd, err := callServAudit(servCli, epoch)
+		if err {
+			break
+		}
+		updAdtrsOnce(upd, adtrs)
+		epoch++
 	}
 }

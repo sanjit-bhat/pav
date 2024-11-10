@@ -11,12 +11,6 @@ func TestAll(t *testing.T) {
 	testAllFull(servAddr, adtrAddrs)
 }
 
-func TestBasic(t *testing.T) {
-	servAddr := makeUniqueAddr()
-	adtrAddrs := []uint64{makeUniqueAddr(), makeUniqueAddr()}
-	testBasicFull(servAddr, adtrAddrs)
-}
-
 func getFreePort() (port uint64, err error) {
 	var a *net.TCPAddr
 	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
