@@ -81,7 +81,7 @@ func (n *node) updateInteriorHash() {
 // It'll be specialized after adding it to the tree.
 func newGenericNode() *node {
 	c := make([]*node, numChildren)
-	return &node{val: nil, hash: nil, children: c}
+	return &node{children: c}
 }
 
 type Digest = []byte
@@ -296,7 +296,7 @@ func (t *Tree) Get(id Id) *GetReply {
 	digest := std.BytesClone(nodePath[0].getHash())
 	proof := getChildHashes(nodePath, id)
 	if lastNode == nil {
-		return &GetReply{Val: nil, Digest: digest, ProofTy: NonmembProofTy,
+		return &GetReply{Digest: digest, ProofTy: NonmembProofTy,
 			Proof: proof, Error: errNone}
 	} else {
 		val := std.BytesClone(lastNode.val)
