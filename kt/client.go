@@ -1,7 +1,6 @@
 package kt
 
 import (
-	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/advrpc"
 	"github.com/mit-pdos/pav/cryptoffi"
@@ -190,18 +189,17 @@ func (c *Client) SelfMon() (uint64, *clientErr) {
 }
 
 // auditEpoch checks a single epoch against an auditor, and evid / error on fail.
-// pre-cond: we've seen this epoch.
-func (c *Client) auditEpoch(epoch uint64, adtrCli *advrpc.Client, adtrPk cryptoffi.PublicKey) *clientErr {
+func auditEpoch(seenDig *SigDig, servSigPk []byte, adtrCli *advrpc.Client, adtrPk cryptoffi.PublicKey) *clientErr {
 	stdErr := &clientErr{err: true}
-	adtrInfo, err0 := callAdtrGet(adtrCli, epoch)
+	adtrInfo, err0 := callAdtrGet(adtrCli, seenDig.Epoch)
 	if err0 {
 		return stdErr
 	}
 
 	// check sigs.
-	servDig := &SigDig{Epoch: epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.ServSig}
-	adtrDig := &SigDig{Epoch: epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.AdtrSig}
-	if CheckSigDig(servDig, c.servSigPk) {
+	servDig := &SigDig{Epoch: seenDig.Epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.ServSig}
+	adtrDig := &SigDig{Epoch: seenDig.Epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.AdtrSig}
+	if CheckSigDig(servDig, servSigPk) {
 		return stdErr
 	}
 	if CheckSigDig(adtrDig, adtrPk) {
@@ -209,8 +207,6 @@ func (c *Client) auditEpoch(epoch uint64, adtrCli *advrpc.Client, adtrPk cryptof
 	}
 
 	// compare against our dig.
-	seenDig, ok0 := c.seenDigs[epoch]
-	primitive.Assert(ok0)
 	if !std.BytesEqual(adtrInfo.Dig, seenDig.Dig) {
 		evid := &Evid{sigDig0: servDig, sigDig1: seenDig}
 		return &clientErr{evid: evid, err: true}
@@ -222,8 +218,8 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.PublicKey) *clientErr {
 	adtrCli := advrpc.Dial(adtrAddr)
 	// check all epochs that we've seen before.
 	var err0 = &clientErr{err: false}
-	for ep := range c.seenDigs {
-		err1 := c.auditEpoch(ep, adtrCli, adtrPk)
+	for _, dig := range c.seenDigs {
+		err1 := auditEpoch(dig, c.servSigPk, adtrCli, adtrPk)
 		if err1.err {
 			err0 = err1
 		}
