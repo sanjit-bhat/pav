@@ -44,7 +44,7 @@ type servEpochInfo struct {
 
 type Server struct {
 	mu    *sync.Mutex
-	sigSk cryptoffi.SigPrivateKey
+	sigSk *cryptoffi.SigPrivateKey
 	vrfSk *cryptoffi.VrfPrivateKey
 	// keyMap stores (mapLabel, mapVal) entries.
 	keyMap *merkle.Tree

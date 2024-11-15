@@ -24,29 +24,35 @@ func Hash(data []byte) []byte {
 
 // # Signature
 
-type SigPrivateKey ed25519.PrivateKey
+// SigPrivateKey has an unexported sk, which can't be accessed outside
+// the package, without reflection or unsafe.
+type SigPrivateKey struct {
+	sk ed25519.PrivateKey
+}
 
 type SigPublicKey ed25519.PublicKey
 
-func SigGenerateKey() (SigPublicKey, SigPrivateKey) {
-	pub, priv, err := ed25519.GenerateKey(nil)
+func SigGenerateKey() (SigPublicKey, *SigPrivateKey) {
+	pk, sk, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return SigPublicKey(pub), SigPrivateKey(priv)
+	return SigPublicKey(pk), &SigPrivateKey{sk: sk}
 }
 
-func (priv SigPrivateKey) Sign(message []byte) []byte {
-	return ed25519.Sign(ed25519.PrivateKey(priv), message)
+func (sk *SigPrivateKey) Sign(message []byte) []byte {
+	return ed25519.Sign(ed25519.PrivateKey(sk.sk), message)
 }
 
 // Verify rets okay if proof verifies.
-func (pub SigPublicKey) Verify(message []byte, sig []byte) bool {
-	return ed25519.Verify(ed25519.PublicKey(pub), message, sig)
+func (pk SigPublicKey) Verify(message []byte, sig []byte) bool {
+	return ed25519.Verify(ed25519.PublicKey(pk), message, sig)
 }
 
 // # VRF
 
+// VrfPrivateKey has an unexported sk, which can't be accessed outside
+// the package, without reflection or unsafe.
 type VrfPrivateKey struct {
 	sk vrf.PrivateKey
 }
@@ -63,7 +69,7 @@ func VrfGenerateKey() (*VrfPublicKey, *VrfPrivateKey) {
 // TODO: check that Google CT's VRF satisfies all the properties we need.
 // maybe re-write to use sha256 and the more robust [internal ed25519].
 // [internal ed25519]: https://pkg.go.dev/filippo.io/edwards25519
-func (priv VrfPrivateKey) Hash(data []byte) ([]byte, []byte) {
+func (priv *VrfPrivateKey) Hash(data []byte) ([]byte, []byte) {
 	h, proof := priv.sk.Evaluate(data)
 	// TODO: check that proof doesn't have h inside it.
 	// that'd be a waste of space.
@@ -71,7 +77,7 @@ func (priv VrfPrivateKey) Hash(data []byte) ([]byte, []byte) {
 }
 
 // Verify rets okay if proof verifies.
-func (pub VrfPublicKey) Verify(data, hash, proof []byte) bool {
+func (pub *VrfPublicKey) Verify(data, hash, proof []byte) bool {
 	h, err := pub.pk.ProofToHash(data, proof)
 	if err != nil {
 		return false
