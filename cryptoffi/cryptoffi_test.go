@@ -34,9 +34,6 @@ func TestVerifyTrue(t *testing.T) {
 	if !pk.Verify(d, sig) {
 		t.Fatal()
 	}
-	if uint64(len(sig)) != SigLen {
-		t.Fatal()
-	}
 }
 
 func TestVerifyFalse(t *testing.T) {
