@@ -12,7 +12,6 @@ import (
 
 const (
 	HashLen uint64 = 32
-	SigLen  uint64 = 64
 )
 
 // # Hash
