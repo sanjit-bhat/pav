@@ -69,16 +69,16 @@ func VrfGenerateKey() (*VrfPublicKey, *VrfPrivateKey) {
 // TODO: check that Google CT's VRF satisfies all the properties we need.
 // maybe re-write to use sha256 and the more robust [internal ed25519].
 // [internal ed25519]: https://pkg.go.dev/filippo.io/edwards25519
-func (priv *VrfPrivateKey) Hash(data []byte) ([]byte, []byte) {
-	h, proof := priv.sk.Evaluate(data)
+func (sk *VrfPrivateKey) Hash(data []byte) ([]byte, []byte) {
+	h, proof := sk.sk.Evaluate(data)
 	// TODO: check that proof doesn't have h inside it.
 	// that'd be a waste of space.
 	return h[:], proof
 }
 
 // Verify rets okay if proof verifies.
-func (pub *VrfPublicKey) Verify(data, hash, proof []byte) bool {
-	h, err := pub.pk.ProofToHash(data, proof)
+func (pk *VrfPublicKey) Verify(data, hash, proof []byte) bool {
+	h, err := pk.pk.ProofToHash(data, proof)
 	if err != nil {
 		return false
 	}
