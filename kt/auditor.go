@@ -9,7 +9,7 @@ import (
 
 type Auditor struct {
 	mu       *sync.Mutex
-	sk       cryptoffi.PrivateKey
+	sk       cryptoffi.SigPrivateKey
 	keyMap   *merkle.Tree
 	histInfo []*AdtrEpochInfo
 }
@@ -84,9 +84,9 @@ func (a *Auditor) Get(epoch uint64) (*AdtrEpochInfo, bool) {
 	return info, false
 }
 
-func newAuditor() (*Auditor, cryptoffi.PublicKey) {
+func newAuditor() (*Auditor, cryptoffi.SigPublicKey) {
 	mu := new(sync.Mutex)
-	pk, sk := cryptoffi.GenerateKey()
+	pk, sk := cryptoffi.SigGenerateKey()
 	m := &merkle.Tree{}
 	return &Auditor{mu: mu, sk: sk, keyMap: m}, pk
 }

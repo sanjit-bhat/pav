@@ -8,10 +8,10 @@ import (
 
 type setupParams struct {
 	servAddr  uint64
-	servSigPk cryptoffi.PublicKey
+	servSigPk cryptoffi.SigPublicKey
 	servVrfPk *cryptoffi.VrfPublicKey
 	adtrAddrs []uint64
-	adtrPks   []cryptoffi.PublicKey
+	adtrPks   []cryptoffi.SigPublicKey
 }
 
 // setup starts server and auditors. it's mainly a logical convenience.
@@ -21,7 +21,7 @@ func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
 	serv, servSigPk, servVrfPk := newServer()
 	servRpc := newRpcServer(serv)
 	servRpc.Serve(servAddr)
-	var adtrPks []cryptoffi.PublicKey
+	var adtrPks []cryptoffi.SigPublicKey
 	for _, adtrAddr := range adtrAddrs {
 		adtr, adtrPk := newAuditor()
 		adtrRpc := newRpcAuditor(adtr)
@@ -48,7 +48,7 @@ func updAdtrsOnce(upd *UpdateProof, adtrs []*advrpc.Client) {
 	}
 }
 
-func doAudits(cli *Client, adtrAddrs []uint64, adtrPks []cryptoffi.PublicKey) {
+func doAudits(cli *Client, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) {
 	numAdtrs := uint64(len(adtrAddrs))
 	for i := uint64(0); i < numAdtrs; i++ {
 		addr := adtrAddrs[i]

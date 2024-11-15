@@ -6,7 +6,7 @@ import (
 )
 
 // Check rets err if signed dig does not validate.
-func CheckSigDig(o *SigDig, pk cryptoffi.PublicKey) bool {
+func CheckSigDig(o *SigDig, pk cryptoffi.SigPublicKey) bool {
 	pre := &PreSigDig{Epoch: o.Epoch, Dig: o.Dig}
 	preByt := PreSigDigEncode(make([]byte, 0), pre)
 	return !pk.Verify(preByt, o.Sig)
@@ -20,7 +20,7 @@ type Evid struct {
 
 // Check returns an error if the evidence does not check out.
 // otherwise, it proves that the server was dishonest.
-func (e *Evid) Check(servPk cryptoffi.PublicKey) bool {
+func (e *Evid) Check(servPk cryptoffi.SigPublicKey) bool {
 	err0 := CheckSigDig(e.sigDig0, servPk)
 	if err0 {
 		return true

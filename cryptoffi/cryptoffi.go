@@ -24,24 +24,24 @@ func Hash(data []byte) []byte {
 
 // # Signature
 
-type PrivateKey ed25519.PrivateKey
+type SigPrivateKey ed25519.PrivateKey
 
-type PublicKey ed25519.PublicKey
+type SigPublicKey ed25519.PublicKey
 
-func GenerateKey() (PublicKey, PrivateKey) {
+func SigGenerateKey() (SigPublicKey, SigPrivateKey) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return PublicKey(pub), PrivateKey(priv)
+	return SigPublicKey(pub), SigPrivateKey(priv)
 }
 
-func (priv PrivateKey) Sign(message []byte) []byte {
+func (priv SigPrivateKey) Sign(message []byte) []byte {
 	return ed25519.Sign(ed25519.PrivateKey(priv), message)
 }
 
 // Verify rets okay if proof verifies.
-func (pub PublicKey) Verify(message []byte, sig []byte) bool {
+func (pub SigPublicKey) Verify(message []byte, sig []byte) bool {
 	return ed25519.Verify(ed25519.PublicKey(pub), message, sig)
 }
 
