@@ -44,7 +44,7 @@ type servEpochInfo struct {
 
 type Server struct {
 	mu    *sync.Mutex
-	sigSk cryptoffi.PrivateKey
+	sigSk cryptoffi.SigPrivateKey
 	vrfSk *cryptoffi.VrfPrivateKey
 	// keyMap stores (mapLabel, mapVal) entries.
 	keyMap *merkle.Tree
@@ -185,9 +185,9 @@ func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	return p, false
 }
 
-func newServer() (*Server, cryptoffi.PublicKey, *cryptoffi.VrfPublicKey) {
+func newServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	mu := new(sync.Mutex)
-	sigPk, sigSk := cryptoffi.GenerateKey()
+	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
 	m := &merkle.Tree{}
 	opens := make(map[string]*PkCommOpen)

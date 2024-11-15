@@ -11,7 +11,7 @@ type Client struct {
 	uid       uint64
 	nextVer   uint64
 	servCli   *advrpc.Client
-	servSigPk cryptoffi.PublicKey
+	servSigPk cryptoffi.SigPublicKey
 	servVrfPk *cryptoffi.VrfPublicKey
 	// seenDigs stores, for an epoch, if we've gotten a commitment for it.
 	seenDigs map[uint64]*SigDig
@@ -189,7 +189,7 @@ func (c *Client) SelfMon() (uint64, *clientErr) {
 }
 
 // auditEpoch checks a single epoch against an auditor, and evid / error on fail.
-func auditEpoch(seenDig *SigDig, servSigPk []byte, adtrCli *advrpc.Client, adtrPk cryptoffi.PublicKey) *clientErr {
+func auditEpoch(seenDig *SigDig, servSigPk []byte, adtrCli *advrpc.Client, adtrPk cryptoffi.SigPublicKey) *clientErr {
 	stdErr := &clientErr{err: true}
 	adtrInfo, err0 := callAdtrGet(adtrCli, seenDig.Epoch)
 	if err0 {
@@ -214,7 +214,7 @@ func auditEpoch(seenDig *SigDig, servSigPk []byte, adtrCli *advrpc.Client, adtrP
 	return &clientErr{err: false}
 }
 
-func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.PublicKey) *clientErr {
+func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *clientErr {
 	adtrCli := advrpc.Dial(adtrAddr)
 	// check all epochs that we've seen before.
 	var err0 = &clientErr{err: false}
@@ -227,7 +227,7 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.PublicKey) *clientErr {
 	return err0
 }
 
-func newClient(uid, servAddr uint64, servSigPk cryptoffi.PublicKey, servVrfPk *cryptoffi.VrfPublicKey) *Client {
+func newClient(uid, servAddr uint64, servSigPk cryptoffi.SigPublicKey, servVrfPk *cryptoffi.VrfPublicKey) *Client {
 	c := advrpc.Dial(servAddr)
 	digs := make(map[uint64]*SigDig)
 	return &Client{uid: uid, servCli: c, servSigPk: servSigPk, servVrfPk: servVrfPk, seenDigs: digs}
