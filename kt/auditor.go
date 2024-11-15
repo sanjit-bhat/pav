@@ -9,7 +9,7 @@ import (
 
 type Auditor struct {
 	mu       *sync.Mutex
-	sk       cryptoffi.SigPrivateKey
+	sk       *cryptoffi.SigPrivateKey
 	keyMap   *merkle.Tree
 	histInfo []*AdtrEpochInfo
 }
