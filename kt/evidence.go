@@ -9,7 +9,7 @@ import (
 func CheckSigDig(o *SigDig, pk cryptoffi.SigPublicKey) bool {
 	pre := &PreSigDig{Epoch: o.Epoch, Dig: o.Dig}
 	preByt := PreSigDigEncode(make([]byte, 0), pre)
-	return !pk.Verify(preByt, o.Sig)
+	return pk.Verify(preByt, o.Sig)
 }
 
 // Evid is evidence that the server signed two conflicting digs.

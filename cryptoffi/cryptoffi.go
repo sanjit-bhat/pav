@@ -42,9 +42,9 @@ func (sk *SigPrivateKey) Sign(message []byte) []byte {
 	return ed25519.Sign(ed25519.PrivateKey(sk.sk), message)
 }
 
-// Verify rets okay if proof verifies.
+// Verify verifies the sig and rets any errs.
 func (pk SigPublicKey) Verify(message []byte, sig []byte) bool {
-	return ed25519.Verify(ed25519.PublicKey(pk), message, sig)
+	return !ed25519.Verify(ed25519.PublicKey(pk), message, sig)
 }
 
 // # VRF

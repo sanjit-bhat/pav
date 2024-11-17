@@ -30,25 +30,25 @@ func TestSig(t *testing.T) {
 	d := []byte("d")
 	pk, sk := SigGenerateKey()
 	sig := sk.Sign(d)
-	if !pk.Verify(d, sig) {
+	if pk.Verify(d, sig) {
 		t.Fatal()
 	}
 
 	// verify false for bad msg.
-	if pk.Verify([]byte("d1"), sig) {
+	if !pk.Verify([]byte("d1"), sig) {
 		t.Fatal()
 	}
 
 	// verify false for bad pk.
 	pk2, _ := SigGenerateKey()
-	if pk2.Verify(d, sig) {
+	if !pk2.Verify(d, sig) {
 		t.Fatal()
 	}
 
 	// verify false for bad sig.
 	sig2 := bytes.Clone(sig)
 	sig2[0] = ^sig2[0]
-	if pk.Verify(d, sig2) {
+	if !pk.Verify(d, sig2) {
 		t.Fatal()
 	}
 }
