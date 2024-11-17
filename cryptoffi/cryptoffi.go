@@ -1,13 +1,12 @@
 package cryptoffi
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha512"
+	"crypto/x509"
 	"github.com/google/keytransparency/core/crypto/vrf"
 	"github.com/google/keytransparency/core/crypto/vrf/p256"
-	"log"
 )
 
 const (
@@ -34,7 +33,7 @@ type SigPublicKey ed25519.PublicKey
 func SigGenerateKey() (SigPublicKey, *SigPrivateKey) {
 	pk, sk, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		log.Fatal(err)
+		panic("cryptoffi: ed25519 keygen err")
 	}
 	return SigPublicKey(pk), &SigPrivateKey{sk: sk}
 }
@@ -52,6 +51,10 @@ func (pk SigPublicKey) Verify(message []byte, sig []byte) bool {
 
 // VrfPrivateKey has an unexported sk, which can't be accessed outside
 // the package, without reflection or unsafe.
+// it uses Google KT's ecvrf under the hood, which satisfies [full uniqueness],
+// i.e., determinism under adversarial pks.
+// this is the only property that pav requires.
+// [full uniqueness]: https://www.rfc-editor.org/rfc/rfc9381#name-elliptic-curve-vrf-ecvrf
 type VrfPrivateKey struct {
 	sk vrf.PrivateKey
 }
@@ -65,23 +68,45 @@ func VrfGenerateKey() (*VrfPublicKey, *VrfPrivateKey) {
 	return &VrfPublicKey{pk: pk}, &VrfPrivateKey{sk: sk}
 }
 
-// TODO: check that Google CT's VRF satisfies all the properties we need.
-// maybe re-write to use sha256 and the more robust [internal ed25519].
-// [internal ed25519]: https://pkg.go.dev/filippo.io/edwards25519
+// Hash computes the hash of data, along with a proof.
+// TODO: rewrite to use ed25519 with the low-level [ed25519].
+// [ed25519]: https://pkg.go.dev/filippo.io/edwards25519
 func (sk *VrfPrivateKey) Hash(data []byte) ([]byte, []byte) {
 	h, proof := sk.sk.Evaluate(data)
-	// TODO: check that proof doesn't have h inside it.
-	// that'd be a waste of space.
 	return h[:], proof
 }
 
-// Verify rets okay if proof verifies.
-func (pk *VrfPublicKey) Verify(data, hash, proof []byte) bool {
-	h, err := pk.pk.ProofToHash(data, proof)
+// Verify verifies data against the proof and returns the hash and an err.
+// it should perform the [ECVRF_verify] checks to run even on adversarial proofs.
+// it can assume a valid pk.
+// [ECVRF_verify]: https://www.rfc-editor.org/rfc/rfc9381#name-ecvrf-verifying
+func (pk *VrfPublicKey) Verify(data, proof []byte) ([]byte, bool) {
+	hash, err := pk.pk.ProofToHash(data, proof)
 	if err != nil {
-		return false
+		return nil, true
 	}
-	return bytes.Equal(hash, h[:])
+	return hash[:], false
+}
+
+// VrfPublicKeyEncodes encodes a valid pk as bytes.
+func VrfPublicKeyEncode(pk *VrfPublicKey) []byte {
+	pk2 := pk.pk.(*p256.PublicKey).PublicKey
+	b, err := x509.MarshalPKIXPublicKey(pk2)
+	if err != nil {
+		panic("cryptoffi: vrf encoding err")
+	}
+	return b
+}
+
+// VrfPublicKeyDecode decodes [b].
+// it should perform the [ECVRF_validate_key] checks to run even on adversarial pks.
+// [ECVRF_validate_key]: https://www.rfc-editor.org/rfc/rfc9381#name-ecvrf-validate-key
+func VrfPublicKeyDecode(b []byte) *VrfPublicKey {
+	pk, err := p256.NewVRFVerifierFromRawKey(b)
+	if err != nil {
+		panic("cryptoffi: vrf decoding err")
+	}
+	return &VrfPublicKey{pk: pk}
 }
 
 // # Random
@@ -90,9 +115,8 @@ func (pk *VrfPublicKey) Verify(data, hash, proof []byte) bool {
 func RandBytes(n uint64) []byte {
 	b := make([]byte, n)
 	_, err := rand.Read(b)
-	// don't care about recovering from crypto/rand failures.
 	if err != nil {
-		panic("crypto/rand call failed")
+		panic("cryptoffi: crypto/rand err")
 	}
 	return b
 }

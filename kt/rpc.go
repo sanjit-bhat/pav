@@ -13,7 +13,7 @@ const (
 	AdtrGetRpc       uint64 = 1
 )
 
-func newRpcServer(s *Server) *advrpc.Server {
+func NewRpcServer(s *Server) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
 	h[ServerPutRpc] = func(arg []byte, reply *[]byte) {
 		argObj, _, err0 := ServerPutArgDecode(arg)
@@ -54,7 +54,7 @@ func newRpcServer(s *Server) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func newRpcAuditor(a *Auditor) *advrpc.Server {
+func NewRpcAuditor(a *Auditor) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
 	h[AdtrUpdateRpc] = func(arg []byte, reply *[]byte) {
 		argObj, _, err0 := AdtrUpdateArgDecode(arg)
@@ -77,7 +77,7 @@ func newRpcAuditor(a *Auditor) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func callServPut(c *advrpc.Client, uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb, bool) {
+func CallServPut(c *advrpc.Client, uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb, bool) {
 	arg := &ServerPutArg{Uid: uid, Pk: pk}
 	argByt := ServerPutArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
@@ -92,7 +92,7 @@ func callServPut(c *advrpc.Client, uid uint64, pk []byte) (*SigDig, *Memb, *NonM
 	return reply.Dig, reply.Latest, reply.Bound, false
 }
 
-func callServGet(c *advrpc.Client, uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb, bool) {
+func CallServGet(c *advrpc.Client, uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb, bool) {
 	arg := &ServerGetArg{Uid: uid}
 	argByt := ServerGetArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
@@ -107,7 +107,7 @@ func callServGet(c *advrpc.Client, uid uint64) (*SigDig, []*MembHide, bool, *Mem
 	return reply.Dig, reply.Hist, reply.IsReg, reply.Latest, reply.Bound, false
 }
 
-func callServSelfMon(c *advrpc.Client, uid uint64) (*SigDig, *NonMemb, bool) {
+func CallServSelfMon(c *advrpc.Client, uid uint64) (*SigDig, *NonMemb, bool) {
 	arg := &ServerSelfMonArg{Uid: uid}
 	argByt := ServerSelfMonArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
@@ -122,7 +122,7 @@ func callServSelfMon(c *advrpc.Client, uid uint64) (*SigDig, *NonMemb, bool) {
 	return reply.Dig, reply.Bound, false
 }
 
-func callServAudit(c *advrpc.Client, epoch uint64) (*UpdateProof, bool) {
+func CallServAudit(c *advrpc.Client, epoch uint64) (*UpdateProof, bool) {
 	arg := &ServerAuditArg{Epoch: epoch}
 	argByt := ServerAuditArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
@@ -139,7 +139,7 @@ func callServAudit(c *advrpc.Client, epoch uint64) (*UpdateProof, bool) {
 	return reply.P, reply.Err
 }
 
-func callAdtrUpdate(c *advrpc.Client, proof *UpdateProof) bool {
+func CallAdtrUpdate(c *advrpc.Client, proof *UpdateProof) bool {
 	arg := &AdtrUpdateArg{P: proof}
 	argByt := AdtrUpdateArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
@@ -154,7 +154,7 @@ func callAdtrUpdate(c *advrpc.Client, proof *UpdateProof) bool {
 	return reply.Err
 }
 
-func callAdtrGet(c *advrpc.Client, epoch uint64) (*AdtrEpochInfo, bool) {
+func CallAdtrGet(c *advrpc.Client, epoch uint64) (*AdtrEpochInfo, bool) {
 	arg := &AdtrGetArg{Epoch: epoch}
 	argByt := AdtrGetArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)

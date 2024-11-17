@@ -1,8 +1,9 @@
-package kt
+package kttest
 
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
+	"github.com/mit-pdos/pav/kt"
 	"sync"
 )
 
@@ -15,10 +16,14 @@ func testAllFull(servAddr uint64, adtrAddrs []uint64) {
 	testAll(setup(servAddr, adtrAddrs))
 }
 
+// TODO: write alice and bob more as isolated components from the test runner,
+// so it's easy to see what common state they rely on, like servVrfPk.
+// in proof, can more easily split out security assumptions vs ones that
+// are just for liveness, like servSigPk.
 func testAll(setup *setupParams) {
-	aliceCli := newClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	aliceCli := kt.NewClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	alice := &alice{cli: aliceCli}
-	bobCli := newClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	bobCli := kt.NewClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	bob := &bob{cli: bobCli}
 
 	wg := new(sync.WaitGroup)
@@ -38,7 +43,7 @@ func testAll(setup *setupParams) {
 
 	// alice self monitor. in real world, she'll come on-line at times and do this.
 	selfMonEp, err0 := alice.cli.SelfMon()
-	primitive.Assume(!err0.err)
+	primitive.Assume(!err0.Err)
 	// this last self monitor will be our history bound.
 	primitive.Assume(bob.epoch <= selfMonEp)
 
@@ -50,7 +55,7 @@ func testAll(setup *setupParams) {
 	doAudits(bob.cli, setup.adtrAddrs, setup.adtrPks)
 
 	// final check. bob got the right key.
-	isReg, alicePk := GetHist(alice.hist, bob.epoch)
+	isReg, alicePk := kt.GetHist(alice.hist, bob.epoch)
 	primitive.Assert(isReg == bob.isReg)
 	if isReg {
 		primitive.Assert(std.BytesEqual(alicePk, bob.alicePk))
@@ -58,8 +63,8 @@ func testAll(setup *setupParams) {
 }
 
 type alice struct {
-	cli  *Client
-	hist []*HistEntry
+	cli  *kt.Client
+	hist []*kt.HistEntry
 }
 
 func (a *alice) run() {
@@ -67,13 +72,13 @@ func (a *alice) run() {
 		primitive.Sleep(5_000_000)
 		pk := []byte{1}
 		epoch, err0 := a.cli.Put(pk)
-		primitive.Assume(!err0.err)
-		a.hist = append(a.hist, &HistEntry{Epoch: epoch, HistVal: pk})
+		primitive.Assume(!err0.Err)
+		a.hist = append(a.hist, &kt.HistEntry{Epoch: epoch, HistVal: pk})
 	}
 }
 
 type bob struct {
-	cli     *Client
+	cli     *kt.Client
 	epoch   uint64
 	isReg   bool
 	alicePk []byte
@@ -82,7 +87,7 @@ type bob struct {
 func (b *bob) run() {
 	primitive.Sleep(120_000_000)
 	isReg, pk, epoch, err0 := b.cli.Get(aliceUid)
-	primitive.Assume(!err0.err)
+	primitive.Assume(!err0.Err)
 	b.epoch = epoch
 	b.isReg = isReg
 	b.alicePk = pk
