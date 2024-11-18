@@ -16,10 +16,6 @@ func testAllFull(servAddr uint64, adtrAddrs []uint64) {
 	testAll(setup(servAddr, adtrAddrs))
 }
 
-// TODO: write alice and bob more as isolated components from the test runner,
-// so it's easy to see what common state they rely on, like servVrfPk.
-// in proof, can more easily split out security assumptions vs ones that
-// are just for liveness, like servSigPk.
 func testAll(setup *setupParams) {
 	aliceCli := kt.NewClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	alice := &alice{cli: aliceCli}
