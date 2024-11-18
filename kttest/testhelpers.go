@@ -10,7 +10,7 @@ import (
 type setupParams struct {
 	servAddr  uint64
 	servSigPk cryptoffi.SigPublicKey
-	servVrfPk *cryptoffi.VrfPublicKey
+	servVrfPk []byte
 	adtrAddrs []uint64
 	adtrPks   []cryptoffi.SigPublicKey
 }
@@ -20,6 +20,7 @@ type setupParams struct {
 // different adversary configs.
 func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
 	serv, servSigPk, servVrfPk := kt.NewServer()
+	servVrfPkEnc := cryptoffi.VrfPublicKeyEncode(servVrfPk)
 	servRpc := kt.NewRpcServer(serv)
 	servRpc.Serve(servAddr)
 	var adtrPks []cryptoffi.SigPublicKey
@@ -30,7 +31,7 @@ func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
 		adtrPks = append(adtrPks, adtrPk)
 	}
 	primitive.Sleep(1_000_000)
-	return &setupParams{servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPk, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
+	return &setupParams{servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPkEnc, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
 }
 
 func mkRpcClients(addrs []uint64) []*advrpc.Client {

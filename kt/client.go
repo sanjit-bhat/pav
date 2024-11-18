@@ -229,8 +229,9 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientEr
 	return err0
 }
 
-func NewClient(uid, servAddr uint64, servSigPk cryptoffi.SigPublicKey, servVrfPk *cryptoffi.VrfPublicKey) *Client {
+func NewClient(uid, servAddr uint64, servSigPk cryptoffi.SigPublicKey, servVrfPk []byte) *Client {
 	c := advrpc.Dial(servAddr)
+	pk := cryptoffi.VrfPublicKeyDecode(servVrfPk)
 	digs := make(map[uint64]*SigDig)
-	return &Client{uid: uid, servCli: c, servSigPk: servSigPk, servVrfPk: servVrfPk, seenDigs: digs}
+	return &Client{uid: uid, servCli: c, servSigPk: servSigPk, servVrfPk: pk, seenDigs: digs}
 }
