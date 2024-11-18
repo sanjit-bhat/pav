@@ -63,13 +63,13 @@ func MapLabelPreDecode(b0 []byte) (*MapLabelPre, []byte, bool) {
 	}
 	return &MapLabelPre{Uid: a1, Ver: a2}, b2, false
 }
-func PkCommOpenEncode(b0 []byte, o *PkCommOpen) []byte {
+func CommitOpenEncode(b0 []byte, o *CommitOpen) []byte {
 	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.Pk)
-	b = marshalutil.WriteSlice1D(b, o.R)
+	b = marshalutil.WriteSlice1D(b, o.Val)
+	b = marshalutil.WriteSlice1D(b, o.Rand)
 	return b
 }
-func PkCommOpenDecode(b0 []byte) (*PkCommOpen, []byte, bool) {
+func CommitOpenDecode(b0 []byte) (*CommitOpen, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
@@ -78,12 +78,12 @@ func PkCommOpenDecode(b0 []byte) (*PkCommOpen, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	return &PkCommOpen{Pk: a1, R: a2}, b2, false
+	return &CommitOpen{Val: a1, Rand: a2}, b2, false
 }
 func MapValPreEncode(b0 []byte, o *MapValPre) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.Epoch)
-	b = marshalutil.WriteSlice1D(b, o.PkComm)
+	b = marshalutil.WriteSlice1D(b, o.PkCommit)
 	return b
 }
 func MapValPreDecode(b0 []byte) (*MapValPre, []byte, bool) {
@@ -95,13 +95,13 @@ func MapValPreDecode(b0 []byte) (*MapValPre, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	return &MapValPre{Epoch: a1, PkComm: a2}, b2, false
+	return &MapValPre{Epoch: a1, PkCommit: a2}, b2, false
 }
 func MembEncode(b0 []byte, o *Memb) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
 	b = marshal.WriteInt(b, o.EpochAdded)
-	b = PkCommOpenEncode(b, o.CommOpen)
+	b = CommitOpenEncode(b, o.PkOpen)
 	b = marshalutil.WriteSlice3D(b, o.MerkProof)
 	return b
 }
@@ -114,7 +114,7 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := PkCommOpenDecode(b2)
+	a3, b3, err3 := CommitOpenDecode(b2)
 	if err3 {
 		return nil, nil, true
 	}
@@ -122,7 +122,7 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	if err4 {
 		return nil, nil, true
 	}
-	return &Memb{LabelProof: a1, EpochAdded: a2, CommOpen: a3, MerkProof: a4}, b4, false
+	return &Memb{LabelProof: a1, EpochAdded: a2, PkOpen: a3, MerkProof: a4}, b4, false
 }
 func MembHideEncode(b0 []byte, o *MembHide) []byte {
 	var b = b0

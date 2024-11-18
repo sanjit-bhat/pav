@@ -13,7 +13,7 @@ type Client struct {
 	servCli   *advrpc.Client
 	servSigPk cryptoffi.SigPublicKey
 	servVrfPk *cryptoffi.VrfPublicKey
-	// seenDigs stores, for an epoch, if we've gotten a commitment for it.
+	// seenDigs stores, for an epoch, if we've gotten a digest for it.
 	seenDigs map[uint64]*SigDig
 	// nextEpoch is the min epoch that we haven't yet seen, an UB on seenDigs.
 	nextEpoch uint64
@@ -70,7 +70,7 @@ func checkMemb(pk *cryptoffi.VrfPublicKey, uid uint64, ver uint64, dig []byte, m
 	if err {
 		return true
 	}
-	mapVal := compMapVal(memb.EpochAdded, memb.CommOpen)
+	mapVal := compMapVal(memb.EpochAdded, memb.PkOpen)
 	return merkle.CheckProof(true, memb.MerkProof, label, mapVal, dig)
 }
 
@@ -122,7 +122,7 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	if dig.Epoch != latest.EpochAdded {
 		return 0, stdErr
 	}
-	if !std.BytesEqual(pk, latest.CommOpen.Pk) {
+	if !std.BytesEqual(pk, latest.PkOpen.Val) {
 		return 0, stdErr
 	}
 	// check bound has right ver.
@@ -169,7 +169,7 @@ func (c *Client) Get(uid uint64) (bool, []byte, uint64, *ClientErr) {
 	if checkNonMemb(c.servVrfPk, uid, boundVer, dig.Dig, bound) {
 		return false, nil, 0, stdErr
 	}
-	return isReg, latest.CommOpen.Pk, dig.Epoch, &ClientErr{Err: false}
+	return isReg, latest.PkOpen.Val, dig.Epoch, &ClientErr{Err: false}
 }
 
 // SelfMon self-monitors for the client's own key, and returns the epoch

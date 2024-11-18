@@ -16,23 +16,12 @@ func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, 
 	return h, p
 }
 
-func compMapVal(epoch uint64, open *PkCommOpen) []byte {
-	openByt := PkCommOpenEncode(make([]byte, 0), open)
-	comm := cryptoffi.Hash(openByt)
-	v := &MapValPre{Epoch: epoch, PkComm: comm}
-	vByt := MapValPreEncode(make([]byte, 0), v)
-	return vByt
-}
-
-// genValComm rets mapVal (epoch || commitment) and a commitment opening,
-// where commitment = Hash(pk || randBytes).
-func genValComm(epoch uint64, pk []byte) ([]byte, *PkCommOpen) {
-	// from 8.12 of [Boneh-Shoup] v0.6, a 512-bit rand space provides statistical
-	// hiding for this sha256-based commitment scheme.
-	// [Boneh-Shoup]: https://toc.cryptobook.us
-	r := cryptoffi.RandBytes(2 * cryptoffi.HashLen)
-	open := &PkCommOpen{Pk: pk, R: r}
-	return compMapVal(epoch, open), open
+// compMapVal rets mapVal (epoch || Hash(pk || rand)).
+func compMapVal(epoch uint64, pkOpen *CommitOpen) []byte {
+	openByt := CommitOpenEncode(make([]byte, 0), pkOpen)
+	commit := cryptoffi.Hash(openByt)
+	v := &MapValPre{Epoch: epoch, PkCommit: commit}
+	return MapValPreEncode(make([]byte, 0), v)
 }
 
 type servEpochInfo struct {
@@ -51,7 +40,7 @@ type Server struct {
 	// histInfo stores info about prior epochs.
 	histInfo []*servEpochInfo
 	// pkCommOpens stores pk commitment openings for a particular mapLabel.
-	pkCommOpens map[string]*PkCommOpen
+	pkCommOpens map[string]*CommitOpen
 	// nextVers stores next version #'s for a particular uid.
 	nextVers map[uint64]uint64
 }
@@ -67,7 +56,7 @@ func (s *Server) getMemb(uid, ver uint64) *Memb {
 	primitive.Assert(!err0)
 	open, ok0 := s.pkCommOpens[string(label)]
 	primitive.Assert(ok0)
-	return &Memb{LabelProof: vrfProof, EpochAdded: valPre.Epoch, CommOpen: open, MerkProof: getReply.Proof}
+	return &Memb{LabelProof: vrfProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkProof: getReply.Proof}
 }
 
 // getMembHide pre-cond that (uid, ver) in-bounds.
@@ -115,14 +104,24 @@ func (s *Server) getDig() *SigDig {
 	return &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
 }
 
+// genCommitOpen generates a commitment opening for val.
+func genCommitOpen(val []byte) *CommitOpen {
+	// from 8.12 of [Boneh-Shoup] v0.6, a 512-bit rand space provides statistical
+	// hiding for this sha256-based commitment scheme.
+	// [Boneh-Shoup]: https://toc.cryptobook.us
+	r := cryptoffi.RandBytes(2 * cryptoffi.HashLen)
+	return &CommitOpen{Val: val, Rand: r}
+}
+
 func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	s.mu.Lock()
 	// add to key map.
 	ver := s.nextVers[uid]
 	label, _ := compMapLabel(uid, ver, s.vrfSk)
 	nextEpoch := uint64(len(s.histInfo))
-	val, open := genValComm(nextEpoch, pk)
-	dig, _, err0 := s.keyMap.Put(label, val)
+	open := genCommitOpen(pk)
+	mapVal := compMapVal(nextEpoch, open)
+	dig, _, err0 := s.keyMap.Put(label, mapVal)
 	primitive.Assert(!err0)
 
 	// update supporting stores.
@@ -132,7 +131,7 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 
 	// sign new dig.
 	updates := make(map[string][]byte)
-	updates[string(label)] = val
+	updates[string(label)] = mapVal
 	preSig := &PreSigDig{Epoch: nextEpoch, Dig: dig}
 	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
 	sig := s.sigSk.Sign(preSigByt)
@@ -157,7 +156,7 @@ func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 	nextVer := s.nextVers[uid]
 	if nextVer == 0 {
 		s.mu.Unlock()
-		return dig, hist, false, &Memb{CommOpen: &PkCommOpen{}}, bound
+		return dig, hist, false, &Memb{PkOpen: &CommitOpen{}}, bound
 	}
 	latest := s.getLatest(uid)
 	s.mu.Unlock()
@@ -190,7 +189,7 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
 	m := &merkle.Tree{}
-	opens := make(map[string]*PkCommOpen)
+	opens := make(map[string]*CommitOpen)
 	vers := make(map[uint64]uint64)
 
 	// commit to init epoch.

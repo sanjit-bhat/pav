@@ -16,20 +16,20 @@ type MapLabelPre struct {
 	Ver uint64
 }
 
-type PkCommOpen struct {
-	Pk []byte
-	R  []byte
+type CommitOpen struct {
+	Val  []byte
+	Rand []byte
 }
 
 type MapValPre struct {
-	Epoch  uint64
-	PkComm []byte
+	Epoch    uint64
+	PkCommit []byte
 }
 
 type Memb struct {
 	LabelProof []byte
 	EpochAdded uint64
-	CommOpen   *PkCommOpen
+	PkOpen     *CommitOpen
 	MerkProof  [][][]byte
 }
 
