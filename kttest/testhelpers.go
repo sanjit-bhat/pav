@@ -1,9 +1,10 @@
-package kt
+package kttest
 
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/mit-pdos/pav/advrpc"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/kt"
 )
 
 type setupParams struct {
@@ -18,13 +19,13 @@ type setupParams struct {
 // it consolidates the external parties, letting us more easily describe
 // different adversary configs.
 func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
-	serv, servSigPk, servVrfPk := newServer()
-	servRpc := newRpcServer(serv)
+	serv, servSigPk, servVrfPk := kt.NewServer()
+	servRpc := kt.NewRpcServer(serv)
 	servRpc.Serve(servAddr)
 	var adtrPks []cryptoffi.SigPublicKey
 	for _, adtrAddr := range adtrAddrs {
-		adtr, adtrPk := newAuditor()
-		adtrRpc := newRpcAuditor(adtr)
+		adtr, adtrPk := kt.NewAuditor()
+		adtrRpc := kt.NewRpcAuditor(adtr)
 		adtrRpc.Serve(adtrAddr)
 		adtrPks = append(adtrPks, adtrPk)
 	}
@@ -41,20 +42,20 @@ func mkRpcClients(addrs []uint64) []*advrpc.Client {
 	return c
 }
 
-func updAdtrsOnce(upd *UpdateProof, adtrs []*advrpc.Client) {
+func updAdtrsOnce(upd *kt.UpdateProof, adtrs []*advrpc.Client) {
 	for _, cli := range adtrs {
-		err := callAdtrUpdate(cli, upd)
+		err := kt.CallAdtrUpdate(cli, upd)
 		primitive.Assume(!err)
 	}
 }
 
-func doAudits(cli *Client, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) {
+func doAudits(cli *kt.Client, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) {
 	numAdtrs := uint64(len(adtrAddrs))
 	for i := uint64(0); i < numAdtrs; i++ {
 		addr := adtrAddrs[i]
 		pk := adtrPks[i]
 		err := cli.Audit(addr, pk)
-		primitive.Assume(!err.err)
+		primitive.Assume(!err.Err)
 	}
 }
 
@@ -63,7 +64,7 @@ func updAdtrsAll(servAddr uint64, adtrAddrs []uint64) {
 	adtrs := mkRpcClients(adtrAddrs)
 	var epoch uint64
 	for {
-		upd, err := callServAudit(servCli, epoch)
+		upd, err := kt.CallServAudit(servCli, epoch)
 		if err {
 			break
 		}

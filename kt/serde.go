@@ -27,24 +27,21 @@ type MapValPre struct {
 }
 
 type Memb struct {
-	Label      []byte
-	VrfProof   []byte
+	LabelProof []byte
 	EpochAdded uint64
 	CommOpen   *PkCommOpen
 	MerkProof  [][][]byte
 }
 
 type MembHide struct {
-	Label     []byte
-	VrfProof  []byte
-	MapVal    []byte
-	MerkProof [][][]byte
+	LabelProof []byte
+	MapVal     []byte
+	MerkProof  [][][]byte
 }
 
 type NonMemb struct {
-	Label     []byte
-	VrfProof  []byte
-	MerkProof [][][]byte
+	LabelProof []byte
+	MerkProof  [][][]byte
 }
 
 type ServerPutArg struct {

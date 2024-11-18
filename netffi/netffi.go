@@ -41,7 +41,7 @@ func Dial(addr uint64) *Conn {
 	conn, err := net.Dial("tcp", addrToStr(addr))
 	if err != nil {
 		// hard for client's to recover if there's an addr err, so fail loudly.
-		panic("could not dial addr")
+		panic("netffi: Dial err")
 	}
 	return newConn(conn)
 }
@@ -107,7 +107,7 @@ func Listen(addr uint64) *Listener {
 	l, err := net.Listen("tcp", addrToStr(addr))
 	if err != nil {
 		// assume no Listen err. likely, port is already in use.
-		panic(err)
+		panic("netffi: Listen err")
 	}
 	return &Listener{l}
 }
@@ -116,7 +116,7 @@ func (l *Listener) Accept() *Conn {
 	conn, err := l.l.Accept()
 	if err != nil {
 		// assume no Accept err.
-		panic(err)
+		panic("netffi: Accept err")
 	}
 	return newConn(conn)
 }

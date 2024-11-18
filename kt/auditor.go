@@ -84,7 +84,7 @@ func (a *Auditor) Get(epoch uint64) (*AdtrEpochInfo, bool) {
 	return info, false
 }
 
-func newAuditor() (*Auditor, cryptoffi.SigPublicKey) {
+func NewAuditor() (*Auditor, cryptoffi.SigPublicKey) {
 	mu := new(sync.Mutex)
 	pk, sk := cryptoffi.SigGenerateKey()
 	m := &merkle.Tree{}

@@ -67,7 +67,7 @@ func (s *Server) getMemb(uid, ver uint64) *Memb {
 	primitive.Assert(!err0)
 	open, ok0 := s.pkCommOpens[string(label)]
 	primitive.Assert(ok0)
-	return &Memb{Label: label, VrfProof: vrfProof, EpochAdded: valPre.Epoch, CommOpen: open, MerkProof: getReply.Proof}
+	return &Memb{LabelProof: vrfProof, EpochAdded: valPre.Epoch, CommOpen: open, MerkProof: getReply.Proof}
 }
 
 // getMembHide pre-cond that (uid, ver) in-bounds.
@@ -76,7 +76,7 @@ func (s *Server) getMembHide(uid, ver uint64) *MembHide {
 	getReply := s.keyMap.Get(label)
 	primitive.Assert(!getReply.Error)
 	primitive.Assert(getReply.ProofTy)
-	return &MembHide{Label: label, VrfProof: vrfProof, MapVal: getReply.Val, MerkProof: getReply.Proof}
+	return &MembHide{LabelProof: vrfProof, MapVal: getReply.Val, MerkProof: getReply.Proof}
 }
 
 func (s *Server) getHist(uid uint64) []*MembHide {
@@ -106,7 +106,7 @@ func (s *Server) getBound(uid uint64) *NonMemb {
 	nextReply := s.keyMap.Get(nextLabel)
 	primitive.Assert(!nextReply.Error)
 	primitive.Assert(!nextReply.ProofTy)
-	return &NonMemb{Label: nextLabel, VrfProof: nextVrfProof, MerkProof: nextReply.Proof}
+	return &NonMemb{LabelProof: nextVrfProof, MerkProof: nextReply.Proof}
 }
 
 func (s *Server) getDig() *SigDig {
@@ -185,7 +185,7 @@ func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	return p, false
 }
 
-func newServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
+func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	mu := new(sync.Mutex)
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
