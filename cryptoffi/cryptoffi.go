@@ -38,11 +38,13 @@ func SigGenerateKey() (SigPublicKey, *SigPrivateKey) {
 	return SigPublicKey(pk), &SigPrivateKey{sk: sk}
 }
 
+// Sign assumes a valid sk and returns a signature for msg.
 func (sk *SigPrivateKey) Sign(message []byte) []byte {
 	return ed25519.Sign(ed25519.PrivateKey(sk.sk), message)
 }
 
 // Verify verifies the sig and rets any errs.
+// it checks for pk, msg, and sig validity.
 func (pk SigPublicKey) Verify(message []byte, sig []byte) bool {
 	return !ed25519.Verify(ed25519.PublicKey(pk), message, sig)
 }
