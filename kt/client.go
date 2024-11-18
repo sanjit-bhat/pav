@@ -26,16 +26,15 @@ type ClientErr struct {
 	Err  bool
 }
 
-// checkDig checks for freshness and prior vals, and evid / err on fail.
-func (c *Client) checkDig(dig *SigDig) *ClientErr {
+func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *ClientErr {
 	stdErr := &ClientErr{Err: true}
 	// check sig.
-	err0 := CheckSigDig(dig, c.servSigPk)
+	err0 := CheckSigDig(dig, servSigPk)
 	if err0 {
 		return stdErr
 	}
 	// ret early if we've already seen this epoch before.
-	seenDig, ok0 := c.seenDigs[dig.Epoch]
+	seenDig, ok0 := seenDigs[dig.Epoch]
 	if ok0 {
 		if !std.BytesEqual(seenDig.Dig, dig.Dig) {
 			evid := &Evid{sigDig0: dig, sigDig1: seenDig}
@@ -44,29 +43,23 @@ func (c *Client) checkDig(dig *SigDig) *ClientErr {
 			return &ClientErr{Err: false}
 		}
 	}
-	// check for freshness.
-	if c.nextEpoch != 0 && dig.Epoch < c.nextEpoch-1 {
-		return stdErr
-	}
 	// check epoch not too high, which would overflow c.nextEpoch.
-	if c.nextEpoch+1 == 0 {
+	if dig.Epoch+1 == 0 {
 		return stdErr
 	}
-	c.seenDigs[dig.Epoch] = dig
-	c.nextEpoch = dig.Epoch + 1
 	return &ClientErr{Err: false}
 }
 
 // checkLabel checks the vrf proof, computes the label, and errors on fail.
-func checkLabel(pk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) ([]byte, bool) {
+func checkLabel(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) ([]byte, bool) {
 	pre := &MapLabelPre{Uid: uid, Ver: ver}
 	preByt := MapLabelPreEncode(make([]byte, 0), pre)
-	return pk.Verify(preByt, proof)
+	return servVrfPk.Verify(preByt, proof)
 }
 
 // checkMemb errors on fail.
-func checkMemb(pk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *Memb) bool {
-	label, err := checkLabel(pk, uid, ver, memb.LabelProof)
+func checkMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *Memb) bool {
+	label, err := checkLabel(servVrfPk, uid, ver, memb.LabelProof)
 	if err {
 		return true
 	}
@@ -75,8 +68,8 @@ func checkMemb(pk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *Me
 }
 
 // checkMembHide errors on fail.
-func checkMembHide(pk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *MembHide) bool {
-	label, err := checkLabel(pk, uid, ver, memb.LabelProof)
+func checkMembHide(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *MembHide) bool {
+	label, err := checkLabel(servVrfPk, uid, ver, memb.LabelProof)
 	if err {
 		return true
 	}
@@ -84,11 +77,11 @@ func checkMembHide(pk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb
 }
 
 // checkHist errors on fail.
-func checkHist(pk *cryptoffi.VrfPublicKey, uid uint64, dig []byte, membs []*MembHide) bool {
+func checkHist(servVrfPk *cryptoffi.VrfPublicKey, uid uint64, dig []byte, membs []*MembHide) bool {
 	var err0 bool
 	for ver0, memb := range membs {
 		ver := uint64(ver0)
-		if checkMembHide(pk, uid, ver, dig, memb) {
+		if checkMembHide(servVrfPk, uid, ver, dig, memb) {
 			err0 = true
 		}
 	}
@@ -96,8 +89,8 @@ func checkHist(pk *cryptoffi.VrfPublicKey, uid uint64, dig []byte, membs []*Memb
 }
 
 // checkNonMemb errors on fail.
-func checkNonMemb(pk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *NonMemb) bool {
-	label, err := checkLabel(pk, uid, ver, nonMemb.LabelProof)
+func checkNonMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *NonMemb) bool {
+	label, err := checkLabel(servVrfPk, uid, ver, nonMemb.LabelProof)
 	if err {
 		return true
 	}
@@ -111,11 +104,15 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	if err0 {
 		return 0, stdErr
 	}
-	err1 := c.checkDig(dig)
+	// dig.
+	err1 := checkDig(c.servSigPk, c.seenDigs, dig)
 	if err1.Err {
 		return 0, err1
 	}
-	// check latest entry has right ver, epoch, pk.
+	if dig.Epoch < c.nextEpoch {
+		return 0, stdErr
+	}
+	// latest.
 	if checkMemb(c.servVrfPk, c.uid, c.nextVer, dig.Dig, latest) {
 		return 0, stdErr
 	}
@@ -125,10 +122,12 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	if !std.BytesEqual(pk, latest.PkOpen.Val) {
 		return 0, stdErr
 	}
-	// check bound has right ver.
+	// bound.
 	if checkNonMemb(c.servVrfPk, c.uid, c.nextVer+1, dig.Dig, bound) {
 		return 0, stdErr
 	}
+	c.seenDigs[dig.Epoch] = dig
+	c.nextEpoch = dig.Epoch + 1
 	c.nextVer += 1
 	return dig.Epoch, &ClientErr{Err: false}
 }
@@ -144,31 +143,36 @@ func (c *Client) Get(uid uint64) (bool, []byte, uint64, *ClientErr) {
 	if err0 {
 		return false, nil, 0, stdErr
 	}
-	err1 := c.checkDig(dig)
+	// dig.
+	err1 := checkDig(c.servSigPk, c.seenDigs, dig)
 	if err1.Err {
 		return false, nil, 0, err1
 	}
+	if c.nextEpoch != 0 && dig.Epoch < c.nextEpoch-1 {
+		return false, nil, 0, stdErr
+	}
+	// hist.
 	if checkHist(c.servVrfPk, uid, dig.Dig, hist) {
 		return false, nil, 0, stdErr
 	}
 	numHistVers := uint64(len(hist))
-	// check isReg aligned with hist.
 	if numHistVers > 0 && !isReg {
 		return false, nil, 0, stdErr
 	}
-	// check latest has right ver.
+	// latest.
 	if isReg && checkMemb(c.servVrfPk, uid, numHistVers, dig.Dig, latest) {
 		return false, nil, 0, stdErr
 	}
-	// check bound has right ver.
+	// bound.
 	var boundVer uint64
-	// if not reg, bound should have ver = 0.
 	if isReg {
 		boundVer = numHistVers + 1
 	}
 	if checkNonMemb(c.servVrfPk, uid, boundVer, dig.Dig, bound) {
 		return false, nil, 0, stdErr
 	}
+	c.seenDigs[dig.Epoch] = dig
+	c.nextEpoch = dig.Epoch + 1
 	return isReg, latest.PkOpen.Val, dig.Epoch, &ClientErr{Err: false}
 }
 
@@ -180,13 +184,20 @@ func (c *Client) SelfMon() (uint64, *ClientErr) {
 	if err0 {
 		return 0, stdErr
 	}
-	err1 := c.checkDig(dig)
+	// dig.
+	err1 := checkDig(c.servSigPk, c.seenDigs, dig)
 	if err1.Err {
 		return 0, err1
 	}
+	if c.nextEpoch != 0 && dig.Epoch < c.nextEpoch-1 {
+		return 0, stdErr
+	}
+	// bound.
 	if checkNonMemb(c.servVrfPk, c.uid, c.nextVer, dig.Dig, bound) {
 		return 0, stdErr
 	}
+	c.seenDigs[dig.Epoch] = dig
+	c.nextEpoch = dig.Epoch + 1
 	return dig.Epoch, &ClientErr{Err: false}
 }
 
