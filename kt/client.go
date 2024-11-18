@@ -58,14 +58,14 @@ func (c *Client) checkDig(dig *SigDig) *ClientErr {
 }
 
 // checkLabel checks the vrf proof, computes the label, and errors on fail.
-func checkLabel(pk *cryptoffi.VrfPublicKey, uid uint64, ver uint64, proof []byte) ([]byte, bool) {
+func checkLabel(pk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) ([]byte, bool) {
 	pre := &MapLabelPre{Uid: uid, Ver: ver}
 	preByt := MapLabelPreEncode(make([]byte, 0), pre)
 	return pk.Verify(preByt, proof)
 }
 
 // checkMemb errors on fail.
-func checkMemb(pk *cryptoffi.VrfPublicKey, uid uint64, ver uint64, dig []byte, memb *Memb) bool {
+func checkMemb(pk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *Memb) bool {
 	label, err := checkLabel(pk, uid, ver, memb.LabelProof)
 	if err {
 		return true
@@ -75,7 +75,7 @@ func checkMemb(pk *cryptoffi.VrfPublicKey, uid uint64, ver uint64, dig []byte, m
 }
 
 // checkMembHide errors on fail.
-func checkMembHide(pk *cryptoffi.VrfPublicKey, uid uint64, ver uint64, dig []byte, memb *MembHide) bool {
+func checkMembHide(pk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *MembHide) bool {
 	label, err := checkLabel(pk, uid, ver, memb.LabelProof)
 	if err {
 		return true
@@ -96,7 +96,7 @@ func checkHist(pk *cryptoffi.VrfPublicKey, uid uint64, dig []byte, membs []*Memb
 }
 
 // checkNonMemb errors on fail.
-func checkNonMemb(pk *cryptoffi.VrfPublicKey, uid uint64, ver uint64, dig []byte, nonMemb *NonMemb) bool {
+func checkNonMemb(pk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *NonMemb) bool {
 	label, err := checkLabel(pk, uid, ver, nonMemb.LabelProof)
 	if err {
 		return true
