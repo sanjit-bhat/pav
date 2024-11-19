@@ -28,24 +28,20 @@ type ClientErr struct {
 
 func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *ClientErr {
 	stdErr := &ClientErr{Err: true}
-	// check sig.
+	// sig.
 	err0 := CheckSigDig(dig, servSigPk)
 	if err0 {
 		return stdErr
 	}
-	// ret early if we've already seen this epoch before.
-	seenDig, ok0 := seenDigs[dig.Epoch]
-	if ok0 {
-		if !std.BytesEqual(seenDig.Dig, dig.Dig) {
-			evid := &Evid{sigDig0: dig, sigDig1: seenDig}
-			return &ClientErr{Evid: evid, Err: true}
-		} else {
-			return &ClientErr{Err: false}
-		}
-	}
-	// check epoch not too high, which would overflow c.nextEpoch.
+	// epoch not too high, which would overflow c.nextEpoch.
 	if dig.Epoch+1 == 0 {
 		return stdErr
+	}
+	// agrees with prior digs.
+	seenDig, ok0 := seenDigs[dig.Epoch]
+	if ok0 && !std.BytesEqual(seenDig.Dig, dig.Dig) {
+		evid := &Evid{sigDig0: dig, sigDig1: seenDig}
+		return &ClientErr{Evid: evid, Err: true}
 	}
 	return &ClientErr{Err: false}
 }
