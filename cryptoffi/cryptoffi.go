@@ -5,8 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"crypto/x509"
-	"github.com/google/keytransparency/core/crypto/vrf"
-	"github.com/google/keytransparency/core/crypto/vrf/p256"
+	"github.com/mit-pdos/pav/cryptoffi/vrf"
 )
 
 const (
@@ -58,15 +57,15 @@ func (pk SigPublicKey) Verify(message []byte, sig []byte) bool {
 // this is the only property that pav requires.
 // [full uniqueness]: https://www.rfc-editor.org/rfc/rfc9381#name-elliptic-curve-vrf-ecvrf
 type VrfPrivateKey struct {
-	sk vrf.PrivateKey
+	sk *vrf.PrivateKey
 }
 
 type VrfPublicKey struct {
-	pk vrf.PublicKey
+	pk *vrf.PublicKey
 }
 
 func VrfGenerateKey() (*VrfPublicKey, *VrfPrivateKey) {
-	sk, pk := p256.GenerateKey()
+	sk, pk := vrf.GenerateKey()
 	return &VrfPublicKey{pk: pk}, &VrfPrivateKey{sk: sk}
 }
 
@@ -92,8 +91,7 @@ func (pk *VrfPublicKey) Verify(data, proof []byte) ([]byte, bool) {
 
 // VrfPublicKeyEncodes encodes a valid pk as bytes.
 func VrfPublicKeyEncode(pk *VrfPublicKey) []byte {
-	pk2 := pk.pk.(*p256.PublicKey).PublicKey
-	b, err := x509.MarshalPKIXPublicKey(pk2)
+	b, err := x509.MarshalPKIXPublicKey(pk.pk.PublicKey)
 	if err != nil {
 		panic("cryptoffi: vrf encoding err")
 	}
@@ -104,7 +102,7 @@ func VrfPublicKeyEncode(pk *VrfPublicKey) []byte {
 // it should perform the [ECVRF_validate_key] checks to run even on adversarial pks.
 // [ECVRF_validate_key]: https://www.rfc-editor.org/rfc/rfc9381#name-ecvrf-validate-key
 func VrfPublicKeyDecode(b []byte) *VrfPublicKey {
-	pk, err := p256.NewVRFVerifierFromRawKey(b)
+	pk, err := vrf.NewVRFVerifierFromRawKey(b)
 	if err != nil {
 		panic("cryptoffi: vrf decoding err")
 	}
