@@ -124,7 +124,8 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	}
 	c.seenDigs[dig.Epoch] = dig
 	c.nextEpoch = dig.Epoch + 1
-	c.nextVer += 1
+	// this client controls nextVer, so no need to check for overflow.
+	c.nextVer = std.SumAssumeNoOverflow(c.nextVer, 1)
 	return dig.Epoch, &ClientErr{Err: false}
 }
 
