@@ -75,9 +75,8 @@ func checkMembHide(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byt
 // checkHist errors on fail.
 func checkHist(servVrfPk *cryptoffi.VrfPublicKey, uid uint64, dig []byte, membs []*MembHide) bool {
 	var err0 bool
-	for ver0, memb := range membs {
-		ver := uint64(ver0)
-		if checkMembHide(servVrfPk, uid, ver, dig, memb) {
+	for ver, memb := range membs {
+		if checkMembHide(servVrfPk, uid, uint64(ver), dig, memb) {
 			err0 = true
 		}
 	}
