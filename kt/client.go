@@ -34,7 +34,7 @@ func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *Clien
 		return stdErr
 	}
 	// epoch not too high, which would overflow c.nextEpoch.
-	if dig.Epoch+1 == 0 {
+	if !std.SumNoOverflow(dig.Epoch, 1) {
 		return stdErr
 	}
 	// agrees with prior digs.
