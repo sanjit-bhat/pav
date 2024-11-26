@@ -247,7 +247,7 @@ func (t *Tree) getPathAddNodes(id Id) []*node {
 	nodePath = append(nodePath, t.root)
 	for pathIdx := uint64(0); pathIdx < cryptoffi.HashLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
-		pos := id[pathIdx]
+		pos := uint64(id[pathIdx])
 		if currNode.children[pos] == nil {
 			currNode.children[pos] = newGenericNode()
 		}
