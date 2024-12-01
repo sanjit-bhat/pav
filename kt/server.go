@@ -2,11 +2,121 @@ package kt
 
 import (
 	"github.com/goose-lang/primitive"
-	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
 	"sync"
 )
+
+type Server struct {
+	mu    *sync.Mutex
+	sigSk *cryptoffi.SigPrivateKey
+	vrfSk *cryptoffi.VrfPrivateKey
+	// keyMap stores (mapLabel, mapVal) entries.
+	keyMap *merkle.Tree
+	// histInfo stores info about prior epochs.
+	histInfo []*servEpochInfo
+	// pkCommOpens stores pk commitment openings for a particular mapLabel.
+	pkCommOpens map[string]*CommitOpen
+	// labelCache caches vrf computations, with uid as the map idx and
+	// version as the slice idx.
+	// the slice always includes the bound version, except when a uid
+	// doesn't yet have a map entry.
+	labelCache map[uint64][]*vrfCache
+}
+
+type servEpochInfo struct {
+	// updates stores (mapLabel, mapVal) keyMap updates.
+	updates map[string][]byte
+	dig     []byte
+	sig     []byte
+}
+
+type vrfCache struct {
+	hash  []byte
+	proof []byte
+}
+
+func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
+	s.mu.Lock()
+	// get lat label and make bound label.
+	labels := getUidLabelCache(s.labelCache, uid, s.vrfSk)
+	boundVer := uint64(len(labels))
+	latLabel := labels[boundVer-1]
+	boundLabel, boundLabelProof := compMapLabel(uid, boundVer, s.vrfSk)
+	s.labelCache[uid] = append(labels, &vrfCache{hash: boundLabel, proof: boundLabelProof})
+
+	// make mapVal.
+	nextEpoch := uint64(len(s.histInfo))
+	open := genCommitOpen(pk)
+	s.pkCommOpens[string(latLabel.hash)] = open
+	mapVal := compMapVal(nextEpoch, open)
+
+	// add to key map.
+	dig, latestProof, err0 := s.keyMap.Put(latLabel.hash, mapVal)
+	primitive.Assert(!err0)
+	latest := &Memb{LabelProof: latLabel.proof, EpochAdded: nextEpoch, PkOpen: open, MerkProof: latestProof}
+
+	// update histInfo.
+	upd := make(map[string][]byte)
+	upd[string(latLabel.hash)] = mapVal
+	newHist, sigDig := updHist(s.histInfo, nextEpoch, upd, dig, s.sigSk)
+	s.histInfo = newHist
+
+	// make bound.
+	boundReply := s.keyMap.Get(boundLabel)
+	primitive.Assert(!boundReply.Error)
+	primitive.Assert(!boundReply.ProofTy)
+	bound := &NonMemb{LabelProof: boundLabelProof, MerkProof: boundReply.Proof}
+	s.mu.Unlock()
+	return sigDig, latest, bound
+}
+
+// Get returns a complete history proof for the uid.
+// if the uid is not yet registered, it returns a trivial memb proof for
+// for the latest version.
+func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
+	s.mu.Lock()
+	dig := getDig(s.histInfo)
+	labels := getUidLabelCache(s.labelCache, uid, s.vrfSk)
+	hist := getHist(s.keyMap, labels)
+	isReg, latest := getLatest(s.keyMap, labels, s.pkCommOpens)
+	bound := getBound(s.keyMap, labels)
+	s.mu.Unlock()
+	return dig, hist, isReg, latest, bound
+}
+
+func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
+	s.mu.Lock()
+	dig := getDig(s.histInfo)
+	labels := getUidLabelCache(s.labelCache, uid, s.vrfSk)
+	bound := getBound(s.keyMap, labels)
+	s.mu.Unlock()
+	return dig, bound
+}
+
+// Audit returns an err on fail.
+func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
+	s.mu.Lock()
+	if epoch >= uint64(len(s.histInfo)) {
+		s.mu.Unlock()
+		return &UpdateProof{Updates: make(map[string][]byte)}, true
+	}
+	info := s.histInfo[epoch]
+	s.mu.Unlock()
+	return &UpdateProof{Updates: info.updates, Sig: info.sig}, false
+}
+
+func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
+	mu := new(sync.Mutex)
+	sigPk, sigSk := cryptoffi.SigGenerateKey()
+	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
+	m := &merkle.Tree{}
+	// commit empty tree as init epoch.
+	hist, _ := updHist(nil, 0, make(map[string][]byte), m.Digest(), sigSk)
+	opens := make(map[string]*CommitOpen)
+	labelCache := make(map[uint64][]*vrfCache)
+	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, keyMap: m, histInfo: hist, pkCommOpens: opens, labelCache: labelCache}, sigPk, vrfPk
+}
 
 // compMapLabel rets mapLabel (VRF(uid || ver)) and a VRF proof.
 func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
@@ -24,86 +134,6 @@ func compMapVal(epoch uint64, pkOpen *CommitOpen) []byte {
 	return MapValPreEncode(make([]byte, 0), v)
 }
 
-type servEpochInfo struct {
-	// updates stores (mapLabel, mapVal) keyMap updates.
-	updates map[string][]byte
-	dig     []byte
-	sig     []byte
-}
-
-type Server struct {
-	mu    *sync.Mutex
-	sigSk *cryptoffi.SigPrivateKey
-	vrfSk *cryptoffi.VrfPrivateKey
-	// keyMap stores (mapLabel, mapVal) entries.
-	keyMap *merkle.Tree
-	// histInfo stores info about prior epochs.
-	histInfo []*servEpochInfo
-	// pkCommOpens stores pk commitment openings for a particular mapLabel.
-	pkCommOpens map[string]*CommitOpen
-	// nextVers stores next version #'s for a particular uid.
-	nextVers map[uint64]uint64
-}
-
-// getMemb pre-cond that (uid, ver) in-bounds.
-func (s *Server) getMemb(uid, ver uint64) *Memb {
-	// VRF is determ, so get same label as prev runs.
-	label, vrfProof := compMapLabel(uid, ver, s.vrfSk)
-	getReply := s.keyMap.Get(label)
-	primitive.Assert(!getReply.Error)
-	primitive.Assert(getReply.ProofTy)
-	valPre, _, err0 := MapValPreDecode(getReply.Val)
-	primitive.Assert(!err0)
-	open, ok0 := s.pkCommOpens[string(label)]
-	primitive.Assert(ok0)
-	return &Memb{LabelProof: vrfProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkProof: getReply.Proof}
-}
-
-// getMembHide pre-cond that (uid, ver) in-bounds.
-func (s *Server) getMembHide(uid, ver uint64) *MembHide {
-	label, vrfProof := compMapLabel(uid, ver, s.vrfSk)
-	getReply := s.keyMap.Get(label)
-	primitive.Assert(!getReply.Error)
-	primitive.Assert(getReply.ProofTy)
-	return &MembHide{LabelProof: vrfProof, MapVal: getReply.Val, MerkProof: getReply.Proof}
-}
-
-func (s *Server) getHist(uid uint64) []*MembHide {
-	var membs []*MembHide
-	nextVer := s.nextVers[uid]
-	if nextVer == 0 {
-		return membs
-	}
-	latVer := nextVer - 1
-	for ver := uint64(0); ver < latVer; ver++ {
-		membs = append(membs, s.getMembHide(uid, ver))
-	}
-	return membs
-}
-
-// getLatest pre-cond that uid has some versions.
-func (s *Server) getLatest(uid uint64) *Memb {
-	nextVer := s.nextVers[uid]
-	primitive.Assert(nextVer != 0)
-	latVer := nextVer - 1
-	return s.getMemb(uid, latVer)
-}
-
-func (s *Server) getBound(uid uint64) *NonMemb {
-	nextVer := s.nextVers[uid]
-	nextLabel, nextVrfProof := compMapLabel(uid, nextVer, s.vrfSk)
-	nextReply := s.keyMap.Get(nextLabel)
-	primitive.Assert(!nextReply.Error)
-	primitive.Assert(!nextReply.ProofTy)
-	return &NonMemb{LabelProof: nextVrfProof, MerkProof: nextReply.Proof}
-}
-
-func (s *Server) getDig() *SigDig {
-	numEpochs := uint64(len(s.histInfo))
-	lastInfo := s.histInfo[numEpochs-1]
-	return &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
-}
-
 // genCommitOpen generates a commitment opening for val.
 func genCommitOpen(val []byte) *CommitOpen {
 	// from 8.12 of [Boneh-Shoup] v0.6, a 512-bit rand space provides statistical
@@ -113,94 +143,77 @@ func genCommitOpen(val []byte) *CommitOpen {
 	return &CommitOpen{Val: val, Rand: r}
 }
 
-func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
-	s.mu.Lock()
-	// add to key map.
-	ver := s.nextVers[uid]
-	label, _ := compMapLabel(uid, ver, s.vrfSk)
-	nextEpoch := uint64(len(s.histInfo))
-	open := genCommitOpen(pk)
-	mapVal := compMapVal(nextEpoch, open)
-	dig, _, err0 := s.keyMap.Put(label, mapVal)
-	primitive.Assert(!err0)
-
-	// update supporting stores.
-	s.pkCommOpens[string(label)] = open
-	// assume OOM before running out of versions.
-	s.nextVers[uid] = std.SumAssumeNoOverflow(ver, 1)
-
-	// sign new dig.
-	updates := make(map[string][]byte)
-	updates[string(label)] = mapVal
-	preSig := &PreSigDig{Epoch: nextEpoch, Dig: dig}
+// updHist updates hist at a particular epoch with some new entries
+// and a new dig, signing the update with sk.
+func updHist(hist []*servEpochInfo, epoch uint64, upd map[string][]byte, dig []byte, sk *cryptoffi.SigPrivateKey) ([]*servEpochInfo, *SigDig) {
+	preSig := &PreSigDig{Epoch: epoch, Dig: dig}
 	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
-	sig := s.sigSk.Sign(preSigByt)
-	newInfo := &servEpochInfo{updates: updates, dig: dig, sig: sig}
-	s.histInfo = append(s.histInfo, newInfo)
-
-	// get proofs.
-	sigDig := s.getDig()
-	latest := s.getLatest(uid)
-	bound := s.getBound(uid)
-	s.mu.Unlock()
-	return sigDig, latest, bound
+	sig := sk.Sign(preSigByt)
+	newInfo := &servEpochInfo{updates: upd, dig: dig, sig: sig}
+	return append(hist, newInfo), &SigDig{Epoch: epoch, Dig: dig, Sig: sig}
 }
 
-// Get rets, among others, whether the uid has been registered,
-// and if so, a complete latest memb proof.
-func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
-	s.mu.Lock()
-	dig := s.getDig()
-	hist := s.getHist(uid)
-	bound := s.getBound(uid)
-	nextVer := s.nextVers[uid]
-	if nextVer == 0 {
-		s.mu.Unlock()
-		return dig, hist, false, &Memb{PkOpen: &CommitOpen{}}, bound
+// getUidLabelCache gets the label cache for a particular uid,
+// guaranteeing ≥1 cached versions.
+func getUidLabelCache(cache map[uint64][]*vrfCache, uid uint64, sk *cryptoffi.VrfPrivateKey) []*vrfCache {
+	labels, ok := cache[uid]
+	if ok {
+		primitive.Assert(len(labels) >= 1)
+		return labels
+	} else {
+		label, proof := compMapLabel(uid, 0, sk)
+		init := []*vrfCache{{hash: label, proof: proof}}
+		cache[uid] = init
+		return init
 	}
-	latest := s.getLatest(uid)
-	s.mu.Unlock()
-	return dig, hist, true, latest, bound
 }
 
-func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
-	s.mu.Lock()
-	dig := s.getDig()
-	bound := s.getBound(uid)
-	s.mu.Unlock()
-	return dig, bound
+func getDig(hist []*servEpochInfo) *SigDig {
+	numEpochs := uint64(len(hist))
+	lastInfo := hist[numEpochs-1]
+	return &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
 }
 
-// Audit returns an err on fail.
-func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
-	s.mu.Lock()
-	if epoch >= uint64(len(s.histInfo)) {
-		s.mu.Unlock()
-		return &UpdateProof{Updates: make(map[string][]byte)}, true
+func getHist(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
+	numRegVers := uint64(len(labels)) - 1
+	if numRegVers == 0 {
+		return nil
 	}
-	info := s.histInfo[epoch]
-	s.mu.Unlock()
-	p := &UpdateProof{Updates: info.updates, Sig: info.sig}
-	return p, false
+	// latest registered ver not included in hist.
+	hist := make([]*MembHide, numRegVers-1)
+	for ver := uint64(0); ver < numRegVers-1; ver++ {
+		label := labels[ver]
+		reply := keyMap.Get(label.hash)
+		primitive.Assert(!reply.Error)
+		primitive.Assert(reply.ProofTy)
+		hist[ver] = &MembHide{LabelProof: label.proof, MapVal: reply.Val, MerkProof: reply.Proof}
+	}
+	return hist
 }
 
-func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
-	mu := new(sync.Mutex)
-	sigPk, sigSk := cryptoffi.SigGenerateKey()
-	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
-	m := &merkle.Tree{}
-	opens := make(map[string]*CommitOpen)
-	vers := make(map[uint64]uint64)
+// getLatest returns whether a val was registered, and if so, a merkle proof.
+func getLatest(keyMap *merkle.Tree, labels []*vrfCache, opens map[string]*CommitOpen) (bool, *Memb) {
+	numRegVers := uint64(len(labels)) - 1
+	if numRegVers == 0 {
+		return false, &Memb{PkOpen: &CommitOpen{}}
+	} else {
+		label := labels[numRegVers-1]
+		reply := keyMap.Get(label.hash)
+		primitive.Assert(!reply.Error)
+		primitive.Assert(reply.ProofTy)
+		valPre, _, err0 := MapValPreDecode(reply.Val)
+		primitive.Assert(!err0)
+		open, ok0 := opens[string(label.hash)]
+		primitive.Assert(ok0)
+		return true, &Memb{LabelProof: label.proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkProof: reply.Proof}
+	}
+}
 
-	// commit to init epoch.
-	dig := m.Digest()
-	updates := make(map[string][]byte)
-	// TODO: maybe factor this out along with Put code.
-	preSig := &PreSigDig{Epoch: 0, Dig: dig}
-	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
-	sig := sigSk.Sign(preSigByt)
-	newInfo := &servEpochInfo{updates: updates, dig: dig, sig: sig}
-	var hist []*servEpochInfo
-	hist = append(hist, newInfo)
-	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, keyMap: m, histInfo: hist, pkCommOpens: opens, nextVers: vers}, sigPk, vrfPk
+func getBound(keyMap *merkle.Tree, labels []*vrfCache) *NonMemb {
+	boundVer := uint64(len(labels)) - 1
+	label := labels[boundVer]
+	reply := keyMap.Get(label.hash)
+	primitive.Assert(!reply.Error)
+	primitive.Assert(!reply.ProofTy)
+	return &NonMemb{LabelProof: label.proof, MerkProof: reply.Proof}
 }
