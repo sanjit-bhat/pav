@@ -51,7 +51,7 @@ func TestOnePut(t *testing.T) {
 	id0 := make([]byte, cryptoffi.HashLen)
 	val0 := make([]byte, 1)
 
-	tr := &Tree{}
+	tr := NewTree()
 	PutCheck(t, tr, id0, val0)
 	val1 := GetMembCheck(t, tr, id0)
 	if !bytes.Equal(val0, val1) {
@@ -65,7 +65,7 @@ func TestTwoPut(t *testing.T) {
 	id1 := cryptoffi.Hash([]byte("id1"))
 	val1 := []byte("val1")
 
-	tr := &Tree{}
+	tr := NewTree()
 	PutCheck(t, tr, id0, val0)
 	PutCheck(t, tr, id1, val1)
 	val2 := GetMembCheck(t, tr, id0)
@@ -83,7 +83,7 @@ func TestOverwrite(t *testing.T) {
 	val0 := []byte("val0")
 	val1 := []byte("val1")
 
-	tr := &Tree{}
+	tr := NewTree()
 	PutCheck(t, tr, id0, val0)
 	PutCheck(t, tr, id0, val1)
 	val2 := GetMembCheck(t, tr, id0)
@@ -98,14 +98,14 @@ func TestGetNil(t *testing.T) {
 	id1 := make([]byte, cryptoffi.HashLen)
 	id1[0] = 1
 
-	tr := &Tree{}
+	tr := NewTree()
 	PutCheck(t, tr, id0, val0)
 	GetNonmembCheck(t, tr, id1)
 }
 
 func TestGetNilEmpty(t *testing.T) {
 	id0 := make([]byte, cryptoffi.HashLen)
-	tr := &Tree{}
+	tr := NewTree()
 	GetNonmembCheck(t, tr, id0)
 }
 
@@ -115,7 +115,7 @@ func TestGetNilBottom(t *testing.T) {
 	id1 := make([]byte, cryptoffi.HashLen)
 	id1[cryptoffi.HashLen-1] = 1
 
-	tr := &Tree{}
+	tr := NewTree()
 	PutCheck(t, tr, id0, val0)
 	GetNonmembCheck(t, tr, id1)
 }
@@ -128,7 +128,7 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 	id0 := make([]byte, cryptoffi.HashLen)
 	val0 := []byte("val0")
 
-	tr := &Tree{}
+	tr := NewTree()
 	digest0, proof0, err := tr.Put(id0, val0)
 	if err {
 		t.Fatal()
@@ -160,7 +160,7 @@ func TestAttackPutNilEmptyNode(t *testing.T) {
 	// membership proofs will still be valid.
 	id1[cryptoffi.HashLen-1] = 1
 
-	tr := &Tree{}
+	tr := NewTree()
 	digest0, proof0, err := tr.Put(id0, nil)
 	if err {
 		t.Fatal()
@@ -188,7 +188,7 @@ func TestLabelOverflow(t *testing.T) {
 	}
 	val := []byte{1}
 
-	tr := &Tree{}
+	tr := NewTree()
 	dig, proof, err := tr.Put(label, val)
 	if err {
 		t.Fatal()

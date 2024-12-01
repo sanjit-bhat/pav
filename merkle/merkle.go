@@ -16,17 +16,29 @@ const (
 	MembProofTy     bool   = true
 )
 
+// context is a result of:
+// 1) for performance reasons, wanting to pre-compute the empty hash.
+// 2) requiring that all hashes come from program steps.
+// 3) goose not having init() support.
+type context struct {
+	emptyHash []byte
+}
+
 type node struct {
 	mapVal   []byte
 	hash     []byte
 	children []*node
 }
 
+func newCtx() *context {
+	// hash of the empty node.
+	return &context{emptyHash: cryptoffi.Hash([]byte{emptyNodeTag})}
+}
+
 // getHash getter to support hashes of empty (nil) nodes.
-func (n *node) getHash() []byte {
+func (ctx *context) getHash(n *node) []byte {
 	if n == nil {
-		// Empty node.
-		return cryptoffi.Hash([]byte{emptyNodeTag})
+		return ctx.emptyHash
 	}
 	return n.hash
 }
@@ -40,10 +52,10 @@ func (n *node) updateLeafHash() {
 }
 
 // Assumes recursive child hashes are already up-to-date.
-func (n *node) updateInteriorHash() {
+func (ctx *context) updateInteriorHash(n *node) {
 	var h cryptoutil.Hasher
-	for _, n := range n.children {
-		cryptoutil.HasherWrite(&h, n.getHash())
+	for _, child := range n.children {
+		cryptoutil.HasherWrite(&h, ctx.getHash(child))
 	}
 	cryptoutil.HasherWrite(&h, []byte{interiorNodeTag})
 	n.hash = cryptoutil.HasherSum(h, nil)
@@ -154,28 +166,33 @@ func CheckProof(proofTy bool, proof [][][]byte, label []byte, mapVal []byte, dig
 // Having a separate Tree type makes the API more clear compared to if it
 // was just a Node.
 type Tree struct {
+	ctx  *context
 	root *node
 }
 
-func (t *Tree) Digest() []byte {
-	return t.root.getHash()
+func NewTree() *Tree {
+	return &Tree{ctx: newCtx()}
 }
 
-func appendNode2D(dst *[][]byte, src []*node) {
-	for _, sl := range src {
-		*dst = append(*dst, sl.getHash())
+func (t *Tree) Digest() []byte {
+	return t.ctx.getHash(t.root)
+}
+
+func (ctx *context) appendNode2D(dst *[][]byte, src []*node) {
+	for _, n := range src {
+		*dst = append(*dst, ctx.getHash(n))
 	}
 }
 
-func getChildHashes(nodePath []*node, label []byte) [][][]byte {
+func (ctx *context) getChildHashes(nodePath []*node, label []byte) [][][]byte {
 	childHashes := make([][][]byte, len(nodePath)-1)
 	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath))-1; pathIdx++ {
 		children := nodePath[pathIdx].children
 		// had a bug where w/o uint64, pos+1 would overflow byte.
 		pos := uint64(label[pathIdx])
 		var proofChildren [][]byte
-		appendNode2D(&proofChildren, children[:pos])
-		appendNode2D(&proofChildren, children[pos+1:])
+		ctx.appendNode2D(&proofChildren, children[:pos])
+		ctx.appendNode2D(&proofChildren, children[pos+1:])
 		childHashes[pathIdx] = proofChildren
 	}
 	return childHashes
@@ -231,11 +248,11 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, [][][]byte, bool) {
 	nodePath[cryptoffi.HashLen].updateLeafHash()
 	// +1/-1 offsets for Goosable uint64 loop var.
 	for pathIdx := cryptoffi.HashLen; pathIdx >= 1; pathIdx-- {
-		nodePath[pathIdx-1].updateInteriorHash()
+		t.ctx.updateInteriorHash(nodePath[pathIdx-1])
 	}
 
-	digest := nodePath[0].getHash()
-	proof := getChildHashes(nodePath, label)
+	digest := t.ctx.getHash(nodePath[0])
+	proof := t.ctx.getChildHashes(nodePath, label)
 	return digest, proof, false
 }
 
@@ -248,8 +265,8 @@ func (t *Tree) Get(label []byte) ([]byte, []byte, bool, [][][]byte, bool) {
 	nodePath := t.getPath(label)
 	lastNode := nodePath[uint64(len(nodePath))-1]
 
-	digest := nodePath[0].getHash()
-	proof := getChildHashes(nodePath, label)
+	digest := t.ctx.getHash(nodePath[0])
+	proof := t.ctx.getChildHashes(nodePath, label)
 	if lastNode == nil {
 		return nil, digest, NonmembProofTy, proof, false
 	} else {

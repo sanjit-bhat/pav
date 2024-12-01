@@ -110,7 +110,7 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	mu := new(sync.Mutex)
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
-	m := &merkle.Tree{}
+	m := merkle.NewTree()
 	// commit empty tree as init epoch.
 	hist, _ := updHist(nil, 0, make(map[string][]byte), m.Digest(), sigSk)
 	opens := make(map[string]*CommitOpen)
