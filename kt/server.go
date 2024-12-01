@@ -180,7 +180,7 @@ func getHist(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
 		return nil
 	}
 	// latest registered ver not included in hist.
-	hist := make([]*MembHide, 0, numRegVers-1)
+	var hist = make([]*MembHide, 0, numRegVers-1)
 	for ver := uint64(0); ver < numRegVers-1; ver++ {
 		label := labels[ver]
 		reply := keyMap.Get(label.hash)
