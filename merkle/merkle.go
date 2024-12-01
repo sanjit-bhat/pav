@@ -44,21 +44,6 @@ func (n *node) getHash() []byte {
 	return n.hash
 }
 
-func (n *node) deepCopy() *node {
-	if n == nil {
-		return nil
-	}
-	var n2 = &node{}
-	n2.val = std.BytesClone(n.val)
-	n2.hash = std.BytesClone(n.hash)
-	children := make([]*node, len(n.children))
-	for i, c := range n.children {
-		children[i] = c.deepCopy()
-	}
-	n2.children = children
-	return n2
-}
-
 func (n *node) updateLeafHash() {
 	var h cryptoutil.Hasher
 	// TODO: tag needs to go before val?
@@ -187,10 +172,6 @@ func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) err
 // was just a Node.
 type Tree struct {
 	root *node
-}
-
-func (t *Tree) DeepCopy() *Tree {
-	return &Tree{root: t.root.deepCopy()}
 }
 
 func (t *Tree) Digest() Digest {
