@@ -48,28 +48,28 @@ func GetNonmembCheck(t *testing.T, tr *Tree, label []byte) {
 }
 
 func TestOnePut(t *testing.T) {
-	id0 := make([]byte, cryptoffi.HashLen)
+	label0 := make([]byte, cryptoffi.HashLen)
 	val0 := make([]byte, 1)
 
 	tr := NewTree()
-	PutCheck(t, tr, id0, val0)
-	val1 := GetMembCheck(t, tr, id0)
+	PutCheck(t, tr, label0, val0)
+	val1 := GetMembCheck(t, tr, label0)
 	if !bytes.Equal(val0, val1) {
 		t.Fatal()
 	}
 }
 
 func TestTwoPut(t *testing.T) {
-	id0 := cryptoffi.Hash([]byte("id0"))
+	label0 := cryptoffi.Hash([]byte("label0"))
 	val0 := []byte("val0")
-	id1 := cryptoffi.Hash([]byte("id1"))
+	label1 := cryptoffi.Hash([]byte("label1"))
 	val1 := []byte("val1")
 
 	tr := NewTree()
-	PutCheck(t, tr, id0, val0)
-	PutCheck(t, tr, id1, val1)
-	val2 := GetMembCheck(t, tr, id0)
-	val3 := GetMembCheck(t, tr, id1)
+	PutCheck(t, tr, label0, val0)
+	PutCheck(t, tr, label1, val1)
+	val2 := GetMembCheck(t, tr, label0)
+	val3 := GetMembCheck(t, tr, label1)
 	if !bytes.Equal(val0, val2) {
 		t.Fatal()
 	}
@@ -79,61 +79,61 @@ func TestTwoPut(t *testing.T) {
 }
 
 func TestOverwrite(t *testing.T) {
-	id0 := cryptoffi.Hash([]byte("id0"))
+	label0 := cryptoffi.Hash([]byte("label0"))
 	val0 := []byte("val0")
 	val1 := []byte("val1")
 
 	tr := NewTree()
-	PutCheck(t, tr, id0, val0)
-	PutCheck(t, tr, id0, val1)
-	val2 := GetMembCheck(t, tr, id0)
+	PutCheck(t, tr, label0, val0)
+	PutCheck(t, tr, label0, val1)
+	val2 := GetMembCheck(t, tr, label0)
 	if !bytes.Equal(val1, val2) {
 		t.Fatal()
 	}
 }
 
 func TestGetNil(t *testing.T) {
-	id0 := make([]byte, cryptoffi.HashLen)
+	label0 := make([]byte, cryptoffi.HashLen)
 	val0 := []byte("val0")
-	id1 := make([]byte, cryptoffi.HashLen)
-	id1[0] = 1
+	label1 := make([]byte, cryptoffi.HashLen)
+	label1[0] = 1
 
 	tr := NewTree()
-	PutCheck(t, tr, id0, val0)
-	GetNonmembCheck(t, tr, id1)
+	PutCheck(t, tr, label0, val0)
+	GetNonmembCheck(t, tr, label1)
 }
 
 func TestGetNilEmpty(t *testing.T) {
-	id0 := make([]byte, cryptoffi.HashLen)
+	label0 := make([]byte, cryptoffi.HashLen)
 	tr := NewTree()
-	GetNonmembCheck(t, tr, id0)
+	GetNonmembCheck(t, tr, label0)
 }
 
 func TestGetNilBottom(t *testing.T) {
-	id0 := make([]byte, cryptoffi.HashLen)
+	label0 := make([]byte, cryptoffi.HashLen)
 	val0 := []byte("val0")
-	id1 := make([]byte, cryptoffi.HashLen)
-	id1[cryptoffi.HashLen-1] = 1
+	label1 := make([]byte, cryptoffi.HashLen)
+	label1[cryptoffi.HashLen-1] = 1
 
 	tr := NewTree()
-	PutCheck(t, tr, id0, val0)
-	GetNonmembCheck(t, tr, id1)
+	PutCheck(t, tr, label0, val0)
+	GetNonmembCheck(t, tr, label1)
 }
 
-// Don't want proof(id, val, digest) and proof(id, val', digest)
+// Don't want proof(label, val, digest) and proof(label, val', digest)
 // to exist at the same time.
 // This could happen if, e.g., nil children weren't factored into their
 // parent's hash.
 func TestAttackChildEmptyHashing(t *testing.T) {
-	id0 := make([]byte, cryptoffi.HashLen)
+	label0 := make([]byte, cryptoffi.HashLen)
 	val0 := []byte("val0")
 
 	tr := NewTree()
-	digest0, proof0, err := tr.Put(id0, val0)
+	digest0, proof0, err := tr.Put(label0, val0)
 	if err {
 		t.Fatal()
 	}
-	err = CheckProof(MembProofTy, proof0, id0, val0, digest0)
+	err = CheckProof(MembProofTy, proof0, label0, val0, digest0)
 	if err {
 		t.Fatal()
 	}
@@ -144,7 +144,7 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 	tmp := proof1[0][0]
 	proof1[0][0] = proof1[0][1]
 	proof1[0][1] = tmp
-	err = CheckProof(NonmembProofTy, proof1, id0, nil, digest0)
+	err = CheckProof(NonmembProofTy, proof1, label0, nil, digest0)
 	if !err {
 		t.Fatal()
 	}
@@ -154,23 +154,23 @@ func TestAttackChildEmptyHashing(t *testing.T) {
 // This attack exploits the bug to prove membership of a nil
 // value at some empty node in the tree.
 func TestAttackPutNilEmptyNode(t *testing.T) {
-	id0 := make([]byte, cryptoffi.HashLen)
-	id1 := make([]byte, cryptoffi.HashLen)
+	label0 := make([]byte, cryptoffi.HashLen)
+	label1 := make([]byte, cryptoffi.HashLen)
 	// It's important that the change be at the end since that's where
 	// membership proofs will still be valid.
-	id1[cryptoffi.HashLen-1] = 1
+	label1[cryptoffi.HashLen-1] = 1
 
 	tr := NewTree()
-	digest0, proof0, err := tr.Put(id0, nil)
+	digest0, proof0, err := tr.Put(label0, nil)
 	if err {
 		t.Fatal()
 	}
-	err = CheckProof(MembProofTy, proof0, id0, nil, digest0)
+	err = CheckProof(MembProofTy, proof0, label0, nil, digest0)
 	if err {
 		t.Fatal()
 	}
 
-	err = CheckProof(MembProofTy, proof0, id1, nil, digest0)
+	err = CheckProof(MembProofTy, proof0, label1, nil, digest0)
 	if !err {
 		t.Fatal()
 	}
