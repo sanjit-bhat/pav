@@ -59,11 +59,16 @@ func TestVRF(t *testing.T) {
 	// verify true.
 	d0 := []byte("d0")
 	h0, p := sk0.Hash(d0)
+	if uint64(len(h0)) != HashLen {
+		t.Fatal()
+	}
 	h0Again, err := pk0.Verify(d0, p)
 	if err {
 		t.Fatal()
 	}
 	if !bytes.Equal(h0, h0Again) {
+		t.Log("h0", h0)
+		t.Log("h0Again", h0Again)
 		t.Fatal()
 	}
 

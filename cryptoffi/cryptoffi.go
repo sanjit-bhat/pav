@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha512"
-	"crypto/x509"
 	"github.com/mit-pdos/pav/cryptoffi/vrf"
 )
 
@@ -52,10 +51,11 @@ func (pk SigPublicKey) Verify(message []byte, sig []byte) bool {
 
 // VrfPrivateKey has an unexported sk, which can't be accessed outside
 // the package, without reflection or unsafe.
-// it uses Google KT's ecvrf under the hood, which satisfies [full uniqueness],
-// i.e., determinism under adversarial pks.
+// we use a fork of ProtonMail's vrf, which implements
+// ECVRF-EDWARDS25519-SHA512-TAI from [RFC 9381].
+// ecvrf satisfies full uniqueness, i.e., determinism under adversarial pks.
 // this is the only property that pav requires.
-// [full uniqueness]: https://www.rfc-editor.org/rfc/rfc9381#name-elliptic-curve-vrf-ecvrf
+// [RFC 9381]: https://datatracker.ietf.org/doc/rfc9381/
 type VrfPrivateKey struct {
 	sk *vrf.PrivateKey
 }
@@ -65,46 +65,53 @@ type VrfPublicKey struct {
 }
 
 func VrfGenerateKey() (*VrfPublicKey, *VrfPrivateKey) {
-	sk, pk := vrf.GenerateKey()
+	sk, err := vrf.GenerateKey(nil)
+	if err != nil {
+		panic("cryptoffi: VrfGenerateKey")
+	}
+	pk, err := sk.Public()
+	if err != nil {
+		panic("cryptoffi: VrfGenerateKey")
+	}
 	return &VrfPublicKey{pk: pk}, &VrfPrivateKey{sk: sk}
 }
 
 // Hash computes the hash of data, along with a proof.
-// TODO: rewrite to use ed25519 with the low-level [ed25519].
-// [ed25519]: https://pkg.go.dev/filippo.io/edwards25519
 func (sk *VrfPrivateKey) Hash(data []byte) ([]byte, []byte) {
-	h, proof := sk.sk.Evaluate(data)
-	return h[:], proof
+	hash, proof, err := sk.sk.Prove(data)
+	if err != nil {
+		panic("cryptoffi: VrfPrivateKey.Hash")
+	}
+	// since we only require vrf determinism, it seems safe to truncate hash.
+	return hash[:HashLen], proof
 }
 
 // Verify verifies data against the proof and returns the hash and an err.
-// it should perform the [ECVRF_verify] checks to run even on adversarial proofs.
-// it can assume a valid pk.
-// [ECVRF_verify]: https://www.rfc-editor.org/rfc/rfc9381#name-ecvrf-verifying
+// it requires a valid pk.
+// it performs the ECVRF_verify checks to run even on adversarial proofs.
 func (pk *VrfPublicKey) Verify(data, proof []byte) ([]byte, bool) {
-	hash, err := pk.pk.ProofToHash(data, proof)
+	ok, hash, err := pk.pk.Verify(data, proof)
 	if err != nil {
 		return nil, true
 	}
-	return hash[:], false
+	if !ok {
+		return nil, true
+	}
+	// since we only require vrf determinism, it seems safe to truncate hash.
+	return hash[:HashLen], false
 }
 
 // VrfPublicKeyEncodes encodes a valid pk as bytes.
 func VrfPublicKeyEncode(pk *VrfPublicKey) []byte {
-	b, err := x509.MarshalPKIXPublicKey(pk.pk.PublicKey)
-	if err != nil {
-		panic("cryptoffi: vrf encoding err")
-	}
-	return b
+	return pk.pk.Bytes()
 }
 
 // VrfPublicKeyDecode decodes [b].
-// it should perform the [ECVRF_validate_key] checks to run even on adversarial pks.
-// [ECVRF_validate_key]: https://www.rfc-editor.org/rfc/rfc9381#name-ecvrf-validate-key
+// it performs the ECVRF_validate_key checks to run even on adversarial pks.
 func VrfPublicKeyDecode(b []byte) *VrfPublicKey {
-	pk, err := vrf.NewVRFVerifierFromRawKey(b)
+	pk, err := vrf.NewPublicKey(b)
 	if err != nil {
-		panic("cryptoffi: vrf decoding err")
+		panic("cryptoffi: VrfPublicKeyDecode")
 	}
 	return &VrfPublicKey{pk: pk}
 }
