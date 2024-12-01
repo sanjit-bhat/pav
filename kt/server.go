@@ -180,13 +180,13 @@ func getHist(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
 		return nil
 	}
 	// latest registered ver not included in hist.
-	hist := make([]*MembHide, numRegVers-1)
+	hist := make([]*MembHide, 0, numRegVers-1)
 	for ver := uint64(0); ver < numRegVers-1; ver++ {
 		label := labels[ver]
 		reply := keyMap.Get(label.hash)
 		primitive.Assert(!reply.Error)
 		primitive.Assert(reply.ProofTy)
-		hist[ver] = &MembHide{LabelProof: label.proof, MapVal: reply.Val, MerkProof: reply.Proof}
+		hist = append(hist, &MembHide{LabelProof: label.proof, MapVal: reply.Val, MerkProof: reply.Proof})
 	}
 	return hist
 }
