@@ -163,7 +163,7 @@ func (t *Tree) Digest() []byte {
 
 func appendNode2D(dst *[][]byte, src []*node) {
 	for _, sl := range src {
-		*dst = append(*dst, std.BytesClone(sl.getHash()))
+		*dst = append(*dst, sl.getHash())
 	}
 }
 
@@ -234,7 +234,7 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, [][][]byte, bool) {
 		nodePath[pathIdx-1].updateInteriorHash()
 	}
 
-	digest := std.BytesClone(nodePath[0].getHash())
+	digest := nodePath[0].getHash()
 	proof := getChildHashes(nodePath, label)
 	return digest, proof, false
 }
@@ -248,12 +248,12 @@ func (t *Tree) Get(label []byte) ([]byte, []byte, bool, [][][]byte, bool) {
 	nodePath := t.getPath(label)
 	lastNode := nodePath[uint64(len(nodePath))-1]
 
-	digest := std.BytesClone(nodePath[0].getHash())
+	digest := nodePath[0].getHash()
 	proof := getChildHashes(nodePath, label)
 	if lastNode == nil {
 		return nil, digest, NonmembProofTy, proof, false
 	} else {
-		val := std.BytesClone(lastNode.mapVal)
+		val := lastNode.mapVal
 		return val, digest, MembProofTy, proof, false
 	}
 }
