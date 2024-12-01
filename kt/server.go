@@ -52,8 +52,8 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	mapVal := compMapVal(nextEpoch, open)
 
 	// add to key map.
-	dig, latestProof, err0 := s.keyMap.Put(latLabel.hash, mapVal)
-	primitive.Assert(!err0)
+	dig, latestProof, err1 := s.keyMap.Put(latLabel.hash, mapVal)
+	primitive.Assert(!err1)
 	latest := &Memb{LabelProof: latLabel.proof, EpochAdded: nextEpoch, PkOpen: open, MerkProof: latestProof}
 
 	// update histInfo.
@@ -63,10 +63,10 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	s.histInfo = newHist
 
 	// make bound.
-	boundReply := s.keyMap.Get(boundLabel)
-	primitive.Assert(!boundReply.Error)
-	primitive.Assert(!boundReply.ProofTy)
-	bound := &NonMemb{LabelProof: boundLabelProof, MerkProof: boundReply.Proof}
+	_, _, boundProofTy, boundProof, err1 := s.keyMap.Get(boundLabel)
+	primitive.Assert(!err1)
+	primitive.Assert(!boundProofTy)
+	bound := &NonMemb{LabelProof: boundLabelProof, MerkProof: boundProof}
 	s.mu.Unlock()
 	return sigDig, latest, bound
 }
@@ -183,10 +183,10 @@ func getHist(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
 	var hist = make([]*MembHide, 0, numRegVers-1)
 	for ver := uint64(0); ver < numRegVers-1; ver++ {
 		label := labels[ver]
-		reply := keyMap.Get(label.hash)
-		primitive.Assert(!reply.Error)
-		primitive.Assert(reply.ProofTy)
-		hist = append(hist, &MembHide{LabelProof: label.proof, MapVal: reply.Val, MerkProof: reply.Proof})
+		mapVal, _, proofTy, proof, err0 := keyMap.Get(label.hash)
+		primitive.Assert(!err0)
+		primitive.Assert(proofTy)
+		hist = append(hist, &MembHide{LabelProof: label.proof, MapVal: mapVal, MerkProof: proof})
 	}
 	return hist
 }
@@ -198,22 +198,22 @@ func getLatest(keyMap *merkle.Tree, labels []*vrfCache, opens map[string]*Commit
 		return false, &Memb{PkOpen: &CommitOpen{}}
 	} else {
 		label := labels[numRegVers-1]
-		reply := keyMap.Get(label.hash)
-		primitive.Assert(!reply.Error)
-		primitive.Assert(reply.ProofTy)
-		valPre, _, err0 := MapValPreDecode(reply.Val)
+		mapVal, _, proofTy, proof, err0 := keyMap.Get(label.hash)
 		primitive.Assert(!err0)
+		primitive.Assert(proofTy)
+		valPre, _, err1 := MapValPreDecode(mapVal)
+		primitive.Assert(!err1)
 		open, ok0 := opens[string(label.hash)]
 		primitive.Assert(ok0)
-		return true, &Memb{LabelProof: label.proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkProof: reply.Proof}
+		return true, &Memb{LabelProof: label.proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkProof: proof}
 	}
 }
 
 func getBound(keyMap *merkle.Tree, labels []*vrfCache) *NonMemb {
 	boundVer := uint64(len(labels)) - 1
 	label := labels[boundVer]
-	reply := keyMap.Get(label.hash)
-	primitive.Assert(!reply.Error)
-	primitive.Assert(!reply.ProofTy)
-	return &NonMemb{LabelProof: label.proof, MerkProof: reply.Proof}
+	_, _, proofTy, proof, err0 := keyMap.Get(label.hash)
+	primitive.Assert(!err0)
+	primitive.Assert(!proofTy)
+	return &NonMemb{LabelProof: label.proof, MerkProof: proof}
 }

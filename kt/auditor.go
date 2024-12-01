@@ -7,20 +7,6 @@ import (
 	"sync"
 )
 
-/*
-TODO: consider adding a simple static vrf pk check to the auditor.
-i think it might be hard to justify the current vrf agreement assumption.
-can't just get it from the server.
-could get it from the binary, but then someone else needs to monitor
-the binary versions to check that it's the same across binaries.
-that's additional to monitoring for good code.
-it's more straightforward if clients to audit, learn that their vrf
-pk is good, and then move forward.
-shouldn't be that bad to implement either, ish.
-add another sigpred msg type to the auditor, which is just
-a ghost var that contains the vrf pk.
-*/
-
 type Auditor struct {
 	mu       *sync.Mutex
 	sk       *cryptoffi.SigPrivateKey
@@ -29,8 +15,8 @@ type Auditor struct {
 }
 
 func (a *Auditor) checkOneUpd(nextEpoch uint64, mapLabel, mapVal []byte) bool {
-	getReply := a.keyMap.Get([]byte(mapLabel))
-	if getReply.Error || getReply.ProofTy {
+	_, _, proofTy, _, err0 := a.keyMap.Get([]byte(mapLabel))
+	if err0 || proofTy {
 		return true
 	}
 	// as long as we store the entire mapVal, don't think it matters

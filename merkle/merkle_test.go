@@ -6,73 +6,42 @@ import (
 	"testing"
 )
 
-func TestTreeDeepCopy(t *testing.T) {
-	child := newGenericNode()
-	child.val = []byte{1}
-	child.hash = []byte{1}
-	root := newGenericNode()
-	root.val = []byte{1}
-	root.hash = []byte{1}
-	root.children[0] = child
-	tr := &Tree{root: root}
-
-	tr2 := tr.DeepCopy()
-	root2 := tr2.root
-	root2.val[0] = 2
-	root2.hash[0] = 2
-	child2 := root2.children[0]
-	child2.val[0] = 2
-	child2.hash[0] = 2
-
-	if !bytes.Equal(root.val, []byte{1}) {
-		t.Fatal()
-	}
-	if !bytes.Equal(root.hash, []byte{1}) {
-		t.Fatal()
-	}
-	if !bytes.Equal(child.val, []byte{1}) {
-		t.Fatal()
-	}
-	if !bytes.Equal(child.hash, []byte{1}) {
-		t.Fatal()
-	}
-}
-
-func PutCheck(t *testing.T, tr *Tree, id Id, val Val) {
-	digest, proof, err := tr.Put(id, val)
+func PutCheck(t *testing.T, tr *Tree, label []byte, val []byte) {
+	digest, proof, err := tr.Put(label, val)
 	if err {
 		t.Fatal()
 	}
-	err = CheckProof(MembProofTy, proof, id, val, digest)
+	err = CheckProof(MembProofTy, proof, label, val, digest)
 	if err {
 		t.Fatal()
 	}
 }
 
-func GetMembCheck(t *testing.T, tr *Tree, id Id) Val {
-	reply := tr.Get(id)
-	if reply.Error {
+// GetMembCheck returns the treeVal.
+func GetMembCheck(t *testing.T, tr *Tree, label []byte) []byte {
+	val, dig, proofTy, proof, err0 := tr.Get(label)
+	if err0 {
 		t.Fatal()
 	}
-	if reply.ProofTy != MembProofTy {
+	if proofTy != MembProofTy {
 		t.Fatal()
 	}
-	err := CheckProof(MembProofTy, reply.Proof, id, reply.Val, reply.Digest)
-	if err {
+	err1 := CheckProof(MembProofTy, proof, label, val, dig)
+	if err1 {
 		t.Fatal()
 	}
-	return reply.Val
+	return val
 }
 
-func GetNonmembCheck(t *testing.T, tr *Tree, id Id) {
-	reply := tr.Get(id)
-	if reply.Error {
+func GetNonmembCheck(t *testing.T, tr *Tree, label []byte) {
+	_, dig, proofTy, proof, err0 := tr.Get(label)
+	if err0 {
 		t.Fatal()
 	}
-	if reply.ProofTy != NonmembProofTy {
+	if proofTy != NonmembProofTy {
 		t.Fatal()
 	}
-	err := CheckProof(NonmembProofTy, reply.Proof, id, nil, reply.Digest)
+	err := CheckProof(NonmembProofTy, proof, label, nil, dig)
 	if err {
 		t.Fatal()
 	}

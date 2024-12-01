@@ -6,31 +6,18 @@ import (
 	"github.com/mit-pdos/pav/cryptoutil"
 )
 
-type errorTy = bool
-type ProofTy = bool
-
 const (
-	errNone errorTy = false
-	errSome errorTy = true
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
-	numChildren     uint64  = 256
-	emptyNodeTag    byte    = 0
-	leafNodeTag     byte    = 1
-	interiorNodeTag byte    = 2
-	NonmembProofTy  ProofTy = false
-	MembProofTy     ProofTy = true
+	numChildren     uint64 = 256
+	emptyNodeTag    byte   = 0
+	leafNodeTag     byte   = 1
+	interiorNodeTag byte   = 2
+	NonmembProofTy  bool   = false
+	MembProofTy     bool   = true
 )
 
-// "keys" of the tree.
-// We use term "Id" to differentiate this from the public keys that could be
-// stored in the tree.
-type Id = []byte
-
-// "values" of the tree.
-type Val = []byte
-
 type node struct {
-	val      Val
+	mapVal   []byte
 	hash     []byte
 	children []*node
 }
@@ -47,7 +34,7 @@ func (n *node) getHash() []byte {
 func (n *node) updateLeafHash() {
 	var h cryptoutil.Hasher
 	// TODO: tag needs to go before val?
-	cryptoutil.HasherWrite(&h, n.val)
+	cryptoutil.HasherWrite(&h, n.mapVal)
 	cryptoutil.HasherWrite(&h, []byte{leafNodeTag})
 	n.hash = cryptoutil.HasherSum(h, nil)
 }
@@ -69,18 +56,14 @@ func newGenericNode() *node {
 	return &node{children: c}
 }
 
-type Digest = []byte
-
 // General proof object.
-// Binds an id down the tree to a particular node hash.
+// Binds a label down the tree to a particular node hash.
 type pathProof struct {
-	id          Id
+	label       []byte
 	nodeHash    []byte
-	digest      Digest
+	digest      []byte
 	childHashes [][][]byte
 }
-
-type Proof = [][][]byte
 
 func isValidHashSl(data [][]byte) bool {
 	var ok = true
@@ -92,8 +75,8 @@ func isValidHashSl(data [][]byte) bool {
 	return ok
 }
 
-func (p *pathProof) check() errorTy {
-	var err = errNone
+func (p *pathProof) check() bool {
+	var err = false
 	var currHash []byte = p.nodeHash
 	proofLen := uint64(len(p.childHashes))
 	// Goose doesn't support general loops, so re-write this way.
@@ -103,14 +86,14 @@ func (p *pathProof) check() errorTy {
 		pathIdx := proofLen - 1 - loopIdx
 		children := p.childHashes[pathIdx]
 		if uint64(len(children)) != numChildren-1 {
-			err = errSome
+			err = true
 			continue
 		}
 		if !isValidHashSl(children) {
-			err = errSome
+			err = true
 			continue
 		}
-		pos := uint64(p.id[pathIdx])
+		pos := uint64(p.label[pathIdx])
 		before := children[:pos]
 		after := children[pos:]
 
@@ -123,17 +106,17 @@ func (p *pathProof) check() errorTy {
 	}
 
 	if err {
-		return errSome
+		return true
 	}
 	if !std.BytesEqual(currHash, p.digest) {
-		return errSome
+		return true
 	}
-	return errNone
+	return false
 }
 
-func getLeafNodeHash(val Val) []byte {
+func getLeafNodeHash(mapVal []byte) []byte {
 	var hr cryptoutil.Hasher
-	cryptoutil.HasherWrite(&hr, val)
+	cryptoutil.HasherWrite(&hr, mapVal)
 	cryptoutil.HasherWrite(&hr, []byte{leafNodeTag})
 	return cryptoutil.HasherSum(hr, nil)
 }
@@ -142,25 +125,25 @@ func getEmptyNodeHash() []byte {
 	return cryptoffi.Hash([]byte{emptyNodeTag})
 }
 
-func CheckProof(proofTy ProofTy, proof Proof, id Id, val Val, digest Digest) errorTy {
+func CheckProof(proofTy bool, proof [][][]byte, label []byte, mapVal []byte, digest []byte) bool {
 	if uint64(len(proof)) > cryptoffi.HashLen {
-		return errSome
+		return true
 	}
-	if len(id) < len(proof) {
-		return errSome
+	if len(label) < len(proof) {
+		return true
 	}
-	// For NonmembProof, have original id, so slice it down
+	// For NonmembProof, have original label, so slice it down
 	// to same sz as path.
-	idPref := id[:len(proof)]
+	labelPref := label[:len(proof)]
 	var nodeHash []byte
 	if proofTy {
-		nodeHash = getLeafNodeHash(val)
+		nodeHash = getLeafNodeHash(mapVal)
 	} else {
 		nodeHash = getEmptyNodeHash()
 	}
 
 	pathProof := &pathProof{
-		id:          idPref,
+		label:       labelPref,
 		nodeHash:    nodeHash,
 		digest:      digest,
 		childHashes: proof,
@@ -174,7 +157,7 @@ type Tree struct {
 	root *node
 }
 
-func (t *Tree) Digest() Digest {
+func (t *Tree) Digest() []byte {
 	return t.root.getHash()
 }
 
@@ -184,12 +167,12 @@ func appendNode2D(dst *[][]byte, src []*node) {
 	}
 }
 
-func getChildHashes(nodePath []*node, id Id) [][][]byte {
+func getChildHashes(nodePath []*node, label []byte) [][][]byte {
 	childHashes := make([][][]byte, len(nodePath)-1)
 	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath))-1; pathIdx++ {
 		children := nodePath[pathIdx].children
 		// had a bug where w/o uint64, pos+1 would overflow byte.
-		pos := uint64(id[pathIdx])
+		pos := uint64(label[pathIdx])
 		var proofChildren [][]byte
 		appendNode2D(&proofChildren, children[:pos])
 		appendNode2D(&proofChildren, children[pos+1:])
@@ -198,10 +181,10 @@ func getChildHashes(nodePath []*node, id Id) [][][]byte {
 	return childHashes
 }
 
-// Get the maximal path corresponding to Id.
+// Get the maximal path corresponding to label.
 // If the full path to a leaf node doesn't exist,
 // return the partial path that ends in an empty node.
-func (t *Tree) getPath(id Id) []*node {
+func (t *Tree) getPath(label []byte) []*node {
 	var nodePath []*node
 	nodePath = append(nodePath, t.root)
 	if t.root == nil {
@@ -210,7 +193,7 @@ func (t *Tree) getPath(id Id) []*node {
 	var stop = false
 	for pathIdx := uint64(0); pathIdx < cryptoffi.HashLen && !stop; pathIdx++ {
 		currNode := nodePath[pathIdx]
-		pos := id[pathIdx]
+		pos := label[pathIdx]
 		nextNode := currNode.children[pos]
 		nodePath = append(nodePath, nextNode)
 		if nextNode == nil {
@@ -220,7 +203,7 @@ func (t *Tree) getPath(id Id) []*node {
 	return nodePath
 }
 
-func (t *Tree) getPathAddNodes(id Id) []*node {
+func (t *Tree) getPathAddNodes(label []byte) []*node {
 	if t.root == nil {
 		t.root = newGenericNode()
 	}
@@ -228,7 +211,7 @@ func (t *Tree) getPathAddNodes(id Id) []*node {
 	nodePath = append(nodePath, t.root)
 	for pathIdx := uint64(0); pathIdx < cryptoffi.HashLen; pathIdx++ {
 		currNode := nodePath[pathIdx]
-		pos := uint64(id[pathIdx])
+		pos := uint64(label[pathIdx])
 		if currNode.children[pos] == nil {
 			currNode.children[pos] = newGenericNode()
 		}
@@ -237,13 +220,14 @@ func (t *Tree) getPathAddNodes(id Id) []*node {
 	return nodePath
 }
 
-func (t *Tree) Put(id Id, val Val) (Digest, Proof, errorTy) {
-	if uint64(len(id)) != cryptoffi.HashLen {
-		return nil, nil, errSome
+// Put returns the digest, proof, and error.
+func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, [][][]byte, bool) {
+	if uint64(len(label)) != cryptoffi.HashLen {
+		return nil, nil, true
 	}
 
-	nodePath := t.getPathAddNodes(id)
-	nodePath[cryptoffi.HashLen].val = val
+	nodePath := t.getPathAddNodes(label)
+	nodePath[cryptoffi.HashLen].mapVal = mapVal
 	nodePath[cryptoffi.HashLen].updateLeafHash()
 	// +1/-1 offsets for Goosable uint64 loop var.
 	for pathIdx := cryptoffi.HashLen; pathIdx >= 1; pathIdx-- {
@@ -251,37 +235,25 @@ func (t *Tree) Put(id Id, val Val) (Digest, Proof, errorTy) {
 	}
 
 	digest := std.BytesClone(nodePath[0].getHash())
-	proof := getChildHashes(nodePath, id)
-	return digest, proof, errNone
+	proof := getChildHashes(nodePath, label)
+	return digest, proof, false
 }
 
-// Goose doesn't support returning more than 4 vars.
-type GetReply struct {
-	Val     Val
-	Digest  Digest
-	ProofTy ProofTy
-	Proof   Proof
-	Error   errorTy
-}
-
-// Return ProofTy vs. having sep funcs bc regardless, would want a proof.
-func (t *Tree) Get(id Id) *GetReply {
-	errReply := &GetReply{}
-	if uint64(len(id)) != cryptoffi.HashLen {
-		errReply.Error = errSome
-		return errReply
+// Get returns the mapVal, digest, proofTy, proof, and error.
+// return ProofTy vs. having sep funcs bc regardless, would want a proof.
+func (t *Tree) Get(label []byte) ([]byte, []byte, bool, [][][]byte, bool) {
+	if uint64(len(label)) != cryptoffi.HashLen {
+		return nil, nil, false, nil, true
 	}
-	nodePath := t.getPath(id)
+	nodePath := t.getPath(label)
 	lastNode := nodePath[uint64(len(nodePath))-1]
 
 	digest := std.BytesClone(nodePath[0].getHash())
-	proof := getChildHashes(nodePath, id)
+	proof := getChildHashes(nodePath, label)
 	if lastNode == nil {
-		return &GetReply{Digest: digest, ProofTy: NonmembProofTy,
-			Proof: proof, Error: errNone}
+		return nil, digest, NonmembProofTy, proof, false
 	} else {
-		val := std.BytesClone(lastNode.val)
-		return &GetReply{Val: val, Digest: digest, ProofTy: MembProofTy,
-			Proof: proof, Error: errNone}
+		val := std.BytesClone(lastNode.mapVal)
+		return val, digest, MembProofTy, proof, false
 	}
 }
