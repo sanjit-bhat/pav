@@ -3,7 +3,7 @@ package cryptoffi
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha512"
+	"crypto/sha256"
 	"github.com/mit-pdos/pav/cryptoffi/vrf"
 )
 
@@ -14,8 +14,8 @@ const (
 // # Hash
 
 func Hash(data []byte) []byte {
-	h := sha512.Sum512_256(data)
-	return h[:]
+	hash := sha256.Sum256(data)
+	return hash[:]
 }
 
 // # Signature
