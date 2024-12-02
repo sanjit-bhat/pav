@@ -3,7 +3,7 @@ module github.com/mit-pdos/pav
 go 1.23
 
 require (
-	filippo.io/edwards25519 v1.0.0-rc.1
+	filippo.io/edwards25519 v1.1.0
 	github.com/goose-lang/primitive v0.1.0
 	github.com/goose-lang/std v0.5.0
 	github.com/stretchr/testify v1.10.0
