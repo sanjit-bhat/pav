@@ -55,7 +55,12 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, []byte, bool) {
 	n := cryptoffi.HashLen - 1
 	for depth := uint64(0); depth < n; depth++ {
 		currNode := interiors[depth]
-		pos := label[depth]
+
+		// XXX: Converting to `uint64` for Goose, since it does not handle the
+		// implicit conversion from uint8 to int when using `pos` as a slice
+		// index.
+		pos := uint64(label[depth])
+
 		if currNode.children[pos] == nil {
 			currNode.children[pos] = newInteriorNode()
 		}
