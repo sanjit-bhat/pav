@@ -4,6 +4,7 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
+	"github.com/tchajed/marshal"
 )
 
 const (
@@ -53,7 +54,7 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, [][][]byte, bool) {
 	interiors = append(interiors, t.root)
 	for pathIdx := uint64(0); pathIdx < cryptoffi.HashLen-1; pathIdx++ {
 		currNode := interiors[pathIdx]
-		pos := uint64(label[pathIdx])
+		pos := label[pathIdx]
 		if currNode.children[pos] == nil {
 			currNode.children[pos] = newInteriorNode()
 		}
@@ -127,11 +128,11 @@ func CheckProof(proofTy bool, proof [][][]byte, label []byte, mapVal []byte, dig
 			loopErr = true
 			continue
 		}
-		if !isValidHashSl(children) {
+		if !checkValidHashes(children) {
 			loopErr = true
 			continue
 		}
-		pos := uint64(labelPref[pathIdx])
+		pos := labelPref[pathIdx]
 		before := children[:pos]
 		after := children[pos:]
 
@@ -177,12 +178,12 @@ func (ctx *context) getHash(n *node) []byte {
 
 // Assumes recursive child hashes are already up-to-date.
 func (ctx *context) updInteriorHash(n *node) {
-	var h cryptoutil.Hasher
+	var b = make([]byte, 0, numChildren*cryptoffi.HashLen+1)
 	for _, child := range n.children {
-		cryptoutil.HasherWrite(&h, ctx.getHash(child))
+		b = marshal.WriteBytes(b, ctx.getHash(child))
 	}
-	cryptoutil.HasherWrite(&h, []byte{interiorNodeTag})
-	n.hash = cryptoutil.HasherSum(h, nil)
+	b = append(b, interiorNodeTag)
+	n.hash = cryptoffi.Hash(b)
 }
 
 // getPath fetches the maximal path to label, including the leaf node.
@@ -215,23 +216,23 @@ func (ctx *context) getChildHashes(interiors []*node, label []byte) [][][]byte {
 	var childHashes = make([][][]byte, 0, len(interiors))
 	for pathIdx := uint64(0); pathIdx < uint64(len(interiors)); pathIdx++ {
 		children := interiors[pathIdx].children
-		// had a bug where w/o uint64, pos+1 would overflow byte.
+		// convert to uint64 bc otherwise pos+1 might overflow.
 		pos := uint64(label[pathIdx])
 		var proofChildren = make([][]byte, 0, numChildren-1)
-		ctx.appNode2D(&proofChildren, children[:pos])
-		ctx.appNode2D(&proofChildren, children[pos+1:])
+		ctx.appNodes(&proofChildren, children[:pos])
+		ctx.appNodes(&proofChildren, children[pos+1:])
 		childHashes = append(childHashes, proofChildren)
 	}
 	return childHashes
 }
 
-func (ctx *context) appNode2D(dst *[][]byte, src []*node) {
+func (ctx *context) appNodes(dst *[][]byte, src []*node) {
 	for _, n := range src {
 		*dst = append(*dst, ctx.getHash(n))
 	}
 }
 
-func isValidHashSl(data [][]byte) bool {
+func checkValidHashes(data [][]byte) bool {
 	var ok = true
 	for _, hash := range data {
 		if uint64(len(hash)) != cryptoffi.HashLen {
