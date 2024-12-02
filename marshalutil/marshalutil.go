@@ -4,74 +4,75 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-type errorTy = bool
-
-const (
-	errNone errorTy = false
-	errSome errorTy = true
-)
-
-func ReadBool(b0 []byte) (bool, []byte, errorTy) {
+func WriteBytes2D(b0 []byte, data [][]byte) []byte {
 	var b = b0
-	if uint64(len(b)) < 1 {
-		return false, nil, errSome
+	for _, x := range data {
+		b = marshal.WriteBytes(b, x)
 	}
-	data, b := marshal.ReadBool(b)
-	return data, b, errNone
+	return b
 }
 
-func ReadConstBool(b0 []byte, cst bool) ([]byte, errorTy) {
+func ReadBool(b0 []byte) (bool, []byte, bool) {
+	var b = b0
+	if uint64(len(b)) < 1 {
+		return false, nil, true
+	}
+	data, b := marshal.ReadBool(b)
+	return data, b, false
+}
+
+func ReadConstBool(b0 []byte, cst bool) ([]byte, bool) {
 	var b = b0
 	res, b, err := ReadBool(b)
 	if err {
-		return nil, errSome
+		return nil, true
 	}
 	if res != cst {
-		return nil, errSome
+		return nil, true
 	}
-	return b, errNone
+	return b, false
 }
 
-func ReadInt(b0 []byte) (uint64, []byte, errorTy) {
+func ReadInt(b0 []byte) (uint64, []byte, bool) {
 	var b = b0
 	if uint64(len(b)) < 8 {
-		return 0, nil, errSome
+		return 0, nil, true
 	}
 	data, b := marshal.ReadInt(b)
-	return data, b, errNone
+	return data, b, false
 }
 
-func ReadConstInt(b0 []byte, cst uint64) ([]byte, errorTy) {
+func ReadConstInt(b0 []byte, cst uint64) ([]byte, bool) {
 	var b = b0
 	res, b, err := ReadInt(b)
 	if err {
-		return nil, errSome
+		return nil, true
 	}
 	if res != cst {
-		return nil, errSome
+		return nil, true
 	}
-	return b, errNone
+	return b, false
 }
 
-func ReadByte(b0 []byte) (byte, []byte, errorTy) {
+func ReadByte(b0 []byte) (byte, []byte, bool) {
 	var b = b0
 	if uint64(len(b)) < 1 {
-		return 0, nil, errSome
+		return 0, nil, true
 	}
 	data, b := marshal.ReadBytes(b, 1)
-	return data[0], b, errNone
+	return data[0], b, false
 }
 
-func ReadConstByte(b0 []byte, cst byte) ([]byte, errorTy) {
+func ReadConstByte(b0 []byte, cst byte) ([]byte, bool) {
 	var b = b0
 	res, b, err := ReadByte(b)
 	if err {
-		return nil, errSome
+		return nil, true
 	}
 	if res != cst {
-		return nil, errSome
+		return nil, true
 	}
-	return b, errNone
+	return b, false
 }
 
 func WriteByte(b0 []byte, data byte) []byte {
@@ -80,16 +81,16 @@ func WriteByte(b0 []byte, data byte) []byte {
 	return b
 }
 
-func ReadBytes(b0 []byte, length uint64) ([]byte, []byte, errorTy) {
+func ReadBytes(b0 []byte, length uint64) ([]byte, []byte, bool) {
 	var b = b0
 	if uint64(len(b)) < length {
-		return nil, nil, errSome
+		return nil, nil, true
 	}
 	data, b := marshal.ReadBytes(b, length)
-	return data, b, errNone
+	return data, b, false
 }
 
-func ReadSlice1D(b0 []byte) ([]byte, []byte, errorTy) {
+func ReadSlice1D(b0 []byte) ([]byte, []byte, bool) {
 	var b = b0
 	length, b, err := ReadInt(b)
 	if err {
@@ -99,7 +100,7 @@ func ReadSlice1D(b0 []byte) ([]byte, []byte, errorTy) {
 	if err {
 		return nil, nil, err
 	}
-	return data, b, errNone
+	return data, b, false
 }
 
 func WriteSlice1D(b0 []byte, data []byte) []byte {
@@ -109,18 +110,18 @@ func WriteSlice1D(b0 []byte, data []byte) []byte {
 	return b
 }
 
-func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
+func ReadSlice2D(b0 []byte) ([][]byte, []byte, bool) {
 	var b = b0
 	length, b, err := ReadInt(b)
 	if err {
 		return nil, nil, err
 	}
 	var data0 [][]byte
-	var err0 errorTy
+	var err0 bool
 	var i uint64
 	for ; i < length; i++ {
 		var data1 []byte
-		var err1 errorTy
+		var err1 bool
 		data1, b, err1 = ReadSlice1D(b)
 		if err1 {
 			err0 = err1
@@ -131,7 +132,7 @@ func ReadSlice2D(b0 []byte) ([][]byte, []byte, errorTy) {
 	if err0 {
 		return nil, nil, err0
 	}
-	return data0, b, errNone
+	return data0, b, false
 }
 
 func WriteSlice2D(b0 []byte, data [][]byte) []byte {
@@ -143,18 +144,18 @@ func WriteSlice2D(b0 []byte, data [][]byte) []byte {
 	return b
 }
 
-func ReadSlice3D(b0 []byte) ([][][]byte, []byte, errorTy) {
+func ReadSlice3D(b0 []byte) ([][][]byte, []byte, bool) {
 	var b = b0
 	length, b, err := ReadInt(b)
 	if err {
 		return nil, nil, err
 	}
 	var data0 [][][]byte
-	var err0 errorTy
+	var err0 bool
 	var i uint64
 	for ; i < length; i++ {
 		var data1 [][]byte
-		var err1 errorTy
+		var err1 bool
 		data1, b, err1 = ReadSlice2D(b)
 		if err1 {
 			err0 = err1
@@ -165,7 +166,7 @@ func ReadSlice3D(b0 []byte) ([][][]byte, []byte, errorTy) {
 	if err0 {
 		return nil, nil, err0
 	}
-	return data0, b, errNone
+	return data0, b, false
 }
 
 func WriteSlice3D(b0 []byte, data [][][]byte) []byte {

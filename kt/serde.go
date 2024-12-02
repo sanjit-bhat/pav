@@ -30,18 +30,18 @@ type Memb struct {
 	LabelProof []byte
 	EpochAdded uint64
 	PkOpen     *CommitOpen
-	MerkProof  []byte
+	MerkProof  [][][]byte
 }
 
 type MembHide struct {
 	LabelProof []byte
 	MapVal     []byte
-	MerkProof  []byte
+	MerkProof  [][][]byte
 }
 
 type NonMemb struct {
 	LabelProof []byte
-	MerkProof  []byte
+	MerkProof  [][][]byte
 }
 
 type ServerPutArg struct {
