@@ -52,7 +52,8 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, []byte, bool) {
 		t.root = newInteriorNode()
 	}
 	interiors = append(interiors, t.root)
-	for depth := uint64(0); depth < cryptoffi.HashLen-1; depth++ {
+	n := cryptoffi.HashLen - 1
+	for depth := uint64(0); depth < n; depth++ {
 		currNode := interiors[depth]
 		pos := label[depth]
 		if currNode.children[pos] == nil {
