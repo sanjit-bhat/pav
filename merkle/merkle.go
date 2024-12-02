@@ -214,15 +214,15 @@ func (t *Tree) getPathAddNodes(label []byte) []*node {
 }
 
 func (ctx *context) getChildHashes(nodePath []*node, label []byte) [][][]byte {
-	childHashes := make([][][]byte, len(nodePath)-1)
+	childHashes := make([][][]byte, 0, len(nodePath)-1)
 	for pathIdx := uint64(0); pathIdx < uint64(len(nodePath))-1; pathIdx++ {
 		children := nodePath[pathIdx].children
 		// had a bug where w/o uint64, pos+1 would overflow byte.
 		pos := uint64(label[pathIdx])
-		var proofChildren [][]byte
+		proofChildren := make([][]byte, 0, numChildren-1)
 		ctx.appendNode2D(&proofChildren, children[:pos])
 		ctx.appendNode2D(&proofChildren, children[pos+1:])
-		childHashes[pathIdx] = proofChildren
+		childHashes = append(childHashes, proofChildren)
 	}
 	return childHashes
 }
