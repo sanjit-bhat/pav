@@ -4,6 +4,8 @@ import (
 	"github.com/tchajed/marshal"
 )
 
+// TODO: pre-size byte slices for encoding functions.
+
 func ReadBool(b0 []byte) (bool, []byte, bool) {
 	var b = b0
 	if uint64(len(b)) < 1 {
