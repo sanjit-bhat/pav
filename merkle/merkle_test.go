@@ -7,11 +7,11 @@ import (
 )
 
 func PutCheck(t *testing.T, tr *Tree, label []byte, val []byte) {
-	digest, proof, err := tr.Put(label, val)
+	dig, proof, err := tr.Put(label, val)
 	if err {
 		t.Fatal()
 	}
-	err = CheckProof(MembProofTy, proof, label, val, digest)
+	err = CheckProof(MembProofTy, proof, label, val, dig)
 	if err {
 		t.Fatal()
 	}
@@ -131,16 +131,16 @@ func TestAttackPutNilEmptyNode(t *testing.T) {
 	label1[cryptoffi.HashLen-1] = 1
 
 	tr := NewTree()
-	digest0, proof0, err := tr.Put(label0, nil)
+	dig0, proof0, err := tr.Put(label0, nil)
 	if err {
 		t.Fatal()
 	}
-	err = CheckProof(MembProofTy, proof0, label0, nil, digest0)
+	err = CheckProof(MembProofTy, proof0, label0, nil, dig0)
 	if err {
 		t.Fatal()
 	}
 
-	err = CheckProof(MembProofTy, proof0, label1, nil, digest0)
+	err = CheckProof(MembProofTy, proof0, label1, nil, dig0)
 	if !err {
 		t.Fatal()
 	}
