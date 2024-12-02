@@ -3,18 +3,18 @@ package merkle
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/tchajed/marshal"
 )
 
 const (
 	// Branch on a byte. 2 ** 8 (bits in byte) = 256.
-	numChildren     uint64 = 256
-	emptyNodeTag    byte   = 0
-	leafNodeTag     byte   = 1
-	interiorNodeTag byte   = 2
-	NonmembProofTy  bool   = false
-	MembProofTy     bool   = true
+	numChildren         uint64 = 256
+	hashesPerProofDepth uint64 = (numChildren - 1) * cryptoffi.HashLen
+	emptyNodeTag        byte   = 0
+	leafNodeTag         byte   = 1
+	interiorNodeTag     byte   = 2
+	NonmembProofTy      bool   = false
+	MembProofTy         bool   = true
 )
 
 type Tree struct {
@@ -41,7 +41,7 @@ func (t *Tree) Digest() []byte {
 }
 
 // Put returns the digest, proof, and error.
-func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, [][][]byte, bool) {
+func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, []byte, bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return nil, nil, true
 	}
@@ -52,9 +52,9 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, [][][]byte, bool) {
 		t.root = newInteriorNode()
 	}
 	interiors = append(interiors, t.root)
-	for pathIdx := uint64(0); pathIdx < cryptoffi.HashLen-1; pathIdx++ {
-		currNode := interiors[pathIdx]
-		pos := label[pathIdx]
+	for depth := uint64(0); depth < cryptoffi.HashLen-1; depth++ {
+		currNode := interiors[depth]
+		pos := label[depth]
 		if currNode.children[pos] == nil {
 			currNode.children[pos] = newInteriorNode()
 		}
@@ -68,18 +68,20 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, [][][]byte, bool) {
 
 	// correct hashes of interior nodes, bubbling up.
 	// +1/-1 offsets for Goosable uint64 loop var.
-	for pathIdx := cryptoffi.HashLen; pathIdx >= 1; pathIdx-- {
-		t.ctx.updInteriorHash(interiors[pathIdx-1])
+	var loopBuf = make([]byte, 0, numChildren*cryptoffi.HashLen+1)
+	for depth := cryptoffi.HashLen; depth >= 1; depth-- {
+		loopBuf = t.ctx.updInteriorHash(loopBuf, interiors[depth-1])
+		loopBuf = loopBuf[:0]
 	}
 
 	dig := t.ctx.getHash(t.root)
-	proof := t.ctx.getChildHashes(interiors, label)
+	proof := t.ctx.getProof(interiors, label)
 	return dig, proof, false
 }
 
 // Get returns the mapVal, digest, proofTy, proof, and error.
 // return ProofTy vs. having sep funcs bc regardless, would want a proof.
-func (t *Tree) Get(label []byte) ([]byte, []byte, bool, [][][]byte, bool) {
+func (t *Tree) Get(label []byte) ([]byte, []byte, bool, []byte, bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return nil, nil, false, nil, true
 	}
@@ -87,7 +89,7 @@ func (t *Tree) Get(label []byte) ([]byte, []byte, bool, [][][]byte, bool) {
 	lastIdx := uint64(len(nodePath)) - 1
 	lastNode := nodePath[lastIdx]
 	dig := t.ctx.getHash(t.root)
-	proof := t.ctx.getChildHashes(nodePath[:lastIdx], label)
+	proof := t.ctx.getProof(nodePath[:lastIdx], label)
 	if lastNode == nil {
 		return nil, dig, NonmembProofTy, proof, false
 	} else {
@@ -100,17 +102,21 @@ func NewTree() *Tree {
 	return &Tree{ctx: newCtx()}
 }
 
-func CheckProof(proofTy bool, proof [][][]byte, label []byte, mapVal []byte, dig []byte) bool {
+// CheckProof returns an error if the proof is invalid.
+func CheckProof(proofTy bool, proof []byte, label []byte, mapVal []byte, dig []byte) bool {
 	proofLen := uint64(len(proof))
-	if proofLen > cryptoffi.HashLen {
+	if proofLen%hashesPerProofDepth != 0 {
 		return true
 	}
-	if uint64(len(label)) < proofLen {
+	proofDepth := proofLen / hashesPerProofDepth
+	if proofDepth > cryptoffi.HashLen {
 		return true
 	}
-	// For NonmembProof, have original label, so slice it down
-	// to same sz as path.
-	labelPref := label[:len(proof)]
+	if uint64(len(label)) != cryptoffi.HashLen {
+		return true
+	}
+	// NonmembProof has original label. slice it down to match proof.
+	labelPref := label[:proofDepth]
 	var nodeHash []byte
 	if proofTy {
 		nodeHash = compLeafNodeHash(mapVal)
@@ -120,28 +126,20 @@ func CheckProof(proofTy bool, proof [][][]byte, label []byte, mapVal []byte, dig
 
 	var loopErr = false
 	var loopCurrHash []byte = nodeHash
+	var loopBuf = make([]byte, 0, numChildren*cryptoffi.HashLen+1)
 	var loopIdx = uint64(0)
-	for ; loopIdx < proofLen; loopIdx++ {
-		pathIdx := proofLen - 1 - loopIdx
-		children := proof[pathIdx]
-		if uint64(len(children)) != numChildren-1 {
-			loopErr = true
-			continue
-		}
-		if !checkValidHashes(children) {
-			loopErr = true
-			continue
-		}
-		pos := labelPref[pathIdx]
-		before := children[:pos]
-		after := children[pos:]
+	for ; loopIdx < proofDepth; loopIdx++ {
+		depth := proofDepth - 1 - loopIdx
+		begin := depth * hashesPerProofDepth
+		middle := begin + uint64(labelPref[depth])*cryptoffi.HashLen
+		end := (depth + 1) * hashesPerProofDepth
 
-		var hr cryptoutil.Hasher
-		cryptoutil.HasherWriteSl(&hr, before)
-		cryptoutil.HasherWrite(&hr, loopCurrHash)
-		cryptoutil.HasherWriteSl(&hr, after)
-		cryptoutil.HasherWrite(&hr, []byte{interiorNodeTag})
-		loopCurrHash = cryptoutil.HasherSum(hr, nil)
+		loopBuf = marshal.WriteBytes(loopBuf, proof[begin:middle])
+		loopBuf = marshal.WriteBytes(loopBuf, loopCurrHash)
+		loopBuf = marshal.WriteBytes(loopBuf, proof[middle:end])
+		loopBuf = append(loopBuf, interiorNodeTag)
+		loopCurrHash = cryptoffi.Hash(loopBuf)
+		loopBuf = loopBuf[:0]
 	}
 
 	if loopErr {
@@ -158,14 +156,10 @@ func compEmptyNodeHash() []byte {
 }
 
 func compLeafNodeHash(mapVal []byte) []byte {
-	var hr cryptoutil.Hasher
-	cryptoutil.HasherWrite(&hr, mapVal)
-	cryptoutil.HasherWrite(&hr, []byte{leafNodeTag})
-	return cryptoutil.HasherSum(hr, nil)
-}
-
-func newCtx() *context {
-	return &context{emptyHash: compEmptyNodeHash()}
+	var b = make([]byte, 0, len(mapVal)+1)
+	b = marshal.WriteBytes(b, mapVal)
+	b = append(b, leafNodeTag)
+	return cryptoffi.Hash(b)
 }
 
 // getHash getter to support hashes of empty (nil) nodes.
@@ -177,13 +171,15 @@ func (ctx *context) getHash(n *node) []byte {
 }
 
 // Assumes recursive child hashes are already up-to-date.
-func (ctx *context) updInteriorHash(n *node) {
-	var b = make([]byte, 0, numChildren*cryptoffi.HashLen+1)
+// uses and returns hash buf, to allow for its re-use.
+func (ctx *context) updInteriorHash(b []byte, n *node) []byte {
+	var b0 = b
 	for _, child := range n.children {
-		b = marshal.WriteBytes(b, ctx.getHash(child))
+		b0 = marshal.WriteBytes(b0, ctx.getHash(child))
 	}
-	b = append(b, interiorNodeTag)
-	n.hash = cryptoffi.Hash(b)
+	b0 = append(b0, interiorNodeTag)
+	n.hash = cryptoffi.Hash(b0)
+	return b0
 }
 
 // getPath fetches the maximal path to label, including the leaf node.
@@ -195,9 +191,9 @@ func getPath(root *node, label []byte) []*node {
 		return nodePath
 	}
 	var isEmpty = false
-	for pathIdx := uint64(0); pathIdx < cryptoffi.HashLen && !isEmpty; pathIdx++ {
-		currNode := nodePath[pathIdx]
-		pos := label[pathIdx]
+	for depth := uint64(0); depth < cryptoffi.HashLen && !isEmpty; depth++ {
+		currNode := nodePath[depth]
+		pos := label[depth]
 		nextNode := currNode.children[pos]
 		nodePath = append(nodePath, nextNode)
 		if nextNode == nil {
@@ -207,37 +203,28 @@ func getPath(root *node, label []byte) []*node {
 	return nodePath
 }
 
+func (ctx *context) getProof(interiors []*node, label []byte) []byte {
+	interiorsLen := uint64(len(interiors))
+	var proof = make([]byte, 0, interiorsLen*hashesPerProofDepth)
+	for depth := uint64(0); depth < interiorsLen; depth++ {
+		children := interiors[depth].children
+		// convert to uint64 bc otherwise pos+1 might overflow.
+		pos := uint64(label[depth])
+		for _, n := range children[:pos] {
+			proof = marshal.WriteBytes(proof, ctx.getHash(n))
+		}
+		for _, n := range children[pos+1:] {
+			proof = marshal.WriteBytes(proof, ctx.getHash(n))
+		}
+	}
+	return proof
+}
+
 func newInteriorNode() *node {
 	c := make([]*node, numChildren)
 	return &node{children: c}
 }
 
-func (ctx *context) getChildHashes(interiors []*node, label []byte) [][][]byte {
-	var childHashes = make([][][]byte, 0, len(interiors))
-	for pathIdx := uint64(0); pathIdx < uint64(len(interiors)); pathIdx++ {
-		children := interiors[pathIdx].children
-		// convert to uint64 bc otherwise pos+1 might overflow.
-		pos := uint64(label[pathIdx])
-		var proofChildren = make([][]byte, 0, numChildren-1)
-		ctx.appNodes(&proofChildren, children[:pos])
-		ctx.appNodes(&proofChildren, children[pos+1:])
-		childHashes = append(childHashes, proofChildren)
-	}
-	return childHashes
-}
-
-func (ctx *context) appNodes(dst *[][]byte, src []*node) {
-	for _, n := range src {
-		*dst = append(*dst, ctx.getHash(n))
-	}
-}
-
-func checkValidHashes(data [][]byte) bool {
-	var ok = true
-	for _, hash := range data {
-		if uint64(len(hash)) != cryptoffi.HashLen {
-			ok = false
-		}
-	}
-	return ok
+func newCtx() *context {
+	return &context{emptyHash: compEmptyNodeHash()}
 }

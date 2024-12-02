@@ -102,7 +102,7 @@ func MembEncode(b0 []byte, o *Memb) []byte {
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
 	b = marshal.WriteInt(b, o.EpochAdded)
 	b = CommitOpenEncode(b, o.PkOpen)
-	b = marshalutil.WriteSlice3D(b, o.MerkProof)
+	b = marshalutil.WriteSlice1D(b, o.MerkProof)
 	return b
 }
 func MembDecode(b0 []byte) (*Memb, []byte, bool) {
@@ -118,7 +118,7 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	a4, b4, err4 := marshalutil.ReadSlice3D(b3)
+	a4, b4, err4 := marshalutil.ReadSlice1D(b3)
 	if err4 {
 		return nil, nil, true
 	}
@@ -128,7 +128,7 @@ func MembHideEncode(b0 []byte, o *MembHide) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
 	b = marshalutil.WriteSlice1D(b, o.MapVal)
-	b = marshalutil.WriteSlice3D(b, o.MerkProof)
+	b = marshalutil.WriteSlice1D(b, o.MerkProof)
 	return b
 }
 func MembHideDecode(b0 []byte) (*MembHide, []byte, bool) {
@@ -140,7 +140,7 @@ func MembHideDecode(b0 []byte) (*MembHide, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadSlice3D(b2)
+	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
 	if err3 {
 		return nil, nil, true
 	}
@@ -149,7 +149,7 @@ func MembHideDecode(b0 []byte) (*MembHide, []byte, bool) {
 func NonMembEncode(b0 []byte, o *NonMemb) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
-	b = marshalutil.WriteSlice3D(b, o.MerkProof)
+	b = marshalutil.WriteSlice1D(b, o.MerkProof)
 	return b
 }
 func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
@@ -157,7 +157,7 @@ func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice3D(b1)
+	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}

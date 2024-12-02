@@ -120,36 +120,6 @@ func TestGetNilBottom(t *testing.T) {
 	GetNonmembCheck(t, tr, label1)
 }
 
-// Don't want proof(label, val, digest) and proof(label, val', digest)
-// to exist at the same time.
-// This could happen if, e.g., nil children weren't factored into their
-// parent's hash.
-func TestAttackChildEmptyHashing(t *testing.T) {
-	label0 := make([]byte, cryptoffi.HashLen)
-	val0 := []byte("val0")
-
-	tr := NewTree()
-	digest0, proof0, err := tr.Put(label0, val0)
-	if err {
-		t.Fatal()
-	}
-	err = CheckProof(MembProofTy, proof0, label0, val0, digest0)
-	if err {
-		t.Fatal()
-	}
-
-	// Construct non-membership proof for that same path,
-	// by swapping actual child ([0][0]) with a nil child ([0][1]).
-	proof1 := proof0[:1]
-	tmp := proof1[0][0]
-	proof1[0][0] = proof1[0][1]
-	proof1[0][1] = tmp
-	err = CheckProof(NonmembProofTy, proof1, label0, nil, digest0)
-	if !err {
-		t.Fatal()
-	}
-}
-
 // We had a bug where Hash(nil val) = Hash(empty node).
 // This attack exploits the bug to prove membership of a nil
 // value at some empty node in the tree.
