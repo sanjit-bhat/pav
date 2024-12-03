@@ -69,7 +69,9 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, []byte, bool) {
 
 	// make leaf node with correct hash.
 	lastInterior := interiors[cryptoffi.HashLen-1]
-	lastPos := label[cryptoffi.HashLen-1]
+	// XXX: To deal with goose failing to handle the implicit conversion to int
+	// when using as a slice index
+	lastPos := uint64(label[cryptoffi.HashLen-1])
 	lastInterior.children[lastPos] = &node{mapVal: mapVal, hash: compLeafNodeHash(mapVal)}
 
 	// correct hashes of interior nodes, bubbling up.
