@@ -77,9 +77,11 @@ func (t *Tree) Put(label []byte, mapVal []byte) ([]byte, []byte, bool) {
 	// correct hashes of interior nodes, bubbling up.
 	// +1/-1 offsets for Goosable uint64 loop var.
 	var loopBuf = make([]byte, 0, numChildren*cryptoffi.HashLen+1)
-	for depth := cryptoffi.HashLen; depth >= 1; depth-- {
+	var depth = cryptoffi.HashLen
+	for depth >= 1 {
 		loopBuf = t.ctx.updInteriorHash(loopBuf, interiors[depth-1])
 		loopBuf = loopBuf[:0]
+		depth--
 	}
 
 	dig := t.ctx.getHash(t.root)
