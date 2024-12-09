@@ -204,7 +204,7 @@ func getPath(root *node, label []byte) *node {
 func (ctx *context) getProof(root *node, label []byte) []byte {
 	var proof = make([]byte, 0, cryptoffi.HashLen*hashesPerProofDepth)
 	var currNode = root
-	for depth := uint64(0); depth < cryptoffi.HashLen; depth++ {
+	for depth := uint64(0); depth < cryptoffi.HashLen && currNode != nil; depth++ {
 		children := currNode.children
 		// convert to uint64 bc otherwise pos+1 might overflow.
 		pos := uint64(label[depth])
