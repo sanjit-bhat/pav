@@ -56,28 +56,40 @@ func NewAuditor() (*Auditor, cryptoffi.SigPublicKey) {
 	return &Auditor{mu: mu, sk: sk, keyMap: m}, pk
 }
 
-// checkUpd checks that updates are okay to apply, and errors on fail.
+// checkOneUpd checks that an update is safe, and errs on fail.
+func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool {
+	_, _, proofTy, _, err0 := keys.Get([]byte(mapLabel))
+	// label has right len. used in applyUpd.
+	if err0 {
+		return true
+	}
+	// label not already in keyMap. map monotonicity.
+	if proofTy {
+		return true
+	}
+
+	valPre, rem, err1 := MapValPreDecode(mapVal)
+	// val bytes exactly encode MapVal.
+	// could relax to at least encode epoch, but this is logically
+	// more straightforward to deal with.
+	if err1 {
+		return true
+	}
+	if len(rem) != 0 {
+		return true
+	}
+	// epoch ok.
+	if valPre.Epoch != nextEp {
+		return true
+	}
+	return false
+}
+
+// checkUpd just runs checkOneUpd for all updates.
 func checkUpd(keys *merkle.Tree, nextEp uint64, upd map[string][]byte) bool {
 	var loopErr bool
 	for mapLabel, mapVal := range upd {
-		_, _, proofTy, _, err0 := keys.Get([]byte(mapLabel))
-		// label has right len. used in applyUpd.
-		if err0 {
-			loopErr = true
-		}
-		// label not already in keyMap. map monotonicity.
-		if proofTy {
-			loopErr = true
-		}
-		valPre, rem, err1 := MapValPreDecode(mapVal)
-		// val bytes exactly encode MapVal.
-		// could relax to at least encode epoch, but this is logically
-		// more straightforward to deal with.
-		if err1 || len(rem) != 0 {
-			loopErr = true
-		}
-		// epoch ok.
-		if valPre.Epoch != nextEp {
+		if checkOneUpd(keys, nextEp, []byte(mapLabel), mapVal) {
 			loopErr = true
 		}
 	}
