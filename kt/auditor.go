@@ -58,7 +58,7 @@ func NewAuditor() (*Auditor, cryptoffi.SigPublicKey) {
 
 // checkOneUpd checks that an update is safe, and errs on fail.
 func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool {
-	_, _, proofTy, _, err0 := keys.Get([]byte(mapLabel))
+	_, _, proofTy, _, err0 := keys.Get(mapLabel)
 	// label has right len. used in applyUpd.
 	if err0 {
 		return true
