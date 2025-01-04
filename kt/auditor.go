@@ -14,53 +14,19 @@ type Auditor struct {
 	histInfo []*AdtrEpochInfo
 }
 
-func (a *Auditor) checkOneUpd(nextEpoch uint64, mapLabel, mapVal []byte) bool {
-	_, _, proofTy, _, err0 := a.keyMap.Get([]byte(mapLabel))
-	if err0 || proofTy {
-		return true
-	}
-	// as long as we store the entire mapVal, don't think it matters
-	// if it has more bytes past the MapValPre.
-	valPre, _, err1 := MapValPreDecode(mapVal)
-	if err1 || valPre.Epoch != nextEpoch {
-		return true
-	}
-	return false
-}
-
-// checkUpd checks that updates are okay to apply, and errors on fail.
-func (a *Auditor) checkUpd(upd map[string][]byte) bool {
-	nextEpoch := uint64(len(a.histInfo))
-	var err0 bool
-	for mapLabel, mapVal := range upd {
-		if a.checkOneUpd(nextEpoch, []byte(mapLabel), mapVal) {
-			err0 = true
-		}
-	}
-	return err0
-}
-
-// applyUpd applies updates.
-func (a *Auditor) applyUpd(upd map[string][]byte) {
-	for label, val := range upd {
-		_, _, err0 := a.keyMap.Put([]byte(label), val)
-		primitive.Assert(!err0)
-	}
-}
-
-// Update checks new epoch updates, applies them, and rets err on fail.
+// Update checks new epoch updates, applies them, and errors on fail.
 func (a *Auditor) Update(proof *UpdateProof) bool {
 	a.mu.Lock()
-	nextEpoch := uint64(len(a.histInfo))
-	if a.checkUpd(proof.Updates) {
+	nextEp := uint64(len(a.histInfo))
+	if checkUpd(a.keyMap, nextEp, proof.Updates) {
 		a.mu.Unlock()
 		return true
 	}
-	a.applyUpd(proof.Updates)
+	applyUpd(a.keyMap, proof.Updates)
 
 	// sign dig.
 	dig := a.keyMap.Digest()
-	preSig := &PreSigDig{Epoch: nextEpoch, Dig: dig}
+	preSig := &PreSigDig{Epoch: nextEp, Dig: dig}
 	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
 	sig := a.sk.Sign(preSigByt)
 	newInfo := &AdtrEpochInfo{Dig: dig, ServSig: proof.Sig, AdtrSig: sig}
@@ -69,8 +35,7 @@ func (a *Auditor) Update(proof *UpdateProof) bool {
 	return false
 }
 
-// Get returns the auditor's known link for a particular epoch,
-// and errs on fail.
+// Get returns the auditor's dig for a particular epoch, and errors on fail.
 func (a *Auditor) Get(epoch uint64) (*AdtrEpochInfo, bool) {
 	a.mu.Lock()
 	numEpochs := uint64(len(a.histInfo))
@@ -89,4 +54,52 @@ func NewAuditor() (*Auditor, cryptoffi.SigPublicKey) {
 	pk, sk := cryptoffi.SigGenerateKey()
 	m := merkle.NewTree()
 	return &Auditor{mu: mu, sk: sk, keyMap: m}, pk
+}
+
+// checkOneUpd checks that an update is safe, and errs on fail.
+func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool {
+	_, _, proofTy, _, err0 := keys.Get(mapLabel)
+	// label has right len. used in applyUpd.
+	if err0 {
+		return true
+	}
+	// label not already in keyMap. map monotonicity.
+	if proofTy {
+		return true
+	}
+
+	valPre, rem, err1 := MapValPreDecode(mapVal)
+	// val bytes exactly encode MapVal.
+	// could relax to at least encode epoch, but this is logically
+	// more straightforward to deal with.
+	if err1 {
+		return true
+	}
+	if len(rem) != 0 {
+		return true
+	}
+	// epoch ok.
+	if valPre.Epoch != nextEp {
+		return true
+	}
+	return false
+}
+
+// checkUpd just runs checkOneUpd for all updates.
+func checkUpd(keys *merkle.Tree, nextEp uint64, upd map[string][]byte) bool {
+	var loopErr bool
+	for mapLabel, mapVal := range upd {
+		if checkOneUpd(keys, nextEp, []byte(mapLabel), mapVal) {
+			loopErr = true
+		}
+	}
+	return loopErr
+}
+
+// applyUpd applies a valid update.
+func applyUpd(keys *merkle.Tree, upd map[string][]byte) {
+	for label, val := range upd {
+		_, _, err0 := keys.Put([]byte(label), val)
+		primitive.Assert(!err0)
+	}
 }
