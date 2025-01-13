@@ -8,7 +8,7 @@ require (
 	github.com/goose-lang/std v0.5.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tchajed/marshal v0.6.2
-	golang.org/x/tools v0.28.0
+	golang.org/x/tools v0.29.0
 )
 
 require (
