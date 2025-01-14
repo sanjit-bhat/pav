@@ -1,4 +1,4 @@
-package kttest
+package kt_test
 
 import (
 	"net"
