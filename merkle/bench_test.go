@@ -51,7 +51,52 @@ func BenchmarkGetMemb(b *testing.B) {
 	}
 }
 
-func BenchmarkGetNonMembWithPuts(b *testing.B) {
+var mapVal []byte
+var proof []byte
+
+func BenchmarkGetNonMembNone(b *testing.B) {
+	tr := NewTree()
+	var seed [32]byte
+	rnd := rand.NewChaCha8(seed)
+	label := make([]byte, cryptoffi.HashLen)
+	nonEmpt := 0
+
+	tr2 := NewTree()
+	val := []byte("val")
+	for i := 0; i < 500; i++ {
+		_, err := rnd.Read(label)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _, errb := tr2.Put(label, val)
+		if errb {
+			b.Fatal()
+		}
+	}
+
+	b.ResetTimer()
+	for range b.N {
+		_, err := rnd.Read(label)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		mapVal0, _, _, proof0, errb := tr.Get(label)
+		mapVal = mapVal0
+		proof = proof0
+		if errb {
+			b.Fatal()
+		}
+		depth := uint64(len(proof0)) / hashesPerProofDepth
+		if depth != 0 {
+			nonEmpt++
+		}
+	}
+
+	b.Log(nonEmpt)
+}
+
+func BenchmarkGetNonMembSome(b *testing.B) {
 	tr := NewTree()
 	val := []byte("val")
 	var seed [32]byte
@@ -71,7 +116,6 @@ func BenchmarkGetNonMembWithPuts(b *testing.B) {
 		}
 	}
 
-	b.Log("starting new loop")
 	b.ResetTimer()
 	for range b.N {
 		_, err := rnd.Read(label)
@@ -79,43 +123,18 @@ func BenchmarkGetNonMembWithPuts(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		_, _, _, proof, errb := tr.Get(label)
+		mapVal0, _, _, proof0, errb := tr.Get(label)
+		mapVal = mapVal0
+		proof = proof0
 		if errb {
 			b.Fatal()
 		}
-		depth := uint64(len(proof)) / hashesPerProofDepth
-		totalDep += int(depth)
+		depth := len(proof0) / int(hashesPerProofDepth)
+		totalDep += depth
 		total++
 	}
 
 	b.Log("avg dep", float32(totalDep)/float32(total), "total", total)
-}
-
-func BenchmarkGetNonMemb(b *testing.B) {
-	tr := NewTree()
-	var seed [32]byte
-	rnd := rand.NewChaCha8(seed)
-	label := make([]byte, cryptoffi.HashLen)
-	nonEmpt := 0
-
-	b.ResetTimer()
-	for range b.N {
-		_, err := rnd.Read(label)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		_, _, _, proof, errb := tr.Get(label)
-		if errb {
-			b.Fatal()
-		}
-		depth := uint64(len(proof)) / hashesPerProofDepth
-		if depth != 0 {
-			nonEmpt++
-		}
-	}
-
-	b.Log(nonEmpt)
 }
 
 func BenchmarkGetProofNone(b *testing.B) {
@@ -124,7 +143,7 @@ func BenchmarkGetProofNone(b *testing.B) {
 
 	b.ResetTimer()
 	for range b.N {
-		tr.ctx.getProof(tr.root, label)
+		proof = tr.ctx.getProof(tr.root, label)
 	}
 }
 
@@ -132,15 +151,13 @@ func BenchmarkGetProofSome(b *testing.B) {
 	tr := NewTree()
 	root := newInteriorNode()
 	child0 := newInteriorNode()
-	child1 := newInteriorNode()
 	tr.root = root
 	root.children[0] = child0
-	child0.children[0] = child1
 	label := make([]byte, cryptoffi.HashLen)
 
 	b.ResetTimer()
 	for range b.N {
-		tr.ctx.getProof(tr.root, label)
+		proof = tr.ctx.getProof(tr.root, label)
 	}
 }
 
