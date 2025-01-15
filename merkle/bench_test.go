@@ -7,7 +7,7 @@ import (
 )
 
 func BenchmarkPut(b *testing.B) {
-	tree := NewTree()
+	tr := NewTree()
 	val := []byte("val")
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
@@ -18,7 +18,7 @@ func BenchmarkPut(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		_, _, errb := tree.Put(label, val)
+		_, _, errb := tr.Put(label, val)
 		if errb {
 			b.Fatal()
 		}
@@ -26,7 +26,7 @@ func BenchmarkPut(b *testing.B) {
 }
 
 func BenchmarkGetMemb(b *testing.B) {
-	tree := NewTree()
+	tr := NewTree()
 	val := []byte("val")
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
@@ -38,13 +38,13 @@ func BenchmarkGetMemb(b *testing.B) {
 			b.Fatal(err)
 		}
 		b.StopTimer()
-		_, _, errb := tree.Put(label, val)
+		_, _, errb := tr.Put(label, val)
 		if errb {
 			b.Fatal()
 		}
 		b.StartTimer()
 
-		_, _, _, _, errb = tree.Get(label)
+		_, _, _, _, errb = tr.Get(label)
 		if errb {
 			b.Fatal()
 		}
@@ -52,7 +52,7 @@ func BenchmarkGetMemb(b *testing.B) {
 }
 
 func BenchmarkGetNonMembWithPuts(b *testing.B) {
-	tree := NewTree()
+	tr := NewTree()
 	val := []byte("val")
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
@@ -65,7 +65,7 @@ func BenchmarkGetNonMembWithPuts(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		_, _, errb := tree.Put(label, val)
+		_, _, errb := tr.Put(label, val)
 		if errb {
 			b.Fatal()
 		}
@@ -79,7 +79,7 @@ func BenchmarkGetNonMembWithPuts(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		_, _, _, proof, errb := tree.Get(label)
+		_, _, _, proof, errb := tr.Get(label)
 		if errb {
 			b.Fatal()
 		}
@@ -88,11 +88,11 @@ func BenchmarkGetNonMembWithPuts(b *testing.B) {
 		total++
 	}
 
-	b.Log("avg dep", float32(totalDep) / float32(total), "total", total)
+	b.Log("avg dep", float32(totalDep)/float32(total), "total", total)
 }
 
 func BenchmarkGetNonMemb(b *testing.B) {
-	tree := NewTree()
+	tr := NewTree()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	label := make([]byte, cryptoffi.HashLen)
@@ -105,7 +105,7 @@ func BenchmarkGetNonMemb(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		_, _, _, proof, errb := tree.Get(label)
+		_, _, _, proof, errb := tr.Get(label)
 		if errb {
 			b.Fatal()
 		}
