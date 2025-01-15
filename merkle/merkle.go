@@ -202,6 +202,8 @@ func getPath(root *node, label []byte) *node {
 }
 
 func (ctx *context) getProof(root *node, label []byte) []byte {
+	// TODO: this over-approximates len for Get proofs that don't
+	// go all the way down the tree.
 	var proof = make([]byte, 0, cryptoffi.HashLen*hashesPerProofDepth)
 	var currNode = root
 	var depth = uint64(0)
