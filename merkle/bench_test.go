@@ -143,3 +143,19 @@ func BenchmarkGetProofSome(b *testing.B) {
 		tr.ctx.getProof(tr.root, label)
 	}
 }
+
+func BenchmarkMallocUnstable(b *testing.B) {
+	proofs := make([][]byte, 0, 1_000_000)
+	for range b.N {
+		proof := make([]byte, 0, cryptoffi.HashLen*hashesPerProofDepth)
+		proofs = append(proofs, proof)
+	}
+}
+
+func BenchmarkMallocWarmup(b *testing.B) {
+	var proof []byte
+	for range b.N {
+		proof = make([]byte, 0, cryptoffi.HashLen*hashesPerProofDepth)
+		proof = append(proof, 1)
+	}
+}
