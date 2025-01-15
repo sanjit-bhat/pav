@@ -117,3 +117,29 @@ func BenchmarkGetNonMemb(b *testing.B) {
 
 	b.Log(nonEmpt)
 }
+
+func BenchmarkGetProofNone(b *testing.B) {
+	tr := NewTree()
+	label := make([]byte, cryptoffi.HashLen)
+
+	b.ResetTimer()
+	for range b.N {
+		tr.ctx.getProof(tr.root, label)
+	}
+}
+
+func BenchmarkGetProofSome(b *testing.B) {
+	tr := NewTree()
+	root := newInteriorNode()
+	child0 := newInteriorNode()
+	child1 := newInteriorNode()
+	tr.root = root
+	root.children[0] = child0
+	child0.children[0] = child1
+	label := make([]byte, cryptoffi.HashLen)
+
+	b.ResetTimer()
+	for range b.N {
+		tr.ctx.getProof(tr.root, label)
+	}
+}
