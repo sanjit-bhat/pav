@@ -1,0 +1,10 @@
+setup:
+- merkle tree seeded with 1000 vals.
+- add to tree over the bench.
+- for GetMemb, only query a single val over bench.
+- Put / Get only one elem per iter.
+- all setup same for both pav and akd.
+
+format: PutNoProof | PutWithProof | GetMemb | GetNonMemb
+pav: 144us | 175us | 31us | 8us
+akd: 73us | 90us | 9.8us | 11.8us
