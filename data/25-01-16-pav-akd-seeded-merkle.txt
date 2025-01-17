@@ -8,3 +8,11 @@ setup:
 format: PutNoProof | PutWithProof | GetMemb | GetNonMemb
 pav: 144us | 175us | 31us | 8us
 akd: 73us | 90us | 9.8us | 11.8us
+
+diffs:
+- hash functions.
+- our heavy gc pressure. high variability from that.
+
+unexplained:
+- akd should be doing a lot less hashes than us, so surprising that Put
+is that expensive.
