@@ -47,6 +47,7 @@ type cache struct {
 }
 
 // Put adds (label, val) to the tree and errors if label isn't a hash.
+// it consumes both label and val.
 func (t *Tree) Put(label []byte, val []byte) bool {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return true
@@ -165,13 +166,11 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, *Proof, []byte, bool
 	}
 	var n = t.root
 	// TODO: could pre-size this if store # elems in tree.
+	// pre-size this for 1B elements since that's what WA's tree has.
 	var sibs []byte
 	var depth uint64
-	for {
-		// break if at max depth, empty node, or leaf node.
-		if depth < cryptoffi.HashLen*8 {
-			break
-		}
+	for ; depth < cryptoffi.HashLen*8; depth++ {
+		// break if empty node or leaf node.
 		if n == nil {
 			break
 		}
@@ -183,7 +182,6 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, *Proof, []byte, bool
 			sibs = append(sibs, getNodeHash(n, t.cache)...)
 		}
 		n = *getChild(n, label, depth)
-		depth++
 	}
 
 	dig := getNodeHash(t.root, t.cache)
