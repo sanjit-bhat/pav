@@ -120,6 +120,11 @@ func VerifyProof(inTree bool, label, val []byte, proof *Proof, dig []byte) bool 
 	return !std.BytesEqual(currHash, dig)
 }
 
+func NewTree() *Tree {
+	c := &cache{emptyHash: compEmptyHash()}
+	return &Tree{cache: c}
+}
+
 func put(n0 **node, depth uint64, label, val []byte, cache *cache) {
 	n := *n0
 	// empty node.
