@@ -5,7 +5,6 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/tchajed/marshal"
-	"math"
 )
 
 const (
@@ -17,8 +16,6 @@ const (
 type Tree struct {
 	cache *cache
 	root  *node
-	// only used for pre-sizing the merkle proofs.
-	nElem uint64
 }
 
 // node contains the union of different node types, which distinguish as:
@@ -55,7 +52,6 @@ func (t *Tree) Put(label []byte, val []byte) bool {
 		return true
 	}
 	put(&t.root, 0, label, val, t.cache)
-	t.nElem++
 	return false
 }
 
@@ -163,12 +159,8 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, *Proof, []byte, bool
 		return false, nil, nil, nil, true
 	}
 	var n = t.root
+	// TODO: could pre-size this if store # elems in tree.
 	var sibs []byte
-	if prove {
-		// pre-size using rough measure of # layers of interior nodes.
-		depth := uint64(math.Ceil(math.Log2(float64(t.nElem))))
-		sibs = make([]byte, 0, depth*cryptoffi.HashLen)
-	}
 	var depth uint64
 	for {
 		// break if at max depth, empty node, or leaf node.
