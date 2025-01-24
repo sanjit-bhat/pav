@@ -65,9 +65,8 @@ func TestMap(t *testing.T) {
 			t.Fatal()
 		}
 
-		l1 := bytes.Clone(label)
 		v1 := bytes.Clone(val)
-		m[string(l1)] = v1
+		m[string(label)] = v1
 	}
 
 	// test everything in map.
