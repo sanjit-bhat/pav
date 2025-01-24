@@ -16,8 +16,12 @@ import (
 var val = []byte("val")
 
 const (
-	nSeed int = 1_000_000
-	nOps  int = 10_000
+	// TODO: use diff # ops per bench to run for long enough.
+	// e.g., Get's are blazing fast. 1M runs in a few ms.
+	// for Put's, 1M takes 3s. but make seed big to reduce var across ops.
+	// nSeed should be fairly fixed across benchmarks.
+	nSeed int = 100
+	nOps  int = 1_000_000
 )
 
 func TestBenchGet(t *testing.T) {
@@ -25,6 +29,7 @@ func TestBenchGet(t *testing.T) {
 
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
+		// TODO: querying a fixed label isn't realistic. it's in the cache.
 		_, _, errb := tr.Get(label)
 		if errb {
 			t.Fatal()
@@ -64,6 +69,8 @@ func TestBenchPut(t *testing.T) {
 		l0 := bytes.Clone(label)
 		v0 := bytes.Clone(val)
 
+		// TODO: hopefully Put time much more than time.Now overhead.
+		// alt, rnd bytes and cloning is only 20ns ish.
 		start := time.Now()
 		errb := tr.Put(l0, v0)
 		if errb {
@@ -77,7 +84,8 @@ func TestBenchPut(t *testing.T) {
 }
 
 func setup(t *testing.T, sz int) (tr *Tree, rnd *rand.ChaCha8, label []byte) {
-	runtime.GC()
+	// TODO: not sure if this helps much.
+	// runtime.GC()
 	tr = NewTree()
 	var seed [32]byte
 	rnd = rand.NewChaCha8(seed)
