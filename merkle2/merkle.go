@@ -169,9 +169,11 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, *Proof, []byte, bool
 		return false, nil, nil, nil, true
 	}
 	var n = t.root
-	// TODO: could pre-size this if store # elems in tree.
-	// pre-size this for 1B elements since that's what WA's tree has.
 	var sibs []byte
+	if prove {
+		// pre-size for roughly 2^30 (1.07B) entries.
+		sibs = make([]byte, 0, 30*cryptoffi.HashLen)
+	}
 	var depth uint64
 	for ; depth < cryptoffi.HashLen*8; depth++ {
 		// break if empty node or leaf node.
