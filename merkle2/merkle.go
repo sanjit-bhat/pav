@@ -142,21 +142,25 @@ func put(n0 **node, depth uint64, label, val []byte, cache *cache) {
 		// on exact label match, replace val.
 		if std.BytesEqual(n.label, label) {
 			n.val = val
-			n.hash = compLeafHash(n.label, n.val)
+			setLeafHash(n)
 			return
 		}
 
-		// otherwise, replace with interior node and recurse.
+		// otherwise, replace with interior node that links
+		// to existing leaf, and recurse.
 		inter := &node{}
 		*n0 = inter
-		*getChild(inter, n.label, depth) = n
-		put(getChild(inter, label, depth), depth+1, label, val, cache)
+		leafChild, _ := getChild(inter, n.label, depth)
+		*leafChild = n
+		recurChild, _ := getChild(inter, label, depth)
+		put(recurChild, depth+1, label, val, cache)
 		setInteriorHash(inter, cache)
 		return
 	}
 
 	// interior node. recurse.
-	put(getChild(n, label, depth), depth+1, label, val, cache)
+	c, _ := getChild(n, label, depth)
+	put(c, depth+1, label, val, cache)
 	setInteriorHash(n, cache)
 }
 
@@ -177,11 +181,12 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, *Proof, []byte, bool
 		if n.child0 == nil && n.child1 == nil {
 			break
 		}
+		child, sib := getChild(n, label, depth)
 		if prove {
-			// proof will have hashes of all interior nodes.
-			sibs = append(sibs, getNodeHash(n, t.cache)...)
+			// proof will have sibling hash for each interior node.
+			sibs = append(sibs, getNodeHash(sib, t.cache)...)
 		}
-		n = *getChild(n, label, depth)
+		n = *child
 	}
 
 	dig := getNodeHash(t.root, t.cache)
@@ -242,11 +247,13 @@ func compInteriorHash(child0, child1 []byte) []byte {
 	return cryptoffi.Hash(b)
 }
 
-func getChild(n *node, b []byte, depth uint64) **node {
-	if !getBit(b, depth) {
-		return &n.child0
+// getChild returns a child and its sibling child,
+// relative to the bit referenced by label and depth.
+func getChild(n *node, label []byte, depth uint64) (**node, *node) {
+	if !getBit(label, depth) {
+		return &n.child0, n.child1
 	} else {
-		return &n.child1
+		return &n.child1, n.child0
 	}
 }
 
