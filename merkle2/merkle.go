@@ -110,6 +110,7 @@ func VerifyProof(inTree bool, label, val []byte, proof *Proof, dig []byte) bool 
 		if !getBit(label, depth-1) {
 			// TODO: could reuse and reset hasher state across these calls,
 			// along with in put calls.
+			// could also re-use output hash slice here.
 			currHash = compInteriorHash(currHash, sib)
 		} else {
 			currHash = compInteriorHash(sib, currHash)
