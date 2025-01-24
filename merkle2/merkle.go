@@ -56,6 +56,44 @@ func (t *Tree) Put(label []byte, val []byte) bool {
 	return false
 }
 
+func put(n0 **node, depth uint64, label, val []byte, cache *cache) {
+	n := *n0
+	// empty node.
+	if n == nil {
+		// replace with leaf node.
+		leaf := &node{label: label, val: val}
+		*n0 = leaf
+		setLeafHash(leaf)
+		return
+	}
+
+	// leaf node.
+	if n.child0 == nil && n.child1 == nil {
+		// on exact label match, replace val.
+		if std.BytesEqual(n.label, label) {
+			n.val = val
+			setLeafHash(n)
+			return
+		}
+
+		// otherwise, replace with interior node that links
+		// to existing leaf, and recurse.
+		inter := &node{}
+		*n0 = inter
+		leafChild, _ := getChild(inter, n.label, depth)
+		*leafChild = n
+		recurChild, _ := getChild(inter, label, depth)
+		put(recurChild, depth+1, label, val, cache)
+		setInteriorHash(inter, cache)
+		return
+	}
+
+	// interior node. recurse.
+	c, _ := getChild(n, label, depth)
+	put(c, depth+1, label, val, cache)
+	setInteriorHash(n, cache)
+}
+
 // Get returns if label is in the tree and, if so, the val.
 // it errors if label isn't a hash.
 func (t *Tree) Get(label []byte) (bool, []byte, bool) {
@@ -68,6 +106,51 @@ func (t *Tree) Get(label []byte) (bool, []byte, bool) {
 // it (5) errors if label isn't a hash.
 func (t *Tree) Prove(label []byte) (bool, []byte, *Proof, []byte, bool) {
 	return t.get(label, true)
+}
+
+func (t *Tree) get(label []byte, prove bool) (bool, []byte, *Proof, []byte, bool) {
+	if uint64(len(label)) != cryptoffi.HashLen {
+		return false, nil, nil, nil, true
+	}
+	var n = t.root
+	var sibs []byte
+	if prove {
+		// pre-size for roughly 2^30 (1.07B) entries.
+		sibs = make([]byte, 0, 30*cryptoffi.HashLen)
+	}
+	var depth uint64
+	for ; depth < cryptoffi.HashLen*8; depth++ {
+		// break if empty node or leaf node.
+		if n == nil {
+			break
+		}
+		if n.child0 == nil && n.child1 == nil {
+			break
+		}
+		child, sib := getChild(n, label, depth)
+		if prove {
+			// proof will have sibling hash for each interior node.
+			sibs = append(sibs, getNodeHash(sib, t.cache)...)
+		}
+		n = *child
+	}
+
+	dig := getNodeHash(t.root, t.cache)
+	proof := &Proof{siblings: sibs}
+	// empty node.
+	if n == nil {
+		return false, nil, proof, dig, false
+	}
+	// not interior node. can't go full depth down and still have interior.
+	primitive.Assert(n.child0 == nil && n.child1 == nil)
+	// leaf node with different label.
+	if !std.BytesEqual(n.label, label) {
+		proof.leafLabel = n.label
+		proof.leafVal = n.val
+		return false, nil, proof, dig, false
+	}
+	// leaf node with same label.
+	return true, n.val, proof, dig, false
 }
 
 // VerifyProof verifies proof against the tree rooted at dig
@@ -125,89 +208,6 @@ func VerifyProof(inTree bool, label, val []byte, proof *Proof, dig []byte) bool 
 func NewTree() *Tree {
 	c := &cache{emptyHash: compEmptyHash()}
 	return &Tree{cache: c}
-}
-
-func put(n0 **node, depth uint64, label, val []byte, cache *cache) {
-	n := *n0
-	// empty node.
-	if n == nil {
-		// replace with leaf node.
-		leaf := &node{label: label, val: val}
-		*n0 = leaf
-		setLeafHash(leaf)
-		return
-	}
-
-	// leaf node.
-	if n.child0 == nil && n.child1 == nil {
-		// on exact label match, replace val.
-		if std.BytesEqual(n.label, label) {
-			n.val = val
-			setLeafHash(n)
-			return
-		}
-
-		// otherwise, replace with interior node that links
-		// to existing leaf, and recurse.
-		inter := &node{}
-		*n0 = inter
-		leafChild, _ := getChild(inter, n.label, depth)
-		*leafChild = n
-		recurChild, _ := getChild(inter, label, depth)
-		put(recurChild, depth+1, label, val, cache)
-		setInteriorHash(inter, cache)
-		return
-	}
-
-	// interior node. recurse.
-	c, _ := getChild(n, label, depth)
-	put(c, depth+1, label, val, cache)
-	setInteriorHash(n, cache)
-}
-
-func (t *Tree) get(label []byte, prove bool) (bool, []byte, *Proof, []byte, bool) {
-	if uint64(len(label)) != cryptoffi.HashLen {
-		return false, nil, nil, nil, true
-	}
-	var n = t.root
-	var sibs []byte
-	if prove {
-		// pre-size for roughly 2^30 (1.07B) entries.
-		sibs = make([]byte, 0, 30*cryptoffi.HashLen)
-	}
-	var depth uint64
-	for ; depth < cryptoffi.HashLen*8; depth++ {
-		// break if empty node or leaf node.
-		if n == nil {
-			break
-		}
-		if n.child0 == nil && n.child1 == nil {
-			break
-		}
-		child, sib := getChild(n, label, depth)
-		if prove {
-			// proof will have sibling hash for each interior node.
-			sibs = append(sibs, getNodeHash(sib, t.cache)...)
-		}
-		n = *child
-	}
-
-	dig := getNodeHash(t.root, t.cache)
-	proof := &Proof{siblings: sibs}
-	// empty node.
-	if n == nil {
-		return false, nil, proof, dig, false
-	}
-	// not interior node. can't go full depth down and still have interior.
-	primitive.Assert(n.child0 == nil && n.child1 == nil)
-	// leaf node with different label.
-	if !std.BytesEqual(n.label, label) {
-		proof.leafLabel = n.label
-		proof.leafVal = n.val
-		return false, nil, proof, dig, false
-	}
-	// leaf node with same label.
-	return true, n.val, proof, dig, false
 }
 
 func getNodeHash(n *node, c *cache) []byte {
