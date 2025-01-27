@@ -161,7 +161,7 @@ func prettyPrint(w io.Writer, x float64, unit string) {
 
 func report(nOps int, ms []*metric) {
 	buf := new(strings.Builder)
-	fmt.Fprintf(buf, "%s", callerName(1))
+	fmt.Fprintf(buf, "%-*s", 20, callerName(1))
 	fmt.Fprintf(buf, "\t%8d", nOps)
 	for _, m := range ms {
 		buf.WriteByte('\t')
