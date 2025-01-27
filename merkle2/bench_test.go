@@ -16,76 +16,81 @@ import (
 var val = []byte("val")
 
 const (
-	// TODO: use diff # ops per bench to run for long enough.
-	// e.g., Get's are blazing fast. 1M runs in a few ms.
-	// for Put's, 1M takes 3s. but make seed big to reduce var across ops.
-	// nSeed should be fairly fixed across benchmarks.
-	nSeed int = 100
-	nOps  int = 1_000_000
+	nSeed int = 1_000_000
 )
 
 func TestBenchGet(t *testing.T) {
-	tr, _, label := setup(t, nSeed)
-
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
-		// TODO: querying a fixed label isn't realistic. it's in the cache.
-		_, _, errb := tr.Get(label)
-		if errb {
-			t.Fatal()
-		}
-	}
-	elap := time.Since(start)
-
-	m0 := float64(elap.Nanoseconds()) / float64(nOps)
-	report(nOps, []*metric{{m0, "ns/op"}})
-}
-
-func TestBenchProve(t *testing.T) {
-	tr, _, label := setup(t, nSeed)
-
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
-		_, _, _, _, errb := tr.Prove(label)
-		if errb {
-			t.Fatal()
-		}
-	}
-	elap := time.Since(start)
-
-	m0 := float64(elap.Nanoseconds()) / float64(nOps)
-	report(nOps, []*metric{{m0, "ns/op"}})
-}
-
-func TestBenchPut(t *testing.T) {
 	tr, rnd, label := setup(t, nSeed)
+	nOps := 1_000_000
 
-	var total time.Duration
+	start := time.Now()
 	for i := 0; i < nOps; i++ {
 		_, err := rnd.Read(label)
 		if err != nil {
 			t.Fatal(err)
 		}
-		l0 := bytes.Clone(label)
-		v0 := bytes.Clone(val)
-
-		// TODO: hopefully Put time much more than time.Now overhead.
-		// alt, rnd bytes and cloning is only 20ns ish.
-		start := time.Now()
-		errb := tr.Put(l0, v0)
+		// this gets non-memb.
+		// memb has similar performance, as long as the
+		// working set of labels is big enough (1M).
+		_, _, errb := tr.Get(label)
 		if errb {
 			t.Fatal()
 		}
-		total += time.Since(start)
 	}
+	total := time.Since(start)
 
 	m0 := float64(total.Nanoseconds()) / float64(nOps)
-	report(nOps, []*metric{{m0, "ns/op"}})
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
+}
+
+func TestBenchProve(t *testing.T) {
+	tr, rnd, label := setup(t, nSeed)
+	nOps := 1_000_000
+
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		_, err := rnd.Read(label)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _, _, _, errb := tr.Prove(label)
+		if errb {
+			t.Fatal()
+		}
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
+}
+
+func TestBenchPut(t *testing.T) {
+	tr, rnd, label := setup(t, nSeed)
+	nOps := 200_000
+
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		_, err := rnd.Read(label)
+		if err != nil {
+			t.Fatal(err)
+		}
+		l := bytes.Clone(label)
+		v := bytes.Clone(val)
+		errb := tr.Put(l, v)
+		if errb {
+			t.Fatal()
+		}
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
 }
 
 func setup(t *testing.T, sz int) (tr *Tree, rnd *rand.ChaCha8, label []byte) {
-	// TODO: not sure if this helps much.
-	// runtime.GC()
 	tr = NewTree()
 	var seed [32]byte
 	rnd = rand.NewChaCha8(seed)
