@@ -20,7 +20,8 @@ const (
 )
 
 func TestBenchGet(t *testing.T) {
-	tr, rnd, label := setup(t, nSeed)
+	tr, rnd := setup(t, nSeed)
+	label := make([]byte, cryptoffi.HashLen)
 	nOps := 1_000_000
 
 	start := time.Now()
@@ -45,7 +46,8 @@ func TestBenchGet(t *testing.T) {
 }
 
 func TestBenchProve(t *testing.T) {
-	tr, rnd, label := setup(t, nSeed)
+	tr, rnd := setup(t, nSeed)
+	label := make([]byte, cryptoffi.HashLen)
 	nOps := 1_000_000
 
 	start := time.Now()
@@ -67,7 +69,8 @@ func TestBenchProve(t *testing.T) {
 }
 
 func TestBenchPut(t *testing.T) {
-	tr, rnd, label := setup(t, nSeed)
+	tr, rnd := setup(t, nSeed)
+	label := make([]byte, cryptoffi.HashLen)
 	nOps := 200_000
 
 	start := time.Now()
@@ -90,20 +93,19 @@ func TestBenchPut(t *testing.T) {
 	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
 }
 
-func setup(t *testing.T, sz int) (tr *Tree, rnd *rand.ChaCha8, label []byte) {
+func setup(t *testing.T, sz int) (tr *Tree, rnd *rand.ChaCha8) {
 	tr = NewTree()
 	var seed [32]byte
 	rnd = rand.NewChaCha8(seed)
-	label = make([]byte, cryptoffi.HashLen)
 
 	for i := 0; i < sz; i++ {
+		label := make([]byte, cryptoffi.HashLen)
 		_, err := rnd.Read(label)
 		if err != nil {
 			t.Fatal(err)
 		}
-		l := bytes.Clone(label)
 		v := bytes.Clone(val)
-		errb := tr.Put(l, v)
+		errb := tr.Put(label, v)
 		if errb {
 			t.Fatal()
 		}
