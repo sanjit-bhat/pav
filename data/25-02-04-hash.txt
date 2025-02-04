@@ -1,0 +1,2 @@
+TestBenchRand           100000000               38.45 ns/op           3844 ms
+TestBenchRandHash       10000000               102.7 ns/op            1027 ms

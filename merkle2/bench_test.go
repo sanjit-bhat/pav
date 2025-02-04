@@ -2,6 +2,7 @@ package merkle
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"io"
@@ -18,6 +19,41 @@ var val = []byte("val")
 const (
 	nSeed int = 1_000_000
 )
+
+func TestBenchRand(t *testing.T) {
+	var seed [32]byte
+	rnd := rand.NewChaCha8(seed)
+	data := make([]byte, 64)
+
+	nOps := 100_000_000
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		rnd.Read(data)
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
+}
+
+func TestBenchRandHash(t *testing.T) {
+	var seed [32]byte
+	rnd := rand.NewChaCha8(seed)
+	data := make([]byte, 64)
+
+	nOps := 10_000_000
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		rnd.Read(data)
+		sha256.Sum256(data)
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
+}
 
 func TestBenchGet(t *testing.T) {
 	tr, rnd := setup(t, nSeed)
