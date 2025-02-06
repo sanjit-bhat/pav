@@ -243,6 +243,8 @@ func setInteriorHash(n *node, c *cache) {
 }
 
 func compInteriorHash(child0, child1 []byte) []byte {
+	// TODO: compare this against using stateful hash api.
+	// should be no memcpy into b.
 	var b = make([]byte, 0, 2*cryptoffi.HashLen+1)
 	b = append(b, child0...)
 	b = append(b, child1...)
