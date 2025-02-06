@@ -38,7 +38,7 @@ type vrfCache struct {
 
 func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	s.mu.Lock()
-	// get lat label and make bound label.
+	// get lat label and bound label.
 	labels := getUidLabelCache(s.labelCache, uid, s.vrfSk)
 	boundVer := uint64(len(labels))
 	latLabel := labels[boundVer-1]
@@ -162,9 +162,7 @@ func getUidLabelCache(cache map[uint64][]*vrfCache, uid uint64, sk *cryptoffi.Vr
 		return labels
 	} else {
 		label, proof := compMapLabel(uid, 0, sk)
-		init := []*vrfCache{{hash: label, proof: proof}}
-		cache[uid] = init
-		return init
+		return []*vrfCache{{hash: label, proof: proof}}
 	}
 }
 
