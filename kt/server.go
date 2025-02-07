@@ -82,7 +82,7 @@ func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 	s.mu.Lock()
 	dig := getDig(s.epochHist)
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-	hist := getVerHist(s.keyMap, labels)
+	hist := getHistVers(s.keyMap, labels)
 	isReg, latest := getLatestVer(s.keyMap, labels, s.pkCommOpens)
 	bound := getBoundVer(s.keyMap, labels)
 	s.mu.Unlock()
@@ -176,9 +176,9 @@ func getDig(hist []*servEpochInfo) *SigDig {
 	return &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
 }
 
-// getVerHist returns membership proofs for the history of versions
+// getHistVers returns membership proofs for the history of versions
 // up until the latest.
-func getVerHist(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
+func getHistVers(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
 	numRegVers := uint64(len(labels)) - 1
 	if numRegVers == 0 {
 		return nil
