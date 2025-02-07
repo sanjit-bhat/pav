@@ -185,19 +185,22 @@ func VerifyProof(inTree bool, label, val []byte, proof *Proof, dig []byte) bool 
 
 	// compute hash up the tree.
 	var depth = maxDepth
+	var hashBuf = make([]byte, 0, 2*cryptoffi.HashLen+1)
 	// depth offset by one to prevent underflow.
 	for depth >= 1 {
 		begin := (depth - 1) * cryptoffi.HashLen
 		end := depth * cryptoffi.HashLen
 		sib := proof.siblings[begin:end]
+
 		if !getBit(label, depth-1) {
-			// TODO: could reuse and reset hasher state across these calls,
-			// along with in put calls.
-			// could also re-use output hash slice here.
-			currHash = compInteriorHash(currHash, sib)
+			hashBuf = setInteriorHashBuf(hashBuf, currHash, sib)
 		} else {
-			currHash = compInteriorHash(sib, currHash)
+			hashBuf = setInteriorHashBuf(hashBuf, sib, currHash)
 		}
+		hr := cryptoffi.NewHasher()
+		hr.Write(hashBuf)
+		hashBuf = hashBuf[:0]
+		currHash = hr.Sum(currHash)
 		depth--
 	}
 
@@ -239,17 +242,16 @@ func compLeafHash(label, val []byte) []byte {
 func setInteriorHash(n *node, c *cache) {
 	child0 := getNodeHash(n.child0, c)
 	child1 := getNodeHash(n.child1, c)
-	n.hash = compInteriorHash(child0, child1)
+	var b = make([]byte, 0, 2*cryptoffi.HashLen+1)
+	b = setInteriorHashBuf(b, child0, child1)
+	n.hash = cryptoffi.Hash(b)
 }
 
-func compInteriorHash(child0, child1 []byte) []byte {
-	// TODO: compare this against using stateful hash api.
-	// should be no memcpy into b.
-	var b = make([]byte, 0, 2*cryptoffi.HashLen+1)
+func setInteriorHashBuf(b []byte, child0, child1 []byte) []byte {
 	b = append(b, child0...)
 	b = append(b, child1...)
 	b = append(b, interiorNodeTag)
-	return cryptoffi.Hash(b)
+	return b
 }
 
 // getChild returns a child and its sibling child,

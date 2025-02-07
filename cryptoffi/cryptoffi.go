@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"github.com/mit-pdos/pav/cryptoffi/vrf"
+	"hash"
 )
 
 const (
@@ -14,8 +15,27 @@ const (
 // # Hash
 
 func Hash(data []byte) []byte {
-	hash := sha256.Sum256(data)
-	return hash[:]
+	h := sha256.Sum256(data)
+	return h[:]
+}
+
+type Hasher struct {
+	h hash.Hash
+}
+
+func NewHasher() *Hasher {
+	return &Hasher{sha256.New()}
+}
+
+func (hr *Hasher) Write(b []byte) {
+	_, err := hr.h.Write(b)
+	if err != nil {
+		panic("cryptoffi: Hasher.Write err")
+	}
+}
+
+func (hr *Hasher) Sum(b []byte) []byte {
+	return hr.h.Sum(b)
 }
 
 // # Signature
