@@ -3,6 +3,7 @@ package kt
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
 	"sync"
 )
@@ -133,7 +134,7 @@ func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, 
 // compMapVal rets mapVal (epoch || Hash(pk || rand)).
 func compMapVal(epoch uint64, pkOpen *CommitOpen) []byte {
 	openByt := CommitOpenEncode(make([]byte, 0), pkOpen)
-	commit := cryptoffi.Hash(openByt)
+	commit := cryptoutil.Hash(openByt)
 	v := &MapValPre{Epoch: epoch, PkCommit: commit}
 	return MapValPreEncode(make([]byte, 0), v)
 }

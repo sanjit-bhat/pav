@@ -3,6 +3,7 @@ package merkle
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/tchajed/marshal"
 )
 
@@ -146,7 +147,7 @@ func CheckProof(proofTy bool, proof []byte, label []byte, mapVal []byte, dig []b
 		loopBuf = marshal.WriteBytes(loopBuf, loopCurrHash)
 		loopBuf = marshal.WriteBytes(loopBuf, proof[middle:end])
 		loopBuf = append(loopBuf, interiorNodeTag)
-		loopCurrHash = cryptoffi.Hash(loopBuf)
+		loopCurrHash = cryptoutil.Hash(loopBuf)
 		loopBuf = loopBuf[:0]
 	}
 
@@ -160,14 +161,14 @@ func CheckProof(proofTy bool, proof []byte, label []byte, mapVal []byte, dig []b
 }
 
 func compEmptyNodeHash() []byte {
-	return cryptoffi.Hash([]byte{emptyNodeTag})
+	return cryptoutil.Hash([]byte{emptyNodeTag})
 }
 
 func compLeafNodeHash(mapVal []byte) []byte {
 	var b = make([]byte, 0, len(mapVal)+1)
 	b = marshal.WriteBytes(b, mapVal)
 	b = append(b, leafNodeTag)
-	return cryptoffi.Hash(b)
+	return cryptoutil.Hash(b)
 }
 
 // getHash getter to support hashes of empty (nil) nodes.
@@ -186,7 +187,7 @@ func (ctx *context) updInteriorHash(b []byte, n *node) []byte {
 		b0 = marshal.WriteBytes(b0, ctx.getHash(child))
 	}
 	b0 = append(b0, interiorNodeTag)
-	n.hash = cryptoffi.Hash(b0)
+	n.hash = cryptoutil.Hash(b0)
 	return b0
 }
 

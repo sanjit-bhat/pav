@@ -3,6 +3,7 @@ package merkle
 import (
 	"bytes"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/cryptoutil"
 	"testing"
 )
 
@@ -60,9 +61,9 @@ func TestOnePut(t *testing.T) {
 }
 
 func TestTwoPut(t *testing.T) {
-	label0 := cryptoffi.Hash([]byte("label0"))
+	label0 := cryptoutil.Hash([]byte("label0"))
 	val0 := []byte("val0")
-	label1 := cryptoffi.Hash([]byte("label1"))
+	label1 := cryptoutil.Hash([]byte("label1"))
 	val1 := []byte("val1")
 
 	tr := NewTree()
@@ -79,7 +80,7 @@ func TestTwoPut(t *testing.T) {
 }
 
 func TestOverwrite(t *testing.T) {
-	label0 := cryptoffi.Hash([]byte("label0"))
+	label0 := cryptoutil.Hash([]byte("label0"))
 	val0 := []byte("val0")
 	val1 := []byte("val1")
 

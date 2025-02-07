@@ -8,8 +8,12 @@ import (
 func TestHash(t *testing.T) {
 	// same hashes for same input.
 	d1 := []byte("d1")
-	h1 := Hash(d1)
-	h2 := Hash(d1)
+	hr1 := NewHasher()
+	hr1.Write(d1)
+	h1 := hr1.Sum(nil)
+	hr2 := NewHasher()
+	hr2.Write(d1)
+	h2 := hr2.Sum(nil)
 	if !bytes.Equal(h1, h2) {
 		t.Fatal()
 	}
@@ -19,7 +23,9 @@ func TestHash(t *testing.T) {
 
 	// diff hashes for diff inputs.
 	d2 := []byte("d2")
-	h3 := Hash(d2)
+	hr3 := NewHasher()
+	hr3.Write(d2)
+	h3 := hr3.Sum(nil)
 	if bytes.Equal(h1, h3) {
 		t.Fatal()
 	}

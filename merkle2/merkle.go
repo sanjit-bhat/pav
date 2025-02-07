@@ -4,6 +4,7 @@ import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/tchajed/marshal"
 )
 
@@ -222,7 +223,7 @@ func getNodeHash(n *node, c *cache) []byte {
 
 func compEmptyHash() []byte {
 	b := []byte{emptyNodeTag}
-	return cryptoffi.Hash(b)
+	return cryptoutil.Hash(b)
 }
 
 func setLeafHash(n *node) {
@@ -236,7 +237,7 @@ func compLeafHash(label, val []byte) []byte {
 	b = marshal.WriteInt(b, valLen)
 	b = append(b, val...)
 	b = append(b, leafNodeTag)
-	return cryptoffi.Hash(b)
+	return cryptoutil.Hash(b)
 }
 
 func setInteriorHash(n *node, c *cache) {
@@ -244,7 +245,7 @@ func setInteriorHash(n *node, c *cache) {
 	child1 := getNodeHash(n.child1, c)
 	var b = make([]byte, 0, 2*cryptoffi.HashLen+1)
 	b = setInteriorHashBuf(b, child0, child1)
-	n.hash = cryptoffi.Hash(b)
+	n.hash = cryptoutil.Hash(b)
 }
 
 func setInteriorHashBuf(b []byte, child0, child1 []byte) []byte {

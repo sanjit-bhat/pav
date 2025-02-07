@@ -14,11 +14,6 @@ const (
 
 // # Hash
 
-func Hash(data []byte) []byte {
-	h := sha256.Sum256(data)
-	return h[:]
-}
-
 type Hasher struct {
 	h hash.Hash
 }
