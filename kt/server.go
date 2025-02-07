@@ -13,8 +13,8 @@ type Server struct {
 	vrfSk *cryptoffi.VrfPrivateKey
 	// keyMap stores (mapLabel, mapVal) entries.
 	keyMap *merkle.Tree
-	// histInfo stores info about prior epochs.
-	histInfo []*servEpochInfo
+	// epochInfo stores info about prior epochs.
+	epochInfo []*servEpochInfo
 	// pkCommOpens stores pk commitment openings for a particular mapLabel.
 	pkCommOpens map[string]*CommitOpen
 	// uidVerRepo provides the authoritative view on the number of versions
@@ -49,7 +49,7 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	s.uidVerRepo[uid] = append(labels, &vrfCache{label: boundLabel, proof: boundLabelProof})
 
 	// make mapVal.
-	nextEpoch := uint64(len(s.histInfo))
+	nextEpoch := uint64(len(s.epochInfo))
 	open := genCommitOpen(pk)
 	s.pkCommOpens[string(latLabel.label)] = open
 	mapVal := compMapVal(nextEpoch, open)
@@ -62,8 +62,8 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	// update histInfo.
 	upd := make(map[string][]byte)
 	upd[string(latLabel.label)] = mapVal
-	newHist, sigDig := updHist(s.histInfo, nextEpoch, upd, dig, s.sigSk)
-	s.histInfo = newHist
+	newHist, sigDig := updHist(s.epochInfo, nextEpoch, upd, dig, s.sigSk)
+	s.epochInfo = newHist
 
 	// make bound.
 	_, _, boundProofTy, boundProof, err1 := s.keyMap.Get(boundLabel)
@@ -79,7 +79,7 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 // for the latest version.
 func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 	s.mu.Lock()
-	dig := getDig(s.histInfo)
+	dig := getDig(s.epochInfo)
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
 	hist := getHist(s.keyMap, labels)
 	isReg, latest := getLatest(s.keyMap, labels, s.pkCommOpens)
@@ -90,7 +90,7 @@ func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 
 func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
 	s.mu.Lock()
-	dig := getDig(s.histInfo)
+	dig := getDig(s.epochInfo)
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
 	bound := getBound(s.keyMap, labels)
 	s.mu.Unlock()
@@ -100,11 +100,11 @@ func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
 // Audit returns an err on fail.
 func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	s.mu.Lock()
-	if epoch >= uint64(len(s.histInfo)) {
+	if epoch >= uint64(len(s.epochInfo)) {
 		s.mu.Unlock()
 		return &UpdateProof{Updates: make(map[string][]byte)}, true
 	}
-	info := s.histInfo[epoch]
+	info := s.epochInfo[epoch]
 	s.mu.Unlock()
 	return &UpdateProof{Updates: info.updates, Sig: info.sig}, false
 }
@@ -118,7 +118,7 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	hist, _ := updHist(nil, 0, make(map[string][]byte), m.Digest(), sigSk)
 	opens := make(map[string]*CommitOpen)
 	labelCache := make(map[uint64][]*vrfCache)
-	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, keyMap: m, histInfo: hist, pkCommOpens: opens, uidVerRepo: labelCache}, sigPk, vrfPk
+	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, keyMap: m, epochInfo: hist, pkCommOpens: opens, uidVerRepo: labelCache}, sigPk, vrfPk
 }
 
 // compMapLabel rets mapLabel (VRF(uid || ver)) and a VRF proof.
