@@ -205,7 +205,7 @@ func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *Clien
 // checkLabel checks the vrf proof, computes the label, and errors on fail.
 func checkLabel(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) ([]byte, bool) {
 	pre := &MapLabelPre{Uid: uid, Ver: ver}
-	preByt := MapLabelPreEncode(make([]byte, 0), pre)
+	preByt := MapLabelPreEncode(make([]byte, 16), pre)
 	return servVrfPk.Verify(preByt, proof)
 }
 

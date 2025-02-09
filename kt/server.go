@@ -136,17 +136,17 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 // compMapLabel rets mapLabel (VRF(uid || ver)) and a VRF proof.
 func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
 	l := &MapLabelPre{Uid: uid, Ver: ver}
-	lByt := MapLabelPreEncode(make([]byte, 0), l)
+	lByt := MapLabelPreEncode(make([]byte, 16), l)
 	h, p := sk.Hash(lByt)
 	return h, p
 }
 
 // compMapVal rets mapVal (epoch || Hash(pk || rand)).
 func compMapVal(epoch uint64, pkOpen *CommitOpen) []byte {
-	openByt := CommitOpenEncode(make([]byte, 0), pkOpen)
+	openByt := CommitOpenEncode(make([]byte, 8+uint64(len(pkOpen.Val))+8+cryptoffi.HashLen), pkOpen)
 	commit := cryptoutil.Hash(openByt)
 	v := &MapValPre{Epoch: epoch, PkCommit: commit}
-	return MapValPreEncode(make([]byte, 0), v)
+	return MapValPreEncode(make([]byte, 8+8+cryptoffi.HashLen), v)
 }
 
 func compCommitOpen(secret, label []byte) []byte {
@@ -160,7 +160,7 @@ func compCommitOpen(secret, label []byte) []byte {
 func updEpochHist(hist *[]*servEpochInfo, upd map[string][]byte, dig []byte, sk *cryptoffi.SigPrivateKey) {
 	epoch := uint64(len(*hist))
 	preSig := &PreSigDig{Epoch: epoch, Dig: dig}
-	preSigByt := PreSigDigEncode(make([]byte, 0), preSig)
+	preSigByt := PreSigDigEncode(make([]byte, 8+8+cryptoffi.HashLen), preSig)
 	sig := sk.Sign(preSigByt)
 	newInfo := &servEpochInfo{updates: upd, dig: dig, sig: sig}
 	*hist = append(*hist, newInfo)
