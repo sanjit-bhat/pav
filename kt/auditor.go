@@ -27,7 +27,7 @@ func (a *Auditor) Update(proof *UpdateProof) bool {
 	// sign dig.
 	dig := a.keyMap.Digest()
 	preSig := &PreSigDig{Epoch: nextEp, Dig: dig}
-	preSigByt := PreSigDigEncode(make([]byte, 8+8+cryptoffi.HashLen), preSig)
+	preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
 	sig := a.sk.Sign(preSigByt)
 	newInfo := &AdtrEpochInfo{Dig: dig, ServSig: proof.Sig, AdtrSig: sig}
 	a.histInfo = append(a.histInfo, newInfo)
