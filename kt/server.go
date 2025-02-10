@@ -2,7 +2,6 @@ package kt
 
 import (
 	"github.com/goose-lang/primitive"
-	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
@@ -72,16 +71,14 @@ func (s *Server) addEntry(uid uint64, pk []byte) {
 	mapVal := compMapVal(nextEpoch, open)
 
 	// update key map and visible map.
-	l := std.BytesClone(latLabel.label)
-	v := std.BytesClone(mapVal)
-	dig, _, err1 := s.keyMap.Put(l, v)
+	err1 := s.keyMap.Put(latLabel.label, mapVal)
 	primitive.Assert(!err1)
 	s.visibleKeys[uid] = pk
 
 	// update epochHist.
 	upd := make(map[string][]byte)
 	upd[string(latLabel.label)] = mapVal
-	updEpochHist(&s.epochHist, upd, dig, s.sigSk)
+	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
 }
 
 // Get returns a complete history proof for uid.
@@ -196,10 +193,10 @@ func getHistVers(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
 	var hist = make([]*MembHide, 0, numRegVers-1)
 	for ver := uint64(0); ver < numRegVers-1; ver++ {
 		label := labels[ver]
-		mapVal, _, proofTy, proof, err0 := keyMap.Get(label.label)
+		inTree, mapVal, proof, err0 := keyMap.Prove(label.label)
 		primitive.Assert(!err0)
-		primitive.Assert(proofTy)
-		hist = append(hist, &MembHide{LabelProof: label.proof, MapVal: mapVal, MerkProof: proof})
+		primitive.Assert(inTree)
+		hist = append(hist, &MembHide{LabelProof: label.proof, MapVal: mapVal, MerkleProof: proof})
 	}
 	return hist
 }
@@ -212,22 +209,22 @@ func getLatestVer(keyMap *merkle.Tree, labels []*vrfCache, commitSecret, pk []by
 		return false, &Memb{PkOpen: &CommitOpen{}}
 	}
 	label := labels[numRegVers-1]
-	mapVal, _, proofTy, proof, err0 := keyMap.Get(label.label)
+	inTree, mapVal, proof, err0 := keyMap.Prove(label.label)
 	primitive.Assert(!err0)
-	primitive.Assert(proofTy)
+	primitive.Assert(inTree)
 	valPre, _, err1 := MapValPreDecode(mapVal)
 	primitive.Assert(!err1)
 	r := compCommitOpen(commitSecret, label.label)
 	open := &CommitOpen{Val: pk, Rand: r}
-	return true, &Memb{LabelProof: label.proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkProof: proof}
+	return true, &Memb{LabelProof: label.proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: proof}
 }
 
 // getBoundVer returns a non-membership proof for the boundary version.
 func getBoundVer(keyMap *merkle.Tree, labels []*vrfCache) *NonMemb {
 	boundVer := uint64(len(labels)) - 1
 	label := labels[boundVer]
-	_, _, proofTy, proof, err0 := keyMap.Get(label.label)
+	inTree, _, proof, err0 := keyMap.Prove(label.label)
 	primitive.Assert(!err0)
-	primitive.Assert(!proofTy)
-	return &NonMemb{LabelProof: label.proof, MerkProof: proof}
+	primitive.Assert(!inTree)
+	return &NonMemb{LabelProof: label.proof, MerkleProof: proof}
 }

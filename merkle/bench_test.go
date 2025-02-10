@@ -1,132 +1,209 @@
 package merkle
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"io"
+	"math"
 	"math/rand/v2"
+	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
 
 var val = []byte("val")
 
-func BenchmarkPutNoProof(b *testing.B) {
-	tr, rnd, label := newSeededTree(b, 1000)
-	b.ResetTimer()
-	for range b.N {
+const (
+	nSeed int = 1_000_000
+)
+
+func TestBenchRand(t *testing.T) {
+	var seed [32]byte
+	rnd := rand.NewChaCha8(seed)
+	data := make([]byte, 64)
+
+	nOps := 100_000_000
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		rnd.Read(data)
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
+}
+
+func TestBenchRandHash(t *testing.T) {
+	var seed [32]byte
+	rnd := rand.NewChaCha8(seed)
+	data := make([]byte, 64)
+
+	nOps := 10_000_000
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		rnd.Read(data)
+		sha256.Sum256(data)
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
+}
+
+func TestBenchGet(t *testing.T) {
+	tr, rnd := setup(t, nSeed)
+	label := make([]byte, cryptoffi.HashLen)
+	nOps := 1_000_000
+
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
 		_, err := rnd.Read(label)
 		if err != nil {
-			b.Fatal(err)
+			t.Fatal(err)
 		}
-		_, errb := tr.putNoProof(label, val)
+		// this gets non-memb.
+		// memb has similar performance, as long as the
+		// working set of labels is big enough (1M).
+		_, _, errb := tr.Get(label)
 		if errb {
-			b.Fatal()
+			t.Fatal()
 		}
 	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
 }
 
-func BenchmarkPutWithProof(b *testing.B) {
-	tr, rnd, label := newSeededTree(b, 1000)
-	b.ResetTimer()
-	for range b.N {
+func TestBenchProve(t *testing.T) {
+	tr, rnd := setup(t, nSeed)
+	label := make([]byte, cryptoffi.HashLen)
+	nOps := 1_000_000
+
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
 		_, err := rnd.Read(label)
 		if err != nil {
-			b.Fatal(err)
+			t.Fatal(err)
 		}
-		_, _, errb := tr.Put(label, val)
+		_, _, _, _, errb := tr.Prove(label)
 		if errb {
-			b.Fatal()
+			t.Fatal()
 		}
 	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
 }
 
-func BenchmarkGetMemb(b *testing.B) {
-	tr, _, label := newSeededTree(b, 1000)
-	b.ResetTimer()
-	for range b.N {
-		_, _, _, _, errb := tr.Get(label)
-		if errb {
-			b.Fatal()
-		}
-	}
-}
+func TestBenchPut(t *testing.T) {
+	tr, rnd := setup(t, nSeed)
+	label := make([]byte, cryptoffi.HashLen)
+	nOps := 200_000
 
-func BenchmarkGetNonMemb(b *testing.B) {
-	tr, rnd, label := newSeededTree(b, 1000)
-	b.ResetTimer()
-	for range b.N {
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
 		_, err := rnd.Read(label)
 		if err != nil {
-			b.Fatal(err)
+			t.Fatal(err)
 		}
-		_, _, _, _, errb := tr.Get(label)
+		l := bytes.Clone(label)
+		v := bytes.Clone(val)
+		errb := tr.Put(l, v)
 		if errb {
-			b.Fatal()
+			t.Fatal()
 		}
 	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	report(nOps, []*metric{{m0, "ns/op"}, {m1, "ms"}})
 }
 
-func newSeededTree(b *testing.B, sz int) (tr *Tree, rnd *rand.ChaCha8, label []byte) {
+func setup(t *testing.T, sz int) (tr *Tree, rnd *rand.ChaCha8) {
 	tr = NewTree()
 	var seed [32]byte
 	rnd = rand.NewChaCha8(seed)
-	label = make([]byte, cryptoffi.HashLen)
 
 	for i := 0; i < sz; i++ {
+		label := make([]byte, cryptoffi.HashLen)
 		_, err := rnd.Read(label)
 		if err != nil {
-			b.Fatal(err)
+			t.Fatal(err)
 		}
-		_, errb := tr.putNoProof(label, val)
+		v := bytes.Clone(val)
+		errb := tr.Put(label, v)
 		if errb {
-			b.Fatal()
+			t.Fatal()
 		}
 	}
 	return
 }
 
-// putNoProof returns the digest and error.
-func (t *Tree) putNoProof(label []byte, mapVal []byte) ([]byte, bool) {
-	if uint64(len(label)) != cryptoffi.HashLen {
-		return nil, true
+type metric struct {
+	n    float64
+	unit string
+}
+
+// callerName gives the function name for the caller,
+// after skip frames (where 0 means the current function).
+func callerName(skip int) string {
+	pcs := make([]uintptr, 1)
+	callers := runtime.Callers(skip+2, pcs) // skip + runtime.Callers + callerName
+	if callers == 0 {
+		panic("bench: zero callers found")
 	}
+	frames := runtime.CallersFrames(pcs)
+	frame, _ := frames.Next()
+	fullName := frame.Function
+	split := strings.Split(fullName, ".")
+	fnName := split[len(split)-1]
+	return fnName
+}
 
-	// make all interior nodes.
-	var interiors = make([]*node, 0, cryptoffi.HashLen)
-	if t.root == nil {
-		t.root = newInteriorNode()
+func prettyPrint(w io.Writer, x float64, unit string) {
+	// Print all numbers with 10 places before the decimal point
+	// and small numbers with four sig figs. Field widths are
+	// chosen to fit the whole part in 10 places while aligning
+	// the decimal point of all fractional formats.
+	var format string
+	switch y := math.Abs(x); {
+	case y == 0 || y >= 999.95:
+		format = "%10.0f %s"
+	case y >= 99.995:
+		format = "%12.1f %s"
+	case y >= 9.9995:
+		format = "%13.2f %s"
+	case y >= 0.99995:
+		format = "%14.3f %s"
+	case y >= 0.099995:
+		format = "%15.4f %s"
+	case y >= 0.0099995:
+		format = "%16.5f %s"
+	case y >= 0.00099995:
+		format = "%17.6f %s"
+	default:
+		format = "%18.7f %s"
 	}
-	interiors = append(interiors, t.root)
-	n := cryptoffi.HashLen - 1
-	for depth := uint64(0); depth < n; depth++ {
-		currNode := interiors[depth]
+	fmt.Fprintf(w, format, x, unit)
+}
 
-		// XXX: Converting to `uint64` for Goose, since it does not handle the
-		// implicit conversion from uint8 to int when using `pos` as a slice
-		// index.
-		pos := uint64(label[depth])
-
-		if currNode.children[pos] == nil {
-			currNode.children[pos] = newInteriorNode()
-		}
-		interiors = append(interiors, currNode.children[pos])
+func report(nOps int, ms []*metric) {
+	buf := new(strings.Builder)
+	fmt.Fprintf(buf, "%-*s", 20, callerName(1))
+	fmt.Fprintf(buf, "\t%8d", nOps)
+	for _, m := range ms {
+		buf.WriteByte('\t')
+		prettyPrint(buf, m.n, m.unit)
 	}
-
-	// make leaf node with correct hash.
-	lastInterior := interiors[cryptoffi.HashLen-1]
-	// XXX: To deal with goose failing to handle the implicit conversion to int
-	// when using as a slice index
-	lastPos := uint64(label[cryptoffi.HashLen-1])
-	lastInterior.children[lastPos] = &node{mapVal: mapVal, hash: compLeafNodeHash(mapVal)}
-
-	// correct hashes of interior nodes, bubbling up.
-	// +1/-1 offsets for Goosable uint64 loop var.
-	var loopBuf = make([]byte, 0, numChildren*cryptoffi.HashLen+1)
-	var depth = cryptoffi.HashLen
-	for depth >= 1 {
-		loopBuf = t.ctx.updInteriorHash(loopBuf, interiors[depth-1])
-		loopBuf = loopBuf[:0]
-		depth--
-	}
-
-	dig := t.ctx.getHash(t.root)
-	return dig, false
+	fmt.Println(buf.String())
 }
