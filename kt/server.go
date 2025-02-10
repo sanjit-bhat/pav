@@ -5,6 +5,7 @@ import (
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
+	"log"
 	"sync"
 )
 
@@ -59,26 +60,33 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	return dig, latest, bound
 }
 
-func (s *Server) PutBatch(uidPks map[uint64][]byte) map[uint64]*ServerPutReply {
+func (s *Server) PutBatch(uidPks map[uint64][]byte, getProofs bool) map[uint64]*ServerPutReply {
 	s.mu.Lock()
 	upd := make(map[string][]byte, len(uidPks))
+	i := 0
 	for uid, pk := range uidPks {
 		l, v := s.addEntry(uid, pk)
 		upd[string(l)] = v
+		if i%1_000 == 0 {
+			log.Println(i)
+		}
+		i++
 	}
 	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
 
 	proofs := make(map[uint64]*ServerPutReply, len(uidPks))
-	for uid := range uidPks {
-		dig := getDig(s.epochHist)
-		labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-		isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
-		primitive.Assert(isReg)
-		bound := getBoundVer(s.keyMap, labels)
-		proofs[uid] = &ServerPutReply{
-			Dig:    dig,
-			Latest: latest,
-			Bound:  bound,
+	if getProofs {
+		for uid := range uidPks {
+			dig := getDig(s.epochHist)
+			labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
+			isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
+			primitive.Assert(isReg)
+			bound := getBoundVer(s.keyMap, labels)
+			proofs[uid] = &ServerPutReply{
+				Dig:    dig,
+				Latest: latest,
+				Bound:  bound,
+			}
 		}
 	}
 	s.mu.Unlock()
@@ -181,10 +189,12 @@ func compCommitOpen(secret, label []byte) []byte {
 
 // updEpochHist does a signed history update with some new entries.
 func updEpochHist(hist *[]*servEpochInfo, upd map[string][]byte, dig []byte, sk *cryptoffi.SigPrivateKey) {
-	epoch := uint64(len(*hist))
-	preSig := &PreSigDig{Epoch: epoch, Dig: dig}
-	preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
-	sig := sk.Sign(preSigByt)
+	// epoch := uint64(len(*hist))
+	// preSig := &PreSigDig{Epoch: epoch, Dig: dig}
+	// preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
+	// sig := sk.Sign(preSigByt)
+	// benchmark: turn off sigs for akd compat.
+	var sig []byte
 	newInfo := &servEpochInfo{updates: upd, dig: dig, sig: sig}
 	*hist = append(*hist, newInfo)
 }
@@ -254,3 +264,4 @@ func getBoundVer(keyMap *merkle.Tree, labels []*vrfCache) *NonMemb {
 	primitive.Assert(!inTree)
 	return &NonMemb{LabelProof: label.proof, MerkleProof: proof}
 }
+
