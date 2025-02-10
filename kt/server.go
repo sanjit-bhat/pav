@@ -45,7 +45,10 @@ type vrfCache struct {
 
 func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	s.mu.Lock()
-	s.addEntry(uid, pk)
+	upd := make(map[string][]byte)
+	l, v := s.addEntry(uid, pk)
+	upd[string(l)] = v
+	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
 
 	dig := getDig(s.epochHist)
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
@@ -56,7 +59,34 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 	return dig, latest, bound
 }
 
-func (s *Server) addEntry(uid uint64, pk []byte) {
+func (s *Server) PutBatch(uidPks map[uint64][]byte) map[uint64]*ServerPutReply {
+	s.mu.Lock()
+	upd := make(map[string][]byte, len(uidPks))
+	for uid, pk := range uidPks {
+		l, v := s.addEntry(uid, pk)
+		upd[string(l)] = v
+	}
+	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
+
+	proofs := make(map[uint64]*ServerPutReply, len(uidPks))
+	for uid := range uidPks {
+		dig := getDig(s.epochHist)
+		labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
+		isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
+		primitive.Assert(isReg)
+		bound := getBoundVer(s.keyMap, labels)
+		proofs[uid] = &ServerPutReply{
+			Dig:    dig,
+			Latest: latest,
+			Bound:  bound,
+		}
+	}
+	s.mu.Unlock()
+	return proofs
+}
+
+// addEntry returns the new mapLabel and mapVal.
+func (s *Server) addEntry(uid uint64, pk []byte) ([]byte, []byte) {
 	// get lat label and make bound label.
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
 	boundVer := uint64(len(labels))
@@ -74,11 +104,7 @@ func (s *Server) addEntry(uid uint64, pk []byte) {
 	err1 := s.keyMap.Put(latLabel.label, mapVal)
 	primitive.Assert(!err1)
 	s.visibleKeys[uid] = pk
-
-	// update epochHist.
-	upd := make(map[string][]byte)
-	upd[string(latLabel.label)] = mapVal
-	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
+	return latLabel.label, mapVal
 }
 
 // Get returns a complete history proof for uid.
