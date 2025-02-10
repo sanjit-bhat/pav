@@ -2,7 +2,7 @@ package kt
 
 import (
 	"bytes"
-	"github.com/mit-pdos/pav/benchutil"
+	_ "github.com/mit-pdos/pav/benchutil"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"math/rand/v2"
 	"testing"
@@ -12,9 +12,17 @@ import (
 var defVal = []byte{2}
 
 const (
-	nSeed int = 1_000_000
+	defNSeed int = 1_000_000
 )
 
+func TestBenchSeed(t *testing.T) {
+	start := time.Now()
+	seedServer(20_000)
+	total := time.Since(start)
+	t.Log(total)
+}
+
+/*
 func TestBenchPut(t *testing.T) {
 	serv, rnd, vrfPk := seedServer()
 	nOps := 2_000
@@ -40,8 +48,9 @@ func TestBenchPut(t *testing.T) {
 		{N: m1, Unit: "total ms"},
 	})
 }
+*/
 
-func seedServer() (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey) {
+func seedServer(nSeed int) (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey) {
 	serv, _, vrfPk := NewServer()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
