@@ -8,7 +8,27 @@ import (
 	"time"
 )
 
-func TestBenchRand(t *testing.T) {
+func TestBenchRand32(t *testing.T) {
+	var seed [32]byte
+	rnd := rand.NewChaCha8(seed)
+	data := make([]byte, 32)
+
+	nOps := 100_000_000
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		rnd.Read(data)
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "ns/op"},
+		{N: m1, Unit: "total ms"},
+	})
+}
+
+func TestBenchRand64(t *testing.T) {
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	data := make([]byte, 64)
@@ -28,7 +48,7 @@ func TestBenchRand(t *testing.T) {
 	})
 }
 
-func TestBenchRandHash(t *testing.T) {
+func TestBenchHash(t *testing.T) {
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	data := make([]byte, 64)
