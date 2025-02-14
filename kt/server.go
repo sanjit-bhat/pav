@@ -10,7 +10,7 @@ import (
 )
 
 type Server struct {
-	mu    *sync.Mutex
+	mu    *sync.RWMutex
 	sigSk *cryptoffi.SigPrivateKey
 	vrfSk *cryptoffi.VrfPrivateKey
 	// commitSecret is the 32-byte secret used to generate commitments.
@@ -119,39 +119,39 @@ func (s *Server) addEntry(uid uint64, pk []byte) ([]byte, []byte) {
 // if uid is not yet registered, it returns an empty memb proof for
 // for the latest version.
 func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
-	s.mu.Lock()
+	s.mu.RLock()
 	dig := getDig(s.epochHist)
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
 	hist := getHistVers(s.keyMap, labels)
 	isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
 	bound := getBoundVer(s.keyMap, labels)
-	s.mu.Unlock()
+	s.mu.RUnlock()
 	return dig, hist, isReg, latest, bound
 }
 
 func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
-	s.mu.Lock()
+	s.mu.RLock()
 	dig := getDig(s.epochHist)
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
 	bound := getBoundVer(s.keyMap, labels)
-	s.mu.Unlock()
+	s.mu.RUnlock()
 	return dig, bound
 }
 
 // Audit returns an err on fail.
 func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
-	s.mu.Lock()
+	s.mu.RLock()
 	if epoch >= uint64(len(s.epochHist)) {
 		s.mu.Unlock()
 		return &UpdateProof{Updates: make(map[string][]byte)}, true
 	}
 	info := s.epochHist[epoch]
-	s.mu.Unlock()
+	s.mu.RUnlock()
 	return &UpdateProof{Updates: info.updates, Sig: info.sig}, false
 }
 
 func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
-	mu := new(sync.Mutex)
+	mu := new(sync.RWMutex)
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
 	sec := cryptoffi.RandBytes(cryptoffi.HashLen)
@@ -194,6 +194,7 @@ func updEpochHist(hist *[]*servEpochInfo, upd map[string][]byte, dig []byte, sk 
 	// preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
 	// sig := sk.Sign(preSigByt)
 	// benchmark: turn off sigs for akd compat.
+	_ = sk
 	var sig []byte
 	newInfo := &servEpochInfo{updates: upd, dig: dig, sig: sig}
 	*hist = append(*hist, newInfo)
@@ -264,4 +265,3 @@ func getBoundVer(keyMap *merkle.Tree, labels []*vrfCache) *NonMemb {
 	primitive.Assert(!inTree)
 	return &NonMemb{LabelProof: label.proof, MerkleProof: proof}
 }
-
