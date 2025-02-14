@@ -61,6 +61,6 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey) {
 		v := bytes.Clone(defVal)
 		els[u] = v
 	}
-	serv.PutBatch(els, false)
+	// serv.PutBatch(els, false)
 	return serv, rnd, vrfPk
 }

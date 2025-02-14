@@ -185,6 +185,7 @@ func ServerPutReplyEncode(b0 []byte, o *ServerPutReply) []byte {
 	b = SigDigEncode(b, o.Dig)
 	b = MembEncode(b, o.Latest)
 	b = NonMembEncode(b, o.Bound)
+	b = marshal.WriteBool(b, o.Err)
 	return b
 }
 func ServerPutReplyDecode(b0 []byte) (*ServerPutReply, []byte, bool) {
@@ -200,7 +201,11 @@ func ServerPutReplyDecode(b0 []byte) (*ServerPutReply, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &ServerPutReply{Dig: a1, Latest: a2, Bound: a3}, b3, false
+	a4, b4, err4 := marshalutil.ReadBool(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	return &ServerPutReply{Dig: a1, Latest: a2, Bound: a3, Err: a4}, b4, false
 }
 func ServerGetArgEncode(b0 []byte, o *ServerGetArg) []byte {
 	var b = b0

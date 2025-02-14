@@ -53,6 +53,7 @@ type ServerPutReply struct {
 	Dig    *SigDig
 	Latest *Memb
 	Bound  *NonMemb
+	Err    bool
 }
 
 type ServerGetArg struct {

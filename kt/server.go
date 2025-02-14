@@ -5,7 +5,6 @@ import (
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
-	"log"
 	"sync"
 )
 
@@ -29,74 +28,8 @@ type Server struct {
 	uidVerRepo map[uint64][]*vrfCache
 	// epochHist stores info about prior epochs.
 	epochHist []*servEpochInfo
-	// workQ stores a work queue of batched Put requests.
+	// workQ batch processes Put requests.
 	workQ *WorkQ
-}
-
-type WQReq struct {
-	uid uint64
-	pk  []byte
-	// latVrf might be nil if uid already present.
-	latVrf   *vrfCache
-	boundVrf *vrfCache
-}
-
-type WQResp struct {
-	Dig   *SigDig
-	Lat   *Memb
-	Bound *NonMemb
-}
-
-type Work struct {
-	done bool
-	Req  *WQReq
-	Resp *WQResp
-}
-
-type WorkQ struct {
-	mu         *sync.Mutex
-	work       []*Work
-	condCli    *sync.Cond
-	condWorker *sync.Cond
-}
-
-func (wq *WorkQ) Do(r *Work) {
-	wq.mu.Lock()
-	wq.work = append(wq.work, r)
-	wq.condWorker.Signal()
-
-	for !r.done {
-		wq.condCli.Wait()
-	}
-	wq.mu.Unlock()
-}
-
-func (wq *WorkQ) Get() []*Work {
-	wq.mu.Lock()
-	for wq.work == nil {
-		wq.condWorker.Wait()
-	}
-
-	work := wq.work
-	wq.work = nil
-	wq.mu.Unlock()
-	return work
-}
-
-func (wq *WorkQ) Finish(work []*Work) {
-	wq.mu.Lock()
-	for _, x := range work {
-		x.done = true
-	}
-	wq.mu.Unlock()
-	wq.condCli.Broadcast()
-}
-
-func NewWorkQ() *WorkQ {
-	mu := new(sync.Mutex)
-	condCli := sync.NewCond(mu)
-	condWork := sync.NewCond(mu)
-	return &WorkQ{mu: mu, condCli: condCli, condWorker: condWork}
 }
 
 type servEpochInfo struct {
@@ -112,88 +45,12 @@ type vrfCache struct {
 	proof []byte
 }
 
-func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
-	s.mu.RLock()
-	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-	boundVer := uint64(len(labels))
-	latVrf := labels[boundVer-1]
-	boundVrf := compMapLabel(uid, boundVer, s.vrfSk)
-
-	req := &WQReq{uid: uid, pk: pk, boundVrf: boundVrf}
-	if boundVer > 1 {
-		req.latVrf = latVrf
-	}
-	s.workQ.Do(&Work{Req: req})
-
-	/*
-		upd := make(map[string][]byte)
-		l, v := s.addEntry(uid, pk)
-		upd[string(l)] = v
-		updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
-
-		dig := getDig(s.epochHist)
-		labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-		isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
-		primitive.Assert(isReg)
-		bound := getBoundVer(s.keyMap, labels)
-		return dig, latest, bound
-	*/
-	s.mu.RUnlock()
-}
-
-func (s *Server) PutBatch(uidPks map[uint64][]byte, getProofs bool) map[uint64]*ServerPutReply {
-	s.mu.Lock()
-	upd := make(map[string][]byte, len(uidPks))
-	i := 0
-	for uid, pk := range uidPks {
-		l, v := s.addEntry(uid, pk)
-		upd[string(l)] = v
-		if i%1_000 == 0 {
-			log.Println(i)
-		}
-		i++
-	}
-	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
-
-	proofs := make(map[uint64]*ServerPutReply, len(uidPks))
-	if getProofs {
-		for uid := range uidPks {
-			dig := getDig(s.epochHist)
-			labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-			isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
-			primitive.Assert(isReg)
-			bound := getBoundVer(s.keyMap, labels)
-			proofs[uid] = &ServerPutReply{
-				Dig:    dig,
-				Latest: latest,
-				Bound:  bound,
-			}
-		}
-	}
-	s.mu.Unlock()
-	return proofs
-}
-
-// addEntry returns the new mapLabel and mapVal.
-func (s *Server) addEntry(uid uint64, pk []byte) ([]byte, []byte) {
-	// get lat label and make bound label.
-	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-	boundVer := uint64(len(labels))
-	latLabel := labels[boundVer-1]
-	boundVrf := compMapLabel(uid, boundVer, s.vrfSk)
-	s.uidVerRepo[uid] = append(labels, boundVrf)
-
-	// make mapVal.
-	nextEpoch := uint64(len(s.epochHist))
-	r := compCommitOpen(s.commitSecret, latLabel.label)
-	open := &CommitOpen{Val: pk, Rand: r}
-	mapVal := compMapVal(nextEpoch, open)
-
-	// update key map and visible map.
-	err1 := s.keyMap.Put(latLabel.label, mapVal)
-	primitive.Assert(!err1)
-	s.visibleKeys[uid] = pk
-	return latLabel.label, mapVal
+// Put errors iff there's a put of the same uid at the same time.
+func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb, bool) {
+	work := &Work{Req: &WQReq{Uid: uid, Pk: pk}}
+	s.workQ.Do(work)
+	resp := work.Resp
+	return resp.Dig, resp.Lat, resp.Bound, resp.Err
 }
 
 // Get returns a complete history proof for uid.
@@ -231,6 +88,151 @@ func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	return &UpdateProof{Updates: info.updates, Sig: info.sig}, false
 }
 
+type WQReq struct {
+	Uid uint64
+	Pk  []byte
+}
+
+type WQResp struct {
+	Dig   *SigDig
+	Lat   *Memb
+	Bound *NonMemb
+	Err   bool
+}
+
+type mapper0Out struct {
+	latestVrf *vrfCache
+	boundVrf  *vrfCache
+	mapVal    []byte
+	pkOpen    *CommitOpen
+}
+
+func (s *Server) Worker() {
+	work := s.workQ.Get()
+
+	// error out duplicates.
+	uidSet := make(map[uint64]bool, len(work))
+	for _, w := range work {
+		w.Resp = &WQResp{}
+		uid := w.Req.Uid
+		_, ok := uidSet[uid]
+		if ok {
+			w.Resp.Err = true
+			w.Resp.Lat = &Memb{PkOpen: &CommitOpen{}}
+			w.Resp.Bound = &NonMemb{}
+		} else {
+			uidSet[uid] = false
+		}
+	}
+
+	// note: there are no other write lockers outside this fn.
+	// so in this fn, the 3 critical sections view:
+	// 1) current server.
+	// 2) current server to new server.
+	// 3) new server.
+	// this is essential to make proper proofs and maintain the server invariant.
+
+	// map 0.
+	outs0 := make([]*mapper0Out, len(work))
+	s.mu.RLock()
+	var i uint64
+	for ; i < uint64(len(work)); i++ {
+		resp := work[i].Resp
+		if !resp.Err {
+			outs0[i] = &mapper0Out{}
+			go func() {
+				s.mapper0(work[i].Req, outs0[i])
+			}()
+		}
+	}
+	s.mu.RUnlock()
+
+	// update server with new entries.
+	s.mu.Lock()
+	upd := make(map[string][]byte, len(work))
+	i = 0
+	for ; i < uint64(len(work)); i++ {
+		resp := work[i].Resp
+		if !resp.Err {
+			req := work[i].Req
+			out0 := outs0[i]
+			label := out0.latestVrf.label
+
+			err0 := s.keyMap.Put(label, out0.mapVal)
+			primitive.Assert(!err0)
+			s.visibleKeys[req.Uid] = req.Pk
+			upd[string(label)] = out0.mapVal
+
+			var labels = s.uidVerRepo[req.Uid]
+			numVers := len(labels)
+			if numVers == 0 {
+				labels = append(labels, out0.latestVrf)
+			}
+			labels = append(labels, out0.boundVrf)
+			s.uidVerRepo[req.Uid] = labels
+		}
+	}
+	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
+	s.mu.Unlock()
+
+	// map 1.
+	s.mu.RLock()
+	i = 0
+	for ; i < uint64(len(work)); i++ {
+		resp := work[i].Resp
+		if !resp.Err {
+			out0 := outs0[i]
+			go func() {
+				s.mapper1(out0, resp)
+			}()
+		}
+	}
+	s.mu.RUnlock()
+
+	s.workQ.Finish(work)
+}
+
+// mapper0 makes mapLabels and mapVals.
+func (s *Server) mapper0(in *WQReq, out *mapper0Out) {
+	labels := getLabels(s.uidVerRepo, in.Uid, s.vrfSk)
+	boundVer := uint64(len(labels))
+	latVrf := labels[boundVer-1]
+	boundVrf := compMapLabel(in.Uid, boundVer, s.vrfSk)
+
+	nextEpoch := uint64(len(s.epochHist))
+	r := compCommitOpen(s.commitSecret, latVrf.label)
+	open := &CommitOpen{Val: in.Pk, Rand: r}
+	mapVal := compMapVal(nextEpoch, open)
+
+	out.latestVrf = latVrf
+	out.boundVrf = boundVrf
+	out.mapVal = mapVal
+	out.pkOpen = open
+}
+
+// mapper1 computes merkle proofs and assembles full response.
+func (s *Server) mapper1(in *mapper0Out, out *WQResp) {
+	latIn, _, latMerk, err0 := s.keyMap.Prove(in.latestVrf.label)
+	primitive.Assert(!err0)
+	primitive.Assert(latIn)
+
+	boundIn, _, boundMerk, err1 := s.keyMap.Prove(in.boundVrf.label)
+	primitive.Assert(!err1)
+	primitive.Assert(!boundIn)
+
+	out.Dig = getDig(s.epochHist)
+	out.Lat = &Memb{
+		LabelProof:  in.latestVrf.proof,
+		EpochAdded:  uint64(len(s.epochHist)) - 1,
+		PkOpen:      in.pkOpen,
+		MerkleProof: latMerk,
+	}
+	out.Bound = &NonMemb{
+		LabelProof:  in.boundVrf.proof,
+		MerkleProof: boundMerk,
+	}
+}
+
 func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	mu := new(sync.RWMutex)
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
@@ -242,7 +244,15 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	// commit empty tree as init epoch.
 	updEpochHist(&hist, make(map[string][]byte), keys.Digest(), sigSk)
 	labels := make(map[uint64][]*vrfCache)
-	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, visibleKeys: vis, uidVerRepo: labels, epochHist: hist}, sigPk, vrfPk
+	wq := NewWorkQ()
+	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, visibleKeys: vis, uidVerRepo: labels, epochHist: hist, workQ: wq}
+
+	go func() {
+		for {
+			s.Worker()
+		}
+	}()
+	return s, sigPk, vrfPk
 }
 
 // compMapLabel rets a vrf output and proof for mapLabel (VRF(uid || ver)).
@@ -345,4 +355,58 @@ func getBoundVer(keyMap *merkle.Tree, labels []*vrfCache) *NonMemb {
 	primitive.Assert(!err0)
 	primitive.Assert(!inTree)
 	return &NonMemb{LabelProof: label.proof, MerkleProof: proof}
+}
+
+// # Work queue
+
+type Work struct {
+	done bool
+	Req  *WQReq
+	Resp *WQResp
+}
+
+type WorkQ struct {
+	mu         *sync.Mutex
+	work       []*Work
+	condCli    *sync.Cond
+	condWorker *sync.Cond
+}
+
+func (wq *WorkQ) Do(r *Work) {
+	wq.mu.Lock()
+	wq.work = append(wq.work, r)
+	wq.condWorker.Signal()
+
+	for !r.done {
+		wq.condCli.Wait()
+	}
+	wq.mu.Unlock()
+}
+
+func (wq *WorkQ) Get() []*Work {
+	wq.mu.Lock()
+	for wq.work == nil {
+		wq.condWorker.Wait()
+	}
+
+	work := wq.work
+	wq.work = nil
+	wq.mu.Unlock()
+	return work
+}
+
+func (wq *WorkQ) Finish(work []*Work) {
+	wq.mu.Lock()
+	for _, x := range work {
+		x.done = true
+	}
+	wq.mu.Unlock()
+	wq.condCli.Broadcast()
+}
+
+func NewWorkQ() *WorkQ {
+	mu := new(sync.Mutex)
+	condCli := sync.NewCond(mu)
+	condWork := sync.NewCond(mu)
+	return &WorkQ{mu: mu, condCli: condCli, condWorker: condWork}
 }
