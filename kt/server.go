@@ -29,6 +29,74 @@ type Server struct {
 	uidVerRepo map[uint64][]*vrfCache
 	// epochHist stores info about prior epochs.
 	epochHist []*servEpochInfo
+	// workQ stores a work queue of batched Put requests.
+	workQ *WorkQ
+}
+
+type WQReq struct {
+	uid uint64
+	pk  []byte
+	// latVrf might be nil if uid already present.
+	latVrf   *vrfCache
+	boundVrf *vrfCache
+}
+
+type WQResp struct {
+	Dig   *SigDig
+	Lat   *Memb
+	Bound *NonMemb
+}
+
+type Work struct {
+	done bool
+	Req  *WQReq
+	Resp *WQResp
+}
+
+type WorkQ struct {
+	mu         *sync.Mutex
+	work       []*Work
+	condCli    *sync.Cond
+	condWorker *sync.Cond
+}
+
+func (wq *WorkQ) Do(r *Work) {
+	wq.mu.Lock()
+	wq.work = append(wq.work, r)
+	wq.condWorker.Signal()
+
+	for !r.done {
+		wq.condCli.Wait()
+	}
+	wq.mu.Unlock()
+}
+
+func (wq *WorkQ) Get() []*Work {
+	wq.mu.Lock()
+	for wq.work == nil {
+		wq.condWorker.Wait()
+	}
+
+	work := wq.work
+	wq.work = nil
+	wq.mu.Unlock()
+	return work
+}
+
+func (wq *WorkQ) Finish(work []*Work) {
+	wq.mu.Lock()
+	for _, x := range work {
+		x.done = true
+	}
+	wq.mu.Unlock()
+	wq.condCli.Broadcast()
+}
+
+func NewWorkQ() *WorkQ {
+	mu := new(sync.Mutex)
+	condCli := sync.NewCond(mu)
+	condWork := sync.NewCond(mu)
+	return &WorkQ{mu: mu, condCli: condCli, condWorker: condWork}
 }
 
 type servEpochInfo struct {
@@ -45,19 +113,32 @@ type vrfCache struct {
 }
 
 func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
-	s.mu.Lock()
-	upd := make(map[string][]byte)
-	l, v := s.addEntry(uid, pk)
-	upd[string(l)] = v
-	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
-
-	dig := getDig(s.epochHist)
+	s.mu.RLock()
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-	isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
-	primitive.Assert(isReg)
-	bound := getBoundVer(s.keyMap, labels)
-	s.mu.Unlock()
-	return dig, latest, bound
+	boundVer := uint64(len(labels))
+	latVrf := labels[boundVer-1]
+	boundVrf := compMapLabel(uid, boundVer, s.vrfSk)
+
+	req := &WQReq{uid: uid, pk: pk, boundVrf: boundVrf}
+	if boundVer > 1 {
+		req.latVrf = latVrf
+	}
+	s.workQ.Do(&Work{Req: req})
+
+	/*
+		upd := make(map[string][]byte)
+		l, v := s.addEntry(uid, pk)
+		upd[string(l)] = v
+		updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
+
+		dig := getDig(s.epochHist)
+		labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
+		isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
+		primitive.Assert(isReg)
+		bound := getBoundVer(s.keyMap, labels)
+		return dig, latest, bound
+	*/
+	s.mu.RUnlock()
 }
 
 func (s *Server) PutBatch(uidPks map[uint64][]byte, getProofs bool) map[uint64]*ServerPutReply {
@@ -99,8 +180,8 @@ func (s *Server) addEntry(uid uint64, pk []byte) ([]byte, []byte) {
 	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
 	boundVer := uint64(len(labels))
 	latLabel := labels[boundVer-1]
-	boundLabel, boundLabelProof := compMapLabel(uid, boundVer, s.vrfSk)
-	s.uidVerRepo[uid] = append(labels, &vrfCache{label: boundLabel, proof: boundLabelProof})
+	boundVrf := compMapLabel(uid, boundVer, s.vrfSk)
+	s.uidVerRepo[uid] = append(labels, boundVrf)
 
 	// make mapVal.
 	nextEpoch := uint64(len(s.epochHist))
@@ -164,12 +245,12 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	return &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, visibleKeys: vis, uidVerRepo: labels, epochHist: hist}, sigPk, vrfPk
 }
 
-// compMapLabel rets mapLabel (VRF(uid || ver)) and a VRF proof.
-func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
+// compMapLabel rets a vrf output and proof for mapLabel (VRF(uid || ver)).
+func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) *vrfCache {
 	l := &MapLabelPre{Uid: uid, Ver: ver}
 	lByt := MapLabelPreEncode(make([]byte, 0, 16), l)
 	h, p := sk.Hash(lByt)
-	return h, p
+	return &vrfCache{label: h, proof: p}
 }
 
 // compMapVal rets mapVal (epoch || Hash(pk || rand)).
@@ -208,8 +289,8 @@ func getLabels(uidVerRepo map[uint64][]*vrfCache, uid uint64, sk *cryptoffi.VrfP
 		primitive.Assert(len(labels) >= 1)
 		return labels
 	} else {
-		label, proof := compMapLabel(uid, 0, sk)
-		return []*vrfCache{{label: label, proof: proof}}
+		vrf := compMapLabel(uid, 0, sk)
+		return []*vrfCache{vrf}
 	}
 }
 
