@@ -134,17 +134,23 @@ func (s *Server) Worker() {
 
 	// map 0.
 	outs0 := make([]*mapper0Out, len(work))
+	wg := new(sync.WaitGroup)
 	s.mu.RLock()
 	var i uint64
 	for ; i < uint64(len(work)); i++ {
 		resp := work[i].Resp
 		if !resp.Err {
-			outs0[i] = &mapper0Out{}
+			req := work[i].Req
+			out0 := &mapper0Out{}
+			outs0[i] = out0
+			wg.Add(1)
 			go func() {
-				s.mapper0(work[i].Req, outs0[i])
+				s.mapper0(req, out0)
+				wg.Done()
 			}()
 		}
 	}
+	wg.Wait()
 	s.mu.RUnlock()
 
 	// update server with new entries.
@@ -176,17 +182,21 @@ func (s *Server) Worker() {
 	s.mu.Unlock()
 
 	// map 1.
+	wg = new(sync.WaitGroup)
 	s.mu.RLock()
 	i = 0
 	for ; i < uint64(len(work)); i++ {
 		resp := work[i].Resp
 		if !resp.Err {
 			out0 := outs0[i]
+			wg.Add(1)
 			go func() {
 				s.mapper1(out0, resp)
+				wg.Done()
 			}()
 		}
 	}
+	wg.Wait()
 	s.mu.RUnlock()
 
 	s.workQ.Finish(work)
