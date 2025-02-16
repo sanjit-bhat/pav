@@ -98,20 +98,21 @@ func (t *Tree) Get(label []byte) (bool, []byte, bool) {
 // it gives a (3) cryptographic proof of this.
 // it (4) errors if label isn't a hash.
 func (t *Tree) Prove(label []byte) (bool, []byte, []byte, bool) {
-	inTree, val, p, err := t.get(label, true)
-	proof := MerkleProofEncode(make([]byte, 0, 8+len(p.Siblings)+8+len(p.LeafLabel)+8+len(p.LeafVal)), p)
-	return inTree, val, proof, err
+	return t.get(label, true)
 }
 
-func (t *Tree) get(label []byte, prove bool) (bool, []byte, *MerkleProof, bool) {
+func (t *Tree) get(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return false, nil, nil, true
 	}
 	var n = t.root
-	var sibs []byte
+	var proof []byte
 	if prove {
 		// pre-size for roughly 2^30 (1.07B) entries.
-		sibs = make([]byte, 0, 30*cryptoffi.HashLen)
+		// size of ed25519 pk.
+		valLen := uint64(32)
+		// proof = SibsLen ++ Sibs ++ LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal.
+		proof = make([]byte, 8, 8+30*cryptoffi.HashLen+8+cryptoffi.HashLen+8+valLen)
 	}
 	var depth uint64
 	for ; depth < cryptoffi.HashLen*8; depth++ {
@@ -125,25 +126,39 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, *MerkleProof, bool) 
 		child, sib := getChild(n, label, depth)
 		if prove {
 			// proof will have sibling hash for each inner node.
-			sibs = append(sibs, getNodeHash(sib, t.cache)...)
+			proof = append(proof, getNodeHash(sib, t.cache)...)
 		}
 		n = *child
 	}
 
-	proof := &MerkleProof{Siblings: sibs}
+	if prove {
+		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
+	}
 	// empty node.
 	if n == nil {
+		if prove {
+			proof = marshal.WriteInt(proof, 0) // LeafLabelLen
+			proof = marshal.WriteInt(proof, 0) // LeafValLen
+		}
 		return false, nil, proof, false
 	}
 	// not inner node. can't go full depth down and still have inner.
 	primitive.Assert(n.child0 == nil && n.child1 == nil)
 	// leaf node with different label.
 	if !std.BytesEqual(n.label, label) {
-		proof.LeafLabel = n.label
-		proof.LeafVal = n.val
+		if prove {
+			proof = marshal.WriteInt(proof, uint64(len(n.label)))
+			proof = marshal.WriteBytes(proof, n.label)
+			proof = marshal.WriteInt(proof, uint64(len(n.val)))
+			proof = marshal.WriteBytes(proof, n.val)
+		}
 		return false, nil, proof, false
 	}
 	// leaf node with same label.
+	if prove {
+		proof = marshal.WriteInt(proof, 0) // LeafLabelLen
+		proof = marshal.WriteInt(proof, 0) // LeafValLen
+	}
 	return true, n.val, proof, false
 }
 
