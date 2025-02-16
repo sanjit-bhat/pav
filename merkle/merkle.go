@@ -189,7 +189,7 @@ func VerifyProof(inTree bool, label, val []byte, proof []byte, dig []byte) bool 
 	if inTree {
 		currHash = compLeafHash(label, val)
 	} else {
-		if proofDec.LeafLabel != nil {
+		if len(proofDec.LeafLabel) != 0 {
 			currHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
 		} else {
 			currHash = compEmptyHash()
