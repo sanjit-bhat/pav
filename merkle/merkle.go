@@ -182,8 +182,8 @@ func VerifyProof(inTree bool, label, val []byte, proof []byte, dig []byte) bool 
 	}
 
 	// compute hash up the tree.
+	var hashOut = make([]byte, 0, cryptoffi.HashLen)
 	var depth = maxDepth
-	var hashBuf = make([]byte, 0, 2*cryptoffi.HashLen+1)
 	// depth offset by one to prevent underflow.
 	for depth >= 1 {
 		begin := (depth - 1) * cryptoffi.HashLen
@@ -191,14 +191,12 @@ func VerifyProof(inTree bool, label, val []byte, proof []byte, dig []byte) bool 
 		sib := proofDec.Siblings[begin:end]
 
 		if !getBit(label, depth-1) {
-			hashBuf = setInnerHashBuf(hashBuf, currHash, sib)
+			hashOut = compInnerHash(currHash, sib, hashOut)
 		} else {
-			hashBuf = setInnerHashBuf(hashBuf, sib, currHash)
+			hashOut = compInnerHash(sib, currHash, hashOut)
 		}
-		hr := cryptoffi.NewHasher()
-		hr.Write(hashBuf)
-		hashBuf = hashBuf[:0]
-		currHash = hr.Sum(currHash)
+		currHash = append(currHash[:0], hashOut...)
+		hashOut = hashOut[:0]
 		depth--
 	}
 
@@ -233,27 +231,26 @@ func setLeafHash(n *node) {
 
 func compLeafHash(label, val []byte) []byte {
 	valLen := uint64(len(val))
-	var b = make([]byte, 0, cryptoffi.HashLen+8+valLen+1)
-	b = append(b, label...)
-	b = marshal.WriteInt(b, valLen)
-	b = append(b, val...)
-	b = append(b, leafNodeTag)
-	return cryptoutil.Hash(b)
+	hr := cryptoffi.NewHasher()
+	hr.Write(label)
+	hr.Write(marshal.WriteInt(nil, valLen))
+	hr.Write(val)
+	hr.Write([]byte{leafNodeTag})
+	return hr.Sum(nil)
 }
 
 func setInnerHash(n *node, c *cache) {
 	child0 := getNodeHash(n.child0, c)
 	child1 := getNodeHash(n.child1, c)
-	var b = make([]byte, 0, 2*cryptoffi.HashLen+1)
-	b = setInnerHashBuf(b, child0, child1)
-	n.hash = cryptoutil.Hash(b)
+	n.hash = compInnerHash(child0, child1, nil)
 }
 
-func setInnerHashBuf(b []byte, child0, child1 []byte) []byte {
-	b = append(b, child0...)
-	b = append(b, child1...)
-	b = append(b, innerNodeTag)
-	return b
+func compInnerHash(child0, child1, h []byte) []byte {
+	hr := cryptoffi.NewHasher()
+	hr.Write(child0)
+	hr.Write(child1)
+	hr.Write([]byte{innerNodeTag})
+	return hr.Sum(h)
 }
 
 // getChild returns a child and its sibling child,

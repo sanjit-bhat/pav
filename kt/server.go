@@ -5,6 +5,7 @@ import (
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
+	"log"
 	"sync"
 )
 
@@ -26,7 +27,7 @@ type Server struct {
 	// it also caches the expensive vrf computations
 	// to make a label from a uid and version.
 	uidVerRepo map[uint64][]*vrfCache
-	// epochHist stores info about prior epochs.
+	// epochHist stores info about prior epochs, for auditing.
 	epochHist []*servEpochInfo
 	// workQ batch processes Put requests.
 	workQ *WorkQ
@@ -109,6 +110,7 @@ type mapper0Out struct {
 
 func (s *Server) Worker() {
 	work := s.workQ.Get()
+	log.Printf("work len: %d", len(work))
 
 	// error out duplicates.
 	uidSet := make(map[uint64]bool, len(work))
