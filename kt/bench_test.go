@@ -181,13 +181,17 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey, []u
 	rnd := rand.NewChaCha8(seed)
 
 	uids := make([]uint64, 0, nSeed)
-	rs := make([]*Work, 0, nSeed)
+	wg := new(sync.WaitGroup)
+	wg.Add(nSeed)
 	for i := 0; i < nSeed; i++ {
 		u := rnd.Uint64()
 		uids = append(uids, u)
-		rs = append(rs, &Work{Req: &WQReq{Uid: u, Pk: mkDefVal()}})
+		go func() {
+			serv.Put(u, mkDefVal())
+			wg.Done()
+		}()
 	}
-	serv.workQ.DoBatch(rs)
+	wg.Wait()
 	return serv, rnd, vrfPk, uids
 }
 

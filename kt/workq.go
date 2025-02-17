@@ -28,18 +28,6 @@ func (wq *WorkQ) Do(r *Work) {
 	wq.mu.Unlock()
 }
 
-func (wq *WorkQ) DoBatch(rs []*Work) {
-	wq.mu.Lock()
-	wq.work = append(wq.work, rs...)
-	wq.condWorker.Signal()
-
-	rsLen := len(rs)
-	for !rs[rsLen-1].done {
-		wq.condCli.Wait()
-	}
-	wq.mu.Unlock()
-}
-
 func (wq *WorkQ) Get() []*Work {
 	wq.mu.Lock()
 	for wq.work == nil {
