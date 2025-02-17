@@ -80,7 +80,7 @@ func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
 func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
 	s.mu.RLock()
 	if epoch >= uint64(len(s.epochHist)) {
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		return &UpdateProof{Updates: make(map[string][]byte)}, true
 	}
 	info := s.epochHist[epoch]
