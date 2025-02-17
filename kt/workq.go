@@ -46,15 +46,8 @@ func (wq *WorkQ) Get() []*Work {
 		wq.condWorker.Wait()
 	}
 
-	maxWork := 100_000
-	var work []*Work
-	if len(wq.work) > maxWork {
-		work = wq.work[:maxWork]
-		wq.work = wq.work[maxWork:]
-	} else {
-		work = wq.work
-		wq.work = nil
-	}
+	work := wq.work
+	wq.work = nil
 	wq.mu.Unlock()
 	return work
 }
