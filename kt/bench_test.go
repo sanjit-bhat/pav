@@ -1,12 +1,16 @@
 package kt
 
 import (
-	"github.com/mit-pdos/pav/benchutil"
-	"github.com/mit-pdos/pav/cryptoffi"
+	"log"
 	"math/rand/v2"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mit-pdos/pav/benchutil"
+	"github.com/mit-pdos/pav/cryptoffi"
 )
 
 const (
@@ -107,6 +111,41 @@ func TestBenchGet(t *testing.T) {
 	})
 }
 
+func TestBenchGetTput(t *testing.T) {
+	nSeed := 100_000
+	serv, _, _, uids := seedServer(nSeed)
+	maxNCli := 3 * runtime.NumCPU()
+
+	cts := make([]atomic.Uint64, maxNCli)
+	prevTime := time.Now()
+	var prevOps uint64
+	for i := 0; i < maxNCli; i++ {
+		go func() {
+			for {
+				j := rand.IntN(nSeed)
+				u := uids[j]
+				serv.Get(u)
+				cts[i].Add(1)
+			}
+		}()
+		time.Sleep(time.Second)
+
+		// measure.
+		var ops uint64
+		for j := 0; j <= i; j++ {
+			ops += cts[j].Load()
+		}
+		diffOps := ops - prevOps
+		prevOps = ops
+		now := time.Now()
+		diffTime := now.Sub(prevTime)
+		prevTime = now
+
+		// report.
+		m0 := float64(diffOps) / float64(diffTime.Seconds())
+		log.Printf("%d clients\t%10.0f op/s", i+1, m0)
+	}
+}
 func TestBenchSelfMon(t *testing.T) {
 	serv, _, vrfPk, uids := seedServer(100_000)
 	nOps := 6_000
