@@ -5,7 +5,6 @@ import (
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
-	"log"
 	"sync"
 )
 
@@ -110,7 +109,6 @@ type mapper0Out struct {
 
 func (s *Server) Worker() {
 	work := s.workQ.Get()
-	log.Printf("work len: %d", len(work))
 
 	// error out duplicates.
 	uidSet := make(map[uint64]bool, len(work))

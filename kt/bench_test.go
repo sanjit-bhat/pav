@@ -5,7 +5,6 @@ import (
 	_ "github.com/mit-pdos/pav/benchutil"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"math/rand/v2"
-	"sync"
 	"testing"
 	"time"
 )
@@ -56,19 +55,12 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey) {
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 
-	wg := new(sync.WaitGroup)
-	wg.Add(nSeed)
+	rs := make([]*Work, 0, nSeed)
 	for i := 0; i < nSeed; i++ {
 		u := rnd.Uint64()
 		v := bytes.Clone(defVal)
-		go func() {
-			_, _, _, err := serv.Put(u, v)
-			if err {
-				panic("serv.Put err")
-			}
-			wg.Done()
-		}()
+		rs = append(rs, &Work{Req: &WQReq{Uid: u, Pk: v}})
 	}
-	wg.Wait()
+	serv.workQ.DoBatch(rs)
 	return serv, rnd, vrfPk
 }

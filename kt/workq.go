@@ -28,14 +28,33 @@ func (wq *WorkQ) Do(r *Work) {
 	wq.mu.Unlock()
 }
 
+func (wq *WorkQ) DoBatch(rs []*Work) {
+	wq.mu.Lock()
+	wq.work = append(wq.work, rs...)
+	wq.condWorker.Signal()
+
+	rsLen := len(rs)
+	for !rs[rsLen-1].done {
+		wq.condCli.Wait()
+	}
+	wq.mu.Unlock()
+}
+
 func (wq *WorkQ) Get() []*Work {
 	wq.mu.Lock()
 	for wq.work == nil {
 		wq.condWorker.Wait()
 	}
 
-	work := wq.work
-	wq.work = nil
+	maxWork := 100_000
+	var work []*Work
+	if len(wq.work) > maxWork {
+		work = wq.work[:maxWork]
+		wq.work = wq.work[maxWork:]
+	} else {
+		work = wq.work
+		wq.work = nil
+	}
 	wq.mu.Unlock()
 	return work
 }
