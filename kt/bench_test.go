@@ -162,7 +162,7 @@ func TestBenchAudit(t *testing.T) {
 }
 
 func updAuditor(t *testing.T, serv *Server, aud *Auditor, epoch uint64) uint64 {
-	for {
+	for ; ; epoch++ {
 		p, err := serv.Audit(epoch)
 		if err {
 			break
@@ -170,7 +170,6 @@ func updAuditor(t *testing.T, serv *Server, aud *Auditor, epoch uint64) uint64 {
 		if err = aud.Update(p); err {
 			t.Fatal()
 		}
-		epoch++
 	}
 	return epoch
 }
@@ -196,6 +195,7 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey, []u
 }
 
 func mkDefVal() []byte {
+	// ed25519 pk is 32 bytes.
 	v := make([]byte, 32)
 	for i := 0; i < 32; i++ {
 		v[i] = 2
