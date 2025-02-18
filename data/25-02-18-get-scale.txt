@@ -1,4 +1,3 @@
-=== RUN   TestBenchGetScale
 TestBenchGetScale         378469                 1.000 nCli         376968 op/s          2.160 mean(us)         20.92 stddev           7.000 p99
 TestBenchGetScale         670468                 2.000 nCli         664032 op/s          2.517 mean(us)         31.29 stddev           8.000 p99
 TestBenchGetScale         924094                 3.000 nCli         909819 op/s          2.795 mean(us)         27.66 stddev           10.00 p99
