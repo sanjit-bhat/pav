@@ -1,9 +1,12 @@
 module github.com/mit-pdos/pav
 
-go 1.23
+go 1.22.0
+
+toolchain go1.24.0
 
 require (
 	filippo.io/edwards25519 v1.1.0
+	github.com/aclements/go-moremath v0.0.0-20241023150245-c8bbc672ef66
 	github.com/goose-lang/primitive v0.1.0
 	github.com/goose-lang/std v0.5.0
 	github.com/stretchr/testify v1.10.0
@@ -12,7 +15,6 @@ require (
 )
 
 require (
-	github.com/aclements/go-moremath v0.0.0-20241023150245-c8bbc672ef66 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
