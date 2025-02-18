@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defNSeed int = 1_000_000
+	defNSeed int = 100_000
 )
 
 func TestBenchSeed(t *testing.T) {
@@ -24,7 +24,7 @@ func TestBenchSeed(t *testing.T) {
 }
 
 func TestBenchPut(t *testing.T) {
-	serv, rnd, vrfPk, _ := seedServer(100_000)
+	serv, rnd, vrfPk, _ := seedServer(defNSeed)
 	nOps := 2_000
 
 	start := time.Now()
@@ -52,7 +52,7 @@ func TestBenchPut(t *testing.T) {
 }
 
 func TestBenchPutBatch(t *testing.T) {
-	serv, rnd, _, _ := seedServer(100_000)
+	serv, rnd, _, _ := seedServer(defNSeed)
 	nOps := 100
 	nInsert := 1_000
 
@@ -79,8 +79,22 @@ func TestBenchPutBatch(t *testing.T) {
 	})
 }
 
+func TestBenchPutSize(t *testing.T) {
+	serv, rnd, _, _ := seedServer(defNSeed)
+	u := rnd.Uint64()
+	dig, lat, bound, err := serv.Put(u, mkDefVal())
+	if err {
+		t.Fatal()
+	}
+	p := &ServerPutReply{Dig: dig, Latest: lat, Bound: bound, Err: err}
+	pb := ServerPutReplyEncode(nil, p)
+	benchutil.Report(1, []*benchutil.Metric{
+		{N: float64(len(pb)), Unit: "B"},
+	})
+}
+
 func TestBenchGet(t *testing.T) {
-	serv, _, vrfPk, uids := seedServer(100_000)
+	serv, _, vrfPk, uids := seedServer(defNSeed)
 	nOps := 3_000
 
 	start := time.Now()
@@ -111,7 +125,7 @@ func TestBenchGet(t *testing.T) {
 }
 
 func TestBenchGetScale(t *testing.T) {
-	nSeed := 100_000
+	nSeed := defNSeed
 	serv, _, _, uids := seedServer(nSeed)
 	maxNCli := 3 * runtime.NumCPU()
 	cliLats := make([][]float64, maxNCli)
@@ -166,8 +180,21 @@ func TestBenchGetScale(t *testing.T) {
 	}
 }
 
+func TestBenchGetSize(t *testing.T) {
+	serv, _, _, uids := seedServer(defNSeed)
+	dig, hist, isReg, lat, bound := serv.Get(uids[0])
+	if !isReg {
+		t.Fatal()
+	}
+	p := &ServerGetReply{Dig: dig, Hist: hist, IsReg: isReg, Latest: lat, Bound: bound}
+	pb := ServerGetReplyEncode(nil, p)
+	benchutil.Report(1, []*benchutil.Metric{
+		{N: float64(len(pb)), Unit: "B"},
+	})
+}
+
 func TestBenchSelfMon(t *testing.T) {
-	serv, _, vrfPk, uids := seedServer(100_000)
+	serv, _, vrfPk, uids := seedServer(defNSeed)
 	nOps := 6_000
 
 	start := time.Now()
@@ -188,8 +215,18 @@ func TestBenchSelfMon(t *testing.T) {
 	})
 }
 
+func TestBenchSelfMonSize(t *testing.T) {
+	serv, _, _, uids := seedServer(defNSeed)
+	dig, bound := serv.SelfMon(uids[0])
+	p := &ServerSelfMonReply{Dig: dig, Bound: bound}
+	pb := ServerSelfMonReplyEncode(nil, p)
+	benchutil.Report(1, []*benchutil.Metric{
+		{N: float64(len(pb)), Unit: "B"},
+	})
+}
+
 func TestBenchAudit(t *testing.T) {
-	serv, rnd, _, _ := seedServer(100_000)
+	serv, rnd, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
 	nOps := 100
@@ -217,6 +254,45 @@ func TestBenchAudit(t *testing.T) {
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "us/op"},
 		{N: m1, Unit: "total ms"},
+	})
+}
+
+func TestBenchAuditSize(t *testing.T) {
+	serv, rnd, _, _ := seedServer(defNSeed)
+	var epoch uint64
+	for ; ; epoch++ {
+		_, err := serv.Audit(epoch)
+		if err {
+			break
+		}
+	}
+
+	nInsert := 1_000
+	wg := new(sync.WaitGroup)
+	wg.Add(nInsert)
+	for i := 0; i < nInsert; i++ {
+		u := rnd.Uint64()
+		go func() {
+			serv.Put(u, mkDefVal())
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	sz := 0
+	// it takes ~3 epochs to insert 1000, which only adds ~30B in overhead.
+	for ; ; epoch++ {
+		upd, err := serv.Audit(epoch)
+		if err {
+			break
+		}
+		p := &ServerAuditReply{P: upd, Err: err}
+		pb := ServerAuditReplyEncode(nil, p)
+		sz += len(pb)
+	}
+
+	benchutil.Report(1, []*benchutil.Metric{
+		{N: float64(sz), Unit: "B"},
 	})
 }
 
