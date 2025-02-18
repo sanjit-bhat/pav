@@ -1,14 +1,13 @@
 package kt
 
 import (
-	"log"
 	"math/rand/v2"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/aclements/go-moremath/stats"
 	"github.com/mit-pdos/pav/benchutil"
 	"github.com/mit-pdos/pav/cryptoffi"
 )
@@ -111,41 +110,62 @@ func TestBenchGet(t *testing.T) {
 	})
 }
 
-func TestBenchGetTput(t *testing.T) {
+func TestBenchGetScale(t *testing.T) {
 	nSeed := 100_000
 	serv, _, _, uids := seedServer(nSeed)
 	maxNCli := 3 * runtime.NumCPU()
-
-	cts := make([]atomic.Uint64, maxNCli)
+	cliLats := make([][]float64, maxNCli)
+	cliMu := make([]sync.Mutex, maxNCli)
 	prevTime := time.Now()
-	var prevOps uint64
+	sampleData := make([]float64, 0, 2_000_000)
+
 	for i := 0; i < maxNCli; i++ {
 		go func() {
+			prev := time.Now()
 			for {
-				j := rand.IntN(nSeed)
-				u := uids[j]
+				u := uids[rand.IntN(nSeed)]
 				serv.Get(u)
-				cts[i].Add(1)
+				end := time.Now()
+				diff := end.Sub(prev)
+				prev = end
+
+				cliMu[i].Lock()
+				cliLats[i] = append(cliLats[i], float64(diff.Microseconds()))
+				cliMu[i].Unlock()
 			}
 		}()
 		time.Sleep(time.Second)
 
 		// measure.
-		var ops uint64
+		sampleData = sampleData[:0]
+		samp := stats.Sample{Xs: sampleData}
 		for j := 0; j <= i; j++ {
-			ops += cts[j].Load()
+			cliMu[j].Lock()
+			lats := cliLats[j]
+			cliLats[j] = nil
+			cliMu[j].Unlock()
+
+			samp.Xs = append(samp.Xs, lats...)
 		}
-		diffOps := ops - prevOps
-		prevOps = ops
+		samp.Sort()
+
+		ops := int(samp.Weight())
 		now := time.Now()
 		diffTime := now.Sub(prevTime)
 		prevTime = now
 
 		// report.
-		m0 := float64(diffOps) / float64(diffTime.Seconds())
-		log.Printf("%d clients\t%10.0f op/s", i+1, m0)
+		tput := float64(ops) / diffTime.Seconds()
+		benchutil.Report(ops, []*benchutil.Metric{
+			{N: float64(i + 1), Unit: "nCli"},
+			{N: tput, Unit: "op/s"},
+			{N: samp.Mean(), Unit: "mean(us)"},
+			{N: samp.StdDev(), Unit: "stddev"},
+			{N: samp.Quantile(0.99), Unit: "p99"},
+		})
 	}
 }
+
 func TestBenchSelfMon(t *testing.T) {
 	serv, _, vrfPk, uids := seedServer(100_000)
 	nOps := 6_000
