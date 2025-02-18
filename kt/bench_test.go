@@ -316,6 +316,7 @@ func TestBenchStorage(t *testing.T) {
 		}
 		wg.Wait()
 
+		runtime.GC()
 		runtime.ReadMemStats(&stat)
 		mb := float64(stat.Alloc) / float64(1_000_000)
 		benchutil.Report(i+nMeasure, []*benchutil.Metric{
