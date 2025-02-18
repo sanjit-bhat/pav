@@ -355,6 +355,7 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey, []u
 		}()
 	}
 	wg.Wait()
+	runtime.GC()
 	return serv, rnd, vrfPk, uids
 }
 
