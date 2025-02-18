@@ -296,6 +296,34 @@ func TestBenchAuditSize(t *testing.T) {
 	})
 }
 
+func TestBenchStorage(t *testing.T) {
+	serv, _, _ := NewServer()
+	var seed [32]byte
+	rnd := rand.NewChaCha8(seed)
+	nInsert := 2_000_000
+	nMeasure := 100_000
+	var stat runtime.MemStats
+
+	for i := 0; i < nInsert; i += nMeasure {
+		wg := new(sync.WaitGroup)
+		wg.Add(nMeasure)
+		for j := 0; j < nMeasure; j++ {
+			u := rnd.Uint64()
+			go func() {
+				serv.Put(u, mkDefVal())
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+
+		runtime.ReadMemStats(&stat)
+		mb := float64(stat.Alloc) / float64(1_000_000)
+		benchutil.Report(i+nMeasure, []*benchutil.Metric{
+			{N: mb, Unit: "MB"},
+		})
+	}
+}
+
 func updAuditor(t *testing.T, serv *Server, aud *Auditor, epoch uint64) uint64 {
 	for ; ; epoch++ {
 		p, err := serv.Audit(epoch)
