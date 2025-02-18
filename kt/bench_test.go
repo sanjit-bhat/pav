@@ -280,7 +280,7 @@ func TestBenchAuditSize(t *testing.T) {
 	wg.Wait()
 
 	sz := 0
-	// it takes ~3 epochs to insert 1000, which only adds ~30B in overhead.
+	// it takes ~3 (not 1) epochs to insert 1000, which only adds ~30B overhead.
 	for ; ; epoch++ {
 		upd, err := serv.Audit(epoch)
 		if err {
