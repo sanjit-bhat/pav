@@ -1,3 +1,5 @@
+// Package benchutil reports benchmark results.
+// it heavily borrows code from the stdlib "testing" pkg.
 package benchutil
 
 import (
@@ -11,6 +13,17 @@ import (
 type Metric struct {
 	N    float64
 	Unit string
+}
+
+func Report(nOps int, ms []*Metric) {
+	buf := new(strings.Builder)
+	fmt.Fprintf(buf, "%-*s", 20, callerName(1))
+	fmt.Fprintf(buf, "\t%8d", nOps)
+	for _, m := range ms {
+		buf.WriteByte('\t')
+		prettyPrint(buf, m.N, m.Unit)
+	}
+	fmt.Println(buf.String())
 }
 
 // callerName gives the function name for the caller,
@@ -54,15 +67,4 @@ func prettyPrint(w io.Writer, x float64, unit string) {
 		format = "%18.7f %s"
 	}
 	fmt.Fprintf(w, format, x, unit)
-}
-
-func Report(nOps int, ms []*Metric) {
-	buf := new(strings.Builder)
-	fmt.Fprintf(buf, "%-*s", 20, callerName(1))
-	fmt.Fprintf(buf, "\t%8d", nOps)
-	for _, m := range ms {
-		buf.WriteByte('\t')
-		prettyPrint(buf, m.N, m.Unit)
-	}
-	fmt.Println(buf.String())
 }
