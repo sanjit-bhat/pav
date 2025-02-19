@@ -2,6 +2,7 @@ package kt
 
 import (
 	"math/rand/v2"
+	"net"
 	"runtime"
 	"sync"
 	"testing"
@@ -24,7 +25,7 @@ func TestBenchSeed(t *testing.T) {
 }
 
 func TestBenchPut(t *testing.T) {
-	serv, rnd, vrfPk, _ := seedServer(defNSeed)
+	serv, rnd, _, vrfPk, _ := seedServer(defNSeed)
 	nOps := 2_000
 
 	start := time.Now()
@@ -52,7 +53,7 @@ func TestBenchPut(t *testing.T) {
 }
 
 func TestBenchPutBatch(t *testing.T) {
-	serv, rnd, _, _ := seedServer(defNSeed)
+	serv, rnd, _, _, _ := seedServer(defNSeed)
 	nOps := 100
 	nInsert := 1_000
 
@@ -80,7 +81,7 @@ func TestBenchPutBatch(t *testing.T) {
 }
 
 func TestBenchPutSize(t *testing.T) {
-	serv, rnd, _, _ := seedServer(defNSeed)
+	serv, rnd, _, _, _ := seedServer(defNSeed)
 	u := rnd.Uint64()
 	dig, lat, bound, err := serv.Put(u, mkDefVal())
 	if err {
@@ -93,8 +94,41 @@ func TestBenchPutSize(t *testing.T) {
 	})
 }
 
+func TestBenchPutCli(t *testing.T) {
+	serv, rnd, sigPk, vrfPk, _ := seedServer(defNSeed)
+	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
+	servRpc := NewRpcServer(serv)
+	servAddr := makeUniqueAddr()
+	servRpc.Serve(servAddr)
+	time.Sleep(time.Millisecond)
+	nOps := 2_000
+
+	clients := make([]*Client, 0, nOps)
+	for i := 0; i < nOps; i++ {
+		u := rnd.Uint64()
+		c := NewClient(u, servAddr, sigPk, vrfPkB)
+		clients = append(clients, c)
+	}
+
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		_, err := clients[i].Put(mkDefVal())
+		if err.Err {
+			t.Fatal()
+		}
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Microseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op"},
+		{N: m1, Unit: "total(ms)"},
+	})
+}
+
 func TestBenchGet(t *testing.T) {
-	serv, _, vrfPk, uids := seedServer(defNSeed)
+	serv, _, _, vrfPk, uids := seedServer(defNSeed)
 	nOps := 3_000
 
 	start := time.Now()
@@ -126,7 +160,7 @@ func TestBenchGet(t *testing.T) {
 
 func TestBenchGetScale(t *testing.T) {
 	nSeed := defNSeed
-	serv, _, _, uids := seedServer(nSeed)
+	serv, _, _, _, uids := seedServer(nSeed)
 	maxNCli := 3 * runtime.NumCPU()
 	cliLats := make([][]float64, maxNCli)
 	cliMu := make([]sync.Mutex, maxNCli)
@@ -181,7 +215,7 @@ func TestBenchGetScale(t *testing.T) {
 }
 
 func TestBenchGetSize(t *testing.T) {
-	serv, _, _, uids := seedServer(defNSeed)
+	serv, _, _, _, uids := seedServer(defNSeed)
 	dig, hist, isReg, lat, bound := serv.Get(uids[0])
 	if !isReg {
 		t.Fatal()
@@ -194,7 +228,7 @@ func TestBenchGetSize(t *testing.T) {
 }
 
 func TestBenchSelfMon(t *testing.T) {
-	serv, _, vrfPk, uids := seedServer(defNSeed)
+	serv, _, _, vrfPk, uids := seedServer(defNSeed)
 	nOps := 6_000
 
 	start := time.Now()
@@ -216,7 +250,7 @@ func TestBenchSelfMon(t *testing.T) {
 }
 
 func TestBenchSelfMonSize(t *testing.T) {
-	serv, _, _, uids := seedServer(defNSeed)
+	serv, _, _, _, uids := seedServer(defNSeed)
 	dig, bound := serv.SelfMon(uids[0])
 	p := &ServerSelfMonReply{Dig: dig, Bound: bound}
 	pb := ServerSelfMonReplyEncode(nil, p)
@@ -226,7 +260,7 @@ func TestBenchSelfMonSize(t *testing.T) {
 }
 
 func TestBenchAudit(t *testing.T) {
-	serv, rnd, _, _ := seedServer(defNSeed)
+	serv, rnd, _, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
 	nOps := 100
@@ -258,7 +292,7 @@ func TestBenchAudit(t *testing.T) {
 }
 
 func TestBenchAuditSize(t *testing.T) {
-	serv, rnd, _, _ := seedServer(defNSeed)
+	serv, rnd, _, _, _ := seedServer(defNSeed)
 	var epoch uint64
 	for ; ; epoch++ {
 		_, err := serv.Audit(epoch)
@@ -338,8 +372,8 @@ func updAuditor(t *testing.T, serv *Server, aud *Auditor, epoch uint64) uint64 {
 	return epoch
 }
 
-func seedServer(nSeed int) (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey, []uint64) {
-	serv, _, vrfPk := NewServer()
+func seedServer(nSeed int) (*Server, *rand.ChaCha8, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey, []uint64) {
+	serv, sigPk, vrfPk := NewServer()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 
@@ -356,7 +390,7 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, *cryptoffi.VrfPublicKey, []u
 	}
 	wg.Wait()
 	runtime.GC()
-	return serv, rnd, vrfPk, uids
+	return serv, rnd, sigPk, vrfPk, uids
 }
 
 func mkDefVal() []byte {
@@ -366,4 +400,25 @@ func mkDefVal() []byte {
 		v[i] = 2
 	}
 	return v
+}
+
+func getFreePort() (port uint64, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close()
+			return uint64(l.Addr().(*net.TCPAddr).Port), nil
+		}
+	}
+	return
+}
+
+func makeUniqueAddr() uint64 {
+	port, err := getFreePort()
+	if err != nil {
+		panic("bad port")
+	}
+	// left shift to make IP 0.0.0.0.
+	return port << 32
 }
