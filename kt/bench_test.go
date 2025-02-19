@@ -460,17 +460,18 @@ func TestBenchAuditCli(t *testing.T) {
 	})
 }
 
-func TestBenchStorage(t *testing.T) {
+func TestBenchServScale(t *testing.T) {
 	serv, _, _ := NewServer()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
-	nInsert := 2_000_000
-	nMeasure := 100_000
+	nInsert := 15_000_000
+	nMeasure := 500_000
 	var stat runtime.MemStats
 
 	for i := 0; i < nInsert; i += nMeasure {
 		wg := new(sync.WaitGroup)
 		wg.Add(nMeasure)
+		start := time.Now()
 		for j := 0; j < nMeasure; j++ {
 			u := rnd.Uint64()
 			go func() {
@@ -479,11 +480,14 @@ func TestBenchStorage(t *testing.T) {
 			}()
 		}
 		wg.Wait()
+		total := time.Since(start)
 
 		runtime.GC()
 		runtime.ReadMemStats(&stat)
+		tput := float64(nMeasure) / float64(total.Seconds())
 		mb := float64(stat.Alloc) / float64(1_000_000)
 		benchutil.Report(i+nMeasure, []*benchutil.Metric{
+			{N: tput, Unit: "op/s"},
 			{N: mb, Unit: "MB"},
 		})
 	}
