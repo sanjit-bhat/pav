@@ -24,7 +24,7 @@ func TestBenchRand32(t *testing.T) {
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "ns/op"},
-		{N: m1, Unit: "total ms"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }
 
@@ -44,7 +44,7 @@ func TestBenchRand64(t *testing.T) {
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "ns/op"},
-		{N: m1, Unit: "total ms"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }
 
@@ -65,7 +65,7 @@ func TestBenchHash(t *testing.T) {
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "ns/op"},
-		{N: m1, Unit: "total ms"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }
 
@@ -87,7 +87,7 @@ func TestBenchVrfHash(t *testing.T) {
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total ms"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }
 
@@ -112,6 +112,6 @@ func TestBenchVrfVerify(t *testing.T) {
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total ms"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }

@@ -1,5 +1,5 @@
-TestBenchPut                2000               642.4 us/op            1284 total ms
-TestBenchPutBatch            100             40821 us/op              4082 total ms
-TestBenchSelfMon            6000               176.5 us/op            1059 total ms
-TestBenchGet                3000               357.8 us/op            1073 total ms
-TestBenchAudit               100             44284 us/op              4428 total ms
+TestBenchPut                2000               642.4 us/op            1284 total(ms)
+TestBenchPutBatch            100             40821 us/op              4082 total(ms)
+TestBenchSelfMon            6000               176.5 us/op            1059 total(ms)
+TestBenchGet                3000               357.8 us/op            1073 total(ms)
+TestBenchAudit               100             44284 us/op              4428 total(ms)

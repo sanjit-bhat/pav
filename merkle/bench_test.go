@@ -40,7 +40,7 @@ func TestBenchMerkGet(t *testing.T) {
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "ns/op"},
-		{N: m1, Unit: "total ms"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }
 
@@ -66,7 +66,7 @@ func TestBenchMerkProve(t *testing.T) {
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "ns/op"},
-		{N: m1, Unit: "total ms"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }
 
@@ -94,7 +94,7 @@ func TestBenchMerkPut(t *testing.T) {
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
 		{N: m0, Unit: "ns/op"},
-		{N: m1, Unit: "total ms"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }
 
