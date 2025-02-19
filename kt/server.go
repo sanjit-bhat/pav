@@ -290,13 +290,13 @@ func compCommitOpen(secret, label []byte) []byte {
 
 // updEpochHist does a signed history update with some new entries.
 func updEpochHist(hist *[]*servEpochInfo, upd map[string][]byte, dig []byte, sk *cryptoffi.SigPrivateKey) {
-	// epoch := uint64(len(*hist))
-	// preSig := &PreSigDig{Epoch: epoch, Dig: dig}
-	// preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
-	// sig := sk.Sign(preSigByt)
+	epoch := uint64(len(*hist))
+	preSig := &PreSigDig{Epoch: epoch, Dig: dig}
+	preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
+	sig := sk.Sign(preSigByt)
 	// benchmark: turn off sigs for akd compat.
-	_ = sk
-	var sig []byte
+	// _ = sk
+	// var sig []byte
 	newInfo := &servEpochInfo{updates: upd, dig: dig, sig: sig}
 	*hist = append(*hist, newInfo)
 }

@@ -1,5 +1,8 @@
 package kt
 
+// NOTE: for server benches that strive for akd compat,
+// look for "benchmark" in source files to find where to remove signatures.
+
 import (
 	"math/rand/v2"
 	"net"
@@ -24,7 +27,7 @@ func TestBenchSeed(t *testing.T) {
 	t.Log(total)
 }
 
-func TestBenchPut(t *testing.T) {
+func TestBenchPutOne(t *testing.T) {
 	serv, rnd, _, vrfPk, _ := seedServer(defNSeed)
 	nOps := 2_000
 
@@ -127,7 +130,7 @@ func TestBenchPutCli(t *testing.T) {
 	})
 }
 
-func TestBenchGet(t *testing.T) {
+func TestBenchGetOne(t *testing.T) {
 	serv, _, _, vrfPk, uids := seedServer(defNSeed)
 	nOps := 3_000
 
@@ -227,7 +230,37 @@ func TestBenchGetSize(t *testing.T) {
 	})
 }
 
-func TestBenchSelfMon(t *testing.T) {
+func TestBenchGetCli(t *testing.T) {
+	serv, rnd, sigPk, vrfPk, uids := seedServer(defNSeed)
+	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
+	servRpc := NewRpcServer(serv)
+	servAddr := makeUniqueAddr()
+	servRpc.Serve(servAddr)
+	time.Sleep(time.Millisecond)
+	cli := NewClient(rnd.Uint64(), servAddr, sigPk, vrfPkB)
+	nOps := 3_000
+
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		isReg, _, _, err := cli.Get(uids[i])
+		if err.Err {
+			t.Fatal()
+		}
+		if !isReg {
+			t.Fatal()
+		}
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Microseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op"},
+		{N: m1, Unit: "total(ms)"},
+	})
+}
+
+func TestBenchSelfMonOne(t *testing.T) {
 	serv, _, _, vrfPk, uids := seedServer(defNSeed)
 	nOps := 6_000
 
@@ -259,7 +292,40 @@ func TestBenchSelfMonSize(t *testing.T) {
 	})
 }
 
-func TestBenchAudit(t *testing.T) {
+func TestBenchSelfMonCli(t *testing.T) {
+	serv, rnd, sigPk, vrfPk, _ := seedServer(defNSeed)
+	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
+	servRpc := NewRpcServer(serv)
+	servAddr := makeUniqueAddr()
+	servRpc.Serve(servAddr)
+	time.Sleep(time.Millisecond)
+	nOps := 6_000
+
+	clients := make([]*Client, 0, nOps)
+	for i := 0; i < nOps; i++ {
+		u := rnd.Uint64()
+		c := NewClient(u, servAddr, sigPk, vrfPkB)
+		clients = append(clients, c)
+	}
+
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		_, err := clients[i].SelfMon()
+		if err.Err {
+			t.Fatal()
+		}
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Microseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op"},
+		{N: m1, Unit: "total(ms)"},
+	})
+}
+
+func TestBenchAuditOne(t *testing.T) {
 	serv, rnd, _, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
@@ -327,6 +393,60 @@ func TestBenchAuditSize(t *testing.T) {
 
 	benchutil.Report(1, []*benchutil.Metric{
 		{N: float64(sz), Unit: "B"},
+	})
+}
+
+func TestBenchAuditCli(t *testing.T) {
+	serv, rnd, sigPk, vrfPk, _ := seedServer(defNSeed)
+	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
+	servRpc := NewRpcServer(serv)
+	servAddr := makeUniqueAddr()
+	servRpc.Serve(servAddr)
+	time.Sleep(time.Millisecond)
+	nOps := 2_000
+	nEps := 5
+
+	// after putting nEps keys, a client knows about nEps epochs.
+	clients := make([]*Client, 0, nOps)
+	wg := new(sync.WaitGroup)
+	wg.Add(nOps)
+	for i := 0; i < nOps; i++ {
+		c := NewClient(rnd.Uint64(), servAddr, sigPk, vrfPkB)
+		clients = append(clients, c)
+
+		go func() {
+			for j := 0; j < nEps; j++ {
+				_, err := c.Put(mkDefVal())
+				if err.Err {
+					t.Error()
+				}
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	aud, audPk := NewAuditor()
+	updAuditor(t, serv, aud, 0)
+	audRpc := NewRpcAuditor(aud)
+	audAddr := makeUniqueAddr()
+	audRpc.Serve(audAddr)
+	time.Sleep(time.Millisecond)
+
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		err := clients[i].Audit(audAddr, audPk)
+		if err.Err {
+			t.Fatal()
+		}
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Microseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op"},
+		{N: m1, Unit: "total(ms)"},
 	})
 }
 
