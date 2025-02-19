@@ -302,11 +302,21 @@ func TestBenchSelfMonCli(t *testing.T) {
 	nOps := 6_000
 
 	clients := make([]*Client, 0, nOps)
+	wg := new(sync.WaitGroup)
+	wg.Add(nOps)
 	for i := 0; i < nOps; i++ {
 		u := rnd.Uint64()
 		c := NewClient(u, servAddr, sigPk, vrfPkB)
 		clients = append(clients, c)
+		go func() {
+			_, err := c.Put(mkDefVal())
+			if err.Err {
+				t.Error()
+			}
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
