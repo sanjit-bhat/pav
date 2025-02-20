@@ -83,6 +83,63 @@ func TestBenchPutBatch(t *testing.T) {
 	})
 }
 
+func TestBenchPutScale(t *testing.T) {
+	// use big seed to minimize effects of growing puts on server.
+	nSeed := 1_000_000
+	serv, _, _, _, _ := seedServer(nSeed)
+	// need lots of clients to hit max workq rate.
+	maxNCli := 200
+	cliLats := make([][]float64, maxNCli)
+	cliMu := make([]sync.Mutex, maxNCli)
+	prevTime := time.Now()
+	sampleData := make([]float64, 0, 2_000_000)
+
+	for i := 0; i < maxNCli; i++ {
+		go func() {
+			prev := time.Now()
+			for {
+				serv.Put(rand.Uint64(), mkDefVal())
+				end := time.Now()
+				diff := end.Sub(prev)
+				prev = end
+
+				cliMu[i].Lock()
+				cliLats[i] = append(cliLats[i], float64(diff.Microseconds()))
+				cliMu[i].Unlock()
+			}
+		}()
+		time.Sleep(time.Second)
+
+		// measure.
+		sampleData = sampleData[:0]
+		samp := stats.Sample{Xs: sampleData}
+		for j := 0; j <= i; j++ {
+			cliMu[j].Lock()
+			lats := cliLats[j]
+			cliLats[j] = nil
+			cliMu[j].Unlock()
+
+			samp.Xs = append(samp.Xs, lats...)
+		}
+		samp.Sort()
+
+		ops := int(samp.Weight())
+		now := time.Now()
+		diffTime := now.Sub(prevTime)
+		prevTime = now
+
+		// report.
+		tput := float64(ops) / diffTime.Seconds()
+		benchutil.Report(ops, []*benchutil.Metric{
+			{N: float64(i + 1), Unit: "nCli"},
+			{N: tput, Unit: "op/s"},
+			{N: samp.Mean(), Unit: "mean(us)"},
+			{N: samp.StdDev(), Unit: "stddev"},
+			{N: samp.Quantile(0.99), Unit: "p99"},
+		})
+	}
+}
+
 func TestBenchPutSize(t *testing.T) {
 	serv, rnd, _, _, _ := seedServer(defNSeed)
 	u := rnd.Uint64()
@@ -164,7 +221,7 @@ func TestBenchGetOne(t *testing.T) {
 func TestBenchGetScale(t *testing.T) {
 	nSeed := defNSeed
 	serv, _, _, _, uids := seedServer(nSeed)
-	maxNCli := 3 * runtime.NumCPU()
+	maxNCli := 2 * runtime.NumCPU()
 	cliLats := make([][]float64, maxNCli)
 	cliMu := make([]sync.Mutex, maxNCli)
 	prevTime := time.Now()
@@ -280,6 +337,61 @@ func TestBenchSelfMonOne(t *testing.T) {
 		{N: m0, Unit: "us/op"},
 		{N: m1, Unit: "total(ms)"},
 	})
+}
+
+func TestBenchSelfMonScale(t *testing.T) {
+	nSeed := defNSeed
+	serv, _, _, _, uids := seedServer(nSeed)
+	maxNCli := 2 * runtime.NumCPU()
+	cliLats := make([][]float64, maxNCli)
+	cliMu := make([]sync.Mutex, maxNCli)
+	prevTime := time.Now()
+	sampleData := make([]float64, 0, 2_000_000)
+
+	for i := 0; i < maxNCli; i++ {
+		go func() {
+			prev := time.Now()
+			for {
+				serv.SelfMon(uids[rand.IntN(nSeed)])
+				end := time.Now()
+				diff := end.Sub(prev)
+				prev = end
+
+				cliMu[i].Lock()
+				cliLats[i] = append(cliLats[i], float64(diff.Microseconds()))
+				cliMu[i].Unlock()
+			}
+		}()
+		time.Sleep(time.Second)
+
+		// measure.
+		sampleData = sampleData[:0]
+		samp := stats.Sample{Xs: sampleData}
+		for j := 0; j <= i; j++ {
+			cliMu[j].Lock()
+			lats := cliLats[j]
+			cliLats[j] = nil
+			cliMu[j].Unlock()
+
+			samp.Xs = append(samp.Xs, lats...)
+		}
+		samp.Sort()
+
+		ops := int(samp.Weight())
+		now := time.Now()
+		diffTime := now.Sub(prevTime)
+		prevTime = now
+
+		// report.
+		tput := float64(ops) / diffTime.Seconds()
+		benchutil.Report(ops, []*benchutil.Metric{
+			{N: float64(i + 1), Unit: "nCli"},
+			{N: tput, Unit: "op/s"},
+			{N: samp.Mean(), Unit: "mean(us)"},
+			{N: samp.StdDev(), Unit: "stddev"},
+			{N: samp.Quantile(0.99), Unit: "p99"},
+		})
+	}
 }
 
 func TestBenchSelfMonSize(t *testing.T) {
