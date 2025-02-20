@@ -576,7 +576,7 @@ func TestBenchServScale(t *testing.T) {
 	serv, _, _ := NewServer()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
-	nInsert := 237_000_000
+	nInsert := 236_500_000
 	nMeasure := 500_000
 	var stat runtime.MemStats
 
