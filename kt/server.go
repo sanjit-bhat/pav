@@ -125,14 +125,12 @@ func (s *Server) Worker() {
 		}
 	}
 
-	// TODO: below logic is bit hard to formalize.
-	// can i instead upgrade read lock to write lock?
 	// NOTE: there are no other write lockers outside this fn.
 	// as a result, in this fn, the 3 critical sections view:
 	//
-	//  1. the current server.
-	//  2. the current server to new server.
-	//  3. the new server.
+	//  1. current server.
+	//  2. current server to new server.
+	//  3. new server.
 	//
 	// this is essential to make proper proofs and maintain the server invariant.
 
