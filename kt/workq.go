@@ -28,6 +28,26 @@ func (wq *WorkQ) Do(r *Work) {
 	wq.mu.Unlock()
 }
 
+// DoBatch is unverified. it's only used as a benchmark helper for
+// unmeasured batch puts.
+func (wq *WorkQ) DoBatch(r []*Work) {
+	wq.mu.Lock()
+	wq.work = append(wq.work, r...)
+	wq.condWorker.Signal()
+
+	// invariant: forall i < j, if work[j].done, then work[i].done.
+	// in pav, preserved by only having one worker that does:
+	//
+	//  w := wq.Get()
+	//  ...
+	//  wq.Finish(w)
+	rLen := len(r)
+	for !r[rLen-1].done {
+		wq.condCli.Wait()
+	}
+	wq.mu.Unlock()
+}
+
 func (wq *WorkQ) Get() []*Work {
 	wq.mu.Lock()
 	for wq.work == nil {

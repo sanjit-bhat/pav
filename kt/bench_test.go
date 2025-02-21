@@ -353,22 +353,18 @@ func TestBenchAuditOne(t *testing.T) {
 	nOps := 100
 	nInsert := 1_000
 
-	start := time.Now()
+	var total time.Duration
 	for i := 0; i < nOps; i++ {
-		wg := new(sync.WaitGroup)
-		wg.Add(nInsert)
+		work := make([]*Work, 0, nInsert)
 		for j := 0; j < nInsert; j++ {
-			u := rnd.Uint64()
-			go func() {
-				serv.Put(u, mkDefVal())
-				wg.Done()
-			}()
+			work = append(work, &Work{Req: &WQReq{Uid: rnd.Uint64(), Pk: mkDefVal()}})
 		}
-		wg.Wait()
+		serv.workQ.DoBatch(work)
 
+		s := time.Now()
 		epoch = updAuditor(t, serv, aud, epoch)
+		total += time.Since(s)
 	}
-	total := time.Since(start)
 
 	m0 := float64(total.Microseconds()) / float64(nOps)
 	m1 := float64(total.Milliseconds())
@@ -389,31 +385,25 @@ func TestBenchAuditSize(t *testing.T) {
 	}
 
 	nInsert := 1_000
-	wg := new(sync.WaitGroup)
-	wg.Add(nInsert)
-	for i := 0; i < nInsert; i++ {
-		u := rnd.Uint64()
-		go func() {
-			serv.Put(u, mkDefVal())
-			wg.Done()
-		}()
+	work := make([]*Work, 0, nInsert)
+	for j := 0; j < nInsert; j++ {
+		work = append(work, &Work{Req: &WQReq{Uid: rnd.Uint64(), Pk: mkDefVal()}})
 	}
-	wg.Wait()
+	serv.workQ.DoBatch(work)
 
-	sz := 0
-	// it takes ~3 (not 1) epochs to insert 1000, which only adds ~30B overhead.
-	for ; ; epoch++ {
-		upd, err := serv.Audit(epoch)
-		if err {
-			break
-		}
-		p := &ServerAuditReply{P: upd, Err: err}
-		pb := ServerAuditReplyEncode(nil, p)
-		sz += len(pb)
+	upd, err := serv.Audit(epoch)
+	p := &ServerAuditReply{P: upd, Err: err}
+	pb := ServerAuditReplyEncode(nil, p)
+
+	epoch++
+	_, err = serv.Audit(epoch)
+	// prev updates should have all been processed in 1 epoch.
+	if !err {
+		t.Fatal()
 	}
 
 	benchutil.Report(1, []*benchutil.Metric{
-		{N: float64(sz), Unit: "B"},
+		{N: float64(len(pb)), Unit: "B"},
 	})
 }
 
@@ -523,17 +513,13 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, cryptoffi.SigPublicKey, *cry
 	rnd := rand.NewChaCha8(seed)
 
 	uids := make([]uint64, 0, nSeed)
-	wg := new(sync.WaitGroup)
-	wg.Add(nSeed)
+	work := make([]*Work, 0, nSeed)
 	for i := 0; i < nSeed; i++ {
 		u := rnd.Uint64()
 		uids = append(uids, u)
-		go func() {
-			serv.Put(u, mkDefVal())
-			wg.Done()
-		}()
+		work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkDefVal()}})
 	}
-	wg.Wait()
+	serv.workQ.DoBatch(work)
 	runtime.GC()
 	return serv, rnd, sigPk, vrfPk, uids
 }
