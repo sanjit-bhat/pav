@@ -30,9 +30,13 @@ func TestBenchSeed(t *testing.T) {
 func TestBenchPutOne(t *testing.T) {
 	serv, rnd, _, _, _ := seedServer(defNSeed)
 	nOps := 2_000
+	nWarm := getWarmup(nOps)
 
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
+	var start time.Time
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
 		_, _, _, err := serv.Put(rnd.Uint64(), mkDefVal())
 		if err {
 			t.Fatal()
@@ -51,10 +55,14 @@ func TestBenchPutOne(t *testing.T) {
 func TestBenchPutBatch(t *testing.T) {
 	serv, rnd, _, _, _ := seedServer(defNSeed)
 	nOps := 100
+	nWarm := getWarmup(nOps)
 	nInsert := 1_000
 
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
+	var start time.Time
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
 		wg := new(sync.WaitGroup)
 		wg.Add(nInsert)
 		for j := 0; j < nInsert; j++ {
@@ -128,16 +136,20 @@ func TestBenchPutCli(t *testing.T) {
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
 	nOps := 2_000
+	nWarm := getWarmup(nOps)
 
-	clients := make([]*Client, 0, nOps)
-	for i := 0; i < nOps; i++ {
+	clients := make([]*Client, 0, nWarm+nOps)
+	for i := 0; i < nWarm+nOps; i++ {
 		u := rnd.Uint64()
 		c := NewClient(u, servAddr, sigPk, vrfPkB)
 		clients = append(clients, c)
 	}
 
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
+	var start time.Time
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
 		_, err := clients[i].Put(mkDefVal())
 		if err.Err {
 			t.Fatal()
@@ -156,9 +168,13 @@ func TestBenchPutCli(t *testing.T) {
 func TestBenchGetOne(t *testing.T) {
 	serv, _, _, _, uids := seedServer(defNSeed)
 	nOps := 3_000
+	nWarm := getWarmup(nOps)
 
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
+	var start time.Time
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
 		u := uids[i]
 		_, _, isReg, _, _ := serv.Get(u)
 		if !isReg {
@@ -225,9 +241,13 @@ func TestBenchGetCli(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	cli := NewClient(rnd.Uint64(), servAddr, sigPk, vrfPkB)
 	nOps := 3_000
+	nWarm := getWarmup(nOps)
 
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
+	var start time.Time
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
 		isReg, _, _, err := cli.Get(uids[i])
 		if err.Err {
 			t.Fatal()
@@ -249,11 +269,14 @@ func TestBenchGetCli(t *testing.T) {
 func TestBenchSelfMonOne(t *testing.T) {
 	serv, _, _, _, uids := seedServer(defNSeed)
 	nOps := 6_000
+	nWarm := getWarmup(nOps)
 
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
-		u := uids[i]
-		serv.SelfMon(u)
+	var start time.Time
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
+		serv.SelfMon(uids[i])
 	}
 	total := time.Since(start)
 
@@ -311,11 +334,12 @@ func TestBenchSelfMonCli(t *testing.T) {
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
 	nOps := 6_000
+	nWarm := getWarmup(nOps)
 
-	clients := make([]*Client, 0, nOps)
+	clients := make([]*Client, 0, nWarm+nOps)
 	wg := new(sync.WaitGroup)
-	wg.Add(nOps)
-	for i := 0; i < nOps; i++ {
+	wg.Add(nWarm + nOps)
+	for i := 0; i < nWarm+nOps; i++ {
 		u := rnd.Uint64()
 		c := NewClient(u, servAddr, sigPk, vrfPkB)
 		clients = append(clients, c)
@@ -329,8 +353,11 @@ func TestBenchSelfMonCli(t *testing.T) {
 	}
 	wg.Wait()
 
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
+	var start time.Time
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
 		_, err := clients[i].SelfMon()
 		if err.Err {
 			t.Fatal()
@@ -351,10 +378,14 @@ func TestBenchAuditOne(t *testing.T) {
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
 	nOps := 100
+	nWarm := getWarmup(nOps)
 	nInsert := 1_000
 
 	var total time.Duration
-	for i := 0; i < nOps; i++ {
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			total = 0
+		}
 		work := make([]*Work, 0, nInsert)
 		for j := 0; j < nInsert; j++ {
 			work = append(work, &Work{Req: &WQReq{Uid: rnd.Uint64(), Pk: mkDefVal()}})
@@ -415,13 +446,14 @@ func TestBenchAuditCli(t *testing.T) {
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
 	nOps := 2_000
+	nWarm := getWarmup(nOps)
 	nEps := 5
 
 	// after putting nEps keys, a client knows about nEps epochs.
-	clients := make([]*Client, 0, nOps)
+	clients := make([]*Client, 0, nWarm+nOps)
 	wg := new(sync.WaitGroup)
-	wg.Add(nOps)
-	for i := 0; i < nOps; i++ {
+	wg.Add(nWarm + nOps)
+	for i := 0; i < nWarm+nOps; i++ {
 		c := NewClient(rnd.Uint64(), servAddr, sigPk, vrfPkB)
 		clients = append(clients, c)
 
@@ -444,8 +476,11 @@ func TestBenchAuditCli(t *testing.T) {
 	audRpc.Serve(audAddr)
 	time.Sleep(time.Millisecond)
 
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
+	var start time.Time
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
 		err := clients[i].Audit(audAddr, audPk)
 		if err.Err {
 			t.Fatal()
@@ -598,4 +633,8 @@ func makeUniqueAddr() uint64 {
 	}
 	// left shift to make IP 0.0.0.0.
 	return port << 32
+}
+
+func getWarmup(nOps int) int {
+	return int(float64(nOps) * float64(0.1))
 }
