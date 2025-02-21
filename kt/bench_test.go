@@ -90,26 +90,21 @@ func TestBenchPutScale(t *testing.T) {
 	serv, _, _, _, _ := seedServer(nSeed)
 	// need lots of clients to hit max workq rate.
 	maxNCli := 200
-	var cliLats [][]float64
-	for i := 0; i < maxNCli; i++ {
-		cliLats = append(cliLats, make([]float64, 0, 1_000_000))
-	}
-	// TODO: size for tput on sr4.
-	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
+	runner := newClientRunner(maxNCli)
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
-		totalTime := runClients(nCli, cliLats, sample, func() {
+		totalTime := runner.run(nCli, func() {
 			serv.Put(rand.Uint64(), mkDefVal())
 		})
 
-		ops := int(sample.Weight())
+		ops := int(runner.sample.Weight())
 		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(ops, []*benchutil.Metric{
 			{N: float64(nCli), Unit: "nCli"},
 			{N: tput, Unit: "op/s"},
-			{N: sample.Mean(), Unit: "mean(us)"},
-			{N: sample.StdDev(), Unit: "stddev"},
-			{N: sample.Quantile(0.99), Unit: "p99"},
+			{N: runner.sample.Mean(), Unit: "mean(us)"},
+			{N: runner.sample.StdDev(), Unit: "stddev"},
+			{N: runner.sample.Quantile(0.99), Unit: "p99"},
 		})
 	}
 }
@@ -195,26 +190,22 @@ func TestBenchGetScale(t *testing.T) {
 	nSeed := defNSeed
 	serv, _, _, _, uids := seedServer(nSeed)
 	maxNCli := runtime.NumCPU()
-	var cliLats [][]float64
-	for i := 0; i < maxNCli; i++ {
-		cliLats = append(cliLats, make([]float64, 0, 1_000_000))
-	}
-	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
+	runner := newClientRunner(maxNCli)
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
-		totalTime := runClients(nCli, cliLats, sample, func() {
+		totalTime := runner.run(nCli, func() {
 			u := uids[rand.IntN(nSeed)]
 			serv.Get(u)
 		})
 
-		ops := int(sample.Weight())
+		ops := int(runner.sample.Weight())
 		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(ops, []*benchutil.Metric{
 			{N: float64(nCli), Unit: "nCli"},
 			{N: tput, Unit: "op/s"},
-			{N: sample.Mean(), Unit: "mean(us)"},
-			{N: sample.StdDev(), Unit: "stddev"},
-			{N: sample.Quantile(0.99), Unit: "p99"},
+			{N: runner.sample.Mean(), Unit: "mean(us)"},
+			{N: runner.sample.StdDev(), Unit: "stddev"},
+			{N: runner.sample.Quantile(0.99), Unit: "p99"},
 		})
 	}
 }
@@ -292,26 +283,22 @@ func TestBenchSelfMonScale(t *testing.T) {
 	nSeed := defNSeed
 	serv, _, _, _, uids := seedServer(nSeed)
 	maxNCli := runtime.NumCPU()
-	var cliLats [][]float64
-	for i := 0; i < maxNCli; i++ {
-		cliLats = append(cliLats, make([]float64, 0, 1_000_000))
-	}
-	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
+	runner := newClientRunner(maxNCli)
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
-		totalTime := runClients(nCli, cliLats, sample, func() {
+		totalTime := runner.run(nCli, func() {
 			u := uids[rand.IntN(nSeed)]
 			serv.SelfMon(u)
 		})
 
-		ops := int(sample.Weight())
+		ops := int(runner.sample.Weight())
 		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(ops, []*benchutil.Metric{
 			{N: float64(nCli), Unit: "nCli"},
 			{N: tput, Unit: "op/s"},
-			{N: sample.Mean(), Unit: "mean(us)"},
-			{N: sample.StdDev(), Unit: "stddev"},
-			{N: sample.Quantile(0.99), Unit: "p99"},
+			{N: runner.sample.Mean(), Unit: "mean(us)"},
+			{N: runner.sample.StdDev(), Unit: "stddev"},
+			{N: runner.sample.Quantile(0.99), Unit: "p99"},
 		})
 	}
 }
@@ -559,9 +546,24 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, cryptoffi.SigPublicKey, *cry
 	return serv, rnd, sigPk, vrfPk, uids
 }
 
-func runClients(nCli int, lats [][]float64, sample *stats.Sample, work func()) time.Duration {
+type clientRunner struct {
+	lats [][]float64
+	sample *stats.Sample
+}
+
+func newClientRunner(maxNCli int) *clientRunner {
+	var lats [][]float64
+	for i := 0; i < maxNCli; i++ {
+		lats = append(lats, make([]float64, 0, 1_000_000))
+	}
+	// TODO: size for tput on sr4.
+	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
+	return &clientRunner{lats: lats, sample: sample}
+}
+
+func (c *clientRunner) run(nCli int, work func()) time.Duration {
 	for i := 0; i < nCli; i++ {
-		lats[i] = lats[i][:0]
+		c.lats[i] = c.lats[i][:0]
 	}
 	var finish []chan struct{}
 	for i := 0; i < nCli; i++ {
@@ -583,7 +585,7 @@ func runClients(nCli int, lats [][]float64, sample *stats.Sample, work func()) t
 					s := time.Now()
 					work()
 					t := time.Since(s)
-					lats[i] = append(lats[i], float64(t.Microseconds()))
+					c.lats[i] = append(c.lats[i], float64(t.Microseconds()))
 				}
 			}
 		}()
@@ -597,11 +599,11 @@ func runClients(nCli int, lats [][]float64, sample *stats.Sample, work func()) t
 	total := time.Since(start)
 
 	// record.
-	*sample = stats.Sample{Xs: sample.Xs[:0]}
+	*c.sample = stats.Sample{Xs: c.sample.Xs[:0]}
 	for i := 0; i < nCli; i++ {
-		sample.Xs = append(sample.Xs, lats[i]...)
+		c.sample.Xs = append(c.sample.Xs, c.lats[i]...)
 	}
-	sample.Sort()
+	c.sample.Sort()
 	return total
 }
 
