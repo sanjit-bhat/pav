@@ -82,53 +82,26 @@ func TestBenchPutScale(t *testing.T) {
 	serv, _, _, _, _ := seedServer(nSeed)
 	// need lots of clients to hit max workq rate.
 	maxNCli := 200
-	cliLats := make([][]float64, maxNCli)
-	cliMu := make([]sync.Mutex, maxNCli)
-	prevTime := time.Now()
-	sampleData := make([]float64, 0, 2_000_000)
-
+	var cliLats [][]float64
 	for i := 0; i < maxNCli; i++ {
-		go func() {
-			prev := time.Now()
-			for {
-				serv.Put(rand.Uint64(), mkDefVal())
-				end := time.Now()
-				diff := end.Sub(prev)
-				prev = end
+		cliLats = append(cliLats, make([]float64, 0, 1_000_000))
+	}
+	// TODO: size for tput on sr4.
+	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
 
-				cliMu[i].Lock()
-				cliLats[i] = append(cliLats[i], float64(diff.Microseconds()))
-				cliMu[i].Unlock()
-			}
-		}()
-		time.Sleep(time.Second)
+	for nCli := 1; nCli <= maxNCli; nCli++ {
+		totalTime := runClients(nCli, cliLats, sample, func() {
+			serv.Put(rand.Uint64(), mkDefVal())
+		})
 
-		// measure.
-		sampleData = sampleData[:0]
-		samp := stats.Sample{Xs: sampleData}
-		for j := 0; j <= i; j++ {
-			cliMu[j].Lock()
-			lats := cliLats[j]
-			cliLats[j] = nil
-			cliMu[j].Unlock()
-
-			samp.Xs = append(samp.Xs, lats...)
-		}
-		samp.Sort()
-
-		ops := int(samp.Weight())
-		now := time.Now()
-		diffTime := now.Sub(prevTime)
-		prevTime = now
-
-		// report.
-		tput := float64(ops) / diffTime.Seconds()
+		ops := int(sample.Weight())
+		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(ops, []*benchutil.Metric{
-			{N: float64(i + 1), Unit: "nCli"},
+			{N: float64(nCli), Unit: "nCli"},
 			{N: tput, Unit: "op/s"},
-			{N: samp.Mean(), Unit: "mean(us)"},
-			{N: samp.StdDev(), Unit: "stddev"},
-			{N: samp.Quantile(0.99), Unit: "p99"},
+			{N: sample.Mean(), Unit: "mean(us)"},
+			{N: sample.StdDev(), Unit: "stddev"},
+			{N: sample.Quantile(0.99), Unit: "p99"},
 		})
 	}
 }
@@ -205,58 +178,27 @@ func TestBenchGetOne(t *testing.T) {
 func TestBenchGetScale(t *testing.T) {
 	nSeed := defNSeed
 	serv, _, _, _, uids := seedServer(nSeed)
-	maxNCli := 2 * runtime.NumCPU()
-	// TODO: pre-alloc these.
-	cliLats := make([][]float64, maxNCli)
-	cliMu := make([]sync.Mutex, maxNCli)
-	prevTime := time.Now()
-	sampleData := make([]float64, 0, 2_000_000)
-
+	maxNCli := runtime.NumCPU()
+	var cliLats [][]float64
 	for i := 0; i < maxNCli; i++ {
-		// TODO: spawn, wait, and kill all client routines in each loop.
-		go func() {
-			prev := time.Now()
-			for {
-				// TODO: double time to rm app cost.
-				u := uids[rand.IntN(nSeed)]
-				serv.Get(u)
-				end := time.Now()
-				diff := end.Sub(prev)
-				prev = end
+		cliLats = append(cliLats, make([]float64, 0, 1_000_000))
+	}
+	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
 
-				cliMu[i].Lock()
-				cliLats[i] = append(cliLats[i], float64(diff.Microseconds()))
-				cliMu[i].Unlock()
-			}
-		}()
-		time.Sleep(time.Second)
+	for nCli := 1; nCli <= maxNCli; nCli++ {
+		totalTime := runClients(nCli, cliLats, sample, func() {
+			u := uids[rand.IntN(nSeed)]
+			serv.Get(u)
+		})
 
-		// measure.
-		sampleData = sampleData[:0]
-		samp := stats.Sample{Xs: sampleData}
-		for j := 0; j <= i; j++ {
-			cliMu[j].Lock()
-			lats := cliLats[j]
-			cliLats[j] = nil
-			cliMu[j].Unlock()
-
-			samp.Xs = append(samp.Xs, lats...)
-		}
-		samp.Sort()
-
-		ops := int(samp.Weight())
-		now := time.Now()
-		diffTime := now.Sub(prevTime)
-		prevTime = now
-
-		// report.
-		tput := float64(ops) / diffTime.Seconds()
+		ops := int(sample.Weight())
+		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(ops, []*benchutil.Metric{
-			{N: float64(i + 1), Unit: "nCli"},
+			{N: float64(nCli), Unit: "nCli"},
 			{N: tput, Unit: "op/s"},
-			{N: samp.Mean(), Unit: "mean(us)"},
-			{N: samp.StdDev(), Unit: "stddev"},
-			{N: samp.Quantile(0.99), Unit: "p99"},
+			{N: sample.Mean(), Unit: "mean(us)"},
+			{N: sample.StdDev(), Unit: "stddev"},
+			{N: sample.Quantile(0.99), Unit: "p99"},
 		})
 	}
 }
@@ -326,54 +268,27 @@ func TestBenchSelfMonOne(t *testing.T) {
 func TestBenchSelfMonScale(t *testing.T) {
 	nSeed := defNSeed
 	serv, _, _, _, uids := seedServer(nSeed)
-	maxNCli := 2 * runtime.NumCPU()
-	cliLats := make([][]float64, maxNCli)
-	cliMu := make([]sync.Mutex, maxNCli)
-	prevTime := time.Now()
-	sampleData := make([]float64, 0, 2_000_000)
-
+	maxNCli := runtime.NumCPU()
+	var cliLats [][]float64
 	for i := 0; i < maxNCli; i++ {
-		go func() {
-			prev := time.Now()
-			for {
-				serv.SelfMon(uids[rand.IntN(nSeed)])
-				end := time.Now()
-				diff := end.Sub(prev)
-				prev = end
+		cliLats = append(cliLats, make([]float64, 0, 1_000_000))
+	}
+	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
 
-				cliMu[i].Lock()
-				cliLats[i] = append(cliLats[i], float64(diff.Microseconds()))
-				cliMu[i].Unlock()
-			}
-		}()
-		time.Sleep(time.Second)
+	for nCli := 1; nCli <= maxNCli; nCli++ {
+		totalTime := runClients(nCli, cliLats, sample, func() {
+			u := uids[rand.IntN(nSeed)]
+			serv.SelfMon(u)
+		})
 
-		// measure.
-		sampleData = sampleData[:0]
-		samp := stats.Sample{Xs: sampleData}
-		for j := 0; j <= i; j++ {
-			cliMu[j].Lock()
-			lats := cliLats[j]
-			cliLats[j] = nil
-			cliMu[j].Unlock()
-
-			samp.Xs = append(samp.Xs, lats...)
-		}
-		samp.Sort()
-
-		ops := int(samp.Weight())
-		now := time.Now()
-		diffTime := now.Sub(prevTime)
-		prevTime = now
-
-		// report.
-		tput := float64(ops) / diffTime.Seconds()
+		ops := int(sample.Weight())
+		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(ops, []*benchutil.Metric{
-			{N: float64(i + 1), Unit: "nCli"},
+			{N: float64(nCli), Unit: "nCli"},
 			{N: tput, Unit: "op/s"},
-			{N: samp.Mean(), Unit: "mean(us)"},
-			{N: samp.StdDev(), Unit: "stddev"},
-			{N: samp.Quantile(0.99), Unit: "p99"},
+			{N: sample.Mean(), Unit: "mean(us)"},
+			{N: sample.StdDev(), Unit: "stddev"},
+			{N: sample.Quantile(0.99), Unit: "p99"},
 		})
 	}
 }
@@ -621,6 +536,52 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, cryptoffi.SigPublicKey, *cry
 	wg.Wait()
 	runtime.GC()
 	return serv, rnd, sigPk, vrfPk, uids
+}
+
+func runClients(nCli int, lats [][]float64, sample *stats.Sample, work func()) time.Duration {
+	for i := 0; i < nCli; i++ {
+		lats[i] = lats[i][:0]
+	}
+	var finish []chan struct{}
+	for i := 0; i < nCli; i++ {
+		finish = append(finish, make(chan struct{}, 1))
+	}
+	wg := new(sync.WaitGroup)
+	wg.Add(nCli)
+
+	// run.
+	start := time.Now()
+	for i := 0; i < nCli; i++ {
+		go func() {
+			for {
+				select {
+				case <-finish[i]:
+					wg.Done()
+					return
+				default:
+					s := time.Now()
+					work()
+					t := time.Since(s)
+					lats[i] = append(lats[i], float64(t.Microseconds()))
+				}
+			}
+		}()
+	}
+
+	time.Sleep(time.Second)
+	for i := 0; i < nCli; i++ {
+		finish[i] <- struct{}{}
+	}
+	wg.Wait()
+	total := time.Since(start)
+
+	// record.
+	*sample = stats.Sample{Xs: sample.Xs[:0]}
+	for i := 0; i < nCli; i++ {
+		sample.Xs = append(sample.Xs, lats[i]...)
+	}
+	sample.Sort()
+	return total
 }
 
 func mkDefVal() []byte {
