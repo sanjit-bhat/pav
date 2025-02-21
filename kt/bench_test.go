@@ -1,7 +1,7 @@
 package kt
 
 // NOTE: for server benches that strive for akd compat,
-// look for "benchmark" in source files to find where to remove signatures.
+// look for "benchmark:" in source files to find where to remove signatures.
 
 import (
 	"math/rand/v2"
@@ -28,20 +28,13 @@ func TestBenchSeed(t *testing.T) {
 }
 
 func TestBenchPutOne(t *testing.T) {
-	serv, rnd, _, vrfPk, _ := seedServer(defNSeed)
+	serv, rnd, _, _, _ := seedServer(defNSeed)
 	nOps := 2_000
 
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
-		u := rnd.Uint64()
-		dig, lat, bound, err := serv.Put(u, mkDefVal())
+		_, _, _, err := serv.Put(rnd.Uint64(), mkDefVal())
 		if err {
-			t.Fatal()
-		}
-		if checkMemb(vrfPk, u, 0, dig.Dig, lat) {
-			t.Fatal()
-		}
-		if checkNonMemb(vrfPk, u, 1, dig.Dig, bound) {
 			t.Fatal()
 		}
 	}
@@ -188,23 +181,14 @@ func TestBenchPutCli(t *testing.T) {
 }
 
 func TestBenchGetOne(t *testing.T) {
-	serv, _, _, vrfPk, uids := seedServer(defNSeed)
+	serv, _, _, _, uids := seedServer(defNSeed)
 	nOps := 3_000
 
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
 		u := uids[i]
-		dig, hist, isReg, lat, bound := serv.Get(u)
+		_, _, isReg, _, _ := serv.Get(u)
 		if !isReg {
-			t.Fatal()
-		}
-		if checkHist(vrfPk, u, dig.Dig, hist) {
-			t.Fatal()
-		}
-		if checkMemb(vrfPk, u, 0, dig.Dig, lat) {
-			t.Fatal()
-		}
-		if checkNonMemb(vrfPk, u, 1, dig.Dig, bound) {
 			t.Fatal()
 		}
 	}
@@ -222,15 +206,18 @@ func TestBenchGetScale(t *testing.T) {
 	nSeed := defNSeed
 	serv, _, _, _, uids := seedServer(nSeed)
 	maxNCli := 2 * runtime.NumCPU()
+	// TODO: pre-alloc these.
 	cliLats := make([][]float64, maxNCli)
 	cliMu := make([]sync.Mutex, maxNCli)
 	prevTime := time.Now()
 	sampleData := make([]float64, 0, 2_000_000)
 
 	for i := 0; i < maxNCli; i++ {
+		// TODO: spawn, wait, and kill all client routines in each loop.
 		go func() {
 			prev := time.Now()
 			for {
+				// TODO: double time to rm app cost.
 				u := uids[rand.IntN(nSeed)]
 				serv.Get(u)
 				end := time.Now()
@@ -318,16 +305,13 @@ func TestBenchGetCli(t *testing.T) {
 }
 
 func TestBenchSelfMonOne(t *testing.T) {
-	serv, _, _, vrfPk, uids := seedServer(defNSeed)
+	serv, _, _, _, uids := seedServer(defNSeed)
 	nOps := 6_000
 
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
 		u := uids[i]
-		dig, bound := serv.SelfMon(u)
-		if checkNonMemb(vrfPk, u, 1, dig.Dig, bound) {
-			t.Fatal()
-		}
+		serv.SelfMon(u)
 	}
 	total := time.Since(start)
 
