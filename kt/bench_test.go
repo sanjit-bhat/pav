@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"runtime"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -547,23 +548,28 @@ func seedServer(nSeed int) (*Server, *rand.ChaCha8, cryptoffi.SigPublicKey, *cry
 }
 
 type clientRunner struct {
-	lats [][]float64
+	times  [][]startEnd
 	sample *stats.Sample
 }
 
+type startEnd struct {
+	start time.Time
+	end   time.Time
+}
+
 func newClientRunner(maxNCli int) *clientRunner {
-	var lats [][]float64
+	var times [][]startEnd
 	for i := 0; i < maxNCli; i++ {
-		lats = append(lats, make([]float64, 0, 1_000_000))
+		times = append(times, make([]startEnd, 0, 1_000_000))
 	}
 	// TODO: size for tput on sr4.
 	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
-	return &clientRunner{lats: lats, sample: sample}
+	return &clientRunner{times: times, sample: sample}
 }
 
 func (c *clientRunner) run(nCli int, work func()) time.Duration {
 	for i := 0; i < nCli; i++ {
-		c.lats[i] = c.lats[i][:0]
+		c.times[i] = c.times[i][:0]
 	}
 	var finish []chan struct{}
 	for i := 0; i < nCli; i++ {
@@ -572,8 +578,7 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 	wg := new(sync.WaitGroup)
 	wg.Add(nCli)
 
-	// run.
-	start := time.Now()
+	// get data.
 	for i := 0; i < nCli; i++ {
 		go func() {
 			for {
@@ -584,8 +589,8 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 				default:
 					s := time.Now()
 					work()
-					t := time.Since(s)
-					c.lats[i] = append(c.lats[i], float64(t.Microseconds()))
+					e := time.Now()
+					c.times[i] = append(c.times[i], startEnd{start: s, end: e})
 				}
 			}
 		}()
@@ -596,12 +601,43 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 		finish[i] <- struct{}{}
 	}
 	wg.Wait()
-	total := time.Since(start)
 
-	// record.
+	// clamp starts and ends to account for setup and takedown variance.
+	starts := make([]time.Time, 0, nCli)
+	ends := make([]time.Time, 0, nCli)
+	for i := 0; i < nCli; i++ {
+		ts := c.times[i]
+		starts = append(starts, ts[0].start)
+		ends = append(ends, ts[len(ts)-1].end)
+	}
+	init := slices.MaxFunc(starts, func(s, e time.Time) int {
+		return s.Compare(e)
+	})
+	postWarm := init.Add(100 * time.Millisecond)
+	end := slices.MinFunc(ends, func(s, e time.Time) int {
+		return s.Compare(e)
+	})
+	total := end.Sub(postWarm)
+
+	// extract sample from between warmup and ending time.
 	*c.sample = stats.Sample{Xs: c.sample.Xs[:0]}
 	for i := 0; i < nCli; i++ {
-		c.sample.Xs = append(c.sample.Xs, c.lats[i]...)
+		times := c.times[i]
+		low, _ := slices.BinarySearchFunc(times, postWarm,
+			func(s startEnd, t time.Time) int {
+				return s.start.Compare(t)
+			})
+		high, ok := slices.BinarySearchFunc(times, end,
+			func(s startEnd, t time.Time) int {
+				return s.end.Compare(t)
+			})
+		if ok {
+			high++
+		}
+		for j := low; j < high; j++ {
+			d := float64(times[j].end.Sub(times[j].start).Microseconds())
+			c.sample.Xs = append(c.sample.Xs, d)
+		}
 	}
 	c.sample.Sort()
 	return total
