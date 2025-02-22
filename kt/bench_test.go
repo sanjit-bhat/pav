@@ -100,8 +100,7 @@ func TestBenchPutScale(t *testing.T) {
 
 		ops := int(runner.sample.Weight())
 		tput := float64(ops) / totalTime.Seconds()
-		benchutil.Report(ops, []*benchutil.Metric{
-			{N: float64(nCli), Unit: "nCli"},
+		benchutil.Report(nCli, []*benchutil.Metric{
 			{N: tput, Unit: "op/s"},
 			{N: runner.sample.Mean(), Unit: "mean(us)"},
 			{N: runner.sample.StdDev(), Unit: "stddev"},
@@ -201,8 +200,7 @@ func TestBenchGetScale(t *testing.T) {
 
 		ops := int(runner.sample.Weight())
 		tput := float64(ops) / totalTime.Seconds()
-		benchutil.Report(ops, []*benchutil.Metric{
-			{N: float64(nCli), Unit: "nCli"},
+		benchutil.Report(nCli, []*benchutil.Metric{
 			{N: tput, Unit: "op/s"},
 			{N: runner.sample.Mean(), Unit: "mean(us)"},
 			{N: runner.sample.StdDev(), Unit: "stddev"},
@@ -315,8 +313,7 @@ func TestBenchSelfMonScale(t *testing.T) {
 
 		ops := int(runner.sample.Weight())
 		tput := float64(ops) / totalTime.Seconds()
-		benchutil.Report(ops, []*benchutil.Metric{
-			{N: float64(nCli), Unit: "nCli"},
+		benchutil.Report(nCli, []*benchutil.Metric{
 			{N: tput, Unit: "op/s"},
 			{N: runner.sample.Mean(), Unit: "mean(us)"},
 			{N: runner.sample.StdDev(), Unit: "stddev"},
@@ -512,27 +509,31 @@ func TestBenchServScale(t *testing.T) {
 	nInsert := 236_500_000
 	nMeasure := 500_000
 	var stat runtime.MemStats
+	nCli := 100
+	runner := newClientRunner(nCli)
 
 	for i := 0; i < nInsert; i += nMeasure {
-		wg := new(sync.WaitGroup)
-		wg.Add(nMeasure)
-		start := time.Now()
-		for j := 0; j < nMeasure; j++ {
-			u := rnd.Uint64()
-			go func() {
-				serv.Put(u, mkDefVal())
-				wg.Done()
-			}()
+		totalTime := runner.run(nCli, func() {
+			serv.Put(rand.Uint64(), mkDefVal())
+		})
+
+		rem := i + nMeasure - len(serv.visibleKeys)
+		work := make([]*Work, 0, rem)
+		for j := 0; j < rem; j++ {
+			work = append(work, &Work{Req: &WQReq{Uid: rnd.Uint64(), Pk: mkDefVal()}})
 		}
-		wg.Wait()
-		total := time.Since(start)
+		serv.workQ.DoBatch(work)
 
 		runtime.GC()
 		runtime.ReadMemStats(&stat)
-		tput := float64(nMeasure) / float64(total.Seconds())
 		mb := float64(stat.Alloc) / float64(1_000_000)
+		ops := int(runner.sample.Weight())
+		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(i+nMeasure, []*benchutil.Metric{
 			{N: tput, Unit: "op/s"},
+			{N: runner.sample.Mean(), Unit: "mean(us)"},
+			{N: runner.sample.StdDev(), Unit: "stddev"},
+			{N: runner.sample.Quantile(0.99), Unit: "p99"},
 			{N: mb, Unit: "MB"},
 		})
 	}
