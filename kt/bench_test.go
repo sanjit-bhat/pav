@@ -577,7 +577,6 @@ func newClientRunner(maxNCli int) *clientRunner {
 	for i := 0; i < maxNCli; i++ {
 		times = append(times, make([]startEnd, 0, 1_000_000))
 	}
-	// TODO: size for tput on sr4.
 	sample := &stats.Sample{Xs: make([]float64, 0, 10_000_000)}
 	return &clientRunner{times: times, sample: sample}
 }
