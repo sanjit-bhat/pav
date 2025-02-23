@@ -21,13 +21,6 @@ const (
 	defNSeed int = 100_000
 )
 
-func TestBenchSeed(t *testing.T) {
-	start := time.Now()
-	seedServer(1_000_000)
-	total := time.Since(start)
-	t.Log(total)
-}
-
 func TestBenchPutOne(t *testing.T) {
 	serv, rnd, _, _, _ := seedServer(defNSeed)
 	nOps := 2_000
