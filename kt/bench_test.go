@@ -517,9 +517,9 @@ func TestBenchServScale(t *testing.T) {
 			serv.Put(rand.Uint64(), mkDefVal())
 		})
 
-		rem := i + nMeasure - len(serv.visibleKeys)
-		work := make([]*Work, 0, rem)
-		for j := 0; j < rem; j++ {
+		nRem := i + nMeasure - len(serv.visibleKeys)
+		work := make([]*Work, 0, nRem)
+		for j := 0; j < nRem; j++ {
 			work = append(work, &Work{Req: &WQReq{Uid: rnd.Uint64(), Pk: mkDefVal()}})
 		}
 		serv.workQ.DoBatch(work)
