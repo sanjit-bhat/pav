@@ -79,12 +79,12 @@ func TestBenchPutBatch(t *testing.T) {
 }
 
 func TestBenchPutScale(t *testing.T) {
-	serv, _, _, _, _ := seedServer(defNSeed)
 	// need lots of clients to hit max workq rate.
 	maxNCli := 200
 	runner := newClientRunner(maxNCli)
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
+		serv, _, _, _, _ := seedServer(defNSeed)
 		totalTime := runner.run(nCli, func() {
 			serv.Put(rand.Uint64(), mkDefVal())
 		})
