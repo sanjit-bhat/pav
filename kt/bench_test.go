@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defNSeed int = 100_000
+	defNSeed int = 1_000_000
 )
 
 func TestBenchPutOne(t *testing.T) {
@@ -79,9 +79,7 @@ func TestBenchPutBatch(t *testing.T) {
 }
 
 func TestBenchPutScale(t *testing.T) {
-	// use big seed to minimize effects of growing puts on server.
-	nSeed := 1_000_000
-	serv, _, _, _, _ := seedServer(nSeed)
+	serv, _, _, _, _ := seedServer(defNSeed)
 	// need lots of clients to hit max workq rate.
 	maxNCli := 200
 	runner := newClientRunner(maxNCli)
