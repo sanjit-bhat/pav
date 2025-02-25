@@ -4,6 +4,7 @@ package kt
 // look for "benchmark:" in source files to find where to remove signatures.
 
 import (
+	"log"
 	"math/rand/v2"
 	"net"
 	"runtime"
@@ -580,37 +581,27 @@ func newClientRunner(maxNCli int) *clientRunner {
 }
 
 func (c *clientRunner) run(nCli int, work func()) time.Duration {
+	// get data.
 	for i := 0; i < nCli; i++ {
 		c.times[i] = c.times[i][:0]
 	}
-	var finish []chan struct{}
-	for i := 0; i < nCli; i++ {
-		finish = append(finish, make(chan struct{}, 1))
-	}
 	wg := new(sync.WaitGroup)
 	wg.Add(nCli)
-
-	// get data.
 	for i := 0; i < nCli; i++ {
 		go func() {
+			cliStart := time.Now()
 			for {
-				select {
-				case <-finish[i]:
+				s := time.Now()
+				work()
+				e := time.Now()
+				c.times[i] = append(c.times[i], startEnd{start: s, end: e})
+
+				if e.Sub(cliStart) >= time.Second {
 					wg.Done()
-					return
-				default:
-					s := time.Now()
-					work()
-					e := time.Now()
-					c.times[i] = append(c.times[i], startEnd{start: s, end: e})
+					break
 				}
 			}
 		}()
-	}
-
-	time.Sleep(time.Second)
-	for i := 0; i < nCli; i++ {
-		finish[i] <- struct{}{}
 	}
 	wg.Wait()
 
