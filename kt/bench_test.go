@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	defNSeed int = 1_000_000
+	defNSeed int     = 1_000_000
+	nsPerUs  float64 = 1_000
 )
 
 func TestBenchPutOne(t *testing.T) {
@@ -94,12 +95,14 @@ func TestBenchPutScale(t *testing.T) {
 		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(nCli, []*benchutil.Metric{
 			{N: tput, Unit: "op/s"},
-			{N: runner.sample.Mean(), Unit: "mean(us)"},
-			{N: runner.sample.StdDev(), Unit: "stddev"},
-			{N: runner.sample.Quantile(0.99), Unit: "p99"},
+			{N: runner.sample.Mean() / nsPerUs, Unit: "mean(us)"},
+			{N: runner.sample.StdDev() / nsPerUs, Unit: "stddev"},
+			{N: runner.sample.Quantile(0.99) / nsPerUs, Unit: "p99"},
 		})
 	}
 }
+
+// TODO: add PutBatch that directly uses workq.DoBatch, for comparison sake.
 
 func TestBenchPutSize(t *testing.T) {
 	serv, rnd, _, _, _ := seedServer(defNSeed)
@@ -194,9 +197,9 @@ func TestBenchGetScale(t *testing.T) {
 		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(nCli, []*benchutil.Metric{
 			{N: tput, Unit: "op/s"},
-			{N: runner.sample.Mean(), Unit: "mean(us)"},
-			{N: runner.sample.StdDev(), Unit: "stddev"},
-			{N: runner.sample.Quantile(0.99), Unit: "p99"},
+			{N: runner.sample.Mean() / nsPerUs, Unit: "mean(us)"},
+			{N: runner.sample.StdDev() / nsPerUs, Unit: "stddev"},
+			{N: runner.sample.Quantile(0.99) / nsPerUs, Unit: "p99"},
 		})
 	}
 }
@@ -307,9 +310,9 @@ func TestBenchSelfMonScale(t *testing.T) {
 		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(nCli, []*benchutil.Metric{
 			{N: tput, Unit: "op/s"},
-			{N: runner.sample.Mean(), Unit: "mean(us)"},
-			{N: runner.sample.StdDev(), Unit: "stddev"},
-			{N: runner.sample.Quantile(0.99), Unit: "p99"},
+			{N: runner.sample.Mean() / nsPerUs, Unit: "mean(us)"},
+			{N: runner.sample.StdDev() / nsPerUs, Unit: "stddev"},
+			{N: runner.sample.Quantile(0.99) / nsPerUs, Unit: "p99"},
 		})
 	}
 }
@@ -523,9 +526,9 @@ func TestBenchServScale(t *testing.T) {
 		tput := float64(ops) / totalTime.Seconds()
 		benchutil.Report(i+nMeasure, []*benchutil.Metric{
 			{N: tput, Unit: "op/s"},
-			{N: runner.sample.Mean(), Unit: "mean(us)"},
-			{N: runner.sample.StdDev(), Unit: "stddev"},
-			{N: runner.sample.Quantile(0.99), Unit: "p99"},
+			{N: runner.sample.Mean() / nsPerUs, Unit: "mean(us)"},
+			{N: runner.sample.StdDev() / nsPerUs, Unit: "stddev"},
+			{N: runner.sample.Quantile(0.99) / nsPerUs, Unit: "p99"},
 			{N: mb, Unit: "MB"},
 		})
 	}
@@ -637,8 +640,11 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 		if ok {
 			high++
 		}
+		if high-low < 1_000 {
+			log.Fatal("clientRunner: something went wrong in clamping")
+		}
 		for j := low; j < high; j++ {
-			d := float64(times[j].end.Sub(times[j].start).Microseconds())
+			d := float64(times[j].end.Sub(times[j].start).Nanoseconds())
 			c.sample.Xs = append(c.sample.Xs, d)
 		}
 	}
