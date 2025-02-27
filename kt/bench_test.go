@@ -24,7 +24,7 @@ const (
 )
 
 func TestBenchPutOne(t *testing.T) {
-	serv, rnd, _, _, _ := seedServer(defNSeed)
+	serv, _, _, _ := seedServer(defNSeed)
 	nOps := 2_000
 	nWarm := getWarmup(nOps)
 
@@ -33,7 +33,7 @@ func TestBenchPutOne(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		_, _, _, err := serv.Put(rnd.Uint64(), mkDefVal())
+		_, _, _, err := serv.Put(rand.Uint64(), mkDefVal())
 		if err {
 			t.Fatal()
 		}
@@ -49,7 +49,7 @@ func TestBenchPutOne(t *testing.T) {
 }
 
 func TestBenchPutBatch(t *testing.T) {
-	serv, rnd, _, _, _ := seedServer(defNSeed)
+	serv, _, _, _ := seedServer(defNSeed)
 	nOps := 100
 	nWarm := getWarmup(nOps)
 	nInsert := 1_000
@@ -62,7 +62,7 @@ func TestBenchPutBatch(t *testing.T) {
 		wg := new(sync.WaitGroup)
 		wg.Add(nInsert)
 		for j := 0; j < nInsert; j++ {
-			u := rnd.Uint64()
+			u := rand.Uint64()
 			go func() {
 				serv.Put(u, mkDefVal())
 				wg.Done()
@@ -86,7 +86,7 @@ func TestBenchPutScale(t *testing.T) {
 	runner := newClientRunner(maxNCli)
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
-		serv, _, _, _, _ := seedServer(defNSeed)
+		serv, _, _, _ := seedServer(defNSeed)
 		totalTime := runner.run(nCli, func() {
 			serv.Put(rand.Uint64(), mkDefVal())
 		})
@@ -105,8 +105,8 @@ func TestBenchPutScale(t *testing.T) {
 // TODO: add PutBatch that directly uses workq.DoBatch, for comparison sake.
 
 func TestBenchPutSize(t *testing.T) {
-	serv, rnd, _, _, _ := seedServer(defNSeed)
-	u := rnd.Uint64()
+	serv, _, _, _ := seedServer(defNSeed)
+	u := rand.Uint64()
 	dig, lat, bound, err := serv.Put(u, mkDefVal())
 	if err {
 		t.Fatal()
@@ -119,7 +119,7 @@ func TestBenchPutSize(t *testing.T) {
 }
 
 func TestBenchPutCli(t *testing.T) {
-	serv, rnd, sigPk, vrfPk, _ := seedServer(defNSeed)
+	serv, sigPk, vrfPk, _ := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
 	servRpc := NewRpcServer(serv)
 	servAddr := makeUniqueAddr()
@@ -130,7 +130,7 @@ func TestBenchPutCli(t *testing.T) {
 
 	clients := make([]*Client, 0, nWarm+nOps)
 	for i := 0; i < nWarm+nOps; i++ {
-		u := rnd.Uint64()
+		u := rand.Uint64()
 		c := NewClient(u, servAddr, sigPk, vrfPkB)
 		clients = append(clients, c)
 	}
@@ -156,7 +156,7 @@ func TestBenchPutCli(t *testing.T) {
 }
 
 func TestBenchGetOne(t *testing.T) {
-	serv, _, _, _, uids := seedServer(defNSeed)
+	serv, _, _, uids := seedServer(defNSeed)
 	nOps := 3_000
 	nWarm := getWarmup(nOps)
 
@@ -183,7 +183,7 @@ func TestBenchGetOne(t *testing.T) {
 
 func TestBenchGetScale(t *testing.T) {
 	nSeed := defNSeed
-	serv, _, _, _, uids := seedServer(nSeed)
+	serv, _, _, uids := seedServer(nSeed)
 	maxNCli := runtime.NumCPU()
 	runner := newClientRunner(maxNCli)
 
@@ -205,7 +205,7 @@ func TestBenchGetScale(t *testing.T) {
 }
 
 func TestBenchGetSizeOne(t *testing.T) {
-	serv, _, _, _, uids := seedServer(defNSeed)
+	serv, _, _, uids := seedServer(defNSeed)
 	dig, hist, isReg, lat, bound := serv.Get(uids[0])
 	if !isReg {
 		t.Fatal()
@@ -218,15 +218,12 @@ func TestBenchGetSizeOne(t *testing.T) {
 }
 
 func TestBenchGetSizeMulti(t *testing.T) {
-	serv, rnd, _, _, _ := seedServer(defNSeed)
+	serv, _, _, _ := seedServer(defNSeed)
 	maxNVers := 10
+	uid := rand.Uint64()
 	for nVers := 1; nVers <= maxNVers; nVers++ {
-		u := rnd.Uint64()
-		for i := 0; i < nVers; i++ {
-			serv.Put(u, mkDefVal())
-		}
-
-		dig, hist, isReg, lat, bound := serv.Get(u)
+		serv.Put(uid, mkDefVal())
+		dig, hist, isReg, lat, bound := serv.Get(uid)
 		if !isReg {
 			t.Fatal()
 		}
@@ -238,14 +235,16 @@ func TestBenchGetSizeMulti(t *testing.T) {
 	}
 }
 
+// TODO: use thread rng everywhere.
+
 func TestBenchGetCli(t *testing.T) {
-	serv, rnd, sigPk, vrfPk, uids := seedServer(defNSeed)
+	serv, sigPk, vrfPk, uids := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
 	servRpc := NewRpcServer(serv)
 	servAddr := makeUniqueAddr()
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
-	cli := NewClient(rnd.Uint64(), servAddr, sigPk, vrfPkB)
+	cli := NewClient(rand.Uint64(), servAddr, sigPk, vrfPkB)
 	nOps := 3_000
 	nWarm := getWarmup(nOps)
 
@@ -273,7 +272,7 @@ func TestBenchGetCli(t *testing.T) {
 }
 
 func TestBenchSelfMonOne(t *testing.T) {
-	serv, _, _, _, uids := seedServer(defNSeed)
+	serv, _, _, uids := seedServer(defNSeed)
 	nOps := 6_000
 	nWarm := getWarmup(nOps)
 
@@ -282,6 +281,7 @@ func TestBenchSelfMonOne(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
+		// TODO: change all these to rand accesses, for consistency.
 		serv.SelfMon(uids[i])
 	}
 	total := time.Since(start)
@@ -296,7 +296,7 @@ func TestBenchSelfMonOne(t *testing.T) {
 
 func TestBenchSelfMonScale(t *testing.T) {
 	nSeed := defNSeed
-	serv, _, _, _, uids := seedServer(nSeed)
+	serv, _, _, uids := seedServer(nSeed)
 	maxNCli := runtime.NumCPU()
 	runner := newClientRunner(maxNCli)
 
@@ -318,7 +318,7 @@ func TestBenchSelfMonScale(t *testing.T) {
 }
 
 func TestBenchSelfMonSize(t *testing.T) {
-	serv, _, _, _, uids := seedServer(defNSeed)
+	serv, _, _, uids := seedServer(defNSeed)
 	dig, bound := serv.SelfMon(uids[0])
 	p := &ServerSelfMonReply{Dig: dig, Bound: bound}
 	pb := ServerSelfMonReplyEncode(nil, p)
@@ -327,8 +327,10 @@ func TestBenchSelfMonSize(t *testing.T) {
 	})
 }
 
+// TODO: add explicit verify benches.
+
 func TestBenchSelfMonCli(t *testing.T) {
-	serv, rnd, sigPk, vrfPk, _ := seedServer(defNSeed)
+	serv, sigPk, vrfPk, _ := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
 	servRpc := NewRpcServer(serv)
 	servAddr := makeUniqueAddr()
@@ -341,7 +343,7 @@ func TestBenchSelfMonCli(t *testing.T) {
 	wg := new(sync.WaitGroup)
 	wg.Add(nWarm + nOps)
 	for i := 0; i < nWarm+nOps; i++ {
-		u := rnd.Uint64()
+		u := rand.Uint64()
 		c := NewClient(u, servAddr, sigPk, vrfPkB)
 		clients = append(clients, c)
 		go func() {
@@ -375,7 +377,7 @@ func TestBenchSelfMonCli(t *testing.T) {
 }
 
 func TestBenchAuditOne(t *testing.T) {
-	serv, rnd, _, _, _ := seedServer(defNSeed)
+	serv, _, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
 	nOps := 100
@@ -389,7 +391,8 @@ func TestBenchAuditOne(t *testing.T) {
 		}
 		work := make([]*Work, 0, nInsert)
 		for j := 0; j < nInsert; j++ {
-			work = append(work, &Work{Req: &WQReq{Uid: rnd.Uint64(), Pk: mkDefVal()}})
+			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkDefVal()}}
+			work = append(work, w)
 		}
 		serv.workQ.DoBatch(work)
 
@@ -407,7 +410,7 @@ func TestBenchAuditOne(t *testing.T) {
 }
 
 func TestBenchAuditSize(t *testing.T) {
-	serv, rnd, _, _, _ := seedServer(defNSeed)
+	serv, _, _, _ := seedServer(defNSeed)
 	var epoch uint64
 	for ; ; epoch++ {
 		_, err := serv.Audit(epoch)
@@ -419,7 +422,8 @@ func TestBenchAuditSize(t *testing.T) {
 	nInsert := 1_000
 	work := make([]*Work, 0, nInsert)
 	for j := 0; j < nInsert; j++ {
-		work = append(work, &Work{Req: &WQReq{Uid: rnd.Uint64(), Pk: mkDefVal()}})
+		w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkDefVal()}}
+		work = append(work, w)
 	}
 	serv.workQ.DoBatch(work)
 
@@ -440,7 +444,7 @@ func TestBenchAuditSize(t *testing.T) {
 }
 
 func TestBenchAuditCli(t *testing.T) {
-	serv, rnd, sigPk, vrfPk, _ := seedServer(defNSeed)
+	serv, sigPk, vrfPk, _ := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
 	servRpc := NewRpcServer(serv)
 	servAddr := makeUniqueAddr()
@@ -455,7 +459,7 @@ func TestBenchAuditCli(t *testing.T) {
 	wg := new(sync.WaitGroup)
 	wg.Add(nWarm + nOps)
 	for i := 0; i < nWarm+nOps; i++ {
-		c := NewClient(rnd.Uint64(), servAddr, sigPk, vrfPkB)
+		c := NewClient(rand.Uint64(), servAddr, sigPk, vrfPkB)
 		clients = append(clients, c)
 
 		go func() {
@@ -499,8 +503,6 @@ func TestBenchAuditCli(t *testing.T) {
 
 func TestBenchServScale(t *testing.T) {
 	serv, _, _ := NewServer()
-	var seed [32]byte
-	rnd := rand.NewChaCha8(seed)
 	nInsert := 236_500_000
 	nMeasure := 500_000
 	var stat runtime.MemStats
@@ -515,7 +517,8 @@ func TestBenchServScale(t *testing.T) {
 		nRem := i + nMeasure - len(serv.visibleKeys)
 		work := make([]*Work, 0, nRem)
 		for j := 0; j < nRem; j++ {
-			work = append(work, &Work{Req: &WQReq{Uid: rnd.Uint64(), Pk: mkDefVal()}})
+			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkDefVal()}}
+			work = append(work, w)
 		}
 		serv.workQ.DoBatch(work)
 
@@ -547,21 +550,19 @@ func updAuditor(t *testing.T, serv *Server, aud *Auditor, epoch uint64) uint64 {
 	return epoch
 }
 
-func seedServer(nSeed int) (*Server, *rand.ChaCha8, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey, []uint64) {
+func seedServer(nSeed int) (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey, []uint64) {
 	serv, sigPk, vrfPk := NewServer()
-	var seed [32]byte
-	rnd := rand.NewChaCha8(seed)
 
 	uids := make([]uint64, 0, nSeed)
 	work := make([]*Work, 0, nSeed)
 	for i := 0; i < nSeed; i++ {
-		u := rnd.Uint64()
+		u := rand.Uint64()
 		uids = append(uids, u)
 		work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkDefVal()}})
 	}
 	serv.workQ.DoBatch(work)
 	runtime.GC()
-	return serv, rnd, sigPk, vrfPk, uids
+	return serv, sigPk, vrfPk, uids
 }
 
 type clientRunner struct {
@@ -641,7 +642,7 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 			high++
 		}
 		if high-low < 1_000 {
-			log.Fatal("clientRunner: something went wrong in clamping")
+			log.Fatal("clientRunner: clients don't have enough overlapping samples")
 		}
 		for j := low; j < high; j++ {
 			d := float64(times[j].end.Sub(times[j].start).Nanoseconds())
