@@ -5,16 +5,20 @@ bench_class = sys.argv[1]
 if bench_class == "serv":
     bench_tests = [
         "TestBenchPutOne",
-        "TestBenchPutBatch",
+        "TestBenchPutMulti",
         "TestBenchPutScale",
+        "TestBenchPutBatch",
         "TestBenchPutSize",
+        "TestBenchPutVerify",
         "TestBenchGetOne",
         "TestBenchGetScale",
         "TestBenchGetSizeOne",
         "TestBenchGetSizeMulti",
+        "TestBenchGetVerify",
         "TestBenchSelfMonOne",
         "TestBenchSelfMonScale",
         "TestBenchSelfMonSize",
+        "TestBenchSelfMonVerify",
         "TestBenchAuditOne",
         "TestBenchAuditSize",
     ]
