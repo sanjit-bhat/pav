@@ -304,28 +304,27 @@ func TestBenchGetSizeMulti(t *testing.T) {
 }
 
 func TestBenchGetVerify(t *testing.T) {
-	serv, _, vrfPk, _ := seedServer(defNSeed)
 	maxNVers := 10
-
 	for nVers := 1; nVers <= maxNVers; nVers++ {
-		nOps, totalGen, totalVerify := getVerifyHelper(t, serv, vrfPk, nVers)
+		nOps, totalGen, totalVerify := getVerifyHelper(t, nVers)
 
-		latGen := float64(totalGen.Microseconds()) / float64(nOps)
-		totGen := float64(totalGen.Milliseconds())
-		latVer := float64(totalVerify.Microseconds()) / float64(nOps)
-		totVer := float64(totalVerify.Milliseconds())
+		m0 := float64(totalGen.Microseconds()) / float64(nOps)
+		m1 := float64(totalGen.Milliseconds())
+		m2 := float64(totalVerify.Microseconds()) / float64(nOps)
+		m3 := float64(totalVerify.Milliseconds())
 
 		benchutil.Report(nVers, []*benchutil.Metric{
-			{N: latGen, Unit: "us/op(gen)"},
-			{N: totGen, Unit: "total(ms,gen)"},
-			{N: latVer, Unit: "us/op(ver)"},
-			{N: totVer, Unit: "total(ms,ver)"},
+			{N: m0, Unit: "us/op(gen)"},
+			{N: m1, Unit: "total(ms,gen)"},
+			{N: m2, Unit: "us/op(ver)"},
+			{N: m3, Unit: "total(ms,ver)"},
 		})
 	}
 }
 
-func getVerifyHelper(t *testing.T, serv *Server, vrfPk *cryptoffi.VrfPublicKey, nVers int) (int, time.Duration, time.Duration) {
-	nOps := 100
+func getVerifyHelper(t *testing.T, nVers int) (int, time.Duration, time.Duration) {
+	serv, _, vrfPk, _ := seedServer(defNSeed)
+	nOps := 1_000
 	nWarm := getWarmup(nOps)
 	var totalGen time.Duration
 	var totalVerify time.Duration
@@ -344,6 +343,7 @@ func getVerifyHelper(t *testing.T, serv *Server, vrfPk *cryptoffi.VrfPublicKey, 
 		s0 := time.Now()
 		dig, hist, isReg, lat, bound := serv.Get(uid)
 		totalGen += time.Since(s0)
+
 		if !isReg {
 			t.Fatal()
 		}
