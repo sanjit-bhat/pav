@@ -165,7 +165,7 @@ func TestBenchGetOne(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		u := uids[i]
+		u := uids[rand.IntN(defNSeed)]
 		_, _, isReg, _, _ := serv.Get(u)
 		if !isReg {
 			t.Fatal()
@@ -182,14 +182,13 @@ func TestBenchGetOne(t *testing.T) {
 }
 
 func TestBenchGetScale(t *testing.T) {
-	nSeed := defNSeed
-	serv, _, _, uids := seedServer(nSeed)
+	serv, _, _, uids := seedServer(defNSeed)
 	maxNCli := runtime.NumCPU()
 	runner := newClientRunner(maxNCli)
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
 		totalTime := runner.run(nCli, func() {
-			u := uids[rand.IntN(nSeed)]
+			u := uids[rand.IntN(defNSeed)]
 			serv.Get(u)
 		})
 
@@ -235,8 +234,6 @@ func TestBenchGetSizeMulti(t *testing.T) {
 	}
 }
 
-// TODO: use thread rng everywhere.
-
 func TestBenchGetCli(t *testing.T) {
 	serv, sigPk, vrfPk, uids := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
@@ -253,7 +250,8 @@ func TestBenchGetCli(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		isReg, _, _, err := cli.Get(uids[i])
+		u := uids[rand.IntN(defNSeed)]
+		isReg, _, _, err := cli.Get(u)
 		if err.Err {
 			t.Fatal()
 		}
@@ -281,8 +279,8 @@ func TestBenchSelfMonOne(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		// TODO: change all these to rand accesses, for consistency.
-		serv.SelfMon(uids[i])
+		u := uids[rand.IntN(defNSeed)]
+		serv.SelfMon(u)
 	}
 	total := time.Since(start)
 
@@ -295,14 +293,13 @@ func TestBenchSelfMonOne(t *testing.T) {
 }
 
 func TestBenchSelfMonScale(t *testing.T) {
-	nSeed := defNSeed
-	serv, _, _, uids := seedServer(nSeed)
+	serv, _, _, uids := seedServer(defNSeed)
 	maxNCli := runtime.NumCPU()
 	runner := newClientRunner(maxNCli)
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
 		totalTime := runner.run(nCli, func() {
-			u := uids[rand.IntN(nSeed)]
+			u := uids[rand.IntN(defNSeed)]
 			serv.SelfMon(u)
 		})
 
