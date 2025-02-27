@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	defNSeed int     = 1_000_000
+	defNSeed uint64  = 1_000_000
 	nsPerUs  float64 = 1_000
 )
 
@@ -118,6 +118,40 @@ func TestBenchPutSize(t *testing.T) {
 	})
 }
 
+func TestBenchPutVerify(t *testing.T) {
+	serv, _, vrfPk, _ := seedServer(defNSeed)
+	nOps := 2_000
+	nWarm := getWarmup(nOps)
+
+	var total time.Duration
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			total = 0
+		}
+		uid := rand.Uint64()
+		dig, lat, bound, err := serv.Put(uid, mkDefVal())
+		if err {
+			t.Fatal()
+		}
+
+		s := time.Now()
+		if checkMemb(vrfPk, uid, 0, dig.Dig, lat) {
+			t.Fatal()
+		}
+		if checkNonMemb(vrfPk, uid, 1, dig.Dig, bound) {
+			t.Fatal()
+		}
+		total += time.Since(s)
+	}
+
+	m0 := float64(total.Microseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op"},
+		{N: m1, Unit: "total(ms)"},
+	})
+}
+
 func TestBenchPutCli(t *testing.T) {
 	serv, sigPk, vrfPk, _ := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
@@ -165,8 +199,8 @@ func TestBenchGetOne(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		u := uids[rand.IntN(defNSeed)]
-		_, _, isReg, _, _ := serv.Get(u)
+		uid := uids[rand.Uint64N(defNSeed)]
+		_, _, isReg, _, _ := serv.Get(uid)
 		if !isReg {
 			t.Fatal()
 		}
@@ -188,7 +222,7 @@ func TestBenchGetScale(t *testing.T) {
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
 		totalTime := runner.run(nCli, func() {
-			u := uids[rand.IntN(defNSeed)]
+			u := uids[rand.Uint64N(defNSeed)]
 			serv.Get(u)
 		})
 
@@ -234,6 +268,70 @@ func TestBenchGetSizeMulti(t *testing.T) {
 	}
 }
 
+func TestBenchGetVerify(t *testing.T) {
+	serv, _, vrfPk, _ := seedServer(defNSeed)
+	maxNVers := 10
+
+	for nVers := 1; nVers <= maxNVers; nVers++ {
+		nOps, totalGen, totalVerify := getVerifyHelper(t, serv, vrfPk, nVers)
+
+		latGen := float64(totalGen.Microseconds()) / float64(nOps)
+		totGen := float64(totalGen.Milliseconds())
+		latVer := float64(totalVerify.Microseconds()) / float64(nOps)
+		totVer := float64(totalVerify.Milliseconds())
+
+		benchutil.Report(nVers, []*benchutil.Metric{
+			{N: latGen, Unit: "us/op(gen)"},
+			{N: totGen, Unit: "total(ms,gen)"},
+			{N: latVer, Unit: "us/op(ver)"},
+			{N: totVer, Unit: "total(ms,ver)"},
+		})
+	}
+}
+
+func getVerifyHelper(t *testing.T, serv *Server, vrfPk *cryptoffi.VrfPublicKey, nVers int) (int, time.Duration, time.Duration) {
+	nOps := 100
+	nWarm := getWarmup(nOps)
+	var totalGen time.Duration
+	var totalVerify time.Duration
+
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			totalGen = 0
+			totalVerify = 0
+		}
+
+		uid := rand.Uint64()
+		for j := 0; j < nVers; j++ {
+			serv.Put(uid, mkDefVal())
+		}
+
+		s0 := time.Now()
+		dig, hist, isReg, lat, bound := serv.Get(uid)
+		totalGen += time.Since(s0)
+		if !isReg {
+			t.Fatal()
+		}
+		if len(hist) != nVers-1 {
+			t.Fatal()
+		}
+
+		s1 := time.Now()
+		if checkHist(vrfPk, uid, dig.Dig, hist) {
+			t.Fatal()
+		}
+		if checkMemb(vrfPk, uid, uint64(nVers-1), dig.Dig, lat) {
+			t.Fatal()
+		}
+		if checkNonMemb(vrfPk, uid, uint64(nVers), dig.Dig, bound) {
+			t.Fatal()
+		}
+		totalVerify += time.Since(s1)
+	}
+
+	return nOps, totalGen, totalVerify
+}
+
 func TestBenchGetCli(t *testing.T) {
 	serv, sigPk, vrfPk, uids := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
@@ -250,8 +348,8 @@ func TestBenchGetCli(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		u := uids[rand.IntN(defNSeed)]
-		isReg, _, _, err := cli.Get(u)
+		uid := uids[rand.Uint64N(defNSeed)]
+		isReg, _, _, err := cli.Get(uid)
 		if err.Err {
 			t.Fatal()
 		}
@@ -279,8 +377,8 @@ func TestBenchSelfMonOne(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		u := uids[rand.IntN(defNSeed)]
-		serv.SelfMon(u)
+		uid := uids[rand.Uint64N(defNSeed)]
+		serv.SelfMon(uid)
 	}
 	total := time.Since(start)
 
@@ -299,7 +397,7 @@ func TestBenchSelfMonScale(t *testing.T) {
 
 	for nCli := 1; nCli <= maxNCli; nCli++ {
 		totalTime := runner.run(nCli, func() {
-			u := uids[rand.IntN(defNSeed)]
+			u := uids[rand.Uint64N(defNSeed)]
 			serv.SelfMon(u)
 		})
 
@@ -324,7 +422,33 @@ func TestBenchSelfMonSize(t *testing.T) {
 	})
 }
 
-// TODO: add explicit verify benches.
+func TestBenchSelfMonVerify(t *testing.T) {
+	serv, _, vrfPk, uids := seedServer(defNSeed)
+	nOps := 6_000
+	nWarm := getWarmup(nOps)
+
+	var total time.Duration
+	for i := 0; i < nWarm+nOps; i++ {
+		if i == nWarm {
+			total = 0
+		}
+		uid := uids[rand.Uint64N(defNSeed)]
+		dig, bound := serv.SelfMon(uid)
+
+		s := time.Now()
+		if checkNonMemb(vrfPk, uid, 1, dig.Dig, bound) {
+			t.Fatal()
+		}
+		total += time.Since(s)
+	}
+
+	m0 := float64(total.Microseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op"},
+		{N: m1, Unit: "total(ms)"},
+	})
+}
 
 func TestBenchSelfMonCli(t *testing.T) {
 	serv, sigPk, vrfPk, _ := seedServer(defNSeed)
@@ -547,12 +671,12 @@ func updAuditor(t *testing.T, serv *Server, aud *Auditor, epoch uint64) uint64 {
 	return epoch
 }
 
-func seedServer(nSeed int) (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey, []uint64) {
+func seedServer(nSeed uint64) (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey, []uint64) {
 	serv, sigPk, vrfPk := NewServer()
 
 	uids := make([]uint64, 0, nSeed)
 	work := make([]*Work, 0, nSeed)
-	for i := 0; i < nSeed; i++ {
+	for i := uint64(0); i < nSeed; i++ {
 		u := rand.Uint64()
 		uids = append(uids, u)
 		work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkDefVal()}})
