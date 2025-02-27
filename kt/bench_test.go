@@ -532,7 +532,7 @@ func TestBenchSelfMonCli(t *testing.T) {
 	})
 }
 
-func TestBenchAuditOne(t *testing.T) {
+func TestBenchAuditBatch(t *testing.T) {
 	serv, _, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)

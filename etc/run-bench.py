@@ -19,7 +19,7 @@ if bench_class == "serv":
         "TestBenchSelfMonScale",
         "TestBenchSelfMonSize",
         "TestBenchSelfMonVerify",
-        "TestBenchAuditOne",
+        "TestBenchAuditBatch",
         "TestBenchAuditSize",
     ]
 elif bench_class == "serv_slow":
@@ -27,6 +27,7 @@ elif bench_class == "serv_slow":
         "TestBenchServScale",
     ]
 elif bench_class == "cli":
+    print("note: remember to uncomment signature gen")
     bench_tests = [
         "TestBenchPutCli",
         "TestBenchGetCli",
@@ -37,4 +38,4 @@ else:
     sys.exit(1)
 
 for name in bench_tests:
-    p = sp.run(["go", "test", "-v", "-count=1", "-timeout=0", "-run", name, "./kt"])
+    sp.run(["go", "test", "-v", "-count=1", "-timeout=0", "-run", name, "./kt"])
