@@ -48,7 +48,7 @@ func TestBenchPutOne(t *testing.T) {
 	})
 }
 
-func TestBenchPutBatch(t *testing.T) {
+func TestBenchPutMulti(t *testing.T) {
 	serv, _, _, _ := seedServer(defNSeed)
 	nOps := 100
 	nWarm := getWarmup(nOps)
@@ -102,7 +102,42 @@ func TestBenchPutScale(t *testing.T) {
 	}
 }
 
-// TODO: add PutBatch that directly uses workq.DoBatch, for comparison sake.
+func TestBenchPutBatch(t *testing.T) {
+	sizes := []int{1, 2, 5, 10, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000}
+	for _, batchSz := range sizes {
+		total, nBatches := putBatchHelper(batchSz)
+
+		tput := float64(nBatches*batchSz) / total.Seconds()
+		lat := float64(total.Microseconds()) / float64(nBatches)
+		overall := float64(total.Milliseconds())
+		benchutil.Report(batchSz, []*benchutil.Metric{
+			{N: tput, Unit: "op/s"},
+			{N: lat, Unit: "us/batch"},
+			{N: overall, Unit: "total(ms)"},
+		})
+	}
+}
+
+func putBatchHelper(batchSz int) (time.Duration, int) {
+	serv, _, _, _ := seedServer(defNSeed)
+	nBatches := 20
+	nWarm := getWarmup(nBatches)
+
+	start := time.Now()
+	for i := 0; i < nWarm+nBatches; i++ {
+		if i == nWarm {
+			start = time.Now()
+		}
+		work := make([]*Work, 0, batchSz)
+		for i := 0; i < batchSz; i++ {
+			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkDefVal()}}
+			work = append(work, w)
+		}
+		serv.workQ.DoBatch(work)
+	}
+	total := time.Since(start)
+	return total, nBatches
+}
 
 func TestBenchPutSize(t *testing.T) {
 	serv, _, _, _ := seedServer(defNSeed)
