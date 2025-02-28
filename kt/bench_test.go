@@ -25,7 +25,7 @@ const (
 
 func TestBenchPutOne(t *testing.T) {
 	serv, _, _, _ := seedServer(defNSeed)
-	nOps := 6_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 
 	var start time.Time
@@ -123,7 +123,7 @@ func TestBenchPutSize(t *testing.T) {
 
 func TestBenchPutVerify(t *testing.T) {
 	serv, _, vrfPk, _ := seedServer(defNSeed)
-	nOps := 6_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 
 	var total time.Duration
@@ -162,7 +162,7 @@ func TestBenchPutCli(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
-	nOps := 6_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 
 	clients := make([]*Client, 0, nWarm+nOps)
@@ -194,7 +194,7 @@ func TestBenchPutCli(t *testing.T) {
 
 func TestBenchGetOne(t *testing.T) {
 	serv, _, _, uids := seedServer(defNSeed)
-	nOps := 6_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 
 	var start time.Time
@@ -279,7 +279,7 @@ func TestBenchGetVerify(t *testing.T) {
 
 func getVerifyHelper(t *testing.T, nVers int) (int, time.Duration, time.Duration) {
 	serv, _, vrfPk, _ := seedServer(defNSeed)
-	nOps := 6_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 	var totalGen time.Duration
 	var totalVerify time.Duration
@@ -330,7 +330,7 @@ func TestBenchGetCli(t *testing.T) {
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
 	cli := NewClient(rand.Uint64(), servAddr, sigPk, vrfPkB)
-	nOps := 6_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 
 	var start time.Time
@@ -359,7 +359,7 @@ func TestBenchGetCli(t *testing.T) {
 
 func TestBenchSelfMonOne(t *testing.T) {
 	serv, _, _, uids := seedServer(defNSeed)
-	nOps := 6_000
+	nOps := 20_000
 	nWarm := getWarmup(nOps)
 
 	var start time.Time
@@ -414,7 +414,7 @@ func TestBenchSelfMonSize(t *testing.T) {
 
 func TestBenchSelfMonVerify(t *testing.T) {
 	serv, _, vrfPk, uids := seedServer(defNSeed)
-	nOps := 6_000
+	nOps := 20_000
 	nWarm := getWarmup(nOps)
 
 	var total time.Duration
@@ -447,7 +447,7 @@ func TestBenchSelfMonCli(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
-	nOps := 6_000
+	nOps := 20_000
 	nWarm := getWarmup(nOps)
 
 	clients := make([]*Client, 0, nWarm+nOps)
@@ -561,7 +561,7 @@ func TestBenchAuditCli(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
-	nOps := 6_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 	nEps := 5
 
