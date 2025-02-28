@@ -1,11 +1,12 @@
 package kt
 
 import (
+	"sync"
+
 	"github.com/goose-lang/primitive"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
-	"sync"
 )
 
 type Server struct {
@@ -305,11 +306,11 @@ func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPriva
 	// latest registered ver not included in hist.
 	var hist = make([]*MembHide, 0, numVers-1)
 	for ver := uint64(0); ver < numVers-1; ver++ {
-		label, proof := compMapLabel(uid, ver, vrfSk)
-		inTree, mapVal, proof, err0 := keyMap.Prove(label)
+		label, labelProof := compMapLabel(uid, ver, vrfSk)
+		inMap, mapVal, mapProof, err0 := keyMap.Prove(label)
 		primitive.Assert(!err0)
-		primitive.Assert(inTree)
-		hist = append(hist, &MembHide{LabelProof: proof, MapVal: mapVal, MerkleProof: proof})
+		primitive.Assert(inMap)
+		hist = append(hist, &MembHide{LabelProof: labelProof, MapVal: mapVal, MerkleProof: mapProof})
 	}
 	return hist
 }
@@ -320,22 +321,22 @@ func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPri
 	if numVers == 0 {
 		return false, &Memb{PkOpen: &CommitOpen{}}
 	}
-	label, proof := compMapLabel(uid, numVers-1, vrfSk)
-	inTree, mapVal, proof, err0 := keyMap.Prove(label)
+	label, labelProof := compMapLabel(uid, numVers-1, vrfSk)
+	inMap, mapVal, mapProof, err0 := keyMap.Prove(label)
 	primitive.Assert(!err0)
-	primitive.Assert(inTree)
+	primitive.Assert(inMap)
 	valPre, _, err1 := MapValPreDecode(mapVal)
 	primitive.Assert(!err1)
 	r := compCommitOpen(commitSecret, label)
 	open := &CommitOpen{Val: pk, Rand: r}
-	return true, &Memb{LabelProof: proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: proof}
+	return true, &Memb{LabelProof: labelProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: mapProof}
 }
 
 // getBound returns a non-membership proof for the boundary version.
 func getBound(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) *NonMemb {
-	label, proof := compMapLabel(uid, numVers, vrfSk)
-	inTree, _, proof, err0 := keyMap.Prove(label)
+	label, labelProof := compMapLabel(uid, numVers, vrfSk)
+	inMap, _, mapProof, err0 := keyMap.Prove(label)
 	primitive.Assert(!err0)
-	primitive.Assert(!inTree)
-	return &NonMemb{LabelProof: proof, MerkleProof: proof}
+	primitive.Assert(!inMap)
+	return &NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
 }
