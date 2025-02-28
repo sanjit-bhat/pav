@@ -491,7 +491,7 @@ func TestBenchAuditBatch(t *testing.T) {
 	serv, _, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
-	nOps := 200
+	nOps := 500
 	nWarm := getWarmup(nOps)
 	nInsert := 1_000
 
