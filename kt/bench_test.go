@@ -48,38 +48,6 @@ func TestBenchPutOne(t *testing.T) {
 	})
 }
 
-func TestBenchPutMulti(t *testing.T) {
-	serv, _, _, _ := seedServer(defNSeed)
-	nOps := 100
-	nWarm := getWarmup(nOps)
-	nInsert := 1_000
-
-	var start time.Time
-	for i := 0; i < nWarm+nOps; i++ {
-		if i == nWarm {
-			start = time.Now()
-		}
-		wg := new(sync.WaitGroup)
-		wg.Add(nInsert)
-		for j := 0; j < nInsert; j++ {
-			u := rand.Uint64()
-			go func() {
-				serv.Put(u, mkRandVal())
-				wg.Done()
-			}()
-		}
-		wg.Wait()
-	}
-	total := time.Since(start)
-
-	m0 := float64(total.Microseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
-	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total(ms)"},
-	})
-}
-
 func TestBenchPutScale(t *testing.T) {
 	// need lots of clients to hit max workq rate.
 	maxNCli := 200
@@ -272,20 +240,7 @@ func TestBenchGetScale(t *testing.T) {
 	}
 }
 
-func TestBenchGetSizeOne(t *testing.T) {
-	serv, _, _, uids := seedServer(defNSeed)
-	dig, hist, isReg, lat, bound := serv.Get(uids[0])
-	if !isReg {
-		t.Fatal()
-	}
-	p := &ServerGetReply{Dig: dig, Hist: hist, IsReg: isReg, Latest: lat, Bound: bound}
-	pb := ServerGetReplyEncode(nil, p)
-	benchutil.Report(1, []*benchutil.Metric{
-		{N: float64(len(pb)), Unit: "B"},
-	})
-}
-
-func TestBenchGetSizeMulti(t *testing.T) {
+func TestBenchGetSize(t *testing.T) {
 	serv, _, _, _ := seedServer(defNSeed)
 	maxNVers := 10
 	uid := rand.Uint64()
@@ -670,7 +625,7 @@ func TestBenchServScale(t *testing.T) {
 			serv.Put(rand.Uint64(), mkRandVal())
 		})
 
-		nRem := i + nMeasure - len(serv.visibleKeys)
+		nRem := i + nMeasure - len(serv.visKeys)
 		work := make([]*Work, 0, nRem)
 		for j := 0; j < nRem; j++ {
 			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}

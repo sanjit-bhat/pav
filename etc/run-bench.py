@@ -4,18 +4,14 @@ import subprocess as sp
 bench_class = sys.argv[1]
 if bench_class == "serv":
     bench_tests = [
-        # TODO: could unify some of these, where the one case is one
-        # of the configs in the multi case.
         "TestBenchPutOne",
-        "TestBenchPutMulti",
         "TestBenchPutScale",
         "TestBenchPutBatch",
         "TestBenchPutSize",
         "TestBenchPutVerify",
         "TestBenchGetOne",
         "TestBenchGetScale",
-        "TestBenchGetSizeOne",
-        "TestBenchGetSizeMulti",
+        "TestBenchGetSize",
         "TestBenchGetVerify",
         "TestBenchSelfMonOne",
         "TestBenchSelfMonScale",
@@ -34,6 +30,33 @@ elif bench_class == "cli":
         "TestBenchPutCli",
         "TestBenchGetCli",
         "TestBenchSelfMonCli",
+    ]
+elif bench_class == "one":
+    bench_tests = [
+        "TestBenchPutOne",
+        "TestBenchGetOne",
+        "TestBenchSelfMonOne",
+        "TestBenchAuditBatch",
+    ]
+elif bench_class == "size":
+    bench_tests = [
+        "TestBenchPutSize",
+        "TestBenchGetSize",
+        "TestBenchSelfMonSize",
+        "TestBenchAuditSize",
+    ]
+elif bench_class == "verify":
+    bench_tests = [
+        "TestBenchPutVerify",
+        "TestBenchGetVerify",
+        "TestBenchSelfMonVerify",
+    ]
+elif bench_class == "scale":
+    bench_tests = [
+        "TestBenchPutScale",
+        "TestBenchPutBatch",
+        "TestBenchGetScale",
+        "TestBenchSelfMonScale",
     ]
 else:
     print("invalid bench_class:", bench_class)
