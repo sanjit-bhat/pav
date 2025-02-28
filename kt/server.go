@@ -1,10 +1,11 @@
 package kt
 
 import (
-	"github.com/goose-lang/primitive"
+	"sync"
+
+	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
-	"sync"
 )
 
 type Server struct {
@@ -53,7 +54,7 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 
 	// add to key map.
 	dig, latestProof, err1 := s.keyMap.Put(latLabel.hash, mapVal)
-	primitive.Assert(!err1)
+	std.Assert(!err1)
 	latest := &Memb{LabelProof: latLabel.proof, EpochAdded: nextEpoch, PkOpen: open, MerkProof: latestProof}
 
 	// update histInfo.
@@ -64,8 +65,8 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb) {
 
 	// make bound.
 	_, _, boundProofTy, boundProof, err1 := s.keyMap.Get(boundLabel)
-	primitive.Assert(!err1)
-	primitive.Assert(!boundProofTy)
+	std.Assert(!err1)
+	std.Assert(!boundProofTy)
 	bound := &NonMemb{LabelProof: boundLabelProof, MerkProof: boundProof}
 	s.mu.Unlock()
 	return sigDig, latest, bound
@@ -158,7 +159,7 @@ func updHist(hist []*servEpochInfo, epoch uint64, upd map[string][]byte, dig []b
 func getUidLabelCache(cache map[uint64][]*vrfCache, uid uint64, sk *cryptoffi.VrfPrivateKey) []*vrfCache {
 	labels, ok := cache[uid]
 	if ok {
-		primitive.Assert(len(labels) >= 1)
+		std.Assert(len(labels) >= 1)
 		return labels
 	} else {
 		label, proof := compMapLabel(uid, 0, sk)
@@ -184,8 +185,8 @@ func getHist(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
 	for ver := uint64(0); ver < numRegVers-1; ver++ {
 		label := labels[ver]
 		mapVal, _, proofTy, proof, err0 := keyMap.Get(label.hash)
-		primitive.Assert(!err0)
-		primitive.Assert(proofTy)
+		std.Assert(!err0)
+		std.Assert(proofTy)
 		hist = append(hist, &MembHide{LabelProof: label.proof, MapVal: mapVal, MerkProof: proof})
 	}
 	return hist
@@ -199,12 +200,12 @@ func getLatest(keyMap *merkle.Tree, labels []*vrfCache, opens map[string]*Commit
 	} else {
 		label := labels[numRegVers-1]
 		mapVal, _, proofTy, proof, err0 := keyMap.Get(label.hash)
-		primitive.Assert(!err0)
-		primitive.Assert(proofTy)
+		std.Assert(!err0)
+		std.Assert(proofTy)
 		valPre, _, err1 := MapValPreDecode(mapVal)
-		primitive.Assert(!err1)
+		std.Assert(!err1)
 		open, ok0 := opens[string(label.hash)]
-		primitive.Assert(ok0)
+		std.Assert(ok0)
 		return true, &Memb{LabelProof: label.proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkProof: proof}
 	}
 }
@@ -213,7 +214,7 @@ func getBound(keyMap *merkle.Tree, labels []*vrfCache) *NonMemb {
 	boundVer := uint64(len(labels)) - 1
 	label := labels[boundVer]
 	_, _, proofTy, proof, err0 := keyMap.Get(label.hash)
-	primitive.Assert(!err0)
-	primitive.Assert(!proofTy)
+	std.Assert(!err0)
+	std.Assert(!proofTy)
 	return &NonMemb{LabelProof: label.proof, MerkProof: proof}
 }

@@ -1,10 +1,11 @@
 package kt
 
 import (
-	"github.com/goose-lang/primitive"
+	"sync"
+
+	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
-	"sync"
 )
 
 type Auditor struct {
@@ -100,6 +101,6 @@ func checkUpd(keys *merkle.Tree, nextEp uint64, upd map[string][]byte) bool {
 func applyUpd(keys *merkle.Tree, upd map[string][]byte) {
 	for label, val := range upd {
 		_, _, err0 := keys.Put([]byte(label), val)
-		primitive.Assert(!err0)
+		std.Assert(!err0)
 	}
 }

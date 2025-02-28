@@ -5,7 +5,7 @@ go 1.23
 require (
 	filippo.io/edwards25519 v1.1.0
 	github.com/goose-lang/primitive v0.1.0
-	github.com/goose-lang/std v0.5.0
+	github.com/goose-lang/std v0.5.1
 	github.com/stretchr/testify v1.10.0
 	github.com/tchajed/marshal v0.6.2
 	golang.org/x/tools v0.30.0

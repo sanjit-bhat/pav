@@ -1,10 +1,11 @@
 package kttest
 
 import (
+	"sync"
+
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/kt"
-	"sync"
 )
 
 const (
@@ -52,9 +53,9 @@ func testAll(setup *setupParams) {
 
 	// final check. bob got the right key.
 	isReg, alicePk := kt.GetHist(alice.hist, bob.epoch)
-	primitive.Assert(isReg == bob.isReg)
+	std.Assert(isReg == bob.isReg)
 	if isReg {
-		primitive.Assert(std.BytesEqual(alicePk, bob.alicePk))
+		std.Assert(std.BytesEqual(alicePk, bob.alicePk))
 	}
 }
 
