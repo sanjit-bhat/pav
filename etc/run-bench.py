@@ -4,6 +4,8 @@ import subprocess as sp
 bench_class = sys.argv[1]
 if bench_class == "serv":
     bench_tests = [
+        # TODO: could unify some of these, where the one case is one
+        # of the configs in the multi case.
         "TestBenchPutOne",
         "TestBenchPutMulti",
         "TestBenchPutScale",

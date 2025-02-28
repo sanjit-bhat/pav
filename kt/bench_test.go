@@ -33,7 +33,7 @@ func TestBenchPutOne(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		_, _, _, err := serv.Put(rand.Uint64(), mkDefVal())
+		_, _, _, err := serv.Put(rand.Uint64(), mkRandVal())
 		if err {
 			t.Fatal()
 		}
@@ -64,7 +64,7 @@ func TestBenchPutMulti(t *testing.T) {
 		for j := 0; j < nInsert; j++ {
 			u := rand.Uint64()
 			go func() {
-				serv.Put(u, mkDefVal())
+				serv.Put(u, mkRandVal())
 				wg.Done()
 			}()
 		}
@@ -88,7 +88,7 @@ func TestBenchPutScale(t *testing.T) {
 	for nCli := 1; nCli <= maxNCli; nCli++ {
 		serv, _, _, _ := seedServer(defNSeed)
 		totalTime := runner.run(nCli, func() {
-			serv.Put(rand.Uint64(), mkDefVal())
+			serv.Put(rand.Uint64(), mkRandVal())
 		})
 
 		ops := int(runner.sample.Weight())
@@ -130,7 +130,7 @@ func putBatchHelper(batchSz int) (time.Duration, int) {
 		}
 		work := make([]*Work, 0, batchSz)
 		for i := 0; i < batchSz; i++ {
-			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkDefVal()}}
+			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
 			work = append(work, w)
 		}
 		serv.workQ.DoBatch(work)
@@ -142,7 +142,7 @@ func putBatchHelper(batchSz int) (time.Duration, int) {
 func TestBenchPutSize(t *testing.T) {
 	serv, _, _, _ := seedServer(defNSeed)
 	u := rand.Uint64()
-	dig, lat, bound, err := serv.Put(u, mkDefVal())
+	dig, lat, bound, err := serv.Put(u, mkRandVal())
 	if err {
 		t.Fatal()
 	}
@@ -164,7 +164,7 @@ func TestBenchPutVerify(t *testing.T) {
 			total = 0
 		}
 		uid := rand.Uint64()
-		dig, lat, bound, err := serv.Put(uid, mkDefVal())
+		dig, lat, bound, err := serv.Put(uid, mkRandVal())
 		if err {
 			t.Fatal()
 		}
@@ -209,7 +209,7 @@ func TestBenchPutCli(t *testing.T) {
 		if i == nWarm {
 			start = time.Now()
 		}
-		_, err := clients[i].Put(mkDefVal())
+		_, err := clients[i].Put(mkRandVal())
 		if err.Err {
 			t.Fatal()
 		}
@@ -290,7 +290,7 @@ func TestBenchGetSizeMulti(t *testing.T) {
 	maxNVers := 10
 	uid := rand.Uint64()
 	for nVers := 1; nVers <= maxNVers; nVers++ {
-		serv.Put(uid, mkDefVal())
+		serv.Put(uid, mkRandVal())
 		dig, hist, isReg, lat, bound := serv.Get(uid)
 		if !isReg {
 			t.Fatal()
@@ -337,7 +337,7 @@ func getVerifyHelper(t *testing.T, nVers int) (int, time.Duration, time.Duration
 
 		uid := rand.Uint64()
 		for j := 0; j < nVers; j++ {
-			serv.Put(uid, mkDefVal())
+			serv.Put(uid, mkRandVal())
 		}
 
 		s0 := time.Now()
@@ -503,7 +503,7 @@ func TestBenchSelfMonCli(t *testing.T) {
 		c := NewClient(u, servAddr, sigPk, vrfPkB)
 		clients = append(clients, c)
 		go func() {
-			_, err := c.Put(mkDefVal())
+			_, err := c.Put(mkRandVal())
 			if err.Err {
 				t.Error()
 			}
@@ -547,7 +547,7 @@ func TestBenchAuditBatch(t *testing.T) {
 		}
 		work := make([]*Work, 0, nInsert)
 		for j := 0; j < nInsert; j++ {
-			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkDefVal()}}
+			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
 			work = append(work, w)
 		}
 		serv.workQ.DoBatch(work)
@@ -578,7 +578,7 @@ func TestBenchAuditSize(t *testing.T) {
 	nInsert := 1_000
 	work := make([]*Work, 0, nInsert)
 	for j := 0; j < nInsert; j++ {
-		w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkDefVal()}}
+		w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
 		work = append(work, w)
 	}
 	serv.workQ.DoBatch(work)
@@ -620,7 +620,7 @@ func TestBenchAuditCli(t *testing.T) {
 
 		go func() {
 			for j := 0; j < nEps; j++ {
-				_, err := c.Put(mkDefVal())
+				_, err := c.Put(mkRandVal())
 				if err.Err {
 					t.Error()
 				}
@@ -667,13 +667,13 @@ func TestBenchServScale(t *testing.T) {
 
 	for i := 0; i < nInsert; i += nMeasure {
 		totalTime := runner.run(nCli, func() {
-			serv.Put(rand.Uint64(), mkDefVal())
+			serv.Put(rand.Uint64(), mkRandVal())
 		})
 
 		nRem := i + nMeasure - len(serv.visibleKeys)
 		work := make([]*Work, 0, nRem)
 		for j := 0; j < nRem; j++ {
-			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkDefVal()}}
+			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
 			work = append(work, w)
 		}
 		serv.workQ.DoBatch(work)
@@ -714,7 +714,7 @@ func seedServer(nSeed uint64) (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPu
 	for i := uint64(0); i < nSeed; i++ {
 		u := rand.Uint64()
 		uids = append(uids, u)
-		work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkDefVal()}})
+		work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}})
 	}
 	serv.workQ.DoBatch(work)
 	runtime.GC()
@@ -809,13 +809,11 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 	return total
 }
 
-func mkDefVal() []byte {
+func mkRandVal() []byte {
 	// ed25519 pk is 32 bytes.
-	v := make([]byte, 32)
-	for i := 0; i < 32; i++ {
-		v[i] = 2
-	}
-	return v
+	x := make([]byte, 32)
+	RandRead(x)
+	return x
 }
 
 func getFreePort() (port uint64, err error) {
@@ -841,4 +839,28 @@ func makeUniqueAddr() uint64 {
 
 func getWarmup(nOps int) int {
 	return int(float64(nOps) * float64(0.1))
+}
+
+func LEPutUint64(b []byte, v uint64) {
+	_ = b[7] // early bounds check to guarantee safety of writes below
+	b[0] = byte(v)
+	b[1] = byte(v >> 8)
+	b[2] = byte(v >> 16)
+	b[3] = byte(v >> 24)
+	b[4] = byte(v >> 32)
+	b[5] = byte(v >> 40)
+	b[6] = byte(v >> 48)
+	b[7] = byte(v >> 56)
+}
+
+func RandRead(p []byte) {
+	for len(p) >= 8 {
+		LEPutUint64(p, rand.Uint64())
+		p = p[8:]
+	}
+	if len(p) > 0 {
+		b := make([]byte, 8)
+		LEPutUint64(b, rand.Uint64())
+		copy(p, b)
+	}
 }
