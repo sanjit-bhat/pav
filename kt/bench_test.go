@@ -673,8 +673,8 @@ func seedServer(nSeed uint64) (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPu
 	for i := uint64(0); i < nEp; i++ {
 		u := rand.Uint64()
 		uids = append(uids, u)
-		w := []*Work{{Req: &WQReq{Uid: u, Pk: mkRandVal()}}}
-		serv.workQ.DoBatch(w)
+		w := &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}}
+		serv.workQ.Do(w)
 	}
 
 	work := make([]*Work, 0, nSeed-nEp)
