@@ -665,25 +665,33 @@ func seedServer(nSeed uint64) (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPu
 	serv, sigPk, vrfPk := NewServer()
 	uids := make([]uint64, 0, nSeed)
 
-	// for akd bench parity.
+	// use multiple epochs for akd bench parity.
 	nEp := uint64(65_536)
 	if nSeed < nEp {
 		log.Fatal("nSeed too small")
 	}
+	batchSz := nSeed / nEp
+	nRem := nSeed % nEp
+
 	for i := uint64(0); i < nEp; i++ {
-		u := rand.Uint64()
-		uids = append(uids, u)
-		w := &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}}
-		serv.workQ.Do(w)
+		work := make([]*Work, 0, batchSz)
+		for j := uint64(0); j < batchSz; j++ {
+			u := rand.Uint64()
+			uids = append(uids, u)
+			work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}})
+		}
+		serv.workQ.DoBatch(work)
 	}
 
-	work := make([]*Work, 0, nSeed-nEp)
-	for i := uint64(0); i < nSeed-nEp; i++ {
-		u := rand.Uint64()
-		uids = append(uids, u)
-		work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}})
+	if nRem != 0 {
+		work := make([]*Work, 0, nRem)
+		for i := uint64(0); i < nRem; i++ {
+			u := rand.Uint64()
+			uids = append(uids, u)
+			work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}})
+		}
+		serv.workQ.DoBatch(work)
 	}
-	serv.workQ.DoBatch(work)
 	runtime.GC()
 	return serv, sigPk, vrfPk, uids
 }
