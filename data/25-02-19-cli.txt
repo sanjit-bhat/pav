@@ -1,4 +1,0 @@
-TestBenchPutCli     	    2000	       821.7 us/op	      1643 total(ms)
-TestBenchGetCli     	    3000	       480.6 us/op	      1441 total(ms)
-TestBenchSelfMonCli 	    6000	       316.1 us/op	      1896 total(ms)
-TestBenchAuditCli   	    2000	       707.0 us/op	      1414 total(ms)

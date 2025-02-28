@@ -1,4 +1,0 @@
-TestBenchPutSize               1              1521 B
-TestBenchGetSize               1              1417 B
-TestBenchSelfMonSize           1               688.0 B
-TestBenchAuditSize             1             96051 B
