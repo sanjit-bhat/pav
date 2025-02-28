@@ -16,16 +16,13 @@ type Server struct {
 	commitSecret []byte
 	// keyMap stores (mapLabel, mapVal) entries.
 	keyMap *merkle.Tree
-	// visibleKeys stores the latest pk (in the clear) associated with
-	// a particular uid. keyMap only has commitments of these pk's.
-	visibleKeys map[uint64][]byte
-	// uidVerRepo provides the authoritative view on the number of versions
-	// registered per uid. this corresponds to entries in keyMap.
-	// uid is map idx, and # reg versions is len(sl)-1,
-	// except when len(sl) == 0, in which case it's 0 versions.
-	// it also caches the expensive vrf computations
-	// to make a label from a uid and version.
-	uidVerRepo map[uint64][]*vrfCache
+	// visKeys stores the latest pk for a particular uid.
+	// the pk is visible, whereas keyMap only has commitments.
+	visKeys map[uint64][]byte
+	// numVers provides the authoritative mapping from uid to number
+	// of registered versions. this corresponds to keyMap entries.
+	// if a uid isn't registered, the zero val is correct.
+	numVers map[uint64]uint64
 	// epochHist stores info about prior epochs, for auditing.
 	epochHist []*servEpochInfo
 	// workQ batch processes Put requests.
@@ -37,12 +34,6 @@ type servEpochInfo struct {
 	updates map[string][]byte
 	dig     []byte
 	sig     []byte
-}
-
-type vrfCache struct {
-	// label is the vrf hash.
-	label []byte
-	proof []byte
 }
 
 // Put errors iff there's a put of the same uid at the same time.
@@ -59,10 +50,10 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb, bool) {
 func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 	s.mu.RLock()
 	dig := getDig(s.epochHist)
-	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-	hist := getHistVers(s.keyMap, labels)
-	isReg, latest := getLatestVer(s.keyMap, labels, s.commitSecret, s.visibleKeys[uid])
-	bound := getBoundVer(s.keyMap, labels)
+	numVers := s.numVers[uid]
+	hist := getHist(s.keyMap, uid, numVers, s.vrfSk)
+	isReg, latest := getLatest(s.keyMap, uid, numVers, s.vrfSk, s.commitSecret, s.visKeys[uid])
+	bound := getBound(s.keyMap, uid, numVers, s.vrfSk)
 	s.mu.RUnlock()
 	return dig, hist, isReg, latest, bound
 }
@@ -70,8 +61,8 @@ func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
 	s.mu.RLock()
 	dig := getDig(s.epochHist)
-	labels := getLabels(s.uidVerRepo, uid, s.vrfSk)
-	bound := getBoundVer(s.keyMap, labels)
+	numVers := s.numVers[uid]
+	bound := getBound(s.keyMap, uid, numVers, s.vrfSk)
 	s.mu.RUnlock()
 	return dig, bound
 }
@@ -101,10 +92,12 @@ type WQResp struct {
 }
 
 type mapper0Out struct {
-	latestVrf *vrfCache
-	boundVrf  *vrfCache
-	mapVal    []byte
-	pkOpen    *CommitOpen
+	latestVrfHash  []byte
+	latestVrfProof []byte
+	boundVrfHash   []byte
+	boundVrfProof  []byte
+	mapVal         []byte
+	pkOpen         *CommitOpen
 }
 
 func (s *Server) Worker() {
@@ -164,20 +157,13 @@ func (s *Server) Worker() {
 		if !resp.Err {
 			req := work[i].Req
 			out0 := outs0[i]
-			label := out0.latestVrf.label
+			label := out0.latestVrfHash
 
 			err0 := s.keyMap.Put(label, out0.mapVal)
 			primitive.Assert(!err0)
-			s.visibleKeys[req.Uid] = req.Pk
+			s.visKeys[req.Uid] = req.Pk
 			upd[string(label)] = out0.mapVal
-
-			var labels = s.uidVerRepo[req.Uid]
-			numVers := len(labels)
-			if numVers == 0 {
-				labels = append(labels, out0.latestVrf)
-			}
-			labels = append(labels, out0.boundVrf)
-			s.uidVerRepo[req.Uid] = labels
+			s.numVers[req.Uid]++
 		}
 	}
 	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
@@ -206,41 +192,42 @@ func (s *Server) Worker() {
 
 // mapper0 makes mapLabels and mapVals.
 func (s *Server) mapper0(in *WQReq, out *mapper0Out) {
-	labels := getLabels(s.uidVerRepo, in.Uid, s.vrfSk)
-	boundVer := uint64(len(labels))
-	latVrf := labels[boundVer-1]
-	boundVrf := compMapLabel(in.Uid, boundVer, s.vrfSk)
+	numVers := s.numVers[in.Uid]
+	latHash, latProof := compMapLabel(in.Uid, numVers, s.vrfSk)
+	boundHash, boundProof := compMapLabel(in.Uid, numVers+1, s.vrfSk)
 
 	nextEpoch := uint64(len(s.epochHist))
-	r := compCommitOpen(s.commitSecret, latVrf.label)
+	r := compCommitOpen(s.commitSecret, latHash)
 	open := &CommitOpen{Val: in.Pk, Rand: r}
 	mapVal := compMapVal(nextEpoch, open)
 
-	out.latestVrf = latVrf
-	out.boundVrf = boundVrf
+	out.latestVrfHash = latHash
+	out.latestVrfProof = latProof
+	out.boundVrfHash = boundHash
+	out.boundVrfProof = boundProof
 	out.mapVal = mapVal
 	out.pkOpen = open
 }
 
 // mapper1 computes merkle proofs and assembles full response.
 func (s *Server) mapper1(in *mapper0Out, out *WQResp) {
-	latIn, _, latMerk, err0 := s.keyMap.Prove(in.latestVrf.label)
+	latIn, _, latMerk, err0 := s.keyMap.Prove(in.latestVrfHash)
 	primitive.Assert(!err0)
 	primitive.Assert(latIn)
 
-	boundIn, _, boundMerk, err1 := s.keyMap.Prove(in.boundVrf.label)
+	boundIn, _, boundMerk, err1 := s.keyMap.Prove(in.boundVrfHash)
 	primitive.Assert(!err1)
 	primitive.Assert(!boundIn)
 
 	out.Dig = getDig(s.epochHist)
 	out.Lat = &Memb{
-		LabelProof:  in.latestVrf.proof,
+		LabelProof:  in.latestVrfProof,
 		EpochAdded:  uint64(len(s.epochHist)) - 1,
 		PkOpen:      in.pkOpen,
 		MerkleProof: latMerk,
 	}
 	out.Bound = &NonMemb{
-		LabelProof:  in.boundVrf.proof,
+		LabelProof:  in.boundVrfProof,
 		MerkleProof: boundMerk,
 	}
 }
@@ -255,9 +242,9 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	var hist []*servEpochInfo
 	// commit empty tree as init epoch.
 	updEpochHist(&hist, make(map[string][]byte), keys.Digest(), sigSk)
-	labels := make(map[uint64][]*vrfCache)
+	vers := make(map[uint64]uint64)
 	wq := NewWorkQ()
-	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, visibleKeys: vis, uidVerRepo: labels, epochHist: hist, workQ: wq}
+	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, visKeys: vis, numVers: vers, epochHist: hist, workQ: wq}
 
 	go func() {
 		for {
@@ -267,12 +254,12 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	return s, sigPk, vrfPk
 }
 
-// compMapLabel rets a vrf output and proof for mapLabel (VRF(uid || ver)).
-func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) *vrfCache {
+// compMapLabel rets the vrf hash and proof for mapLabel (VRF(uid || ver)).
+func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
 	l := &MapLabelPre{Uid: uid, Ver: ver}
 	lByt := MapLabelPreEncode(make([]byte, 0, 16), l)
 	h, p := sk.Hash(lByt)
-	return &vrfCache{label: h, proof: p}
+	return h, p
 }
 
 // compMapVal rets mapVal (epoch || Hash(pk || rand)).
@@ -303,68 +290,52 @@ func updEpochHist(hist *[]*servEpochInfo, upd map[string][]byte, dig []byte, sk 
 	*hist = append(*hist, newInfo)
 }
 
-// getLabels gets labels for all existing registered versions of a uid
-// and a bound version. it doesn't mutate the provided repo.
-func getLabels(uidVerRepo map[uint64][]*vrfCache, uid uint64, sk *cryptoffi.VrfPrivateKey) []*vrfCache {
-	labels, ok := uidVerRepo[uid]
-	if ok {
-		primitive.Assert(len(labels) >= 1)
-		return labels
-	} else {
-		vrf := compMapLabel(uid, 0, sk)
-		return []*vrfCache{vrf}
-	}
-}
-
 func getDig(hist []*servEpochInfo) *SigDig {
 	numEpochs := uint64(len(hist))
 	lastInfo := hist[numEpochs-1]
 	return &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
 }
 
-// getHistVers returns membership proofs for the history of versions
+// getHist returns membership proofs for the history of versions
 // up until the latest.
-func getHistVers(keyMap *merkle.Tree, labels []*vrfCache) []*MembHide {
-	numRegVers := uint64(len(labels)) - 1
-	if numRegVers == 0 {
+func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) []*MembHide {
+	if numVers == 0 {
 		return nil
 	}
 	// latest registered ver not included in hist.
-	var hist = make([]*MembHide, 0, numRegVers-1)
-	for ver := uint64(0); ver < numRegVers-1; ver++ {
-		label := labels[ver]
-		inTree, mapVal, proof, err0 := keyMap.Prove(label.label)
+	var hist = make([]*MembHide, 0, numVers-1)
+	for ver := uint64(0); ver < numVers-1; ver++ {
+		label, proof := compMapLabel(uid, ver, vrfSk)
+		inTree, mapVal, proof, err0 := keyMap.Prove(label)
 		primitive.Assert(!err0)
 		primitive.Assert(inTree)
-		hist = append(hist, &MembHide{LabelProof: label.proof, MapVal: mapVal, MerkleProof: proof})
+		hist = append(hist, &MembHide{LabelProof: proof, MapVal: mapVal, MerkleProof: proof})
 	}
 	return hist
 }
 
-// getLatestVer returns whether a version is registered, and if so,
+// getLatest returns whether a version is registered, and if so,
 // a membership proof for the latest version.
-func getLatestVer(keyMap *merkle.Tree, labels []*vrfCache, commitSecret, pk []byte) (bool, *Memb) {
-	numRegVers := uint64(len(labels)) - 1
-	if numRegVers == 0 {
+func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey, commitSecret, pk []byte) (bool, *Memb) {
+	if numVers == 0 {
 		return false, &Memb{PkOpen: &CommitOpen{}}
 	}
-	label := labels[numRegVers-1]
-	inTree, mapVal, proof, err0 := keyMap.Prove(label.label)
+	label, proof := compMapLabel(uid, numVers-1, vrfSk)
+	inTree, mapVal, proof, err0 := keyMap.Prove(label)
 	primitive.Assert(!err0)
 	primitive.Assert(inTree)
 	valPre, _, err1 := MapValPreDecode(mapVal)
 	primitive.Assert(!err1)
-	r := compCommitOpen(commitSecret, label.label)
+	r := compCommitOpen(commitSecret, label)
 	open := &CommitOpen{Val: pk, Rand: r}
-	return true, &Memb{LabelProof: label.proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: proof}
+	return true, &Memb{LabelProof: proof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: proof}
 }
 
-// getBoundVer returns a non-membership proof for the boundary version.
-func getBoundVer(keyMap *merkle.Tree, labels []*vrfCache) *NonMemb {
-	boundVer := uint64(len(labels)) - 1
-	label := labels[boundVer]
-	inTree, _, proof, err0 := keyMap.Prove(label.label)
+// getBound returns a non-membership proof for the boundary version.
+func getBound(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) *NonMemb {
+	label, proof := compMapLabel(uid, numVers, vrfSk)
+	inTree, _, proof, err0 := keyMap.Prove(label)
 	primitive.Assert(!err0)
 	primitive.Assert(!inTree)
-	return &NonMemb{LabelProof: label.proof, MerkleProof: proof}
+	return &NonMemb{LabelProof: proof, MerkleProof: proof}
 }
