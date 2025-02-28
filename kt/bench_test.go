@@ -359,7 +359,7 @@ func TestBenchGetCli(t *testing.T) {
 
 func TestBenchSelfMonOne(t *testing.T) {
 	serv, _, _, uids := seedServer(defNSeed)
-	nOps := 6_000
+	nOps := 3_000
 	nWarm := getWarmup(nOps)
 
 	var start time.Time
@@ -414,7 +414,7 @@ func TestBenchSelfMonSize(t *testing.T) {
 
 func TestBenchSelfMonVerify(t *testing.T) {
 	serv, _, vrfPk, uids := seedServer(defNSeed)
-	nOps := 6_000
+	nOps := 3_000
 	nWarm := getWarmup(nOps)
 
 	var total time.Duration
@@ -447,7 +447,7 @@ func TestBenchSelfMonCli(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
-	nOps := 6_000
+	nOps := 3_000
 	nWarm := getWarmup(nOps)
 
 	clients := make([]*Client, 0, nWarm+nOps)
@@ -663,10 +663,22 @@ func updAuditor(t *testing.T, serv *Server, aud *Auditor, epoch uint64) uint64 {
 
 func seedServer(nSeed uint64) (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey, []uint64) {
 	serv, sigPk, vrfPk := NewServer()
-
 	uids := make([]uint64, 0, nSeed)
-	work := make([]*Work, 0, nSeed)
-	for i := uint64(0); i < nSeed; i++ {
+
+	// for akd bench parity.
+	nEp := uint64(65_536)
+	if nSeed < nEp {
+		log.Fatal("nSeed too small")
+	}
+	for i := uint64(0); i < nEp; i++ {
+		u := rand.Uint64()
+		uids = append(uids, u)
+		w := []*Work{{Req: &WQReq{Uid: u, Pk: mkRandVal()}}}
+		serv.workQ.DoBatch(w)
+	}
+
+	work := make([]*Work, 0, nSeed-nEp)
+	for i := uint64(0); i < nSeed-nEp; i++ {
 		u := rand.Uint64()
 		uids = append(uids, u)
 		work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}})
