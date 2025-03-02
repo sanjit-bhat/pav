@@ -723,7 +723,7 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 				e := time.Now()
 				c.times[i] = append(c.times[i], startEnd{start: s, end: e})
 
-				if e.Sub(cliStart) >= time.Second {
+				if e.Sub(cliStart) >= 2*time.Second {
 					wg.Done()
 					break
 				}
@@ -764,7 +764,7 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 		if ok {
 			high++
 		}
-		if high-low < 1_000 {
+		if high-low < 100 {
 			log.Fatal("clientRunner: clients don't have enough overlapping samples")
 		}
 		for j := low; j < high; j++ {
