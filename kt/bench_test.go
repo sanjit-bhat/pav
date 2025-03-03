@@ -614,18 +614,29 @@ func TestBenchAuditCli(t *testing.T) {
 
 func TestBenchServScale(t *testing.T) {
 	serv, _, _ := NewServer()
-	nInsert := 236_500_000
+	nInsert := 500_000_000
 	nMeasure := 500_000
 	var stat runtime.MemStats
-	nCli := 100
-	runner := newClientRunner(nCli)
 
 	for i := 0; i < nInsert; i += nMeasure {
-		totalTime := runner.run(nCli, func() {
-			serv.Put(rand.Uint64(), mkRandVal())
-		})
+		runtime.GC()
+		runtime.ReadMemStats(&stat)
 
-		nRem := i + nMeasure - len(serv.visKeys)
+		nOps := 10_000
+		nWarm := getWarmup(nOps)
+		var start time.Time
+		for j := 0; j < nWarm+nOps; j++ {
+			if j == nWarm {
+				start = time.Now()
+			}
+			_, _, _, err := serv.Put(rand.Uint64(), mkRandVal())
+			if err {
+				t.Fatal()
+			}
+		}
+		total := time.Since(start)
+
+		nRem := nMeasure - nWarm - nOps
 		work := make([]*Work, 0, nRem)
 		for j := 0; j < nRem; j++ {
 			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
@@ -633,16 +644,10 @@ func TestBenchServScale(t *testing.T) {
 		}
 		serv.workQ.DoBatch(work)
 
-		runtime.GC()
-		runtime.ReadMemStats(&stat)
+		lat := float64(total.Microseconds()) / float64(nOps)
 		mb := float64(stat.Alloc) / float64(1_000_000)
-		ops := int(runner.sample.Weight())
-		tput := float64(ops) / totalTime.Seconds()
-		benchutil.Report(i+nMeasure, []*benchutil.Metric{
-			{N: tput, Unit: "op/s"},
-			{N: runner.sample.Mean() / nsPerUs, Unit: "mean(us)"},
-			{N: runner.sample.StdDev() / nsPerUs, Unit: "stddev"},
-			{N: runner.sample.Quantile(0.99) / nsPerUs, Unit: "p99"},
+		benchutil.Report(i, []*benchutil.Metric{
+			{N: lat, Unit: "us/op"},
 			{N: mb, Unit: "MB"},
 		})
 	}
