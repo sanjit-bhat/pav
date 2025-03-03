@@ -495,10 +495,12 @@ func TestBenchAuditBatch(t *testing.T) {
 	nWarm := getWarmup(nOps)
 	nInsert := 1_000
 
-	var total time.Duration
+	var totalGen time.Duration
+	var totalVer time.Duration
 	for i := 0; i < nWarm+nOps; i++ {
 		if i == nWarm {
-			total = 0
+			totalGen = 0
+			totalVer = 0
 		}
 		work := make([]*Work, 0, nInsert)
 		for j := 0; j < nInsert; j++ {
@@ -507,16 +509,33 @@ func TestBenchAuditBatch(t *testing.T) {
 		}
 		serv.workQ.DoBatch(work)
 
-		s := time.Now()
-		epoch = updAuditor(t, serv, aud, epoch)
-		total += time.Since(s)
+		for ; ; epoch++ {
+			s0 := time.Now()
+			p, err := serv.Audit(epoch)
+			if err {
+				break
+			}
+
+			s1 := time.Now()
+			if err = aud.Update(p); err {
+				t.Fatal()
+			}
+			e := time.Now()
+
+			totalGen += s1.Sub(s0)
+			totalVer += e.Sub(s1)
+		}
 	}
 
-	m0 := float64(total.Microseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
+	m0 := float64(totalGen.Microseconds()) / float64(nOps)
+	m1 := float64(totalGen.Milliseconds())
+	m2 := float64(totalVer.Microseconds()) / float64(nOps)
+	m3 := float64(totalVer.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total(ms)"},
+		{N: m0, Unit: "us/op(gen)"},
+		{N: m1, Unit: "total(ms,gen)"},
+		{N: m2, Unit: "us/op(ver)"},
+		{N: m3, Unit: "total(ms,ver)"},
 	})
 }
 
