@@ -71,7 +71,7 @@ func TestBenchPutScale(t *testing.T) {
 }
 
 func TestBenchPutBatch(t *testing.T) {
-	sizes := []int{1, 2, 5, 10, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000}
+	sizes := []int{1, 2, 5, 10, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000}
 	for _, batchSz := range sizes {
 		total, nBatches := putBatchHelper(batchSz)
 
