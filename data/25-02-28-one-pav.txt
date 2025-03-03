@@ -1,4 +1,4 @@
 TestBenchPutOne     	   10000	       207.3 us/op	      2073 total(ms)
 TestBenchGetOne     	   10000	       194.4 us/op	      1943 total(ms)
 TestBenchSelfMonOne 	   20000	        97.81 us/op	      1956 total(ms)
-TestBenchAuditBatch 	     300	      8153 us/op	      2445 total(ms)
+TestBenchAuditBatch 	     300	         0.7400 us/op(gen)	         0 total(ms,gen)	      8124 us/op(ver)	      2437 total(ms,ver)

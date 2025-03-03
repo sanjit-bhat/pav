@@ -1,0 +1,3 @@
+TestBenchPutCli     	   10000	       563.4 us/op	      5634 total(ms)
+TestBenchGetCli     	   10000	       531.4 us/op	      5314 total(ms)
+TestBenchSelfMonCli 	   20000	       300.4 us/op	      6008 total(ms)
