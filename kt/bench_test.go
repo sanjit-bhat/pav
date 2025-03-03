@@ -295,10 +295,8 @@ func getVerifyHelper(t *testing.T, nVers int) (int, time.Duration, time.Duration
 			serv.Put(uid, mkRandVal())
 		}
 
-		s0 := time.Now()
+		t0 := time.Now()
 		dig, hist, isReg, lat, bound := serv.Get(uid)
-		totalGen += time.Since(s0)
-
 		if !isReg {
 			t.Fatal()
 		}
@@ -306,7 +304,7 @@ func getVerifyHelper(t *testing.T, nVers int) (int, time.Duration, time.Duration
 			t.Fatal()
 		}
 
-		s1 := time.Now()
+		t1 := time.Now()
 		if checkHist(vrfPk, uid, dig.Dig, hist) {
 			t.Fatal()
 		}
@@ -316,7 +314,10 @@ func getVerifyHelper(t *testing.T, nVers int) (int, time.Duration, time.Duration
 		if checkNonMemb(vrfPk, uid, uint64(nVers), dig.Dig, bound) {
 			t.Fatal()
 		}
-		totalVerify += time.Since(s1)
+		t2 := time.Now()
+
+		totalGen += t1.Sub(t0)
+		totalVerify += t2.Sub(t1)
 	}
 
 	return nOps, totalGen, totalVerify
@@ -510,20 +511,19 @@ func TestBenchAuditBatch(t *testing.T) {
 		serv.workQ.DoBatch(work)
 
 		for ; ; epoch++ {
-			s0 := time.Now()
+			t0 := time.Now()
 			p, err := serv.Audit(epoch)
 			if err {
 				break
 			}
-
-			s1 := time.Now()
+			t1 := time.Now()
 			if err = aud.Update(p); err {
 				t.Fatal()
 			}
-			e := time.Now()
+			t2 := time.Now()
 
-			totalGen += s1.Sub(s0)
-			totalVer += e.Sub(s1)
+			totalGen += t1.Sub(t0)
+			totalVer += t2.Sub(t1)
 		}
 	}
 
