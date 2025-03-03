@@ -616,14 +616,14 @@ func TestBenchServScale(t *testing.T) {
 	serv, _, _ := NewServer()
 	nInsert := 500_000_000
 	nMeasure := 500_000
+	nOps := 10_000
+	nWarm := getWarmup(nOps)
 	var stat runtime.MemStats
 
 	for i := 0; i < nInsert; i += nMeasure {
 		runtime.GC()
 		runtime.ReadMemStats(&stat)
 
-		nOps := 10_000
-		nWarm := getWarmup(nOps)
 		var start time.Time
 		for j := 0; j < nWarm+nOps; j++ {
 			if j == nWarm {
