@@ -69,3 +69,46 @@ plot_ver = f"""\\begin{{tikzpicture}}
 \\end{{tikzpicture}}"""
 print("---\nVerify plot:")
 print(plot_ver)
+
+data_pav_size = []
+inf = open("data/25-02-28-size-pav.txt", "r")
+for line in inf.readlines():
+    line = line.strip()
+    if not line.startswith("TestBenchGetSize"):
+        continue
+    parts = line.split()
+    data_pav_size.append(float(parts[2]))
+
+data_akd_size = []
+inf = open("data/25-02-28-size-akd.txt", "r")
+for line in inf.readlines():
+    line = line.strip()
+    if not line.startswith("bench_get_size"):
+        continue
+    parts = line.split()
+    data_akd_size.append(float(parts[2]))
+
+coords_pav_size = "\n    ".join(
+    f"({ver + 1}, {sz})" for ver, sz in enumerate(data_pav_size)
+)
+coords_akd_size = "\n    ".join(
+    f"({ver + 1}, {sz})" for ver, sz in enumerate(data_akd_size)
+)
+plot_size = f"""\\begin{{tikzpicture}}
+\\begin{{axis}}[
+    xlabel={{Num versions}},
+    ylabel={{Proof Size (B)}},
+    grid=major,
+    legend pos=north west,
+]
+\\addplot[mark=x, blue] coordinates {{
+    {coords_pav_size}
+}};
+\\addplot[mark=*, red] coordinates {{
+    {coords_akd_size}
+}};
+\\legend{{\\vkt,AKD}}
+\\end{{axis}}
+\\end{{tikzpicture}}"""
+print("---\nSize plot:")
+print(plot_size)
