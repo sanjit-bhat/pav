@@ -618,6 +618,7 @@ func TestBenchServScale(t *testing.T) {
 	nMeasure := 500_000
 	nOps := 10_000
 	nWarm := getWarmup(nOps)
+	nRem := nMeasure - nWarm - nOps
 	var stat runtime.MemStats
 
 	for i := 0; i < nInsert; i += nMeasure {
@@ -636,7 +637,6 @@ func TestBenchServScale(t *testing.T) {
 		}
 		total := time.Since(start)
 
-		nRem := nMeasure - nWarm - nOps
 		work := make([]*Work, 0, nRem)
 		for j := 0; j < nRem; j++ {
 			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
