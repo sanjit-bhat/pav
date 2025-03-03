@@ -30,6 +30,7 @@ elif bench_class == "cli":
         "TestBenchPutCli",
         "TestBenchGetCli",
         "TestBenchSelfMonCli",
+        "TestBenchAuditCli",
     ]
 elif bench_class == "one":
     bench_tests = [
