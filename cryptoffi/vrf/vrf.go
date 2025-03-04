@@ -1,5 +1,6 @@
 // This started from https://pkg.go.dev/github.com/ProtonMail/go-ecvrf/ecvrf,
-// with modifications to check for adversarial pks and improve pk.Verify performance.
+// with modifications to check for adversarial pks, improve pk.Verify performance,
+// and reduce duplicate computation.
 //
 // Package ecvrf implements ECVRF-EDWARDS25519-SHA512-TAI, a verifiable random
 // function described in draft-irtf-cfrg-vrf-10.

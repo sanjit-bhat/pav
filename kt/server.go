@@ -255,12 +255,12 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	return s, sigPk, vrfPk
 }
 
-// compMapLabel rets the vrf hash and proof for mapLabel (VRF(uid || ver)).
+// compMapLabel rets the vrf output and proof for mapLabel (VRF(uid || ver)).
 func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
 	l := &MapLabelPre{Uid: uid, Ver: ver}
 	lByt := MapLabelPreEncode(make([]byte, 0, 16), l)
-	h, p := sk.Hash(lByt)
-	return h, p
+	o, p := sk.Prove(lByt)
+	return o, p
 }
 
 // compMapVal rets mapVal (epoch || Hash(pk || rand)).

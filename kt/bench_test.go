@@ -634,7 +634,7 @@ func TestBenchAuditCli(t *testing.T) {
 func TestBenchServScale(t *testing.T) {
 	serv, _, _ := NewServer()
 	nInsert := 500_000_000
-	nMeasure := 500_000
+	nMeasure := 1_000_000
 	nOps := 10_000
 	nWarm := getWarmup(nOps)
 	nRem := nMeasure - nWarm - nOps
