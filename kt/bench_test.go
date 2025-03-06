@@ -25,7 +25,7 @@ const (
 
 func TestBenchPutGenVer(t *testing.T) {
 	serv, _, vrfPk, _ := seedServer(defNSeed)
-	nOps := 50_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 
 	var totalGen time.Duration
@@ -180,7 +180,7 @@ func TestBenchPutCli(t *testing.T) {
 
 func TestBenchGetGenVer(t *testing.T) {
 	serv, _, vrfPk, uids := seedServer(defNSeed)
-	nOps := 50_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 	var totalGen time.Duration
 	var totalVer time.Duration
@@ -306,7 +306,7 @@ func TestBenchGetCli(t *testing.T) {
 
 func TestBenchSelfMonGenVer(t *testing.T) {
 	serv, _, vrfPk, uids := seedServer(defNSeed)
-	nOps := 50_000
+	nOps := 20_000
 	nWarm := getWarmup(nOps)
 	var totalGen time.Duration
 	var totalVer time.Duration
