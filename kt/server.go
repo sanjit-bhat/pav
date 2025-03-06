@@ -259,8 +259,7 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
 	l := &MapLabelPre{Uid: uid, Ver: ver}
 	lByt := MapLabelPreEncode(make([]byte, 0, 16), l)
-	o, p := sk.Prove(lByt)
-	return o, p
+	return sk.Prove(lByt)
 }
 
 // compMapVal rets mapVal (epoch || Hash(pk || rand)).
