@@ -73,9 +73,9 @@ func TestBenchVrfProve(t *testing.T) {
 	_, sk := VrfGenerateKey()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
-	data := make([]byte, 32)
+	data := make([]byte, 16)
 
-	nOps := 30_000
+	nOps := 50_000
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
 		rnd.Read(data)
@@ -95,18 +95,18 @@ func TestBenchVrfVerify(t *testing.T) {
 	pk, sk := VrfGenerateKey()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
-	data := make([]byte, 32)
+	data := make([]byte, 16)
 
-	nOps := 20_000
-	start := time.Now()
+	nOps := 50_000
+	var total time.Duration
 	for i := 0; i < nOps; i++ {
-		// note: random proofs each iteration seem to help
-		// stabilize the results.
 		rnd.Read(data)
 		_, p := sk.Prove(data)
+
+		t := time.Now()
 		pk.Verify(data, p)
+		total += time.Since(t)
 	}
-	total := time.Since(start)
 
 	m0 := float64(total.Microseconds()) / float64(nOps)
 	m1 := float64(total.Milliseconds())
