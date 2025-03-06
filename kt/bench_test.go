@@ -23,28 +23,48 @@ const (
 	nsPerUs  float64 = 1_000
 )
 
-func TestBenchPutOne(t *testing.T) {
-	serv, _, _, _ := seedServer(defNSeed)
-	nOps := 10_000
+func TestBenchPutGenVer(t *testing.T) {
+	serv, _, vrfPk, _ := seedServer(defNSeed)
+	nOps := 50_000
 	nWarm := getWarmup(nOps)
 
-	var start time.Time
+	var totalGen time.Duration
+	var totalVer time.Duration
 	for i := 0; i < nWarm+nOps; i++ {
 		if i == nWarm {
-			start = time.Now()
+			totalGen = 0
+			totalVer = 0
 		}
-		_, _, _, err := serv.Put(rand.Uint64(), mkRandVal())
+		uid := rand.Uint64()
+
+		t0 := time.Now()
+		dig, lat, bound, err := serv.Put(uid, mkRandVal())
 		if err {
 			t.Fatal()
 		}
-	}
-	total := time.Since(start)
 
-	m0 := float64(total.Microseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
+		t1 := time.Now()
+		if checkMemb(vrfPk, uid, 0, dig.Dig, lat) {
+			t.Fatal()
+		}
+		if checkNonMemb(vrfPk, uid, 1, dig.Dig, bound) {
+			t.Fatal()
+		}
+		t2 := time.Now()
+
+		totalGen += t1.Sub(t0)
+		totalVer += t2.Sub(t1)
+	}
+
+	m0 := float64(totalGen.Microseconds()) / float64(nOps)
+	m1 := float64(totalGen.Milliseconds())
+	m2 := float64(totalVer.Microseconds()) / float64(nOps)
+	m3 := float64(totalVer.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total(ms)"},
+		{N: m0, Unit: "us/op(gen)"},
+		{N: m1, Unit: "total(ms,gen)"},
+		{N: m2, Unit: "us/op(ver)"},
+		{N: m3, Unit: "total(ms,ver)"},
 	})
 }
 
@@ -121,40 +141,6 @@ func TestBenchPutSize(t *testing.T) {
 	})
 }
 
-func TestBenchPutVerify(t *testing.T) {
-	serv, _, vrfPk, _ := seedServer(defNSeed)
-	nOps := 10_000
-	nWarm := getWarmup(nOps)
-
-	var total time.Duration
-	for i := 0; i < nWarm+nOps; i++ {
-		if i == nWarm {
-			total = 0
-		}
-		uid := rand.Uint64()
-		dig, lat, bound, err := serv.Put(uid, mkRandVal())
-		if err {
-			t.Fatal()
-		}
-
-		s := time.Now()
-		if checkMemb(vrfPk, uid, 0, dig.Dig, lat) {
-			t.Fatal()
-		}
-		if checkNonMemb(vrfPk, uid, 1, dig.Dig, bound) {
-			t.Fatal()
-		}
-		total += time.Since(s)
-	}
-
-	m0 := float64(total.Microseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
-	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total(ms)"},
-	})
-}
-
 func TestBenchPutCli(t *testing.T) {
 	serv, sigPk, vrfPk, _ := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
@@ -192,29 +178,54 @@ func TestBenchPutCli(t *testing.T) {
 	})
 }
 
-func TestBenchGetOne(t *testing.T) {
-	serv, _, _, uids := seedServer(defNSeed)
-	nOps := 10_000
+func TestBenchGetGenVer(t *testing.T) {
+	serv, _, vrfPk, uids := seedServer(defNSeed)
+	nOps := 50_000
 	nWarm := getWarmup(nOps)
+	var totalGen time.Duration
+	var totalVer time.Duration
 
-	var start time.Time
 	for i := 0; i < nWarm+nOps; i++ {
 		if i == nWarm {
-			start = time.Now()
+			totalGen = 0
+			totalVer = 0
 		}
 		uid := uids[rand.Uint64N(defNSeed)]
-		_, _, isReg, _, _ := serv.Get(uid)
+
+		t0 := time.Now()
+		dig, hist, isReg, lat, bound := serv.Get(uid)
 		if !isReg {
 			t.Fatal()
 		}
-	}
-	total := time.Since(start)
+		if len(hist) != 0 {
+			t.Fatal()
+		}
 
-	m0 := float64(total.Microseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
+		t1 := time.Now()
+		if checkHist(vrfPk, uid, dig.Dig, hist) {
+			t.Fatal()
+		}
+		if checkMemb(vrfPk, uid, 0, dig.Dig, lat) {
+			t.Fatal()
+		}
+		if checkNonMemb(vrfPk, uid, 1, dig.Dig, bound) {
+			t.Fatal()
+		}
+		t2 := time.Now()
+
+		totalGen += t1.Sub(t0)
+		totalVer += t2.Sub(t1)
+	}
+
+	m0 := float64(totalGen.Microseconds()) / float64(nOps)
+	m1 := float64(totalGen.Milliseconds())
+	m2 := float64(totalVer.Microseconds()) / float64(nOps)
+	m3 := float64(totalVer.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total(ms)"},
+		{N: m0, Unit: "us/op(gen)"},
+		{N: m1, Unit: "total(ms,gen)"},
+		{N: m2, Unit: "us/op(ver)"},
+		{N: m3, Unit: "total(ms,ver)"},
 	})
 }
 
@@ -258,71 +269,6 @@ func TestBenchGetSize(t *testing.T) {
 	}
 }
 
-func TestBenchGetVerify(t *testing.T) {
-	maxNVers := 10
-	for nVers := 1; nVers <= maxNVers; nVers++ {
-		nOps, totalGen, totalVerify := getVerifyHelper(t, nVers)
-
-		m0 := float64(totalGen.Microseconds()) / float64(nOps)
-		m1 := float64(totalGen.Milliseconds())
-		m2 := float64(totalVerify.Microseconds()) / float64(nOps)
-		m3 := float64(totalVerify.Milliseconds())
-
-		benchutil.Report(nVers, []*benchutil.Metric{
-			{N: m0, Unit: "us/op(gen)"},
-			{N: m1, Unit: "total(ms,gen)"},
-			{N: m2, Unit: "us/op(ver)"},
-			{N: m3, Unit: "total(ms,ver)"},
-		})
-	}
-}
-
-func getVerifyHelper(t *testing.T, nVers int) (int, time.Duration, time.Duration) {
-	serv, _, vrfPk, _ := seedServer(defNSeed)
-	nOps := 10_000
-	nWarm := getWarmup(nOps)
-	var totalGen time.Duration
-	var totalVerify time.Duration
-
-	for i := 0; i < nWarm+nOps; i++ {
-		if i == nWarm {
-			totalGen = 0
-			totalVerify = 0
-		}
-
-		uid := rand.Uint64()
-		for j := 0; j < nVers; j++ {
-			serv.Put(uid, mkRandVal())
-		}
-
-		t0 := time.Now()
-		dig, hist, isReg, lat, bound := serv.Get(uid)
-		if !isReg {
-			t.Fatal()
-		}
-		if len(hist) != nVers-1 {
-			t.Fatal()
-		}
-
-		t1 := time.Now()
-		if checkHist(vrfPk, uid, dig.Dig, hist) {
-			t.Fatal()
-		}
-		if checkMemb(vrfPk, uid, uint64(nVers-1), dig.Dig, lat) {
-			t.Fatal()
-		}
-		if checkNonMemb(vrfPk, uid, uint64(nVers), dig.Dig, bound) {
-			t.Fatal()
-		}
-		t2 := time.Now()
-
-		totalGen += t1.Sub(t0)
-		totalVerify += t2.Sub(t1)
-	}
-
-	return nOps, totalGen, totalVerify
-}
-
 func TestBenchGetCli(t *testing.T) {
 	serv, sigPk, vrfPk, uids := seedServer(defNSeed)
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(vrfPk)
@@ -358,26 +304,42 @@ func TestBenchGetCli(t *testing.T) {
 	})
 }
 
-func TestBenchSelfMonOne(t *testing.T) {
-	serv, _, _, uids := seedServer(defNSeed)
-	nOps := 20_000
+func TestBenchSelfMonGenVer(t *testing.T) {
+	serv, _, vrfPk, uids := seedServer(defNSeed)
+	nOps := 50_000
 	nWarm := getWarmup(nOps)
+	var totalGen time.Duration
+	var totalVer time.Duration
 
-	var start time.Time
 	for i := 0; i < nWarm+nOps; i++ {
 		if i == nWarm {
-			start = time.Now()
+			totalGen = 0
+			totalVer = 0
 		}
 		uid := uids[rand.Uint64N(defNSeed)]
-		serv.SelfMon(uid)
-	}
-	total := time.Since(start)
 
-	m0 := float64(total.Microseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
+		t0 := time.Now()
+		dig, bound := serv.SelfMon(uid)
+
+		t1 := time.Now()
+		if checkNonMemb(vrfPk, uid, 1, dig.Dig, bound) {
+			t.Fatal()
+		}
+		t2 := time.Now()
+
+		totalGen += t1.Sub(t0)
+		totalVer += t2.Sub(t1)
+	}
+
+	m0 := float64(totalGen.Microseconds()) / float64(nOps)
+	m1 := float64(totalGen.Milliseconds())
+	m2 := float64(totalVer.Microseconds()) / float64(nOps)
+	m3 := float64(totalVer.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total(ms)"},
+		{N: m0, Unit: "us/op(gen)"},
+		{N: m1, Unit: "total(ms,gen)"},
+		{N: m2, Unit: "us/op(ver)"},
+		{N: m3, Unit: "total(ms,ver)"},
 	})
 }
 
@@ -410,34 +372,6 @@ func TestBenchSelfMonSize(t *testing.T) {
 	pb := ServerSelfMonReplyEncode(nil, p)
 	benchutil.Report(1, []*benchutil.Metric{
 		{N: float64(len(pb)), Unit: "B"},
-	})
-}
-
-func TestBenchSelfMonVerify(t *testing.T) {
-	serv, _, vrfPk, uids := seedServer(defNSeed)
-	nOps := 20_000
-	nWarm := getWarmup(nOps)
-
-	var total time.Duration
-	for i := 0; i < nWarm+nOps; i++ {
-		if i == nWarm {
-			total = 0
-		}
-		uid := uids[rand.Uint64N(defNSeed)]
-		dig, bound := serv.SelfMon(uid)
-
-		s := time.Now()
-		if checkNonMemb(vrfPk, uid, 1, dig.Dig, bound) {
-			t.Fatal()
-		}
-		total += time.Since(s)
-	}
-
-	m0 := float64(total.Microseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
-	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total(ms)"},
 	})
 }
 
@@ -488,16 +422,16 @@ func TestBenchSelfMonCli(t *testing.T) {
 	})
 }
 
-func TestBenchAuditBatch(t *testing.T) {
+func TestBenchAuditGenVer(t *testing.T) {
 	serv, _, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
 	nOps := 300
 	nWarm := getWarmup(nOps)
 	nInsert := 1_000
-
 	var totalGen time.Duration
 	var totalVer time.Duration
+
 	for i := 0; i < nWarm+nOps; i++ {
 		if i == nWarm {
 			totalGen = 0
