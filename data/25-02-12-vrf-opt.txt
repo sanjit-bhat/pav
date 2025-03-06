@@ -1,2 +1,0 @@
-TestBenchVrfHash           30000               129.9 us/op            3897 total(ms)
-TestBenchVrfVerify         20000               300.4 us/op            6008 total(ms)

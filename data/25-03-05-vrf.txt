@@ -1,0 +1,5 @@
+TestBenchVrfProve   	   50000	       143.9 us/op	      7196 total(ms)
+TestBenchVrfVerify  	   50000	       192.5 us/op	      9624 total(ms)
+bench_vrf_eval      	   50000	        58.40 us/op	      2919 total(ms)
+bench_vrf_prove     	   50000	       144.0 us/op	      7200 total(ms)
+bench_vrf_verify    	   50000	       216.4 us/op	     10819 total(ms)
