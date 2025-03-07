@@ -773,7 +773,7 @@ func (c *clientRunner) run(nCli int, work func()) time.Duration {
 func mkRandVal() []byte {
 	// ed25519 pk is 32 bytes.
 	x := make([]byte, 32)
-	RandRead(x)
+	randRead(x)
 	return x
 }
 
@@ -802,7 +802,7 @@ func getWarmup(nOps int) int {
 	return int(float64(nOps) * float64(0.1))
 }
 
-func LEPutUint64(b []byte, v uint64) {
+func lePutUint64(b []byte, v uint64) {
 	_ = b[7] // early bounds check to guarantee safety of writes below
 	b[0] = byte(v)
 	b[1] = byte(v >> 8)
@@ -814,14 +814,14 @@ func LEPutUint64(b []byte, v uint64) {
 	b[7] = byte(v >> 56)
 }
 
-func RandRead(p []byte) {
+func randRead(p []byte) {
 	for len(p) >= 8 {
-		LEPutUint64(p, rand.Uint64())
+		lePutUint64(p, rand.Uint64())
 		p = p[8:]
 	}
 	if len(p) > 0 {
 		b := make([]byte, 8)
-		LEPutUint64(b, rand.Uint64())
+		lePutUint64(b, rand.Uint64())
 		copy(p, b)
 	}
 }

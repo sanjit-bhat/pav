@@ -3,86 +3,23 @@ package merkle
 import (
 	"bytes"
 	"github.com/mit-pdos/pav/benchutil"
-	"github.com/mit-pdos/pav/cryptoffi"
 	"math/rand/v2"
 	"testing"
 	"time"
 )
 
-var defVal = []byte("val")
-
 const (
-	defNSeed int = 1_000_000
+	defNSeed uint64 = 1_000_000
 )
 
-func TestBenchMerkGet(t *testing.T) {
-	tr, rnd := seedTree(t, defNSeed)
-	label := make([]byte, cryptoffi.HashLen)
-	nOps := 1_000_000
-
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
-		_, err := rnd.Read(label)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// this gets non-memb.
-		// memb has similar performance, as long as the
-		// working set of labels is big enough (1M).
-		_, _, errb := tr.Get(label)
-		if errb {
-			t.Fatal()
-		}
-	}
-	total := time.Since(start)
-
-	m0 := float64(total.Nanoseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
-	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "ns/op"},
-		{N: m1, Unit: "total(ms)"},
-	})
-}
-
-func TestBenchMerkProve(t *testing.T) {
-	tr, rnd := seedTree(t, defNSeed)
-	label := make([]byte, cryptoffi.HashLen)
-	nOps := 1_000_000
-
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
-		_, err := rnd.Read(label)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, _, _, errb := tr.Prove(label)
-		if errb {
-			t.Fatal()
-		}
-	}
-	total := time.Since(start)
-
-	m0 := float64(total.Nanoseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
-	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "ns/op"},
-		{N: m1, Unit: "total(ms)"},
-	})
-}
-
 func TestBenchMerkPut(t *testing.T) {
-	tr, rnd := seedTree(t, defNSeed)
-	label := make([]byte, cryptoffi.HashLen)
-	nOps := 200_000
+	tr, _ := seedTree(t, defNSeed)
+	nOps := 500_000
 
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
-		_, err := rnd.Read(label)
-		if err != nil {
-			t.Fatal(err)
-		}
-		l := bytes.Clone(label)
-		v := bytes.Clone(defVal)
+		l := mkRandLabel()
+		v := mkRandVal()
 		errb := tr.Put(l, v)
 		if errb {
 			t.Fatal()
@@ -90,30 +27,125 @@ func TestBenchMerkPut(t *testing.T) {
 	}
 	total := time.Since(start)
 
-	m0 := float64(total.Nanoseconds()) / float64(nOps)
+	m0 := float64(total.Microseconds()) / float64(nOps)
 	m1 := float64(total.Milliseconds())
 	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "ns/op"},
+		{N: m0, Unit: "us/op"},
 		{N: m1, Unit: "total(ms)"},
 	})
 }
 
-func seedTree(t *testing.T, sz int) (tr *Tree, rnd *rand.ChaCha8) {
-	tr = NewTree()
-	var seed [32]byte
-	rnd = rand.NewChaCha8(seed)
+func TestBenchMerkGet(t *testing.T) {
+	tr, labels := seedTree(t, defNSeed)
+	nOps := 5_000_000
 
-	for i := 0; i < sz; i++ {
-		label := make([]byte, cryptoffi.HashLen)
-		_, err := rnd.Read(label)
-		if err != nil {
-			t.Fatal(err)
+	start := time.Now()
+	for i := 0; i < nOps; i++ {
+		l := labels[rand.Uint64N(defNSeed)]
+		isReg, _, errb := tr.Get(l)
+		if errb {
+			t.Fatal()
 		}
-		v := bytes.Clone(defVal)
-		errb := tr.Put(label, v)
+		if !isReg {
+			t.Fatal()
+		}
+	}
+	total := time.Since(start)
+
+	m0 := float64(total.Microseconds()) / float64(nOps)
+	m1 := float64(total.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op"},
+		{N: m1, Unit: "total(ms)"},
+	})
+}
+
+func TestBenchMerkGenVer(t *testing.T) {
+	tr, labels := seedTree(t, defNSeed)
+	nOps := 5_000_000
+
+	var totalGen time.Duration
+	var totalVer time.Duration
+	for i := 0; i < nOps; i++ {
+		l := labels[rand.Uint64N(defNSeed)]
+
+		t0 := time.Now()
+		isReg, v, p, errb := tr.Prove(l)
+		if errb {
+			t.Fatal()
+		}
+		if !isReg {
+			t.Fatal()
+		}
+
+		t1 := time.Now()
+		VerifyProof(true, l, v, p, tr.Digest())
+		t2 := time.Now()
+
+		totalGen += t1.Sub(t0)
+		totalVer += t2.Sub(t1)
+	}
+
+	m0 := float64(totalGen.Microseconds()) / float64(nOps)
+	m1 := float64(totalGen.Milliseconds())
+	m2 := float64(totalVer.Microseconds()) / float64(nOps)
+	m3 := float64(totalVer.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op(gen)"},
+		{N: m1, Unit: "total(ms,gen)"},
+		{N: m2, Unit: "us/op(ver)"},
+		{N: m3, Unit: "total(ms,ver)"},
+	})
+}
+
+func seedTree(t *testing.T, sz uint64) (tr *Tree, labels [][]byte) {
+	tr = NewTree()
+	labels = make([][]byte, 0, sz)
+
+	for i := uint64(0); i < sz; i++ {
+		l := mkRandLabel()
+		labels = append(labels, bytes.Clone(l))
+		v := mkRandVal()
+		errb := tr.Put(l, v)
 		if errb {
 			t.Fatal()
 		}
 	}
 	return
+}
+
+func lePutUint64(b []byte, v uint64) {
+	_ = b[7] // early bounds check to guarantee safety of writes below
+	b[0] = byte(v)
+	b[1] = byte(v >> 8)
+	b[2] = byte(v >> 16)
+	b[3] = byte(v >> 24)
+	b[4] = byte(v >> 32)
+	b[5] = byte(v >> 40)
+	b[6] = byte(v >> 48)
+	b[7] = byte(v >> 56)
+}
+
+func randRead(p []byte) {
+	for len(p) >= 8 {
+		lePutUint64(p, rand.Uint64())
+		p = p[8:]
+	}
+	if len(p) > 0 {
+		b := make([]byte, 8)
+		lePutUint64(b, rand.Uint64())
+		copy(p, b)
+	}
+}
+
+func mkRandLabel() []byte {
+	x := make([]byte, 32)
+	randRead(x)
+	return x
+}
+
+func mkRandVal() []byte {
+	x := make([]byte, 40)
+	randRead(x)
+	return x
 }
