@@ -23,6 +23,42 @@ const (
 	nsPerUs  float64 = 1_000
 )
 
+func TestLabelGenVer(t *testing.T) {
+	pk, sk := cryptoffi.VrfGenerateKey()
+	nOps := 50_000
+
+	var totalGen time.Duration
+	var totalVer time.Duration
+	for i := 0; i < nOps; i++ {
+		uid := rand.Uint64()
+		ver := uint64(0)
+
+		t0 := time.Now()
+		_, p := compMapLabel(uid, ver, sk)
+
+		t1 := time.Now()
+		_, err := checkLabel(pk, uid, ver, p)
+		if err {
+			t.Fatal()
+		}
+		t2 := time.Now()
+
+		totalGen += t1.Sub(t0)
+		totalVer += t2.Sub(t1)
+	}
+
+	m0 := float64(totalGen.Microseconds()) / float64(nOps)
+	m1 := float64(totalGen.Milliseconds())
+	m2 := float64(totalVer.Microseconds()) / float64(nOps)
+	m3 := float64(totalVer.Milliseconds())
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: m0, Unit: "us/op(gen)"},
+		{N: m1, Unit: "total(ms,gen)"},
+		{N: m2, Unit: "us/op(ver)"},
+		{N: m3, Unit: "total(ms,ver)"},
+	})
+}
+
 func TestBenchPutGenVer(t *testing.T) {
 	serv, _, vrfPk, _ := seedServer(defNSeed)
 	nOps := 10_000
