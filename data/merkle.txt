@@ -1,0 +1,5 @@
+bench_merk_gen_ver  	  500000	        34.14 us/op(gen)	     17071 total(ms,gen)	         5.762 us/op(ver)	      2881 total(ms,ver)
+bench_merk_insert   	  100000	       164.2 us/op	     16418 total(ms)
+TestBenchMerkPut    	  500000	         8.642 us/op	      4321 total(ms)
+TestBenchMerkGet    	 5000000	         1.164 us/op	      5820 total(ms)
+TestBenchMerkGenVer 	 5000000	         1.707 us/op(gen)	      8533 total(ms,gen)	         4.883 us/op(ver)	     24415 total(ms,ver)
