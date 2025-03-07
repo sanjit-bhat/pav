@@ -23,7 +23,7 @@ const (
 	nsPerUs  float64 = 1_000
 )
 
-func TestLabelGenVer(t *testing.T) {
+func TestBenchLabelGenVer(t *testing.T) {
 	pk, sk := cryptoffi.VrfGenerateKey()
 	nOps := 50_000
 

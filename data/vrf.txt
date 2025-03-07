@@ -1,0 +1,3 @@
+bench_label_gen_ver 	   50000	       155.9 us/op(gen)	      7795 total(ms,gen)	       223.6 us/op(ver)	     11181 total(ms,ver)
+bench_label_get     	   50000	        79.30 us/op	      3965 total(ms)
+TestBenchLabelGenVer	   50000	       143.7 us/op(gen)	      7184 total(ms,gen)	       191.0 us/op(ver)	      9549 total(ms,ver)
