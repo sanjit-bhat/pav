@@ -458,23 +458,54 @@ func TestBenchSelfMonCli(t *testing.T) {
 	})
 }
 
-func TestBenchAuditGenVer(t *testing.T) {
+type batchCfg struct {
+	batchSz  int
+	nBatches int
+}
+
+func TestBenchAuditBatch(t *testing.T) {
+	cfgs := []batchCfg{
+		{1, 50_000},
+		{2, 50_000},
+		{5, 10_000},
+		{10, 10_000},
+		{20, 10_000},
+		{50, 5_000},
+		{100, 3_000},
+		{200, 1_500},
+		{500, 500},
+		{1_000, 300},
+	}
+	for _, c := range cfgs {
+		totalGen, totalVer := auditBatchHelper(t, c.batchSz, c.nBatches)
+		m0 := float64(totalGen.Microseconds()) / float64(c.nBatches)
+		m1 := float64(totalGen.Milliseconds())
+		m2 := float64(totalVer.Microseconds()) / float64(c.nBatches)
+		m3 := float64(totalVer.Milliseconds())
+		benchutil.Report(c.batchSz, []*benchutil.Metric{
+			{N: m0, Unit: "us/op(gen)"},
+			{N: m1, Unit: "total(ms,gen)"},
+			{N: m2, Unit: "us/op(ver)"},
+			{N: m3, Unit: "total(ms,ver)"},
+		})
+	}
+}
+
+func auditBatchHelper(t *testing.T, batchSz, nBatches int) (time.Duration, time.Duration) {
 	serv, _, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
-	nOps := 300
-	nWarm := getWarmup(nOps)
-	nInsert := 1_000
+	nWarm := getWarmup(nBatches)
+
 	var totalGen time.Duration
 	var totalVer time.Duration
-
-	for i := 0; i < nWarm+nOps; i++ {
+	for i := 0; i < nWarm+nBatches; i++ {
 		if i == nWarm {
 			totalGen = 0
 			totalVer = 0
 		}
-		work := make([]*Work, 0, nInsert)
-		for j := 0; j < nInsert; j++ {
+		work := make([]*Work, 0, batchSz)
+		for j := 0; j < batchSz; j++ {
 			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
 			work = append(work, w)
 		}
@@ -496,17 +527,7 @@ func TestBenchAuditGenVer(t *testing.T) {
 			totalVer += t2.Sub(t1)
 		}
 	}
-
-	m0 := float64(totalGen.Microseconds()) / float64(nOps)
-	m1 := float64(totalGen.Milliseconds())
-	m2 := float64(totalVer.Microseconds()) / float64(nOps)
-	m3 := float64(totalVer.Milliseconds())
-	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op(gen)"},
-		{N: m1, Unit: "total(ms,gen)"},
-		{N: m2, Unit: "us/op(ver)"},
-		{N: m3, Unit: "total(ms,ver)"},
-	})
+	return totalGen, totalVer
 }
 
 func TestBenchAuditSize(t *testing.T) {
