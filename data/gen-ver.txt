@@ -1,8 +1,6 @@
 TestBenchPutGenVer  	   10000	       315.2 us/op(gen)	      3152 total(ms,gen)	       394.6 us/op(ver)	      3946 total(ms,ver)
 TestBenchGetGenVer  	   10000	       296.3 us/op(gen)	      2963 total(ms,gen)	       392.8 us/op(ver)	      3927 total(ms,ver)
 TestBenchSelfMonGenVer	   20000	       147.6 us/op(gen)	      2952 total(ms,gen)	       196.1 us/op(ver)	      3922 total(ms,ver)
-TestBenchAuditGenVer	     300	         0.7100 us/op(gen)	         0 total(ms,gen)	      9909 us/op(ver)	      2972 total(ms,ver)
-bench_audit_gen_ver 	     300	      1260 us/op(gen)	       377.0 total(ms,gen)	      4379 us/op(ver)	      1313 total(ms,ver)
 bench_get_gen_ver   	   10000	       825.1 us/op(gen)	      8250 total(ms,gen)	       680.2 us/op(ver)	      6802 total(ms,ver)
 bench_put_gen_ver   	   10000	      1978 us/op(gen)	     19783 total(ms,gen)	      1411 us/op(ver)	     14114 total(ms,ver)
 bench_selfmon_gen_ver	   20000	      1427 us/op(gen)	     28531 total(ms,gen)	      1217 us/op(ver)	     24340 total(ms,ver)
