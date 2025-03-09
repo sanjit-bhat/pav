@@ -1,2 +1,0 @@
-TestBenchRand32     	100000000	        19.73 ns/op	      1972 total(ms)
-TestBenchRand64     	100000000	        38.20 ns/op	      3820 total(ms)

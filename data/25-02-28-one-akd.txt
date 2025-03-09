@@ -1,4 +1,0 @@
-bench_put_one       	   10000	      1625 us/op	     16247 total(ms)
-bench_get_one       	   10000	       516.3 us/op	      5163 total(ms)
-bench_selfmon_one   	   20000	      1089 us/op	     21788 total(ms)
-bench_audit_batch   	     300	      1273 us/op(gen)	       381.0 total(ms,gen)	      4371 us/op(ver)	      1311 total(ms,ver)
