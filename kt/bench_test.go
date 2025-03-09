@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/aclements/go-moremath/stats"
+	"github.com/elastic/go-sysinfo"
 	"github.com/mit-pdos/pav/benchutil"
 	"github.com/mit-pdos/pav/cryptoffi"
 )
@@ -289,8 +290,7 @@ func TestBenchGetScale(t *testing.T) {
 
 func TestBenchGetSize(t *testing.T) {
 	serv, _, _, uids := seedServer(defNSeed)
-	uid := uids[rand.Uint64N(defNSeed)]
-	dig, hist, isReg, lat, bound := serv.Get(uid)
+	dig, hist, isReg, lat, bound := serv.Get(uids[0])
 	if !isReg {
 		t.Fatal()
 	}
@@ -616,40 +616,29 @@ func TestBenchAuditCli(t *testing.T) {
 
 func TestBenchServScale(t *testing.T) {
 	serv, _, _ := NewServer()
-	nInsert := 500_000_000
+	nTotal := 500_000_000
 	nMeasure := 1_000_000
-	nOps := 10_000
-	nWarm := getWarmup(nOps)
-	nRem := nMeasure - nWarm - nOps
-	var stat runtime.MemStats
 
-	for i := 0; i < nInsert; i += nMeasure {
+	for i := 0; i < nTotal; i += nMeasure {
 		runtime.GC()
-		runtime.ReadMemStats(&stat)
-
-		var start time.Time
-		for j := 0; j < nWarm+nOps; j++ {
-			if j == nWarm {
-				start = time.Now()
-			}
-			_, _, _, err := serv.Put(rand.Uint64(), mkRandVal())
-			if err {
-				t.Fatal()
-			}
+		proc, err := sysinfo.Self()
+		if err != nil {
+			t.Fatal(err)
 		}
-		total := time.Since(start)
+		mem, err := proc.Memory()
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		work := make([]*Work, 0, nRem)
-		for j := 0; j < nRem; j++ {
+		work := make([]*Work, 0, nMeasure)
+		for j := 0; j < nMeasure; j++ {
 			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
 			work = append(work, w)
 		}
 		serv.workQ.DoBatch(work)
 
-		lat := float64(total.Microseconds()) / float64(nOps)
-		mb := float64(stat.Alloc) / float64(1_000_000)
+		mb := float64(mem.Resident) / float64(1_000_000)
 		benchutil.Report(i, []*benchutil.Metric{
-			{N: lat, Unit: "us/op"},
 			{N: mb, Unit: "MB"},
 		})
 	}
