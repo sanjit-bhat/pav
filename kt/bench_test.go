@@ -288,21 +288,17 @@ func TestBenchGetScale(t *testing.T) {
 }
 
 func TestBenchGetSize(t *testing.T) {
-	serv, _, _, _ := seedServer(defNSeed)
-	maxNVers := 10
-	uid := rand.Uint64()
-	for nVers := 1; nVers <= maxNVers; nVers++ {
-		serv.Put(uid, mkRandVal())
-		dig, hist, isReg, lat, bound := serv.Get(uid)
-		if !isReg {
-			t.Fatal()
-		}
-		p := &ServerGetReply{Dig: dig, Hist: hist, IsReg: isReg, Latest: lat, Bound: bound}
-		pb := ServerGetReplyEncode(nil, p)
-		benchutil.Report(nVers, []*benchutil.Metric{
-			{N: float64(len(pb)), Unit: "B"},
-		})
+	serv, _, _, uids := seedServer(defNSeed)
+	uid := uids[rand.Uint64N(defNSeed)]
+	dig, hist, isReg, lat, bound := serv.Get(uid)
+	if !isReg {
+		t.Fatal()
 	}
+	p := &ServerGetReply{Dig: dig, Hist: hist, IsReg: isReg, Latest: lat, Bound: bound}
+	pb := ServerGetReplyEncode(nil, p)
+	benchutil.Report(1, []*benchutil.Metric{
+		{N: float64(len(pb)), Unit: "B"},
+	})
 }
 
 func TestBenchGetCli(t *testing.T) {
