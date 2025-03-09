@@ -540,15 +540,11 @@ func TestBenchAuditSize(t *testing.T) {
 		}
 	}
 
-	nInsert := 1_000
-	work := make([]*Work, 0, nInsert)
-	for j := 0; j < nInsert; j++ {
-		w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
-		work = append(work, w)
-	}
-	serv.workQ.DoBatch(work)
-
+	serv.Put(rand.Uint64(), mkRandVal())
 	upd, err := serv.Audit(epoch)
+	if err {
+		t.Fatal()
+	}
 	p := &ServerAuditReply{P: upd, Err: err}
 	pb := ServerAuditReplyEncode(nil, p)
 
