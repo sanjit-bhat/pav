@@ -463,7 +463,7 @@ type batchCfg struct {
 	nBatches int
 }
 
-func TestBenchAuditBatch(t *testing.T) {
+func TestBenchAuditScale(t *testing.T) {
 	cfgs := []batchCfg{
 		{1, 50_000},
 		{2, 50_000},
@@ -477,7 +477,7 @@ func TestBenchAuditBatch(t *testing.T) {
 		{1_000, 300},
 	}
 	for _, c := range cfgs {
-		totalGen, totalVer := auditBatchHelper(t, c.batchSz, c.nBatches)
+		totalGen, totalVer := auditScaleHelper(t, c.batchSz, c.nBatches)
 		m0 := float64(totalGen.Microseconds()) / float64(c.nBatches)
 		m1 := float64(totalGen.Milliseconds())
 		m2 := float64(totalVer.Microseconds()) / float64(c.nBatches)
@@ -491,7 +491,7 @@ func TestBenchAuditBatch(t *testing.T) {
 	}
 }
 
-func auditBatchHelper(t *testing.T, batchSz, nBatches int) (time.Duration, time.Duration) {
+func auditScaleHelper(t *testing.T, batchSz, nBatches int) (time.Duration, time.Duration) {
 	serv, _, _, _ := seedServer(defNSeed)
 	aud, _ := NewAuditor()
 	epoch := updAuditor(t, serv, aud, 0)
