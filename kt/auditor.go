@@ -24,13 +24,14 @@ func (a *Auditor) Update(proof *UpdateProof) bool {
 	}
 	applyUpd(a.keyMap, proof.Updates)
 
-	// sign dig.
 	dig := a.keyMap.Digest()
+	// sign dig.
 	preSig := &PreSigDig{Epoch: nextEp, Dig: dig}
 	preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
 	sig := a.sk.Sign(preSigByt)
 	// benchmark: turn off sigs for akd compat.
 	// var sig []byte
+
 	newInfo := &AdtrEpochInfo{Dig: dig, ServSig: proof.Sig, AdtrSig: sig}
 	a.histInfo = append(a.histInfo, newInfo)
 	a.mu.Unlock()
@@ -58,7 +59,17 @@ func NewAuditor() (*Auditor, cryptoffi.SigPublicKey) {
 	return &Auditor{mu: mu, sk: sk, keyMap: m}, pk
 }
 
-// checkOneUpd checks that an update is safe, and errs on fail.
+func checkUpd(keys *merkle.Tree, nextEp uint64, upd map[string][]byte) bool {
+	var loopErr bool
+	for mapLabel, mapVal := range upd {
+		if checkOneUpd(keys, nextEp, []byte(mapLabel), mapVal) {
+			loopErr = true
+		}
+	}
+	return loopErr
+}
+
+// checkOneUpd checks that an update is safe to apply, and errs on fail.
 func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool {
 	inTree, _, err0 := keys.Get(mapLabel)
 	// label has right len. used in applyUpd.
@@ -87,18 +98,7 @@ func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool
 	return false
 }
 
-// checkUpd just runs checkOneUpd for all updates.
-func checkUpd(keys *merkle.Tree, nextEp uint64, upd map[string][]byte) bool {
-	var loopErr bool
-	for mapLabel, mapVal := range upd {
-		if checkOneUpd(keys, nextEp, []byte(mapLabel), mapVal) {
-			loopErr = true
-		}
-	}
-	return loopErr
-}
-
-// applyUpd applies a valid update.
+// applyUpd applies a valid update to the previous map.
 func applyUpd(keys *merkle.Tree, upd map[string][]byte) {
 	for label, val := range upd {
 		err0 := keys.Put([]byte(label), val)
