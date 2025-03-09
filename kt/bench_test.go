@@ -614,7 +614,7 @@ func TestBenchAuditCli(t *testing.T) {
 	})
 }
 
-func TestBenchServScale(t *testing.T) {
+func TestBenchServMem(t *testing.T) {
 	serv, _, _ := NewServer()
 	nTotal := 500_000_000
 	nMeasure := 1_000_000
@@ -629,6 +629,10 @@ func TestBenchServScale(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		mb := float64(mem.Resident) / float64(1_000_000)
+		benchutil.Report(i, []*benchutil.Metric{
+			{N: mb, Unit: "MB"},
+		})
 
 		work := make([]*Work, 0, nMeasure)
 		for j := 0; j < nMeasure; j++ {
@@ -636,11 +640,6 @@ func TestBenchServScale(t *testing.T) {
 			work = append(work, w)
 		}
 		serv.workQ.DoBatch(work)
-
-		mb := float64(mem.Resident) / float64(1_000_000)
-		benchutil.Report(i, []*benchutil.Metric{
-			{N: mb, Unit: "MB"},
-		})
 	}
 }
 
