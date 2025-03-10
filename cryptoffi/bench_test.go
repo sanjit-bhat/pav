@@ -115,3 +115,12 @@ func TestBenchVrfVerify(t *testing.T) {
 		{N: m1, Unit: "total(ms)"},
 	})
 }
+
+func TestBenchVrfSize(t *testing.T) {
+	_, sk := VrfGenerateKey()
+	data := make([]byte, 16)
+	_, p := sk.Prove(data)
+	benchutil.Report(0, []*benchutil.Metric{
+		{N: float64(len(p)), Unit: "B"},
+	})
+}

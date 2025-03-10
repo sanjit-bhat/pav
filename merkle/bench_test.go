@@ -2,7 +2,9 @@ package merkle
 
 import (
 	"bytes"
+	"github.com/aclements/go-moremath/stats"
 	"github.com/mit-pdos/pav/benchutil"
+	"math"
 	"math/rand/v2"
 	"testing"
 	"time"
@@ -98,10 +100,27 @@ func TestBenchMerkGenVer(t *testing.T) {
 	})
 }
 
+func TestBenchMerkSize(t *testing.T) {
+	tr, labels := seedTree(t, defNSeed)
+	samp := &stats.Sample{Xs: make([]float64, 0, defNSeed)}
+	for _, label := range labels {
+		isReg, _, p, errb := tr.Prove(label)
+		if errb {
+			t.Fatal()
+		}
+		if !isReg {
+			t.Fatal()
+		}
+		samp.Xs = append(samp.Xs, float64(len(p)))
+	}
+	benchutil.Report(1, []*benchutil.Metric{
+		{N: math.Round(samp.Mean()), Unit: "B"},
+	})
+}
+
 func seedTree(t *testing.T, sz uint64) (tr *Tree, labels [][]byte) {
 	tr = NewTree()
 	labels = make([][]byte, 0, sz)
-
 	for i := uint64(0); i < sz; i++ {
 		l := mkRandLabel()
 		labels = append(labels, bytes.Clone(l))
