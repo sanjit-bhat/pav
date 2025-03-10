@@ -128,24 +128,31 @@ func TestBenchPutScale(t *testing.T) {
 }
 
 func TestBenchPutBatch(t *testing.T) {
-	sizes := []int{1, 2, 5, 10, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000}
-	for _, batchSz := range sizes {
-		total, nBatches := putBatchHelper(batchSz)
-
-		tput := float64(nBatches*batchSz) / total.Seconds()
-		lat := float64(total.Microseconds()) / float64(nBatches)
-		overall := float64(total.Milliseconds())
-		benchutil.Report(batchSz, []*benchutil.Metric{
-			{N: tput, Unit: "op/s"},
-			{N: lat, Unit: "us/batch"},
-			{N: overall, Unit: "total(ms)"},
+	cfgs := []batchCfg{
+		{1, 50_000},
+		{2, 50_000},
+		{5, 10_000},
+		{10, 10_000},
+		{20, 10_000},
+		{50, 5_000},
+		{100, 3_000},
+		{200, 1_500},
+		{500, 500},
+		{1_000, 300},
+	}
+	for _, c := range cfgs {
+		total := putBatchHelper(c.batchSz, c.nBatches)
+		m0 := float64(total.Microseconds()) / float64(c.nBatches)
+		m1 := float64(total.Milliseconds())
+		benchutil.Report(c.batchSz, []*benchutil.Metric{
+			{N: m0, Unit: "us/op"},
+			{N: m1, Unit: "total(ms)"},
 		})
 	}
 }
 
-func putBatchHelper(batchSz int) (time.Duration, int) {
+func putBatchHelper(batchSz, nBatches int) time.Duration {
 	serv, _, _, _ := seedServer(defNSeed)
-	nBatches := 20
 	nWarm := getWarmup(nBatches)
 
 	start := time.Now()
@@ -160,8 +167,7 @@ func putBatchHelper(batchSz int) (time.Duration, int) {
 		}
 		serv.workQ.DoBatch(work)
 	}
-	total := time.Since(start)
-	return total, nBatches
+	return time.Since(start)
 }
 
 func TestBenchPutSize(t *testing.T) {
