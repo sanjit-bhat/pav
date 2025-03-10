@@ -17,17 +17,20 @@ type Server struct {
 	commitSecret []byte
 	// keyMap stores (mapLabel, mapVal) entries.
 	keyMap *merkle.Tree
-	// visKeys stores the latest pk for a particular uid.
-	// the pk is visible, whereas keyMap only has commitments.
-	visKeys map[uint64][]byte
-	// numVers provides the authoritative mapping from uid to number
-	// of registered versions. this corresponds to keyMap entries.
-	// if a uid isn't registered, the zero val is correct.
-	numVers map[uint64]uint64
+	// userInfo stores info about every registered uid.
+	userInfo map[uint64]*userState
 	// epochHist stores info about prior epochs, for auditing.
 	epochHist []*servEpochInfo
 	// workQ batch processes Put requests.
 	workQ *WorkQ
+}
+
+type userState struct {
+	// numVers provides the authoritative number of registered versions,
+	// which corresponds to keyMap entries.
+	numVers uint64
+	// plainPk stores the plaintext pk, whereas keyMap only has commitments.
+	plainPk []byte
 }
 
 type servEpochInfo struct {
@@ -50,10 +53,17 @@ func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb, bool) {
 // for the latest version.
 func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 	s.mu.RLock()
+	user := s.userInfo[uid]
+	var numVers uint64
+	var plainPk []byte
+	if user != nil {
+		numVers = user.numVers
+		plainPk = user.plainPk
+	}
+
 	dig := getDig(s.epochHist)
-	numVers := s.numVers[uid]
 	hist := getHist(s.keyMap, uid, numVers, s.vrfSk)
-	isReg, latest := getLatest(s.keyMap, uid, numVers, s.vrfSk, s.commitSecret, s.visKeys[uid])
+	isReg, latest := getLatest(s.keyMap, uid, numVers, s.vrfSk, s.commitSecret, plainPk)
 	bound := getBound(s.keyMap, uid, numVers, s.vrfSk)
 	s.mu.RUnlock()
 	return dig, hist, isReg, latest, bound
@@ -61,8 +71,13 @@ func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 
 func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
 	s.mu.RLock()
+	user := s.userInfo[uid]
+	var numVers uint64
+	if user != nil {
+		numVers = user.numVers
+	}
+
 	dig := getDig(s.epochHist)
-	numVers := s.numVers[uid]
 	bound := getBound(s.keyMap, uid, numVers, s.vrfSk)
 	s.mu.RUnlock()
 	return dig, bound
@@ -162,9 +177,14 @@ func (s *Server) Worker() {
 
 			err0 := s.keyMap.Put(label, out0.mapVal)
 			primitive.Assert(!err0)
-			s.visKeys[req.Uid] = req.Pk
 			upd[string(label)] = out0.mapVal
-			s.numVers[req.Uid]++
+			var user = s.userInfo[req.Uid]
+			if user == nil {
+				user = &userState{}
+			}
+			user.numVers++
+			user.plainPk = req.Pk
+			s.userInfo[req.Uid] = user
 		}
 	}
 	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
@@ -193,7 +213,11 @@ func (s *Server) Worker() {
 
 // mapper0 makes mapLabels and mapVals.
 func (s *Server) mapper0(in *WQReq, out *mapper0Out) {
-	numVers := s.numVers[in.Uid]
+	user := s.userInfo[in.Uid]
+	var numVers uint64
+	if user != nil {
+		numVers = user.numVers
+	}
 	latHash, latProof := compMapLabel(in.Uid, numVers, s.vrfSk)
 	boundHash, boundProof := compMapLabel(in.Uid, numVers+1, s.vrfSk)
 
@@ -239,13 +263,12 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
 	sec := cryptoffi.RandBytes(cryptoffi.HashLen)
 	keys := merkle.NewTree()
-	vis := make(map[uint64][]byte)
+	users := make(map[uint64]*userState)
 	var hist []*servEpochInfo
 	// commit empty tree as init epoch.
 	updEpochHist(&hist, make(map[string][]byte), keys.Digest(), sigSk)
-	vers := make(map[uint64]uint64)
 	wq := NewWorkQ()
-	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, visKeys: vis, numVers: vers, epochHist: hist, workQ: wq}
+	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, userInfo: users, epochHist: hist, workQ: wq}
 
 	go func() {
 		for {
