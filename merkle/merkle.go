@@ -137,8 +137,8 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	// empty node.
 	if n == nil {
 		if prove {
-			proof = marshal.WriteInt(proof, 0) // LeafLabelLen
-			proof = marshal.WriteInt(proof, 0) // LeafValLen
+			proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
+			proof = marshal.WriteInt(proof, 0) // empty LeafValLen
 		}
 		return false, nil, proof, false
 	}
@@ -156,8 +156,8 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	}
 	// leaf node with same label.
 	if prove {
-		proof = marshal.WriteInt(proof, 0) // LeafLabelLen
-		proof = marshal.WriteInt(proof, 0) // LeafValLen
+		proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
+		proof = marshal.WriteInt(proof, 0) // empty LeafValLen
 	}
 	return true, n.val, proof, false
 }
