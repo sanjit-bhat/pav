@@ -142,10 +142,10 @@ func TestBenchPutBatch(t *testing.T) {
 	}
 	for _, c := range cfgs {
 		total := putBatchHelper(c.batchSz, c.nBatches)
-		m0 := float64(total.Microseconds()) / float64(c.nBatches)
+		m0 := float64(c.batchSz*c.nBatches) / total.Seconds()
 		m1 := float64(total.Milliseconds())
 		benchutil.Report(c.batchSz, []*benchutil.Metric{
-			{N: m0, Unit: "us/op"},
+			{N: m0, Unit: "op/s"},
 			{N: m1, Unit: "total(ms)"},
 		})
 	}
@@ -480,14 +480,14 @@ func TestBenchAuditScale(t *testing.T) {
 	}
 	for _, c := range cfgs {
 		totalGen, totalVer := auditScaleHelper(t, c.batchSz, c.nBatches)
-		m0 := float64(totalGen.Microseconds()) / float64(c.nBatches)
+		m0 := float64(c.batchSz*c.nBatches) / totalGen.Seconds()
 		m1 := float64(totalGen.Milliseconds())
-		m2 := float64(totalVer.Microseconds()) / float64(c.nBatches)
+		m2 := float64(c.batchSz*c.nBatches) / totalVer.Seconds()
 		m3 := float64(totalVer.Milliseconds())
 		benchutil.Report(c.batchSz, []*benchutil.Metric{
-			{N: m0, Unit: "us/op(gen)"},
+			{N: m0, Unit: "op/s(gen)"},
 			{N: m1, Unit: "total(ms,gen)"},
-			{N: m2, Unit: "us/op(ver)"},
+			{N: m2, Unit: "op/s(ver)"},
 			{N: m3, Unit: "total(ms,ver)"},
 		})
 	}
