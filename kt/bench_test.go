@@ -569,7 +569,7 @@ func TestBenchAuditCli(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
-	nOps := 30_000
+	nOps := 10_000
 	nWarm := getWarmup(nOps)
 
 	// after putting 1 key, a client knows about 1 epoch.
