@@ -569,11 +569,10 @@ func TestBenchAuditCli(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
-	nOps := 10_000
+	nOps := 30_000
 	nWarm := getWarmup(nOps)
-	nEps := 5
 
-	// after putting nEps keys, a client knows about nEps epochs.
+	// after putting 1 key, a client knows about 1 epoch.
 	clients := make([]*Client, 0, nWarm+nOps)
 	wg := new(sync.WaitGroup)
 	wg.Add(nWarm + nOps)
@@ -582,11 +581,9 @@ func TestBenchAuditCli(t *testing.T) {
 		clients = append(clients, c)
 
 		go func() {
-			for j := 0; j < nEps; j++ {
-				_, err := c.Put(mkRandVal())
-				if err.Err {
-					t.Error()
-				}
+			_, err := c.Put(mkRandVal())
+			if err.Err {
+				t.Error()
 			}
 			wg.Done()
 		}()
