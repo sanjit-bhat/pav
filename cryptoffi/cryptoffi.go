@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"github.com/mit-pdos/pav/cryptoffi/vrf"
+	"hash"
 )
 
 const (
@@ -13,9 +14,23 @@ const (
 
 // # Hash
 
-func Hash(data []byte) []byte {
-	hash := sha256.Sum256(data)
-	return hash[:]
+type Hasher struct {
+	h hash.Hash
+}
+
+func NewHasher() *Hasher {
+	return &Hasher{sha256.New()}
+}
+
+func (hr *Hasher) Write(b []byte) {
+	_, err := hr.h.Write(b)
+	if err != nil {
+		panic("cryptoffi: Hasher.Write err")
+	}
+}
+
+func (hr *Hasher) Sum(b []byte) []byte {
+	return hr.h.Sum(b)
 }
 
 // # Signature
@@ -76,29 +91,29 @@ func VrfGenerateKey() (*VrfPublicKey, *VrfPrivateKey) {
 	return &VrfPublicKey{pk: pk}, &VrfPrivateKey{sk: sk}
 }
 
-// Hash computes the hash of data, along with a proof.
-func (sk *VrfPrivateKey) Hash(data []byte) ([]byte, []byte) {
-	hash, proof, err := sk.sk.Prove(data)
+// Prove evaluates the VRF on data, returning the output and a proof.
+func (sk *VrfPrivateKey) Prove(data []byte) ([]byte, []byte) {
+	out, proof, err := sk.sk.Prove(data)
 	if err != nil {
-		panic("cryptoffi: VrfPrivateKey.Hash")
+		panic("cryptoffi: VrfPrivateKey.Prove")
 	}
-	// since we only require vrf determinism, it seems safe to truncate hash.
-	return hash[:HashLen], proof
+	// since we only require vrf determinism, it seems safe to truncate out.
+	return out[:HashLen], proof
 }
 
-// Verify verifies data against the proof and returns the hash and an err.
+// Verify verifies data against the proof and returns the output and an err.
 // it requires a valid pk.
 // it performs the ECVRF_verify checks to run even on adversarial proofs.
 func (pk *VrfPublicKey) Verify(data, proof []byte) ([]byte, bool) {
-	ok, hash, err := pk.pk.Verify(data, proof)
+	ok, out, err := pk.pk.Verify(data, proof)
 	if err != nil {
 		return nil, true
 	}
 	if !ok {
 		return nil, true
 	}
-	// since we only require vrf determinism, it seems safe to truncate hash.
-	return hash[:HashLen], false
+	// since we only require vrf determinism, it seems safe to truncate out.
+	return out[:HashLen], false
 }
 
 // VrfPublicKeyEncodes encodes a valid pk as bytes.

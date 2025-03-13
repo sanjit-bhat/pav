@@ -20,8 +20,8 @@ func NewRpcServer(s *Server) *advrpc.Server {
 		if err0 {
 			return
 		}
-		ret0, ret1, ret2 := s.Put(argObj.Uid, argObj.Pk)
-		replyObj := &ServerPutReply{Dig: ret0, Latest: ret1, Bound: ret2}
+		ret0, ret1, ret2, ret3 := s.Put(argObj.Uid, argObj.Pk)
+		replyObj := &ServerPutReply{Dig: ret0, Latest: ret1, Bound: ret2, Err: ret3}
 		*reply = ServerPutReplyEncode(*reply, replyObj)
 	}
 	h[ServerGetRpc] = func(arg []byte, reply *[]byte) {
@@ -89,7 +89,7 @@ func CallServPut(c *advrpc.Client, uid uint64, pk []byte) (*SigDig, *Memb, *NonM
 	if err1 {
 		return nil, nil, nil, true
 	}
-	return reply.Dig, reply.Latest, reply.Bound, false
+	return reply.Dig, reply.Latest, reply.Bound, reply.Err
 }
 
 func CallServGet(c *advrpc.Client, uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb, bool) {

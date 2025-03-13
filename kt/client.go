@@ -25,72 +25,6 @@ type ClientErr struct {
 	Err  bool
 }
 
-func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *ClientErr {
-	stdErr := &ClientErr{Err: true}
-	// sig.
-	err0 := CheckSigDig(dig, servSigPk)
-	if err0 {
-		return stdErr
-	}
-	// epoch not too high, which would overflow c.nextEpoch.
-	if !std.SumNoOverflow(dig.Epoch, 1) {
-		return stdErr
-	}
-	// agrees with prior digs.
-	seenDig, ok0 := seenDigs[dig.Epoch]
-	if ok0 && !std.BytesEqual(seenDig.Dig, dig.Dig) {
-		evid := &Evid{sigDig0: dig, sigDig1: seenDig}
-		return &ClientErr{Evid: evid, Err: true}
-	}
-	return &ClientErr{Err: false}
-}
-
-// checkLabel checks the vrf proof, computes the label, and errors on fail.
-func checkLabel(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) ([]byte, bool) {
-	pre := &MapLabelPre{Uid: uid, Ver: ver}
-	preByt := MapLabelPreEncode(make([]byte, 0), pre)
-	return servVrfPk.Verify(preByt, proof)
-}
-
-// checkMemb errors on fail.
-func checkMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *Memb) bool {
-	label, err := checkLabel(servVrfPk, uid, ver, memb.LabelProof)
-	if err {
-		return true
-	}
-	mapVal := compMapVal(memb.EpochAdded, memb.PkOpen)
-	return merkle.CheckProof(true, memb.MerkProof, label, mapVal, dig)
-}
-
-// checkMembHide errors on fail.
-func checkMembHide(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *MembHide) bool {
-	label, err := checkLabel(servVrfPk, uid, ver, memb.LabelProof)
-	if err {
-		return true
-	}
-	return merkle.CheckProof(true, memb.MerkProof, label, memb.MapVal, dig)
-}
-
-// checkHist errors on fail.
-func checkHist(servVrfPk *cryptoffi.VrfPublicKey, uid uint64, dig []byte, membs []*MembHide) bool {
-	var err0 bool
-	for ver, memb := range membs {
-		if checkMembHide(servVrfPk, uid, uint64(ver), dig, memb) {
-			err0 = true
-		}
-	}
-	return err0
-}
-
-// checkNonMemb errors on fail.
-func checkNonMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *NonMemb) bool {
-	label, err := checkLabel(servVrfPk, uid, ver, nonMemb.LabelProof)
-	if err {
-		return true
-	}
-	return merkle.CheckProof(false, nonMemb.MerkProof, label, nil, dig)
-}
-
 // Put rets the epoch at which the key was put, and evid / error on fail.
 func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	stdErr := &ClientErr{Err: true}
@@ -202,6 +136,19 @@ func (c *Client) SelfMon() (uint64, *ClientErr) {
 	return dig.Epoch, &ClientErr{Err: false}
 }
 
+func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientErr {
+	adtrCli := advrpc.Dial(adtrAddr)
+	// check all epochs that we've seen before.
+	var err0 = &ClientErr{Err: false}
+	for _, dig := range c.seenDigs {
+		err1 := auditEpoch(dig, c.servSigPk, adtrCli, adtrPk)
+		if err1.Err {
+			err0 = err1
+		}
+	}
+	return err0
+}
+
 // auditEpoch checks a single epoch against an auditor, and evid / error on fail.
 func auditEpoch(seenDig *SigDig, servSigPk []byte, adtrCli *advrpc.Client, adtrPk cryptoffi.SigPublicKey) *ClientErr {
 	stdErr := &ClientErr{Err: true}
@@ -228,22 +175,75 @@ func auditEpoch(seenDig *SigDig, servSigPk []byte, adtrCli *advrpc.Client, adtrP
 	return &ClientErr{Err: false}
 }
 
-func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientErr {
-	adtrCli := advrpc.Dial(adtrAddr)
-	// check all epochs that we've seen before.
-	var err0 = &ClientErr{Err: false}
-	for _, dig := range c.seenDigs {
-		err1 := auditEpoch(dig, c.servSigPk, adtrCli, adtrPk)
-		if err1.Err {
-			err0 = err1
-		}
-	}
-	return err0
-}
-
 func NewClient(uid, servAddr uint64, servSigPk cryptoffi.SigPublicKey, servVrfPk []byte) *Client {
 	c := advrpc.Dial(servAddr)
 	pk := cryptoffi.VrfPublicKeyDecode(servVrfPk)
 	digs := make(map[uint64]*SigDig)
 	return &Client{uid: uid, servCli: c, servSigPk: servSigPk, servVrfPk: pk, seenDigs: digs}
+}
+
+func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *ClientErr {
+	stdErr := &ClientErr{Err: true}
+	// sig.
+	err0 := CheckSigDig(dig, servSigPk)
+	if err0 {
+		return stdErr
+	}
+	// epoch not too high, which would overflow c.nextEpoch.
+	if !std.SumNoOverflow(dig.Epoch, 1) {
+		return stdErr
+	}
+	// agrees with prior digs.
+	seenDig, ok0 := seenDigs[dig.Epoch]
+	if ok0 && !std.BytesEqual(seenDig.Dig, dig.Dig) {
+		evid := &Evid{sigDig0: dig, sigDig1: seenDig}
+		return &ClientErr{Evid: evid, Err: true}
+	}
+	return &ClientErr{Err: false}
+}
+
+// checkLabel checks the vrf proof, computes the label, and errors on fail.
+func checkLabel(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) ([]byte, bool) {
+	pre := &MapLabelPre{Uid: uid, Ver: ver}
+	preByt := MapLabelPreEncode(make([]byte, 0, 16), pre)
+	return servVrfPk.Verify(preByt, proof)
+}
+
+// checkMemb errors on fail.
+func checkMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *Memb) bool {
+	label, err := checkLabel(servVrfPk, uid, ver, memb.LabelProof)
+	if err {
+		return true
+	}
+	mapVal := compMapVal(memb.EpochAdded, memb.PkOpen)
+	return merkle.Verify(true, label, mapVal, memb.MerkleProof, dig)
+}
+
+// checkMembHide errors on fail.
+func checkMembHide(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *MembHide) bool {
+	label, err := checkLabel(servVrfPk, uid, ver, memb.LabelProof)
+	if err {
+		return true
+	}
+	return merkle.Verify(true, label, memb.MapVal, memb.MerkleProof, dig)
+}
+
+// checkHist errors on fail.
+func checkHist(servVrfPk *cryptoffi.VrfPublicKey, uid uint64, dig []byte, membs []*MembHide) bool {
+	var err0 bool
+	for ver, memb := range membs {
+		if checkMembHide(servVrfPk, uid, uint64(ver), dig, memb) {
+			err0 = true
+		}
+	}
+	return err0
+}
+
+// checkNonMemb errors on fail.
+func checkNonMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *NonMemb) bool {
+	label, err := checkLabel(servVrfPk, uid, ver, nonMemb.LabelProof)
+	if err {
+		return true
+	}
+	return merkle.Verify(false, label, nil, nonMemb.MerkleProof, dig)
 }

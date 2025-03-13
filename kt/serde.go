@@ -27,21 +27,21 @@ type MapValPre struct {
 }
 
 type Memb struct {
-	LabelProof []byte
-	EpochAdded uint64
-	PkOpen     *CommitOpen
-	MerkProof  []byte
+	LabelProof  []byte
+	EpochAdded  uint64
+	PkOpen      *CommitOpen
+	MerkleProof []byte
 }
 
 type MembHide struct {
-	LabelProof []byte
-	MapVal     []byte
-	MerkProof  []byte
+	LabelProof  []byte
+	MapVal      []byte
+	MerkleProof []byte
 }
 
 type NonMemb struct {
-	LabelProof []byte
-	MerkProof  []byte
+	LabelProof  []byte
+	MerkleProof []byte
 }
 
 type ServerPutArg struct {
@@ -53,6 +53,7 @@ type ServerPutReply struct {
 	Dig    *SigDig
 	Latest *Memb
 	Bound  *NonMemb
+	Err    bool
 }
 
 type ServerGetArg struct {

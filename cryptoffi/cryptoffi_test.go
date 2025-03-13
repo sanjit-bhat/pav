@@ -8,8 +8,12 @@ import (
 func TestHash(t *testing.T) {
 	// same hashes for same input.
 	d1 := []byte("d1")
-	h1 := Hash(d1)
-	h2 := Hash(d1)
+	hr1 := NewHasher()
+	hr1.Write(d1)
+	h1 := hr1.Sum(nil)
+	hr2 := NewHasher()
+	hr2.Write(d1)
+	h2 := hr2.Sum(nil)
 	if !bytes.Equal(h1, h2) {
 		t.Fatal()
 	}
@@ -19,7 +23,9 @@ func TestHash(t *testing.T) {
 
 	// diff hashes for diff inputs.
 	d2 := []byte("d2")
-	h3 := Hash(d2)
+	hr3 := NewHasher()
+	hr3.Write(d2)
+	h3 := hr3.Sum(nil)
 	if bytes.Equal(h1, h3) {
 		t.Fatal()
 	}
@@ -58,30 +64,30 @@ func TestVRF(t *testing.T) {
 
 	// verify true.
 	d0 := []byte("d0")
-	h0, p := sk0.Hash(d0)
-	if uint64(len(h0)) != HashLen {
+	o0, p := sk0.Prove(d0)
+	if uint64(len(o0)) != HashLen {
 		t.Fatal()
 	}
-	h0Again, err := pk0.Verify(d0, p)
+	o0Again, err := pk0.Verify(d0, p)
 	if err {
 		t.Fatal()
 	}
-	if !bytes.Equal(h0, h0Again) {
-		t.Log("h0", h0)
-		t.Log("h0Again", h0Again)
+	if !bytes.Equal(o0, o0Again) {
+		t.Log("h0", o0)
+		t.Log("h0Again", o0Again)
 		t.Fatal()
 	}
 
-	// same hashes for same input.
-	h1, _ := sk0.Hash(d0)
-	if !bytes.Equal(h0, h1) {
+	// same output for same input.
+	o1, _ := sk0.Prove(d0)
+	if !bytes.Equal(o0, o1) {
 		t.Fatal()
 	}
 
-	// diff hashes for diff inputs.
+	// diff outputs for diff inputs.
 	d1 := []byte("d1")
-	h2, _ := sk0.Hash(d1)
-	if bytes.Equal(h0, h2) {
+	o2, _ := sk0.Prove(d1)
+	if bytes.Equal(o0, o2) {
 		t.Fatal()
 	}
 
@@ -102,7 +108,7 @@ func TestVRF(t *testing.T) {
 func TestVRFSerde(t *testing.T) {
 	pk0, sk := VrfGenerateKey()
 	d := []byte("d")
-	_, p := sk.Hash(d)
+	_, p := sk.Prove(d)
 
 	pk0B := VrfPublicKeyEncode(pk0)
 	pk1 := VrfPublicKeyDecode(pk0B)

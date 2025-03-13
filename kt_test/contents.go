@@ -1,11 +1,10 @@
-package kttest
+package kt_test
 
 import (
-	"sync"
-
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/kt"
+	"sync"
 )
 
 const (

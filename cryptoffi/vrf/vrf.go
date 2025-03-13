@@ -1,5 +1,6 @@
 // This started from https://pkg.go.dev/github.com/ProtonMail/go-ecvrf/ecvrf,
-// with modifications to check for adversarial pks and improve pk.Verify performance.
+// with modifications to check for adversarial pks, improve pk.Verify performance,
+// and reduce duplicate computation.
 //
 // Package ecvrf implements ECVRF-EDWARDS25519-SHA512-TAI, a verifiable random
 // function described in draft-irtf-cfrg-vrf-10.
@@ -128,17 +129,21 @@ func (sk *PrivateKey) Prove(message []byte) (vrf, proof []byte, err error) {
 	}
 
 	gamma := (&edwards25519.Point{}).ScalarMult(sk.x, h)
-	kHash := generateNonceHash(sk.sk, h.Bytes())
+	hByt := h.Bytes()
+	kHash := generateNonceHash(sk.sk, hByt)
 	k, err := edwards25519.NewScalar().SetUniformBytes(kHash)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	gammaByt := gamma.Bytes()
 	c := hashPoints(
-		h,
-		gamma,
-		(&edwards25519.Point{}).ScalarBaseMult(k),
-		(&edwards25519.Point{}).ScalarMult(k, h),
+		hByt,
+		gammaByt,
+		[]*edwards25519.Point{
+			(&edwards25519.Point{}).ScalarBaseMult(k),
+			(&edwards25519.Point{}).ScalarMult(k, h),
+		},
 	)
 
 	// append 16 zeroes to c to convert it to a scalar
@@ -151,7 +156,7 @@ func (sk *PrivateKey) Prove(message []byte) (vrf, proof []byte, err error) {
 	s := edwards25519.NewScalar().Add(k, edwards25519.NewScalar().Multiply(cScal, sk.x))
 
 	proof = make([]byte, ProofSize)
-	copy(proof, gamma.Bytes())
+	copy(proof, gammaByt)
 	copy(proof[pointSize:], c)
 	copy(proof[pointSize+intermediateSize:], s.Bytes())
 
@@ -166,7 +171,8 @@ func (pk *PublicKey) Verify(message, proof []byte) (verified bool, vrf []byte, e
 		return false, nil, errors.New("ecvrf: bad proof length")
 	}
 
-	gamma, err := (&edwards25519.Point{}).SetBytes(proof[:pointSize])
+	gammaByt := proof[:pointSize]
+	gamma, err := (&edwards25519.Point{}).SetBytes(gammaByt)
 	if err != nil {
 		return false, nil, err
 	}
@@ -199,7 +205,8 @@ func (pk *PublicKey) Verify(message, proof []byte) (verified bool, vrf []byte, e
 	)
 
 	// If c and c' are different
-	if !bytes.Equal(hashPoints(h, gamma, u, v), proof[pointSize:pointSize+intermediateSize]) {
+	hByt := h.Bytes()
+	if !bytes.Equal(hashPoints(hByt, gammaByt, []*edwards25519.Point{u, v}), proof[pointSize:pointSize+intermediateSize]) {
 		return false, nil, nil
 	}
 
@@ -244,9 +251,11 @@ func generateNonceHash(sk, h []byte) []byte {
 
 // hashPoints implements step 5.1.6 of draft-irtf-cfrg-vrf-10 as defined by the section
 // 5.4.3, ECVRF_hash_points.
-func hashPoints(points ...*edwards25519.Point) []byte {
+func hashPoints(hByt, gammaByt []byte, points []*edwards25519.Point) []byte {
 	h := sha512.New()
 	h.Write([]byte{suiteID, 0x02})
+	h.Write(hByt)
+	h.Write(gammaByt)
 	for _, point := range points {
 		h.Write(point.Bytes())
 	}

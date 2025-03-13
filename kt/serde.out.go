@@ -102,7 +102,7 @@ func MembEncode(b0 []byte, o *Memb) []byte {
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
 	b = marshal.WriteInt(b, o.EpochAdded)
 	b = CommitOpenEncode(b, o.PkOpen)
-	b = marshalutil.WriteSlice1D(b, o.MerkProof)
+	b = marshalutil.WriteSlice1D(b, o.MerkleProof)
 	return b
 }
 func MembDecode(b0 []byte) (*Memb, []byte, bool) {
@@ -122,13 +122,13 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	if err4 {
 		return nil, nil, true
 	}
-	return &Memb{LabelProof: a1, EpochAdded: a2, PkOpen: a3, MerkProof: a4}, b4, false
+	return &Memb{LabelProof: a1, EpochAdded: a2, PkOpen: a3, MerkleProof: a4}, b4, false
 }
 func MembHideEncode(b0 []byte, o *MembHide) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
 	b = marshalutil.WriteSlice1D(b, o.MapVal)
-	b = marshalutil.WriteSlice1D(b, o.MerkProof)
+	b = marshalutil.WriteSlice1D(b, o.MerkleProof)
 	return b
 }
 func MembHideDecode(b0 []byte) (*MembHide, []byte, bool) {
@@ -144,12 +144,12 @@ func MembHideDecode(b0 []byte) (*MembHide, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &MembHide{LabelProof: a1, MapVal: a2, MerkProof: a3}, b3, false
+	return &MembHide{LabelProof: a1, MapVal: a2, MerkleProof: a3}, b3, false
 }
 func NonMembEncode(b0 []byte, o *NonMemb) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
-	b = marshalutil.WriteSlice1D(b, o.MerkProof)
+	b = marshalutil.WriteSlice1D(b, o.MerkleProof)
 	return b
 }
 func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
@@ -161,7 +161,7 @@ func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	return &NonMemb{LabelProof: a1, MerkProof: a2}, b2, false
+	return &NonMemb{LabelProof: a1, MerkleProof: a2}, b2, false
 }
 func ServerPutArgEncode(b0 []byte, o *ServerPutArg) []byte {
 	var b = b0
@@ -185,6 +185,7 @@ func ServerPutReplyEncode(b0 []byte, o *ServerPutReply) []byte {
 	b = SigDigEncode(b, o.Dig)
 	b = MembEncode(b, o.Latest)
 	b = NonMembEncode(b, o.Bound)
+	b = marshal.WriteBool(b, o.Err)
 	return b
 }
 func ServerPutReplyDecode(b0 []byte) (*ServerPutReply, []byte, bool) {
@@ -200,7 +201,11 @@ func ServerPutReplyDecode(b0 []byte) (*ServerPutReply, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &ServerPutReply{Dig: a1, Latest: a2, Bound: a3}, b3, false
+	a4, b4, err4 := marshalutil.ReadBool(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	return &ServerPutReply{Dig: a1, Latest: a2, Bound: a3, Err: a4}, b4, false
 }
 func ServerGetArgEncode(b0 []byte, o *ServerGetArg) []byte {
 	var b = b0
