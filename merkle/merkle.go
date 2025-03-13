@@ -15,8 +15,8 @@ const (
 )
 
 type Tree struct {
-	cache *cache
-	root  *node
+	ctx  *context
+	root *node
 }
 
 // node contains the union of different node types, which distinguish as:
@@ -35,7 +35,7 @@ type node struct {
 	val []byte
 }
 
-type cache struct {
+type context struct {
 	emptyHash []byte
 }
 
@@ -45,11 +45,11 @@ func (t *Tree) Put(label []byte, val []byte) bool {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return true
 	}
-	put(&t.root, 0, label, val, t.cache)
+	put(&t.root, 0, label, val, t.ctx)
 	return false
 }
 
-func put(n0 **node, depth uint64, label, val []byte, cache *cache) {
+func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 	n := *n0
 	// empty node.
 	if n == nil {
@@ -76,15 +76,15 @@ func put(n0 **node, depth uint64, label, val []byte, cache *cache) {
 		leafChild, _ := getChild(inter, n.label, depth)
 		*leafChild = n
 		recurChild, _ := getChild(inter, label, depth)
-		put(recurChild, depth+1, label, val, cache)
-		setInnerHash(inter, cache)
+		put(recurChild, depth+1, label, val, ctx)
+		setInnerHash(inter, ctx)
 		return
 	}
 
 	// inner node. recurse.
 	c, _ := getChild(n, label, depth)
-	put(c, depth+1, label, val, cache)
-	setInnerHash(n, cache)
+	put(c, depth+1, label, val, ctx)
+	setInnerHash(n, ctx)
 }
 
 // Get returns if label is in the tree and, if so, the val.
@@ -126,7 +126,7 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, []byte, bool) {
 		child, sib := getChild(n, label, depth)
 		if prove {
 			// proof will have sibling hash for each inner node.
-			proof = append(proof, getNodeHash(sib, t.cache)...)
+			proof = append(proof, getNodeHash(sib, t.ctx)...)
 		}
 		n = *child
 	}
@@ -220,15 +220,15 @@ func VerifyProof(inTree bool, label, val []byte, proof []byte, dig []byte) bool 
 }
 
 func (t *Tree) Digest() []byte {
-	return getNodeHash(t.root, t.cache)
+	return getNodeHash(t.root, t.ctx)
 }
 
 func NewTree() *Tree {
-	c := &cache{emptyHash: compEmptyHash()}
-	return &Tree{cache: c}
+	c := &context{emptyHash: compEmptyHash()}
+	return &Tree{ctx: c}
 }
 
-func getNodeHash(n *node, c *cache) []byte {
+func getNodeHash(n *node, c *context) []byte {
 	if n == nil {
 		return c.emptyHash
 	}
@@ -254,7 +254,7 @@ func compLeafHash(label, val []byte) []byte {
 	return hr.Sum(nil)
 }
 
-func setInnerHash(n *node, c *cache) {
+func setInnerHash(n *node, c *context) {
 	child0 := getNodeHash(n.child0, c)
 	child1 := getNodeHash(n.child1, c)
 	n.hash = compInnerHash(child0, child1, nil)
