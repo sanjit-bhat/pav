@@ -216,7 +216,7 @@ func checkMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, m
 		return true
 	}
 	mapVal := compMapVal(memb.EpochAdded, memb.PkOpen)
-	return merkle.VerifyProof(true, label, mapVal, memb.MerkleProof, dig)
+	return merkle.Verify(true, label, mapVal, memb.MerkleProof, dig)
 }
 
 // checkMembHide errors on fail.
@@ -225,7 +225,7 @@ func checkMembHide(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byt
 	if err {
 		return true
 	}
-	return merkle.VerifyProof(true, label, memb.MapVal, memb.MerkleProof, dig)
+	return merkle.Verify(true, label, memb.MapVal, memb.MerkleProof, dig)
 }
 
 // checkHist errors on fail.
@@ -245,5 +245,5 @@ func checkNonMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte
 	if err {
 		return true
 	}
-	return merkle.VerifyProof(false, label, nil, nonMemb.MerkleProof, dig)
+	return merkle.Verify(false, label, nil, nonMemb.MerkleProof, dig)
 }

@@ -81,7 +81,7 @@ func TestBenchMerkGenVer(t *testing.T) {
 		}
 
 		t1 := time.Now()
-		VerifyProof(true, l, v, p, tr.Digest())
+		Verify(true, l, v, p, tr.Digest())
 		t2 := time.Now()
 
 		totalGen += t1.Sub(t0)

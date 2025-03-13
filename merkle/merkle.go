@@ -71,13 +71,13 @@ func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 
 		// otherwise, replace with inner node that links
 		// to existing leaf, and recurse.
-		inter := &node{}
-		*n0 = inter
-		leafChild, _ := getChild(inter, n.label, depth)
+		inner := &node{}
+		*n0 = inner
+		leafChild, _ := getChild(inner, n.label, depth)
 		*leafChild = n
-		recurChild, _ := getChild(inter, label, depth)
+		recurChild, _ := getChild(inner, label, depth)
 		put(recurChild, depth+1, label, val, ctx)
-		setInnerHash(inter, ctx)
+		setInnerHash(inner, ctx)
 		return
 	}
 
@@ -162,12 +162,12 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	return true, n.val, proof, false
 }
 
-// VerifyProof verifies proof against the tree rooted at dig
+// Verify verifies proof against the tree rooted at dig
 // and returns an error upon failure.
 // there are two types of inputs.
 // if inTree, (label, val) should be in the tree.
 // if !inTree, label should not be in the tree.
-func VerifyProof(inTree bool, label, val []byte, proof []byte, dig []byte) bool {
+func Verify(inTree bool, label, val, proof, dig []byte) bool {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return true
 	}
