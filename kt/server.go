@@ -145,7 +145,7 @@ func (s *Server) Worker() {
 
 	// map 0.
 	outs0 := make([]*mapper0Out, len(work))
-	wg := new(sync.WaitGroup)
+	var wg = new(sync.WaitGroup)
 	s.mu.RLock()
 	var i uint64
 	for ; i < uint64(len(work)); i++ {
@@ -182,7 +182,7 @@ func (s *Server) Worker() {
 			if user == nil {
 				user = &userState{}
 			}
-			user.numVers++
+			user.numVers += 1
 			user.plainPk = req.Pk
 			s.userInfo[req.Uid] = user
 		}
