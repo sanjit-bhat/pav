@@ -3,7 +3,7 @@ package kt
 import (
 	"sync"
 
-	"github.com/goose-lang/primitive"
+	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/merkle"
@@ -176,7 +176,7 @@ func (s *Server) Worker() {
 			label := out0.latestVrfHash
 
 			err0 := s.keyMap.Put(label, out0.mapVal)
-			primitive.Assert(!err0)
+			std.Assert(!err0)
 			upd[string(label)] = out0.mapVal
 			var user = s.userInfo[req.Uid]
 			if user == nil {
@@ -237,12 +237,12 @@ func (s *Server) mapper0(in *WQReq, out *mapper0Out) {
 // mapper1 computes merkle proofs and assembles full response.
 func (s *Server) mapper1(in *mapper0Out, out *WQResp) {
 	latIn, _, latMerk, err0 := s.keyMap.Prove(in.latestVrfHash)
-	primitive.Assert(!err0)
-	primitive.Assert(latIn)
+	std.Assert(!err0)
+	std.Assert(latIn)
 
 	boundIn, _, boundMerk, err1 := s.keyMap.Prove(in.boundVrfHash)
-	primitive.Assert(!err1)
-	primitive.Assert(!boundIn)
+	std.Assert(!err1)
+	std.Assert(!boundIn)
 
 	out.Dig = getDig(s.epochHist)
 	out.Lat = &Memb{
@@ -330,8 +330,8 @@ func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPriva
 	for ver := uint64(0); ver < numVers-1; ver++ {
 		label, labelProof := compMapLabel(uid, ver, vrfSk)
 		inMap, mapVal, mapProof, err0 := keyMap.Prove(label)
-		primitive.Assert(!err0)
-		primitive.Assert(inMap)
+		std.Assert(!err0)
+		std.Assert(inMap)
 		hist = append(hist, &MembHide{LabelProof: labelProof, MapVal: mapVal, MerkleProof: mapProof})
 	}
 	return hist
@@ -345,10 +345,10 @@ func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPri
 	}
 	label, labelProof := compMapLabel(uid, numVers-1, vrfSk)
 	inMap, mapVal, mapProof, err0 := keyMap.Prove(label)
-	primitive.Assert(!err0)
-	primitive.Assert(inMap)
+	std.Assert(!err0)
+	std.Assert(inMap)
 	valPre, _, err1 := MapValPreDecode(mapVal)
-	primitive.Assert(!err1)
+	std.Assert(!err1)
 	r := compCommitOpen(commitSecret, label)
 	open := &CommitOpen{Val: pk, Rand: r}
 	return true, &Memb{LabelProof: labelProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: mapProof}
@@ -358,7 +358,7 @@ func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPri
 func getBound(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) *NonMemb {
 	label, labelProof := compMapLabel(uid, numVers, vrfSk)
 	inMap, _, mapProof, err0 := keyMap.Prove(label)
-	primitive.Assert(!err0)
-	primitive.Assert(!inMap)
+	std.Assert(!err0)
+	std.Assert(!inMap)
 	return &NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
 }

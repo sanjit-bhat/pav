@@ -143,7 +143,7 @@ func (t *Tree) get(label []byte, prove bool) (bool, []byte, []byte, bool) {
 		return false, nil, proof, false
 	}
 	// not inner node. can't go full depth down and still have inner.
-	primitive.Assert(n.child0 == nil && n.child1 == nil)
+	std.Assert(n.child0 == nil && n.child1 == nil)
 	// leaf node with different label.
 	if !std.BytesEqual(n.label, label) {
 		if prove {

@@ -1,7 +1,7 @@
 package kt
 
 import (
-	"github.com/goose-lang/primitive"
+	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
 	"sync"
@@ -102,6 +102,6 @@ func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool
 func applyUpd(keys *merkle.Tree, upd map[string][]byte) {
 	for label, val := range upd {
 		err0 := keys.Put([]byte(label), val)
-		primitive.Assert(!err0)
+		std.Assert(!err0)
 	}
 }
