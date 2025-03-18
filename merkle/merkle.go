@@ -90,7 +90,7 @@ func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 // Get returns if label is in the tree and, if so, the val.
 // it errors if label isn't a hash.
 func (t *Tree) Get(label []byte) (bool, []byte, bool) {
-	inTree, val, _, err := t.get(label, false)
+	inTree, val, _, err := t.prove(label, false)
 	return inTree, val, err
 }
 
@@ -98,10 +98,10 @@ func (t *Tree) Get(label []byte) (bool, []byte, bool) {
 // it gives a (3) cryptographic proof of this.
 // it (4) errors if label isn't a hash.
 func (t *Tree) Prove(label []byte) (bool, []byte, []byte, bool) {
-	return t.get(label, true)
+	return t.prove(label, true)
 }
 
-func (t *Tree) get(label []byte, prove bool) (bool, []byte, []byte, bool) {
+func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return false, nil, nil, true
 	}
@@ -236,8 +236,7 @@ func getNodeHash(n *node, c *context) []byte {
 }
 
 func compEmptyHash() []byte {
-	b := []byte{emptyNodeTag}
-	return cryptoutil.Hash(b)
+	return cryptoutil.Hash([]byte{emptyNodeTag})
 }
 
 func setLeafHash(n *node) {
@@ -247,10 +246,10 @@ func setLeafHash(n *node) {
 func compLeafHash(label, val []byte) []byte {
 	valLen := uint64(len(val))
 	hr := cryptoffi.NewHasher()
+	hr.Write([]byte{leafNodeTag})
 	hr.Write(label)
 	hr.Write(marshal.WriteInt(nil, valLen))
 	hr.Write(val)
-	hr.Write([]byte{leafNodeTag})
 	return hr.Sum(nil)
 }
 
@@ -262,9 +261,9 @@ func setInnerHash(n *node, c *context) {
 
 func compInnerHash(child0, child1, h []byte) []byte {
 	hr := cryptoffi.NewHasher()
+	hr.Write([]byte{innerNodeTag})
 	hr.Write(child0)
 	hr.Write(child1)
-	hr.Write([]byte{innerNodeTag})
 	return hr.Sum(h)
 }
 
