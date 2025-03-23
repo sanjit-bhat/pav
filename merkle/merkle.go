@@ -183,13 +183,16 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 	if maxDepth > cryptoffi.HashLen*8 {
 		return true
 	}
+	if std.BytesEqual(label, proofDec.LeafLabel) {
+		return true
+	}
 
 	// compute leaf hash.
 	var currHash []byte
 	if inTree {
 		currHash = compLeafHash(label, val)
 	} else {
-		if len(proofDec.LeafLabel) != 0 {
+		if uint64(len(proofDec.LeafLabel)) == cryptoffi.HashLen {
 			currHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
 		} else {
 			currHash = compEmptyHash()
