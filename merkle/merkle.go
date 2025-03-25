@@ -175,7 +175,26 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 	if err0 {
 		return true
 	}
-	sibsLen := uint64(len(proofDec.Siblings))
+	if std.BytesEqual(label, proofDec.LeafLabel) {
+		return true
+	}
+
+	// hash last node.
+	var lastHash []byte
+	if inTree {
+		lastHash = compLeafHash(label, val)
+	} else {
+		if uint64(len(proofDec.LeafLabel)) == cryptoffi.HashLen {
+			lastHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
+		} else {
+			lastHash = compEmptyHash()
+		}
+	}
+	return verifySiblings(label, lastHash, proofDec.Siblings, dig)
+}
+
+func verifySiblings(label, lastHash, siblings, dig []byte) bool {
+	sibsLen := uint64(len(siblings))
 	if sibsLen%cryptoffi.HashLen != 0 {
 		return true
 	}
@@ -183,30 +202,15 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 	if maxDepth > cryptoffi.HashLen*8 {
 		return true
 	}
-	if std.BytesEqual(label, proofDec.LeafLabel) {
-		return true
-	}
 
-	// compute leaf hash.
-	var currHash []byte
-	if inTree {
-		currHash = compLeafHash(label, val)
-	} else {
-		if uint64(len(proofDec.LeafLabel)) == cryptoffi.HashLen {
-			currHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
-		} else {
-			currHash = compEmptyHash()
-		}
-	}
-
-	// compute hash up the tree.
+	// hash up the tree.
+	var currHash = lastHash
 	var hashOut = make([]byte, 0, cryptoffi.HashLen)
 	var depth = maxDepth
-	// depth offset by one to prevent underflow.
 	for ; depth > 0; depth-- {
 		begin := (depth - 1) * cryptoffi.HashLen
 		end := depth * cryptoffi.HashLen
-		sib := proofDec.Siblings[begin:end]
+		sib := siblings[begin:end]
 
 		if !getBit(label, depth-1) {
 			hashOut = compInnerHash(currHash, sib, hashOut)
