@@ -203,7 +203,7 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 	var hashOut = make([]byte, 0, cryptoffi.HashLen)
 	var depth = maxDepth
 	// depth offset by one to prevent underflow.
-	for depth >= 1 {
+	for ; depth > 0; depth-- {
 		begin := (depth - 1) * cryptoffi.HashLen
 		end := depth * cryptoffi.HashLen
 		sib := proofDec.Siblings[begin:end]
@@ -215,7 +215,6 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 		}
 		currHash = append(currHash[:0], hashOut...)
 		hashOut = hashOut[:0]
-		depth--
 	}
 
 	// check against supplied dig.
