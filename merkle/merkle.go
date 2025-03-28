@@ -10,8 +10,8 @@ import (
 
 const (
 	emptyNodeTag byte = 0
-	innerNodeTag byte = 1
-	leafNodeTag  byte = 2
+	leafNodeTag  byte = 1
+	innerNodeTag byte = 2
 )
 
 type Tree struct {
