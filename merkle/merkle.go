@@ -21,8 +21,8 @@ type Tree struct {
 
 // node contains the union of different node types, which distinguish as:
 //  1. empty node. if node ptr is nil.
-//  2. inner node. if either child0 or child1 not nil. has hash.
-//  3. leaf node. else. has hash, full label, and val.
+//  2. leaf node. if child0 and child1 nil. has hash, label, and val.
+//  3. inner node. else. has hash.
 type node struct {
 	hash []byte
 	// only for inner node.
@@ -115,7 +115,7 @@ func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 		proof = make([]byte, 8, 8+30*cryptoffi.HashLen+8+cryptoffi.HashLen+8+valLen)
 	}
 	var depth uint64
-	for ; depth < cryptoffi.HashLen*8; depth++ {
+	for ; ; depth++ {
 		// break if empty node or leaf node.
 		if n == nil {
 			break
@@ -142,8 +142,6 @@ func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 		}
 		return false, nil, proof, false
 	}
-	// not inner node. can't go full depth down and still have inner.
-	std.Assert(n.child0 == nil && n.child1 == nil)
 	// leaf node with different label.
 	if !std.BytesEqual(n.label, label) {
 		if prove {
@@ -198,15 +196,11 @@ func verifySiblings(label, lastHash, siblings, dig []byte) bool {
 	if sibsLen%cryptoffi.HashLen != 0 {
 		return true
 	}
-	maxDepth := sibsLen / cryptoffi.HashLen
-	if maxDepth > cryptoffi.HashLen*8 {
-		return true
-	}
 
 	// hash up the tree.
 	var currHash = lastHash
 	var hashOut = make([]byte, 0, cryptoffi.HashLen)
-	var depth = maxDepth
+	var depth = sibsLen / cryptoffi.HashLen
 	for ; depth > 0; depth-- {
 		begin := (depth - 1) * cryptoffi.HashLen
 		end := depth * cryptoffi.HashLen
@@ -283,9 +277,16 @@ func getChild(n *node, label []byte, depth uint64) (**node, *node) {
 	}
 }
 
+// getBit returns false if the nth bit of b is 0.
+// if n exceeds b, it returns false.
+// this is fine as long as it's used consistently across the code.
 func getBit(b []byte, n uint64) bool {
 	slot := n / 8
-	off := n % 8
-	x := b[slot]
-	return x&(1<<off) != 0
+	if slot < uint64(len(b)) {
+		off := n % 8
+		x := b[slot]
+		return x&(1<<off) != 0
+	} else {
+		return false
+	}
 }
