@@ -131,11 +131,11 @@ func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	if prove {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
-	inTree, val, proof0 := proveSibs(label, prove, n, proof)
+	inTree, val, proof0 := proveLast(label, prove, n, proof)
 	return inTree, val, proof0, false
 }
 
-func proveSibs(label []byte, prove bool, last *node, proof []byte) (bool, []byte, []byte) {
+func proveLast(label []byte, prove bool, last *node, proof []byte) (bool, []byte, []byte) {
 	// empty node.
 	if last == nil {
 		if prove {
