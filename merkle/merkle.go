@@ -12,6 +12,9 @@ const (
 	emptyNodeTag byte = 0
 	leafNodeTag  byte = 1
 	innerNodeTag byte = 2
+	// pre-size for roughly 2^30 (1.07B) entries.
+	// proof = SibsLen ++ Sibs ++ LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk).
+	avgProofLen uint64 = 8 + 30*cryptoffi.HashLen + 8 + cryptoffi.HashLen + 8 + 32
 )
 
 type Tree struct {
@@ -105,14 +108,8 @@ func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return false, nil, nil, true
 	}
-	var proof0 []byte
-	if prove {
-		// pre-size for roughly 2^30 (1.07B) entries.
-		// proof = SibsLen ++ Sibs ++ LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk).
-		proof0 = make([]byte, 8, 8+30*cryptoffi.HashLen+8+cryptoffi.HashLen+8+32)
-	}
-	proof1, last := proveSibs(label, prove, t.ctx, t.root, proof0, 0)
-	var proof = proof1
+	proof0, last := proveSiblings(label, prove, t.ctx, t.root, 0)
+	var proof = proof0
 	if prove {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
@@ -143,22 +140,29 @@ func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	return true, last.val, proof, false
 }
 
-func proveSibs(label []byte, prove bool, ctx *context, n *node, proof0 []byte, depth uint64) ([]byte, *node) {
-	var proof = proof0
+func proveSiblings(label []byte, prove bool, ctx *context, n *node, depth uint64) ([]byte, *node) {
 	// break if empty node or leaf node.
 	if n == nil {
-		return proof, n
+		if prove {
+			return make([]byte, 8, avgProofLen), n
+		}
+		return nil, n
 	}
 	if n.child0 == nil && n.child1 == nil {
-		return proof, n
+		if prove {
+			return make([]byte, 8, avgProofLen), n
+		}
+		return nil, n
 	}
 
 	child, sib := getChild(n, label, depth)
+	proof0, last := proveSiblings(label, prove, ctx, *child, depth+1)
+	var proof = proof0
 	if prove {
 		// proof will have sibling hash for each inner node.
 		proof = append(proof, getNodeHash(sib, ctx)...)
 	}
-	return proveSibs(label, prove, ctx, *child, proof, depth+1)
+	return proof, last
 }
 
 // Verify verifies proof against the tree rooted at dig
@@ -201,13 +205,15 @@ func verifySiblings(label, lastHash, siblings, dig []byte) bool {
 	// hash up the tree.
 	var currHash = lastHash
 	var hashOut = make([]byte, 0, cryptoffi.HashLen)
-	var depth = sibsLen / cryptoffi.HashLen
-	for ; depth > 0; depth-- {
-		begin := (depth - 1) * cryptoffi.HashLen
-		end := depth * cryptoffi.HashLen
+	maxDepth := sibsLen / cryptoffi.HashLen
+	var depthInv uint64
+	for ; depthInv < maxDepth; depthInv++ {
+		begin := depthInv * cryptoffi.HashLen
+		end := (depthInv + 1) * cryptoffi.HashLen
 		sib := siblings[begin:end]
 
-		if !getBit(label, depth-1) {
+		depth := maxDepth - depthInv - 1
+		if !getBit(label, depth) {
 			hashOut = compInnerHash(currHash, sib, hashOut)
 		} else {
 			hashOut = compInnerHash(sib, currHash, hashOut)
