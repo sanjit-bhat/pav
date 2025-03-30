@@ -109,10 +109,8 @@ func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	var proof []byte
 	if prove {
 		// pre-size for roughly 2^30 (1.07B) entries.
-		// size of ed25519 pk.
-		valLen := uint64(32)
-		// proof = SibsLen ++ Sibs ++ LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal.
-		proof = make([]byte, 8, 8+30*cryptoffi.HashLen+8+cryptoffi.HashLen+8+valLen)
+		// proof = SibsLen ++ Sibs ++ LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk).
+		proof = make([]byte, 8, 8+30*cryptoffi.HashLen+8+cryptoffi.HashLen+8+32)
 	}
 	var depth uint64
 	for ; ; depth++ {
@@ -130,34 +128,38 @@ func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 		}
 		n = *child
 	}
-
 	if prove {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
+	inTree, val, proof0 := proveSibs(label, prove, n, proof)
+	return inTree, val, proof0, false
+}
+
+func proveSibs(label []byte, prove bool, last *node, proof []byte) (bool, []byte, []byte) {
 	// empty node.
-	if n == nil {
+	if last == nil {
 		if prove {
 			proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
 			proof = marshal.WriteInt(proof, 0) // empty LeafValLen
 		}
-		return false, nil, proof, false
+		return false, nil, proof
 	}
 	// leaf node with different label.
-	if !std.BytesEqual(n.label, label) {
+	if !std.BytesEqual(last.label, label) {
 		if prove {
-			proof = marshal.WriteInt(proof, uint64(len(n.label)))
-			proof = marshal.WriteBytes(proof, n.label)
-			proof = marshal.WriteInt(proof, uint64(len(n.val)))
-			proof = marshal.WriteBytes(proof, n.val)
+			proof = marshal.WriteInt(proof, uint64(len(last.label)))
+			proof = marshal.WriteBytes(proof, last.label)
+			proof = marshal.WriteInt(proof, uint64(len(last.val)))
+			proof = marshal.WriteBytes(proof, last.val)
 		}
-		return false, nil, proof, false
+		return false, nil, proof
 	}
 	// leaf node with same label.
 	if prove {
 		proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
 		proof = marshal.WriteInt(proof, 0) // empty LeafValLen
 	}
-	return true, n.val, proof, false
+	return true, last.val, proof
 }
 
 // Verify verifies proof against the tree rooted at dig
