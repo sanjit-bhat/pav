@@ -76,10 +76,7 @@ func TestMap(t *testing.T) {
 }
 
 func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal []byte) {
-	inTree, val, proof, errb := tr.Prove(label)
-	if errb {
-		t.Fatal()
-	}
+	inTree, val, proof := tr.Prove(label)
 	if inTree != expInTree {
 		t.Fatal()
 	}
@@ -87,7 +84,7 @@ func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal
 		t.Fatal()
 	}
 	dig := tr.Digest()
-	errb = Verify(inTree, label, val, proof, dig)
+	errb := Verify(inTree, label, val, proof, dig)
 	if errb {
 		t.Fatal()
 	}

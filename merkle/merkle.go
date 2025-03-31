@@ -39,8 +39,9 @@ type context struct {
 	emptyHash []byte
 }
 
-// Put adds (label, val) to the tree and errors if label isn't a hash.
-// it consumes both label and val.
+// Put adds (label, val) to the tree, storing immutable references to both.
+// for liveness (not safety) reasons, it returns an error
+// if the label does not have a fixed length.
 func (t *Tree) Put(label []byte, val []byte) bool {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return true
@@ -87,24 +88,19 @@ func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 	setInnerHash(n, ctx)
 }
 
-// Get returns if label is in the tree and, if so, the val.
-// it errors if label isn't a hash.
-func (t *Tree) Get(label []byte) (bool, []byte, bool) {
-	in, val, _, err := t.prove(label, false)
-	return in, val, err
+// Get returns if label is in the tree and if so, the val.
+func (t *Tree) Get(label []byte) (bool, []byte) {
+	in, val, _ := t.prove(label, false)
+	return in, val
 }
 
-// Prove returns (1) if label is in the tree and, if so, (2) the val.
-// it gives a (3) cryptographic proof of this.
-// it (4) errors if label isn't a hash.
-func (t *Tree) Prove(label []byte) (bool, []byte, []byte, bool) {
+// Prove returns if label is in tree (and if so, the val) and
+// a cryptographic proof of this.
+func (t *Tree) Prove(label []byte) (bool, []byte, []byte) {
 	return t.prove(label, true)
 }
 
-func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte, bool) {
-	if uint64(len(label)) != cryptoffi.HashLen {
-		return false, nil, nil, true
-	}
+func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte) {
 	found, foundLabel, foundVal, proof0 := find(label, getProof, t.ctx, t.root, 0)
 	var proof = proof0
 	if getProof {
@@ -113,25 +109,28 @@ func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte, bool) {
 
 	if !found {
 		if getProof {
-			proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
-			proof = marshal.WriteInt(proof, 0) // empty LeafValLen
+			proof = marshal.WriteBool(proof, false) // FoundOtherLeaf
+			proof = marshal.WriteInt(proof, 0)      // empty LeafLabelLen
+			proof = marshal.WriteInt(proof, 0)      // empty LeafValLen
 		}
-		return false, nil, proof, false
+		return false, nil, proof
 	}
 	if !std.BytesEqual(foundLabel, label) {
 		if getProof {
+			proof = marshal.WriteBool(proof, true) // FoundOtherLeaf
 			proof = marshal.WriteInt(proof, uint64(len(foundLabel)))
 			proof = marshal.WriteBytes(proof, foundLabel)
 			proof = marshal.WriteInt(proof, uint64(len(foundVal)))
 			proof = marshal.WriteBytes(proof, foundVal)
 		}
-		return false, nil, proof, false
+		return false, nil, proof
 	}
 	if getProof {
-		proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
-		proof = marshal.WriteInt(proof, 0) // empty LeafValLen
+		proof = marshal.WriteBool(proof, false) // FoundOtherLeaf
+		proof = marshal.WriteInt(proof, 0)      // empty LeafLabelLen
+		proof = marshal.WriteInt(proof, 0)      // empty LeafValLen
 	}
-	return true, foundVal, proof, false
+	return true, foundVal, proof
 }
 
 // find returns whether label path found (and if so, the found label and val)
@@ -165,8 +164,9 @@ func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) (boo
 }
 
 func getProofLen(depth uint64) uint64 {
-	// proof = SibsLen ++ Sibs ++ LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk).
-	return 8 + depth*cryptoffi.HashLen + 8 + cryptoffi.HashLen + 8 + 32
+	// proof = SibsLen ++ Sibs ++ FoundOtherLeaf ++
+	// LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk).
+	return 8 + depth*cryptoffi.HashLen + 1 + 8 + cryptoffi.HashLen + 8 + 32
 }
 
 // Verify verifies proof against the tree rooted at dig
@@ -175,14 +175,8 @@ func getProofLen(depth uint64) uint64 {
 // if inTree, (label, val) should be in the tree.
 // if !inTree, label should not be in the tree.
 func Verify(inTree bool, label, val, proof, dig []byte) bool {
-	if uint64(len(label)) != cryptoffi.HashLen {
-		return true
-	}
 	proofDec, _, err0 := MerkleProofDecode(proof)
 	if err0 {
-		return true
-	}
-	if std.BytesEqual(label, proofDec.LeafLabel) {
 		return true
 	}
 
@@ -191,7 +185,10 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 	if inTree {
 		lastHash = compLeafHash(label, val)
 	} else {
-		if uint64(len(proofDec.LeafLabel)) == cryptoffi.HashLen {
+		if proofDec.FoundOtherLeaf {
+			if std.BytesEqual(label, proofDec.LeafLabel) {
+				return true
+			}
 			lastHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
 		} else {
 			lastHash = compEmptyHash()
@@ -255,11 +252,11 @@ func setLeafHash(n *node) {
 }
 
 func compLeafHash(label, val []byte) []byte {
-	valLen := uint64(len(val))
 	hr := cryptoffi.NewHasher()
 	hr.Write([]byte{leafNodeTag})
+	hr.Write(marshal.WriteInt(nil, uint64(len(label))))
 	hr.Write(label)
-	hr.Write(marshal.WriteInt(nil, valLen))
+	hr.Write(marshal.WriteInt(nil, uint64(len(val))))
 	hr.Write(val)
 	return hr.Sum(nil)
 }
@@ -290,7 +287,8 @@ func getChild(n *node, label []byte, depth uint64) (**node, *node) {
 
 // getBit returns false if the nth bit of b is 0.
 // if n exceeds b, it returns false.
-// this is fine as long as it's used consistently across the code.
+// this is fine as long as the code consistently treats labels as
+// having variable length.
 func getBit(b []byte, n uint64) bool {
 	slot := n / 8
 	if slot < uint64(len(b)) {

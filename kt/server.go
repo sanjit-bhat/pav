@@ -236,12 +236,10 @@ func (s *Server) mapper0(in *WQReq, out *mapper0Out) {
 
 // mapper1 computes merkle proofs and assembles full response.
 func (s *Server) mapper1(in *mapper0Out, out *WQResp) {
-	latIn, _, latMerk, err0 := s.keyMap.Prove(in.latestVrfHash)
-	std.Assert(!err0)
+	latIn, _, latMerk := s.keyMap.Prove(in.latestVrfHash)
 	std.Assert(latIn)
 
-	boundIn, _, boundMerk, err1 := s.keyMap.Prove(in.boundVrfHash)
-	std.Assert(!err1)
+	boundIn, _, boundMerk := s.keyMap.Prove(in.boundVrfHash)
 	std.Assert(!boundIn)
 
 	out.Dig = getDig(s.epochHist)
@@ -329,8 +327,7 @@ func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPriva
 	var hist = make([]*MembHide, 0, numVers-1)
 	for ver := uint64(0); ver < numVers-1; ver++ {
 		label, labelProof := compMapLabel(uid, ver, vrfSk)
-		inMap, mapVal, mapProof, err0 := keyMap.Prove(label)
-		std.Assert(!err0)
+		inMap, mapVal, mapProof := keyMap.Prove(label)
 		std.Assert(inMap)
 		hist = append(hist, &MembHide{LabelProof: labelProof, MapVal: mapVal, MerkleProof: mapProof})
 	}
@@ -344,8 +341,7 @@ func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPri
 		return false, &Memb{PkOpen: &CommitOpen{}}
 	}
 	label, labelProof := compMapLabel(uid, numVers-1, vrfSk)
-	inMap, mapVal, mapProof, err0 := keyMap.Prove(label)
-	std.Assert(!err0)
+	inMap, mapVal, mapProof := keyMap.Prove(label)
 	std.Assert(inMap)
 	valPre, _, err1 := MapValPreDecode(mapVal)
 	std.Assert(!err1)
@@ -357,8 +353,7 @@ func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPri
 // getBound returns a non-membership proof for the boundary version.
 func getBound(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) *NonMemb {
 	label, labelProof := compMapLabel(uid, numVers, vrfSk)
-	inMap, _, mapProof, err0 := keyMap.Prove(label)
-	std.Assert(!err0)
+	inMap, _, mapProof := keyMap.Prove(label)
 	std.Assert(!inMap)
 	return &NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
 }

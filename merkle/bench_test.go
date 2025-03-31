@@ -44,10 +44,7 @@ func TestBenchMerkGet(t *testing.T) {
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
 		l := labels[rand.Uint64N(defNSeed)]
-		isReg, _, errb := tr.Get(l)
-		if errb {
-			t.Fatal()
-		}
+		isReg, _ := tr.Get(l)
 		if !isReg {
 			t.Fatal()
 		}
@@ -72,10 +69,7 @@ func TestBenchMerkGenVer(t *testing.T) {
 		l := labels[rand.Uint64N(defNSeed)]
 
 		t0 := time.Now()
-		isReg, v, p, errb := tr.Prove(l)
-		if errb {
-			t.Fatal()
-		}
+		isReg, v, p := tr.Prove(l)
 		if !isReg {
 			t.Fatal()
 		}
@@ -104,10 +98,7 @@ func TestBenchMerkSize(t *testing.T) {
 	tr, labels := seedTree(t, defNSeed)
 	samp := &stats.Sample{Xs: make([]float64, 0, defNSeed)}
 	for _, label := range labels {
-		isReg, _, p, errb := tr.Prove(label)
-		if errb {
-			t.Fatal()
-		}
+		isReg, _, p := tr.Prove(label)
 		if !isReg {
 			t.Fatal()
 		}

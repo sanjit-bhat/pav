@@ -4,14 +4,23 @@ package merkle
 
 import (
 	"github.com/mit-pdos/pav/marshalutil"
+	"github.com/tchajed/marshal"
 )
 
+func MerkleProofEncode(b0 []byte, o *MerkleProof) []byte {
+	var b = b0
+	b = marshalutil.WriteSlice1D(b, o.Siblings)
+	b = marshal.WriteBool(b, o.FoundOtherLeaf)
+	b = marshalutil.WriteSlice1D(b, o.LeafLabel)
+	b = marshalutil.WriteSlice1D(b, o.LeafVal)
+	return b
+}
 func MerkleProofDecode(b0 []byte) (*MerkleProof, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := marshalutil.ReadBool(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -19,5 +28,9 @@ func MerkleProofDecode(b0 []byte) (*MerkleProof, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &MerkleProof{Siblings: a1, LeafLabel: a2, LeafVal: a3}, b3, false
+	a4, b4, err4 := marshalutil.ReadSlice1D(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	return &MerkleProof{Siblings: a1, FoundOtherLeaf: a2, LeafLabel: a3, LeafVal: a4}, b4, false
 }
