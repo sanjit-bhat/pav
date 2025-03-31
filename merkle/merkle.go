@@ -171,12 +171,15 @@ func getProofLen(depth uint64) uint64 {
 
 // Verify verifies proof against the tree rooted at dig
 // and returns an error upon failure.
-// there are two types of inputs.
+// there are two types of inputs:
 // if inTree, (label, val) should be in the tree.
 // if !inTree, label should not be in the tree.
 func Verify(inTree bool, label, val, proof, dig []byte) bool {
 	proofDec, _, err0 := MerkleProofDecode(proof)
 	if err0 {
+		return true
+	}
+	if proofDec.FoundOtherLeaf && std.BytesEqual(label, proofDec.LeafLabel) {
 		return true
 	}
 
@@ -186,9 +189,6 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 		lastHash = compLeafHash(label, val)
 	} else {
 		if proofDec.FoundOtherLeaf {
-			if std.BytesEqual(label, proofDec.LeafLabel) {
-				return true
-			}
 			lastHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
 		} else {
 			lastHash = compEmptyHash()
