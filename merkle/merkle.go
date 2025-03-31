@@ -105,21 +105,19 @@ func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte, bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return false, nil, nil, true
 	}
-	foundLabel, foundVal, proof0 := find(label, getProof, t.ctx, t.root, 0)
+	found, foundLabel, foundVal, proof0 := find(label, getProof, t.ctx, t.root, 0)
 	var proof = proof0
 	if getProof {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
 
-	// empty node.
-	if foundLabel == nil {
+	if !found {
 		if getProof {
 			proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
 			proof = marshal.WriteInt(proof, 0) // empty LeafValLen
 		}
 		return false, nil, proof, false
 	}
-	// leaf node with different label.
 	if !std.BytesEqual(foundLabel, label) {
 		if getProof {
 			proof = marshal.WriteInt(proof, uint64(len(foundLabel)))
@@ -129,7 +127,6 @@ func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte, bool) {
 		}
 		return false, nil, proof, false
 	}
-	// leaf node with same label.
 	if getProof {
 		proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
 		proof = marshal.WriteInt(proof, 0) // empty LeafValLen
@@ -137,15 +134,16 @@ func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte, bool) {
 	return true, foundVal, proof, false
 }
 
-// find returns the found label, found val, and proof.
-func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) ([]byte, []byte, []byte) {
+// find returns whether label path found (and if so, the found label and val)
+// and the sibling proof.
+func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) (bool, []byte, []byte, []byte) {
 	// break on empty node.
 	if n == nil {
 		var proof []byte
 		if getProof {
 			proof = make([]byte, 8, getProofLen(depth))
 		}
-		return nil, nil, proof
+		return false, nil, nil, proof
 	}
 	// break on leaf node.
 	if n.child0 == nil && n.child1 == nil {
@@ -153,17 +151,17 @@ func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) ([]b
 		if getProof {
 			proof = make([]byte, 8, getProofLen(depth))
 		}
-		return n.label, n.val, proof
+		return true, n.label, n.val, proof
 	}
 
 	child, sib := getChild(n, label, depth)
-	fl, fv, proof0 := find(label, getProof, ctx, *child, depth+1)
+	f, fl, fv, proof0 := find(label, getProof, ctx, *child, depth+1)
 	var proof = proof0
 	if getProof {
 		// proof will have sibling hash for each inner node.
 		proof = append(proof, getNodeHash(sib, ctx)...)
 	}
-	return fl, fv, proof
+	return f, fl, fv, proof
 }
 
 func getProofLen(depth uint64) uint64 {
