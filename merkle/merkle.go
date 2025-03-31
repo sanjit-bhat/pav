@@ -1,7 +1,6 @@
 package merkle
 
 import (
-	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
@@ -12,9 +11,6 @@ const (
 	emptyNodeTag byte = 0
 	leafNodeTag  byte = 1
 	innerNodeTag byte = 2
-	// pre-size for roughly 2^30 (1.07B) entries.
-	// proof = SibsLen ++ Sibs ++ LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk).
-	avgProofLen uint64 = 8 + 30*cryptoffi.HashLen + 8 + cryptoffi.HashLen + 8 + 32
 )
 
 type Tree struct {
@@ -93,76 +89,76 @@ func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 // Get returns if label is in the tree and, if so, the val.
 // it errors if label isn't a hash.
 func (t *Tree) Get(label []byte) (bool, []byte, bool) {
-	inTree, val, _, err := t.prove(label, false)
-	return inTree, val, err
+	if uint64(len(label)) != cryptoffi.HashLen {
+		return false, nil, true
+	}
+	inTree, val, _ := prove(label, false, t.ctx, t.root, 0)
+	return inTree, val, false
 }
 
 // Prove returns (1) if label is in the tree and, if so, (2) the val.
 // it gives a (3) cryptographic proof of this.
 // it (4) errors if label isn't a hash.
 func (t *Tree) Prove(label []byte) (bool, []byte, []byte, bool) {
-	return t.prove(label, true)
-}
-
-func (t *Tree) prove(label []byte, prove bool) (bool, []byte, []byte, bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return false, nil, nil, true
 	}
-	proof0, last := proveSiblings(label, prove, t.ctx, t.root, 0)
-	var proof = proof0
-	if prove {
-		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
-	}
-
-	// empty node.
-	if last == nil {
-		if prove {
-			proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
-			proof = marshal.WriteInt(proof, 0) // empty LeafValLen
-		}
-		return false, nil, proof, false
-	}
-	// leaf node with different label.
-	if !std.BytesEqual(last.label, label) {
-		if prove {
-			proof = marshal.WriteInt(proof, uint64(len(last.label)))
-			proof = marshal.WriteBytes(proof, last.label)
-			proof = marshal.WriteInt(proof, uint64(len(last.val)))
-			proof = marshal.WriteBytes(proof, last.val)
-		}
-		return false, nil, proof, false
-	}
-	// leaf node with same label.
-	if prove {
-		proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
-		proof = marshal.WriteInt(proof, 0) // empty LeafValLen
-	}
-	return true, last.val, proof, false
+	inTree, val, proof := prove(label, true, t.ctx, t.root, 0)
+	return inTree, val, proof, false
 }
 
-func proveSiblings(label []byte, prove bool, ctx *context, n *node, depth uint64) ([]byte, *node) {
-	// break if empty node or leaf node.
+func prove(label []byte, getProof bool, ctx *context, n *node, depth uint64) (bool, []byte, []byte) {
+	// break on empty node.
 	if n == nil {
-		if prove {
-			return make([]byte, 8, avgProofLen), n
+		if getProof {
+			var proof = make([]byte, 0, getProofLen(depth))
+			proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
+			proof = marshal.WriteInt(proof, 0) // empty LeafValLen
+			proof = marshal.WriteInt(proof, depth*cryptoffi.HashLen)
+			return false, nil, proof
 		}
-		return nil, n
+		return false, nil, nil
 	}
+	// break on leaf node.
 	if n.child0 == nil && n.child1 == nil {
-		if prove {
-			return make([]byte, 8, avgProofLen), n
+		// different label.
+		if !std.BytesEqual(n.label, label) {
+			if getProof {
+				var proof = make([]byte, 0, getProofLen(depth))
+				proof = marshal.WriteInt(proof, uint64(len(n.label)))
+				proof = marshal.WriteBytes(proof, n.label)
+				proof = marshal.WriteInt(proof, uint64(len(n.val)))
+				proof = marshal.WriteBytes(proof, n.val)
+				proof = marshal.WriteInt(proof, depth*cryptoffi.HashLen)
+				return false, nil, proof
+			}
+			return false, nil, nil
 		}
-		return nil, n
+
+		// same label.
+		if getProof {
+			var proof = make([]byte, 0, getProofLen(depth))
+			proof = marshal.WriteInt(proof, 0) // empty LeafLabelLen
+			proof = marshal.WriteInt(proof, 0) // empty LeafValLen
+			proof = marshal.WriteInt(proof, depth*cryptoffi.HashLen)
+			return true, n.val, proof
+		}
+		return true, n.val, nil
 	}
 
 	child, sib := getChild(n, label, depth)
-	proof0, last := proveSiblings(label, prove, ctx, *child, depth+1)
+	inTree, val, proof0 := prove(label, getProof, ctx, *child, depth+1)
 	var proof = proof0
-	if prove {
+	if getProof {
 		// proof will have sibling hash for each inner node.
 		proof = append(proof, getNodeHash(sib, ctx)...)
 	}
-	return proof, last
+	return inTree, val, proof
+}
+
+func getProofLen(depth uint64) uint64 {
+	// proof = LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk) ++ SibsLen ++ Sibs.
+	return 8 + cryptoffi.HashLen + 8 + 32 + 8 + depth*cryptoffi.HashLen
 }
 
 // Verify verifies proof against the tree rooted at dig
