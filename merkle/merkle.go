@@ -141,19 +141,19 @@ func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte, bool) {
 func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) ([]byte, []byte, []byte) {
 	// break on empty node.
 	if n == nil {
+		var proof []byte
 		if getProof {
-			var proof = make([]byte, 8, getProofLen(depth))
-			return nil, nil, proof
+			proof = make([]byte, 8, getProofLen(depth))
 		}
-		return nil, nil, nil
+		return nil, nil, proof
 	}
 	// break on leaf node.
 	if n.child0 == nil && n.child1 == nil {
+		var proof []byte
 		if getProof {
-			var proof = make([]byte, 8, getProofLen(depth))
-			return n.label, n.val, proof
+			proof = make([]byte, 8, getProofLen(depth))
 		}
-		return n.label, n.val, nil
+		return n.label, n.val, proof
 	}
 
 	child, sib := getChild(n, label, depth)
