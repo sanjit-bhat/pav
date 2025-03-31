@@ -133,7 +133,7 @@ func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte) {
 	return true, foundVal, proof
 }
 
-// find returns whether label path found (and if so, the found label and val)
+// find returns whether label path was found (and if so, the found label and val)
 // and the sibling proof.
 func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) (bool, []byte, []byte, []byte) {
 	// break on empty node.
