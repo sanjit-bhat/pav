@@ -19,5 +19,5 @@ func MerkleProofDecode(b0 []byte) (*MerkleProof, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &MerkleProof{LeafLabel: a1, LeafVal: a2, Siblings: a3}, b3, false
+	return &MerkleProof{Siblings: a1, LeafLabel: a2, LeafVal: a3}, b3, false
 }
