@@ -71,11 +71,11 @@ func checkUpd(keys *merkle.Tree, nextEp uint64, upd map[string][]byte) bool {
 
 // checkOneUpd checks that an update is safe to apply, and errs on fail.
 func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool {
-	inTree, _, err0 := keys.Get(mapLabel)
-	// label has right len. used in applyUpd.
-	if err0 {
+	// used in applyUpd.
+	if uint64(len(mapLabel)) != cryptoffi.HashLen {
 		return true
 	}
+	inTree, _ := keys.Get(mapLabel)
 	// label not already in keyMap. map monotonicity.
 	if inTree {
 		return true
