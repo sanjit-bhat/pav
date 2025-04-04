@@ -179,20 +179,24 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 	if err0 {
 		return true
 	}
-	if proofDec.FoundOtherLeaf && std.BytesEqual(label, proofDec.LeafLabel) {
-		return true
-	}
 
 	// hash last node.
 	var lastHash []byte
+	var err1 bool
 	if inTree {
 		lastHash = compLeafHash(label, val)
 	} else {
 		if proofDec.FoundOtherLeaf {
 			lastHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
+			if std.BytesEqual(label, proofDec.LeafLabel) {
+				err1 = true
+			}
 		} else {
 			lastHash = compEmptyHash()
 		}
+	}
+	if err1 {
+		return true
 	}
 	return verifySiblings(label, lastHash, proofDec.Siblings, dig)
 }
