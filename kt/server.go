@@ -146,7 +146,6 @@ func (s *Server) Worker() {
 	// map 0.
 	outs0 := make([]*mapper0Out, len(work))
 	var wg = new(sync.WaitGroup)
-	s.mu.RLock()
 	var i uint64
 	for ; i < uint64(len(work)); i++ {
 		resp := work[i].Resp
@@ -162,7 +161,6 @@ func (s *Server) Worker() {
 		}
 	}
 	wg.Wait()
-	s.mu.RUnlock()
 
 	// update server with new entries.
 	s.mu.Lock()
@@ -192,7 +190,6 @@ func (s *Server) Worker() {
 
 	// map 1.
 	wg = new(sync.WaitGroup)
-	s.mu.RLock()
 	i = 0
 	for ; i < uint64(len(work)); i++ {
 		resp := work[i].Resp
@@ -206,7 +203,6 @@ func (s *Server) Worker() {
 		}
 	}
 	wg.Wait()
-	s.mu.RUnlock()
 
 	s.workQ.Finish(work)
 }
