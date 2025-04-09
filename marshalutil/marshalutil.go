@@ -11,8 +11,8 @@ func ReadBool(b0 []byte) (bool, []byte, bool) {
 	if uint64(len(b)) < 1 {
 		return false, nil, true
 	}
-	data, b := marshal.ReadBool(b)
-	return data, b, false
+	data, b2 := marshal.ReadBool(b)
+	return data, b2, false
 }
 
 func ReadConstBool(b0 []byte, cst bool) ([]byte, bool) {
