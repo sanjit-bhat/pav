@@ -32,8 +32,8 @@ func ReadInt(b0 []byte) (uint64, []byte, bool) {
 	if uint64(len(b)) < 8 {
 		return 0, nil, true
 	}
-	data, b := marshal.ReadInt(b)
-	return data, b, false
+	data, b2 := marshal.ReadInt(b)
+	return data, b2, false
 }
 
 func ReadConstInt(b0 []byte, cst uint64) ([]byte, bool) {
