@@ -8,15 +8,18 @@ import (
 )
 
 type Client struct {
-	uid       uint64
-	nextVer   uint64
+	uid     uint64
+	nextVer uint64
+	// seenDigs stores, for an epoch, if we've gotten a digest for it.
+	seenDigs map[uint64]*SigDig
+	// nextEpoch bounds the entries in seenDigs.
+	// storing the next (instead of last) epoch yields a correct
+	// zero val on client init, with the downside of having to check
+	// that nextEpoch doesn't overflow.
+	nextEpoch uint64
 	servCli   *advrpc.Client
 	servSigPk cryptoffi.SigPublicKey
 	servVrfPk *cryptoffi.VrfPublicKey
-	// seenDigs stores, for an epoch, if we've gotten a digest for it.
-	seenDigs map[uint64]*SigDig
-	// nextEpoch is the min epoch that we haven't yet seen, an UB on seenDigs.
-	nextEpoch uint64
 }
 
 // ClientErr abstracts errors that potentially have irrefutable evidence.
@@ -77,7 +80,7 @@ func (c *Client) Get(uid uint64) (bool, []byte, uint64, *ClientErr) {
 	if err1.Err {
 		return false, nil, 0, err1
 	}
-	if c.nextEpoch != 0 && dig.Epoch < c.nextEpoch-1 {
+	if dig.Epoch+1 < c.nextEpoch {
 		return false, nil, 0, stdErr
 	}
 	// hist.
@@ -118,7 +121,7 @@ func (c *Client) SelfMon() (uint64, *ClientErr) {
 	if err1.Err {
 		return 0, err1
 	}
-	if c.nextEpoch != 0 && dig.Epoch < c.nextEpoch-1 {
+	if dig.Epoch+1 < c.nextEpoch {
 		return 0, stdErr
 	}
 	// bound.
@@ -183,7 +186,7 @@ func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *Clien
 	if err0 {
 		return stdErr
 	}
-	// epoch not too high, which would overflow c.nextEpoch.
+	// doesn't overflow c.nextEpoch.
 	if !std.SumNoOverflow(dig.Epoch, 1) {
 		return stdErr
 	}
