@@ -321,7 +321,6 @@ func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPriva
 	}
 	// latest registered ver not included in hist.
 	var hist = make([]*MembHide, 0, numVers-1)
-	// for ver := uint64(0); ver < numVers-1; ver++ {
 	var ver = uint64(0)
 	for ver < numVers-1 {
 		label, labelProof := compMapLabel(uid, ver, vrfSk)

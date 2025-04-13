@@ -37,12 +37,6 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	if err1.Err {
 		return 0, err1
 	}
-	// TODO: might be able to use same <= freshness check as Get / SelfMon.
-	// = case with two puts is mathematically ruled out:
-	// e.g., first put: [M v1; NM v2]. second put: [M v2; NM v3].
-	// altho maybe selfmon wouldn't work bc can no longer say "up thru
-	// this epoch". the latest epoch might change, as per the put allowance.
-	// note: doing this would simplify server spec.
 	if dig.Epoch < c.nextEpoch {
 		return 0, stdErr
 	}
