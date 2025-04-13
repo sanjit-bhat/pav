@@ -8,17 +8,15 @@ import (
 )
 
 type Client struct {
-	uid     uint64
-	nextVer uint64
-	// seenDigs stores, for an epoch, if we've gotten a digest for it.
-	seenDigs map[uint64]*SigDig
-	// lastEpoch gives the last seen epoch, which bounds seenDigs.
-	// it's active if isInit, which turns on after seeing one epoch.
-	lastEpoch uint64
-	isInit    bool
+	uid       uint64
+	nextVer   uint64
 	servCli   *advrpc.Client
 	servSigPk cryptoffi.SigPublicKey
 	servVrfPk *cryptoffi.VrfPublicKey
+	// seenDigs stores, for an epoch, if we've gotten a digest for it.
+	seenDigs map[uint64]*SigDig
+	// nextEpoch is the min epoch that we haven't yet seen, an UB on seenDigs.
+	nextEpoch uint64
 }
 
 // ClientErr abstracts errors that potentially have irrefutable evidence.
@@ -39,7 +37,13 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	if err1.Err {
 		return 0, err1
 	}
-	if c.isInit && dig.Epoch <= c.lastEpoch {
+	// TODO: might be able to use same <= freshness check as Get / SelfMon.
+	// = case with two puts is mathematically ruled out:
+	// e.g., first put: [M v1; NM v2]. second put: [M v2; NM v3].
+	// altho maybe selfmon wouldn't work bc can no longer say "up thru
+	// this epoch". the latest epoch might change, as per the put allowance.
+	// note: doing this would simplify server spec.
+	if dig.Epoch < c.nextEpoch {
 		return 0, stdErr
 	}
 	// latest.
@@ -57,8 +61,7 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 		return 0, stdErr
 	}
 	c.seenDigs[dig.Epoch] = dig
-	c.isInit = true
-	c.lastEpoch = dig.Epoch
+	c.nextEpoch = dig.Epoch + 1
 	// this client controls nextVer, so no need to check for overflow.
 	c.nextVer = std.SumAssumeNoOverflow(c.nextVer, 1)
 	return dig.Epoch, &ClientErr{Err: false}
@@ -80,7 +83,7 @@ func (c *Client) Get(uid uint64) (bool, []byte, uint64, *ClientErr) {
 	if err1.Err {
 		return false, nil, 0, err1
 	}
-	if c.isInit && dig.Epoch < c.lastEpoch {
+	if c.nextEpoch != 0 && dig.Epoch < c.nextEpoch-1 {
 		return false, nil, 0, stdErr
 	}
 	// hist.
@@ -104,8 +107,7 @@ func (c *Client) Get(uid uint64) (bool, []byte, uint64, *ClientErr) {
 		return false, nil, 0, stdErr
 	}
 	c.seenDigs[dig.Epoch] = dig
-	c.isInit = true
-	c.lastEpoch = dig.Epoch
+	c.nextEpoch = dig.Epoch + 1
 	return isReg, latest.PkOpen.Val, dig.Epoch, &ClientErr{Err: false}
 }
 
@@ -122,7 +124,7 @@ func (c *Client) SelfMon() (uint64, *ClientErr) {
 	if err1.Err {
 		return 0, err1
 	}
-	if c.isInit && dig.Epoch < c.lastEpoch {
+	if c.nextEpoch != 0 && dig.Epoch < c.nextEpoch-1 {
 		return 0, stdErr
 	}
 	// bound.
@@ -130,8 +132,7 @@ func (c *Client) SelfMon() (uint64, *ClientErr) {
 		return 0, stdErr
 	}
 	c.seenDigs[dig.Epoch] = dig
-	c.isInit = true
-	c.lastEpoch = dig.Epoch
+	c.nextEpoch = dig.Epoch + 1
 	return dig.Epoch, &ClientErr{Err: false}
 }
 
@@ -186,6 +187,10 @@ func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *Clien
 	// sig.
 	err0 := CheckSigDig(dig, servSigPk)
 	if err0 {
+		return stdErr
+	}
+	// epoch not too high, which would overflow c.nextEpoch.
+	if !std.SumNoOverflow(dig.Epoch, 1) {
 		return stdErr
 	}
 	// agrees with prior digs.
