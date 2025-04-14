@@ -160,12 +160,11 @@ func putBatchHelper(batchSz, nBatches int) time.Duration {
 		if i == nWarm {
 			start = time.Now()
 		}
-		work := make([]*Work, 0, batchSz)
+		reqs := make([]*WQReq, 0, batchSz)
 		for i := 0; i < batchSz; i++ {
-			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
-			work = append(work, w)
+			reqs = append(reqs, &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()})
 		}
-		serv.workQ.DoBatch(work)
+		serv.workQ.DoBatch(reqs)
 	}
 	return time.Since(start)
 }
@@ -506,12 +505,12 @@ func auditScaleHelper(t *testing.T, batchSz, nBatches int) (time.Duration, time.
 			totalGen = 0
 			totalVer = 0
 		}
-		work := make([]*Work, 0, batchSz)
+		reqs := make([]*WQReq, 0, batchSz)
 		for j := 0; j < batchSz; j++ {
-			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
-			work = append(work, w)
+			req := &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}
+			reqs = append(reqs, req)
 		}
-		serv.workQ.DoBatch(work)
+		serv.workQ.DoBatch(reqs)
 
 		for ; ; epoch++ {
 			t0 := time.Now()
@@ -637,12 +636,12 @@ func TestBenchServMem(t *testing.T) {
 			{N: mb, Unit: "MB"},
 		})
 
-		work := make([]*Work, 0, nMeasure)
+		reqs := make([]*WQReq, 0, nMeasure)
 		for j := 0; j < nMeasure; j++ {
-			w := &Work{Req: &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}}
-			work = append(work, w)
+			req := &WQReq{Uid: rand.Uint64(), Pk: mkRandVal()}
+			reqs = append(reqs, req)
 		}
-		serv.workQ.DoBatch(work)
+		serv.workQ.DoBatch(reqs)
 	}
 }
 
@@ -671,17 +670,16 @@ func seedServer(nSeed uint64) (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPu
 	for i := uint64(0); i < nEp; i++ {
 		u := rand.Uint64()
 		uids = append(uids, u)
-		w := &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}}
-		serv.workQ.Do(w)
+		serv.workQ.Do(&WQReq{Uid: u, Pk: mkRandVal()})
 	}
 
-	work := make([]*Work, 0, nSeed-nEp)
+	reqs := make([]*WQReq, 0, nSeed-nEp)
 	for i := uint64(0); i < nSeed-nEp; i++ {
 		u := rand.Uint64()
 		uids = append(uids, u)
-		work = append(work, &Work{Req: &WQReq{Uid: u, Pk: mkRandVal()}})
+		reqs = append(reqs, &WQReq{Uid: u, Pk: mkRandVal()})
 	}
-	serv.workQ.DoBatch(work)
+	serv.workQ.DoBatch(reqs)
 	runtime.GC()
 	return serv, sigPk, vrfPk, uids
 }
