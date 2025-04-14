@@ -18,6 +18,12 @@ type WorkQ struct {
 	cond *sync.Cond
 }
 
+func NewWork(req *WQReq) *Work {
+	w := &Work{mu: new(sync.Mutex), Req: req}
+	w.cond = sync.NewCond(w.mu)
+	return w
+}
+
 func (w *Work) Finish() {
 	w.mu.Lock()
 	w.done = true
@@ -26,9 +32,7 @@ func (w *Work) Finish() {
 }
 
 func (wq *WorkQ) Do(req *WQReq) *WQResp {
-	w := &Work{mu: new(sync.Mutex), Req: req}
-	w.cond = sync.NewCond(w.mu)
-
+	w := NewWork(req)
 	wq.mu.Lock()
 	wq.work = append(wq.work, w)
 	wq.cond.Signal()
@@ -48,8 +52,7 @@ func (wq *WorkQ) Do(req *WQReq) *WQResp {
 func (wq *WorkQ) DoBatch(reqs []*WQReq) {
 	works := make([]*Work, len(reqs))
 	for i, req := range reqs {
-		works[i] = &Work{mu: new(sync.Mutex), Req: req}
-		works[i].cond = sync.NewCond(works[i].mu)
+		works[i] = NewWork(req)
 	}
 
 	wq.mu.Lock()
