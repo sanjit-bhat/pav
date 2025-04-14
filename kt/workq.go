@@ -57,8 +57,8 @@ func (wq *WorkQ) DoBatch(reqs []*WQReq) {
 	wq.cond.Signal()
 	wq.mu.Unlock()
 
-	n := len(works)
-	for i := 0; i < n; i++ {
+	n := uint64(len(works))
+	for i := uint64(0); i < n; i++ {
 		w := works[n-1-i]
 
 		w.mu.Lock()
