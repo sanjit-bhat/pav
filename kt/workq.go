@@ -59,7 +59,7 @@ func (wq *WorkQ) DoBatch(reqs []*WQReq) {
 
 	n := len(works)
 	for i := 0; i < n; i++ {
-		w := works[n - 1 - i]
+		w := works[n-1-i]
 
 		w.mu.Lock()
 		for !w.done {
