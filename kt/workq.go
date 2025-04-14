@@ -5,53 +5,74 @@ import (
 )
 
 type Work struct {
+	mu   *sync.Mutex
+	cond *sync.Cond
 	done bool
 	Req  *WQReq
 	Resp *WQResp
 }
 
 type WorkQ struct {
-	mu         *sync.Mutex
-	work       []*Work
-	condCli    *sync.Cond
-	condWorker *sync.Cond
+	mu   *sync.Mutex
+	work []*Work
+	cond *sync.Cond
 }
 
-func (wq *WorkQ) Do(r *Work) {
-	wq.mu.Lock()
-	wq.work = append(wq.work, r)
-	wq.condWorker.Signal()
+func (w *Work) Finish() {
+	w.mu.Lock()
+	w.done = true
+	w.cond.Signal()
+	w.mu.Unlock()
+}
 
-	for !r.done {
-		wq.condCli.Wait()
-	}
+func (wq *WorkQ) Do(req *WQReq) *WQResp {
+	w := &Work{mu: new(sync.Mutex), Req: req}
+	w.cond = sync.NewCond(w.mu)
+
+	wq.mu.Lock()
+	wq.work = append(wq.work, w)
+	wq.cond.Signal()
 	wq.mu.Unlock()
+
+	w.mu.Lock()
+	for !w.done {
+		w.cond.Wait()
+	}
+	w.mu.Unlock()
+
+	return w.Resp
 }
 
 // DoBatch is unverified. it's only used as a benchmark helper for
 // unmeasured batch puts.
-func (wq *WorkQ) DoBatch(r []*Work) {
-	wq.mu.Lock()
-	wq.work = append(wq.work, r...)
-	wq.condWorker.Signal()
-
-	// invariant: forall i < j, if work[j].done, then work[i].done.
-	// in pav, preserved by only having one worker that does:
-	//
-	//  w := wq.Get()
-	//  ...
-	//  wq.Finish(w)
-	rLen := len(r)
-	for !r[rLen-1].done {
-		wq.condCli.Wait()
+func (wq *WorkQ) DoBatch(reqs []*WQReq) {
+	works := make([]*Work, len(reqs))
+	for i, req := range reqs {
+		works[i] = &Work{mu: new(sync.Mutex), Req: req}
+		works[i].cond = sync.NewCond(works[i].mu)
 	}
+
+	wq.mu.Lock()
+	wq.work = append(wq.work, works...)
+	wq.cond.Signal()
 	wq.mu.Unlock()
+
+	n := len(works)
+	for i := 0; i < n; i++ {
+		w := works[n - 1 - i]
+
+		w.mu.Lock()
+		for !w.done {
+			w.cond.Wait()
+		}
+		w.mu.Unlock()
+	}
 }
 
 func (wq *WorkQ) Get() []*Work {
 	wq.mu.Lock()
 	for wq.work == nil {
-		wq.condWorker.Wait()
+		wq.cond.Wait()
 	}
 
 	work := wq.work
@@ -60,18 +81,8 @@ func (wq *WorkQ) Get() []*Work {
 	return work
 }
 
-func (wq *WorkQ) Finish(work []*Work) {
-	wq.mu.Lock()
-	for _, x := range work {
-		x.done = true
-	}
-	wq.mu.Unlock()
-	wq.condCli.Broadcast()
-}
-
 func NewWorkQ() *WorkQ {
 	mu := new(sync.Mutex)
-	condCli := sync.NewCond(mu)
-	condWork := sync.NewCond(mu)
-	return &WorkQ{mu: mu, condCli: condCli, condWorker: condWork}
+	cond := sync.NewCond(mu)
+	return &WorkQ{mu: mu, cond: cond}
 }

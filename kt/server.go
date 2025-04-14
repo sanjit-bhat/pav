@@ -42,9 +42,7 @@ type servEpochInfo struct {
 
 // Put errors iff there's a put of the same uid at the same time.
 func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb, bool) {
-	work := &Work{Req: &WQReq{Uid: uid, Pk: pk}}
-	s.workQ.Do(work)
-	resp := work.Resp
+	resp := s.workQ.Do(&WQReq{Uid: uid, Pk: pk})
 	return resp.Dig, resp.Lat, resp.Bound, resp.Err
 }
 
@@ -204,7 +202,9 @@ func (s *Server) Worker() {
 	}
 	wg.Wait()
 
-	s.workQ.Finish(work)
+	for _, w := range work {
+		w.Finish()
+	}
 }
 
 // mapper0 makes mapLabels and mapVals.
