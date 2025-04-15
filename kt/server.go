@@ -145,7 +145,7 @@ func (s *Server) Worker() {
 	outs0 := make([]*mapper0Out, len(work))
 	var wg = new(sync.WaitGroup)
 	var i uint64
-	for ; i < uint64(len(work)); i++ {
+	for i < uint64(len(work)) {
 		resp := work[i].Resp
 		if !resp.Err {
 			req := work[i].Req
@@ -157,6 +157,7 @@ func (s *Server) Worker() {
 				wg.Done()
 			}()
 		}
+		i++
 	}
 	wg.Wait()
 
@@ -164,7 +165,7 @@ func (s *Server) Worker() {
 	s.mu.Lock()
 	upd := make(map[string][]byte, len(work))
 	i = 0
-	for ; i < uint64(len(work)); i++ {
+	for i < uint64(len(work)) {
 		resp := work[i].Resp
 		if !resp.Err {
 			req := work[i].Req
@@ -182,6 +183,7 @@ func (s *Server) Worker() {
 			user.plainPk = req.Pk
 			s.userInfo[req.Uid] = user
 		}
+		i++
 	}
 	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
 	s.mu.Unlock()
@@ -189,7 +191,7 @@ func (s *Server) Worker() {
 	// map 1.
 	wg = new(sync.WaitGroup)
 	i = 0
-	for ; i < uint64(len(work)); i++ {
+	for i < uint64(len(work)) {
 		resp := work[i].Resp
 		if !resp.Err {
 			out0 := outs0[i]
@@ -199,6 +201,7 @@ func (s *Server) Worker() {
 				wg.Done()
 			}()
 		}
+		i++
 	}
 	wg.Wait()
 
