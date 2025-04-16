@@ -143,14 +143,18 @@ func (s *Server) Worker() {
 
 	// map 0.
 	outs0 := make([]*mapper0Out, len(work))
-	var wg = new(sync.WaitGroup)
 	var i uint64
+	for i < uint64(len(work)) {
+		outs0[i] = &mapper0Out{}
+		i++
+	}
+	var wg = new(sync.WaitGroup)
+	i = 0
 	for i < uint64(len(work)) {
 		resp := work[i].Resp
 		if !resp.Err {
 			req := work[i].Req
-			out0 := &mapper0Out{}
-			outs0[i] = out0
+			out0 := outs0[i]
 			wg.Add(1)
 			go func() {
 				s.mapper0(req, out0)
