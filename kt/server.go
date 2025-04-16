@@ -148,7 +148,7 @@ func (s *Server) Worker() {
 		outs0[i] = &mapper0Out{}
 		i++
 	}
-	var wg = new(sync.WaitGroup)
+	wg := new(sync.WaitGroup)
 	i = 0
 	for i < uint64(len(work)) {
 		resp := work[i].Resp
@@ -193,21 +193,21 @@ func (s *Server) Worker() {
 	s.mu.Unlock()
 
 	// map 1.
-	wg = new(sync.WaitGroup)
+	wg1 := new(sync.WaitGroup)
 	i = 0
 	for i < uint64(len(work)) {
 		resp := work[i].Resp
 		if !resp.Err {
 			out0 := outs0[i]
-			wg.Add(1)
+			wg1.Add(1)
 			go func() {
 				s.mapper1(out0, resp)
-				wg.Done()
+				wg1.Done()
 			}()
 		}
 		i++
 	}
-	wg.Wait()
+	wg1.Wait()
 
 	for _, w := range work {
 		w.Finish()
