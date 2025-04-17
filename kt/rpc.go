@@ -81,9 +81,11 @@ func CallServPut(c *advrpc.Client, uid uint64, pk []byte) (*SigDig, *Memb, *NonM
 	arg := &ServerPutArg{Uid: uid, Pk: pk}
 	argByt := ServerPutArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
-	err0 := c.Call(ServerPutRpc, argByt, replyByt)
-	if err0 {
-		return nil, nil, nil, true
+	var err0 = true
+	for err0 {
+		// TODO: this "removes" possibility of net failure,
+		// while adding obvious liveness issues.
+		err0 = c.Call(ServerPutRpc, argByt, replyByt)
 	}
 	reply, _, err1 := ServerPutReplyDecode(*replyByt)
 	if err1 {
@@ -96,9 +98,9 @@ func CallServGet(c *advrpc.Client, uid uint64) (*SigDig, []*MembHide, bool, *Mem
 	arg := &ServerGetArg{Uid: uid}
 	argByt := ServerGetArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
-	err0 := c.Call(ServerGetRpc, argByt, replyByt)
-	if err0 {
-		return nil, nil, false, nil, nil, true
+	var err0 = true
+	for err0 {
+		err0 = c.Call(ServerGetRpc, argByt, replyByt)
 	}
 	reply, _, err1 := ServerGetReplyDecode(*replyByt)
 	if err1 {
@@ -111,9 +113,9 @@ func CallServSelfMon(c *advrpc.Client, uid uint64) (*SigDig, *NonMemb, bool) {
 	arg := &ServerSelfMonArg{Uid: uid}
 	argByt := ServerSelfMonArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
-	err0 := c.Call(ServerSelfMonRpc, argByt, replyByt)
-	if err0 {
-		return nil, nil, true
+	var err0 = true
+	for err0 {
+		err0 = c.Call(ServerSelfMonRpc, argByt, replyByt)
 	}
 	reply, _, err1 := ServerSelfMonReplyDecode(*replyByt)
 	if err1 {
@@ -126,16 +128,14 @@ func CallServAudit(c *advrpc.Client, epoch uint64) (*UpdateProof, bool) {
 	arg := &ServerAuditArg{Epoch: epoch}
 	argByt := ServerAuditArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
-	err0 := c.Call(ServerAuditRpc, argByt, replyByt)
-	if err0 {
-		return nil, true
+	var err0 = true
+	for err0 {
+		err0 = c.Call(ServerAuditRpc, argByt, replyByt)
 	}
 	reply, _, err1 := ServerAuditReplyDecode(*replyByt)
 	if err1 {
 		return nil, true
 	}
-	// since our clients don't currently distinguish server vs. net errs,
-	// it seems fine to combine the err spaces.
 	return reply.P, reply.Err
 }
 
@@ -143,9 +143,9 @@ func CallAdtrUpdate(c *advrpc.Client, proof *UpdateProof) bool {
 	arg := &AdtrUpdateArg{P: proof}
 	argByt := AdtrUpdateArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
-	err0 := c.Call(AdtrUpdateRpc, argByt, replyByt)
-	if err0 {
-		return true
+	var err0 = true
+	for err0 {
+		err0 = c.Call(AdtrUpdateRpc, argByt, replyByt)
 	}
 	reply, _, err1 := AdtrUpdateReplyDecode(*replyByt)
 	if err1 {
@@ -158,9 +158,9 @@ func CallAdtrGet(c *advrpc.Client, epoch uint64) (*AdtrEpochInfo, bool) {
 	arg := &AdtrGetArg{Epoch: epoch}
 	argByt := AdtrGetArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
-	err0 := c.Call(AdtrGetRpc, argByt, replyByt)
-	if err0 {
-		return nil, true
+	var err0 = true
+	for err0 {
+		err0 = c.Call(AdtrGetRpc, argByt, replyByt)
 	}
 	reply, _, err1 := AdtrGetReplyDecode(*replyByt)
 	if err1 {
