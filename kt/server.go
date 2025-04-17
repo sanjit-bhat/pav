@@ -189,7 +189,7 @@ func (s *Server) Worker() {
 		}
 		i++
 	}
-	updEpochHist(&s.epochHist, upd, s.keyMap.Digest(), s.sigSk)
+	s.updEpochHist(upd)
 	s.mu.Unlock()
 
 	// map 1.
@@ -267,9 +267,9 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	users := make(map[uint64]*userState)
 	var hist []*servEpochInfo
 	// commit empty tree as init epoch.
-	updEpochHist(&hist, make(map[string][]byte), keys.Digest(), sigSk)
 	wq := NewWorkQ()
 	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, userInfo: users, epochHist: hist, workQ: wq}
+	s.updEpochHist(make(map[string][]byte))
 
 	go func() {
 		for {
@@ -302,8 +302,10 @@ func compCommitOpen(secret, label []byte) []byte {
 }
 
 // updEpochHist does a signed history update with some new entries.
-func updEpochHist(hist *[]*servEpochInfo, upd map[string][]byte, dig []byte, sk *cryptoffi.SigPrivateKey) {
-	epoch := uint64(len(*hist))
+func (s *Server) updEpochHist(upd map[string][]byte) {
+	sk := s.sigSk
+	dig := s.keyMap.Digest()
+	epoch := uint64(len(s.epochHist))
 	preSig := &PreSigDig{Epoch: epoch, Dig: dig}
 	preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
 	sig := sk.Sign(preSigByt)
@@ -311,7 +313,7 @@ func updEpochHist(hist *[]*servEpochInfo, upd map[string][]byte, dig []byte, sk 
 	// _ = sk
 	// var sig []byte
 	newInfo := &servEpochInfo{updates: upd, dig: dig, sig: sig}
-	*hist = append(*hist, newInfo)
+	s.epochHist = append(s.epochHist, newInfo)
 }
 
 func getDig(hist []*servEpochInfo) *SigDig {
