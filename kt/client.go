@@ -149,10 +149,7 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientEr
 // auditEpoch checks a single epoch against an auditor, and evid / error on fail.
 func auditEpoch(seenDig *SigDig, servSigPk []byte, adtrCli *advrpc.Client, adtrPk cryptoffi.SigPublicKey) *ClientErr {
 	stdErr := &ClientErr{Err: true}
-	adtrInfo, err0 := CallAdtrGet(adtrCli, seenDig.Epoch)
-	if err0 {
-		return stdErr
-	}
+	adtrInfo := CallAdtrGet(adtrCli, seenDig.Epoch)
 
 	// check sigs.
 	servDig := &SigDig{Epoch: seenDig.Epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.ServSig}

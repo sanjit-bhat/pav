@@ -83,8 +83,8 @@ func CallServPut(c *advrpc.Client, uid uint64, pk []byte) (*SigDig, *Memb, *NonM
 	replyByt := new([]byte)
 	var err0 = true
 	for err0 {
-		// TODO: this "removes" possibility of net failure,
-		// while adding obvious liveness issues.
+		// this "removes" possibility of net failure.
+		// should prob have some retry backoff mechanism.
 		err0 = c.Call(ServerPutRpc, argByt, replyByt)
 	}
 	reply, _, err1 := ServerPutReplyDecode(*replyByt)
@@ -154,7 +154,24 @@ func CallAdtrUpdate(c *advrpc.Client, proof *UpdateProof) bool {
 	return reply.Err
 }
 
-func CallAdtrGet(c *advrpc.Client, epoch uint64) (*AdtrEpochInfo, bool) {
+func CallAdtrGet(c *advrpc.Client, epoch uint64) *AdtrEpochInfo {
+	var adtrInfo *AdtrEpochInfo
+	var err = true
+	// this "removes" errors from the auditor, which arise from
+	// not yet having seen an epoch.
+	// this allows us to prove that client.Audit never errors
+	// in a correctness setting.
+	// a malicious server could send a very large epoch to the client,
+	// causing it to infinitely loop.
+	for err {
+		adtrInfo0, err0 := callAdtrGetInner(c, epoch)
+		adtrInfo = adtrInfo0
+		err = err0
+	}
+	return adtrInfo
+}
+
+func callAdtrGetInner(c *advrpc.Client, epoch uint64) (*AdtrEpochInfo, bool) {
 	arg := &AdtrGetArg{Epoch: epoch}
 	argByt := AdtrGetArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
