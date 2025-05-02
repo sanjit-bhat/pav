@@ -12,15 +12,35 @@ const (
 	bobUid   uint64 = 1
 )
 
-func testAliceBobAll(servAddr uint64, adtrAddrs []uint64) {
-	testAliceBob(setup(servAddr, adtrAddrs))
+// testSecurity Assume's no errors in client-server calls and
+// has clients contact the auditor.
+func testSecurity(servAddr uint64, adtrAddrs []uint64) {
+	s := setup(servAddr, adtrAddrs)
+	s.servGood = false
+	testAliceBob(s)
+}
+
+// testCorrectness Assert's no errors in client-server calls and
+// does not use auditors.
+func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
+	s := setup(servAddr, adtrAddrs)
+	s.servGood = true
+	testAliceBob(s)
+}
+
+func checkServErr(servGood bool, err bool) {
+	if servGood {
+		primitive.Assert(!err)
+	} else {
+		primitive.Assume(!err)
+	}
 }
 
 func testAliceBob(setup *setupParams) {
 	aliceCli := kt.NewClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	alice := &alice{cli: aliceCli}
+	alice := &alice{servGood: setup.servGood, cli: aliceCli}
 	bobCli := kt.NewClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	bob := &bob{cli: bobCli}
+	bob := &bob{servGood: setup.servGood, cli: bobCli}
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
@@ -39,16 +59,18 @@ func testAliceBob(setup *setupParams) {
 
 	// alice self monitor. in real world, she'll come online at times and do this.
 	selfMonEp, err0 := alice.cli.SelfMon()
-	primitive.Assume(!err0.Err)
+	checkServErr(setup.servGood, err0.Err)
 	// this last self monitor will be our history bound.
 	primitive.Assume(bob.epoch <= selfMonEp)
 
-	// sync auditors. in real world, this'll happen periodically.
-	updAdtrsAll(setup.servAddr, setup.adtrAddrs)
+	if !setup.servGood {
+		// sync auditors. in real world, this'll happen periodically.
+		updAdtrsAll(setup.servAddr, setup.adtrAddrs)
 
-	// alice and bob audit. ordering irrelevant across clients.
-	doAudits(alice.cli, setup.adtrAddrs, setup.adtrPks)
-	doAudits(bob.cli, setup.adtrAddrs, setup.adtrPks)
+		// alice and bob audit. ordering irrelevant across clients.
+		doAudits(alice.cli, setup.adtrAddrs, setup.adtrPks)
+		doAudits(bob.cli, setup.adtrAddrs, setup.adtrPks)
+	}
 
 	// final check. bob got the right key.
 	isReg, alicePk := kt.GetHist(alice.hist, bob.epoch)
@@ -59,8 +81,9 @@ func testAliceBob(setup *setupParams) {
 }
 
 type alice struct {
-	cli  *kt.Client
-	hist []*kt.HistEntry
+	servGood bool
+	cli      *kt.Client
+	hist     []*kt.HistEntry
 }
 
 func (a *alice) run() {
@@ -68,22 +91,23 @@ func (a *alice) run() {
 		primitive.Sleep(5_000_000)
 		pk := []byte{1}
 		epoch, err0 := a.cli.Put(pk)
-		primitive.Assume(!err0.Err)
+		checkServErr(a.servGood, err0.Err)
 		a.hist = append(a.hist, &kt.HistEntry{Epoch: epoch, HistVal: pk})
 	}
 }
 
 type bob struct {
-	cli     *kt.Client
-	epoch   uint64
-	isReg   bool
-	alicePk []byte
+	servGood bool
+	cli      *kt.Client
+	epoch    uint64
+	isReg    bool
+	alicePk  []byte
 }
 
 func (b *bob) run() {
 	primitive.Sleep(120_000_000)
 	isReg, pk, epoch, err0 := b.cli.Get(aliceUid)
-	primitive.Assume(!err0.Err)
+	checkServErr(b.servGood, err0.Err)
 	b.epoch = epoch
 	b.isReg = isReg
 	b.alicePk = pk

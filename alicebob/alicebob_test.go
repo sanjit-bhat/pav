@@ -5,10 +5,16 @@ import (
 	"testing"
 )
 
-func TestAliceBob(t *testing.T) {
+func TestSecurity(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	adtrAddrs := []uint64{makeUniqueAddr(), makeUniqueAddr()}
-	testAliceBobAll(servAddr, adtrAddrs)
+	testSecurity(servAddr, adtrAddrs)
+}
+
+func TestCorrectness(t *testing.T) {
+	servAddr := makeUniqueAddr()
+	adtrAddrs := []uint64{makeUniqueAddr(), makeUniqueAddr()}
+	testCorrectness(servAddr, adtrAddrs)
 }
 
 func getFreePort() (port uint64, err error) {

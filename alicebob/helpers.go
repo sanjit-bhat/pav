@@ -8,6 +8,7 @@ import (
 )
 
 type setupParams struct {
+	servGood  bool
 	servAddr  uint64
 	servSigPk cryptoffi.SigPublicKey
 	servVrfPk []byte
