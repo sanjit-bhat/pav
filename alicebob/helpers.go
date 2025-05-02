@@ -1,4 +1,4 @@
-package kt_test
+package alicebob
 
 import (
 	"github.com/goose-lang/primitive"

@@ -1,4 +1,4 @@
-package kt_test
+package alicebob
 
 import (
 	"github.com/goose-lang/primitive"
@@ -12,11 +12,11 @@ const (
 	bobUid   uint64 = 1
 )
 
-func testAllFull(servAddr uint64, adtrAddrs []uint64) {
-	testAll(setup(servAddr, adtrAddrs))
+func testAliceBobAll(servAddr uint64, adtrAddrs []uint64) {
+	testAliceBob(setup(servAddr, adtrAddrs))
 }
 
-func testAll(setup *setupParams) {
+func testAliceBob(setup *setupParams) {
 	aliceCli := kt.NewClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	alice := &alice{cli: aliceCli}
 	bobCli := kt.NewClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
@@ -37,7 +37,7 @@ func testAll(setup *setupParams) {
 	}()
 	wg.Wait()
 
-	// alice self monitor. in real world, she'll come on-line at times and do this.
+	// alice self monitor. in real world, she'll come online at times and do this.
 	selfMonEp, err0 := alice.cli.SelfMon()
 	primitive.Assume(!err0.Err)
 	// this last self monitor will be our history bound.

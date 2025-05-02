@@ -1,14 +1,14 @@
-package kt_test
+package alicebob
 
 import (
 	"net"
 	"testing"
 )
 
-func TestAll(t *testing.T) {
+func TestAliceBob(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	adtrAddrs := []uint64{makeUniqueAddr(), makeUniqueAddr()}
-	testAllFull(servAddr, adtrAddrs)
+	testAliceBobAll(servAddr, adtrAddrs)
 }
 
 func getFreePort() (port uint64, err error) {
