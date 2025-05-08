@@ -7,9 +7,9 @@ require (
 	github.com/aclements/go-moremath v0.0.0-20241023150245-c8bbc672ef66
 	github.com/elastic/go-sysinfo v1.15.3
 	github.com/goose-lang/primitive v0.1.0
-	github.com/goose-lang/std v0.6.0
+	github.com/goose-lang/std v0.6.1
 	github.com/stretchr/testify v1.10.0
-	github.com/tchajed/marshal v0.6.4
+	github.com/tchajed/marshal v0.6.5
 	golang.org/x/tools v0.33.0
 )
 
