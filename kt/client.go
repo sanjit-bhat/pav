@@ -2,6 +2,7 @@ package kt
 
 import (
 	"github.com/goose-lang/std"
+	"github.com/goose-lang/std/std_core"
 	"github.com/mit-pdos/pav/advrpc"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/merkle"
@@ -60,7 +61,7 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	c.seenDigs[dig.Epoch] = dig
 	c.nextEpoch = dig.Epoch + 1
 	// this client controls nextVer, so no need to check for overflow.
-	c.nextVer = std.SumAssumeNoOverflow(c.nextVer, 1)
+	c.nextVer = std_core.SumAssumeNoOverflow(c.nextVer, 1)
 	return dig.Epoch, &ClientErr{Err: false}
 }
 
@@ -184,7 +185,7 @@ func checkDig(servSigPk []byte, seenDigs map[uint64]*SigDig, dig *SigDig) *Clien
 		return stdErr
 	}
 	// doesn't overflow c.nextEpoch.
-	if !std.SumNoOverflow(dig.Epoch, 1) {
+	if !std_core.SumNoOverflow(dig.Epoch, 1) {
 		return stdErr
 	}
 	// agrees with prior digs.
