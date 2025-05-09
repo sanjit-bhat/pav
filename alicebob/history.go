@@ -1,18 +1,19 @@
 package alicebob
 
+import (
+	"github.com/goose-lang/primitive"
+)
+
 type histEntry struct {
 	isReg bool
 	pk    []byte
 }
 
 // extendHist to length numEpochs.
-// error if numEpochs smaller than length hist.
-func extendHist(hist []*histEntry, numEpochs uint64) (bool, []*histEntry) {
+// numEpochs must not be smaller than length hist.
+func extendHist(hist []*histEntry, numEpochs uint64) []*histEntry {
 	histLen := uint64(len(hist))
-	if numEpochs < histLen {
-		return true, hist
-	}
-
+	primitive.Assert(histLen <= numEpochs)
 	var last *histEntry
 	if histLen == 0 {
 		last = &histEntry{}
@@ -22,9 +23,8 @@ func extendHist(hist []*histEntry, numEpochs uint64) (bool, []*histEntry) {
 
 	var newHist = hist
 	var i = histLen
-	for i < numEpochs {
+	for ; i < numEpochs; i++ {
 		newHist = append(newHist, last)
-		i++
 	}
-	return false, newHist
+	return newHist
 }

@@ -60,9 +60,7 @@ func testAliceBob(setup *setupParams) {
 	// alice self monitor. in real world, she'll come online at times and do this.
 	selfMonEp, err0 := alice.cli.SelfMon()
 	checkServErr(setup.servGood, err0.Err)
-	err1, newHist := extendHist(alice.hist, selfMonEp+1)
-	alice.hist = newHist
-	primitive.Assert(!err1)
+	alice.hist = extendHist(alice.hist, selfMonEp+1)
 
 	if !setup.servGood {
 		// sync auditors. in real world, this'll happen periodically.
@@ -95,9 +93,7 @@ func (a *alice) run() {
 		epoch, err0 := a.cli.Put(pk)
 		checkServErr(a.servGood, err0.Err)
 		// extend to numEpochs-1, leaving space for latest change.
-		err1, newHist := extendHist(a.hist, epoch)
-		a.hist = newHist
-		primitive.Assert(!err1)
+		a.hist = extendHist(a.hist, epoch)
 		a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
 	}
 }
