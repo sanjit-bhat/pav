@@ -60,8 +60,9 @@ func testAliceBob(setup *setupParams) {
 	// alice self monitor. in real world, she'll come online at times and do this.
 	selfMonEp, err0 := alice.cli.SelfMon()
 	checkServErr(setup.servGood, err0.Err)
-	// this last self monitor will be our history bound.
-	primitive.Assume(bob.epoch <= selfMonEp)
+	err1, newHist := extendHist(alice.hist, selfMonEp+1)
+	alice.hist = newHist
+	primitive.Assert(!err1)
 
 	if !setup.servGood {
 		// sync auditors. in real world, this'll happen periodically.
@@ -73,17 +74,18 @@ func testAliceBob(setup *setupParams) {
 	}
 
 	// final check. bob got the right key.
-	isReg, alicePk := kt.GetHist(alice.hist, bob.epoch)
-	std.Assert(isReg == bob.isReg)
-	if isReg {
-		std.Assert(std.BytesEqual(alicePk, bob.alicePk))
+	primitive.Assume(bob.epoch <= selfMonEp)
+	aliceKey := alice.hist[bob.epoch]
+	std.Assert(aliceKey.isReg == bob.isReg)
+	if aliceKey.isReg {
+		std.Assert(std.BytesEqual(aliceKey.pk, bob.alicePk))
 	}
 }
 
 type alice struct {
 	servGood bool
 	cli      *kt.Client
-	hist     []*kt.HistEntry
+	hist     []*histEntry
 }
 
 func (a *alice) run() {
@@ -92,7 +94,11 @@ func (a *alice) run() {
 		pk := []byte{1}
 		epoch, err0 := a.cli.Put(pk)
 		checkServErr(a.servGood, err0.Err)
-		a.hist = append(a.hist, &kt.HistEntry{Epoch: epoch, HistVal: pk})
+		// extend to numEpochs-1, leaving space for latest change.
+		err1, newHist := extendHist(a.hist, epoch)
+		a.hist = newHist
+		primitive.Assert(!err1)
+		a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
 	}
 }
 
