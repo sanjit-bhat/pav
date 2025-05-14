@@ -16,13 +16,6 @@ func mkRpcClients(addrs []uint64) []*advrpc.Client {
 	return c
 }
 
-func updAdtrsOnce(upd *kt.UpdateProof, adtrs []*advrpc.Client) {
-	for _, cli := range adtrs {
-		err := kt.CallAdtrUpdate(cli, upd)
-		primitive.Assume(!err)
-	}
-}
-
 func doAudits(cli *kt.Client, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) {
 	numAdtrs := uint64(len(adtrAddrs))
 	for i := uint64(0); i < numAdtrs; i++ {
@@ -30,6 +23,13 @@ func doAudits(cli *kt.Client, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicK
 		pk := adtrPks[i]
 		err := cli.Audit(addr, pk)
 		primitive.Assume(!err.Err)
+	}
+}
+
+func updAdtrsOnce(upd *kt.UpdateProof, adtrs []*advrpc.Client) {
+	for _, cli := range adtrs {
+		err := kt.CallAdtrUpdate(cli, upd)
+		primitive.Assume(!err)
 	}
 }
 
