@@ -3,6 +3,7 @@ package alicebob
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
+	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/kt"
 	"sync"
 )
@@ -11,6 +12,18 @@ const (
 	aliceUid uint64 = 0
 	bobUid   uint64 = 1
 )
+
+// setupParams describes different security configs with the
+// servGood and adtrGood params.
+type setupParams struct {
+	servGood  bool
+	servAddr  uint64
+	servSigPk cryptoffi.SigPublicKey
+	servVrfPk []byte
+	adtrGood  bool
+	adtrAddrs []uint64
+	adtrPks   []cryptoffi.SigPublicKey
+}
 
 // testSecurity Assume's no errors in client-server calls and
 // has clients contact the auditor.
@@ -115,4 +128,21 @@ func (b *bob) run() {
 	b.epoch = epoch
 	b.isReg = isReg
 	b.alicePk = pk
+}
+
+// setup starts server and auditors.
+func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
+	serv, servSigPk, servVrfPk := kt.NewServer()
+	servVrfPkEnc := cryptoffi.VrfPublicKeyEncode(servVrfPk)
+	servRpc := kt.NewRpcServer(serv)
+	servRpc.Serve(servAddr)
+	var adtrPks []cryptoffi.SigPublicKey
+	for _, adtrAddr := range adtrAddrs {
+		adtr, adtrPk := kt.NewAuditor()
+		adtrRpc := kt.NewRpcAuditor(adtr)
+		adtrRpc.Serve(adtrAddr)
+		adtrPks = append(adtrPks, adtrPk)
+	}
+	primitive.Sleep(1_000_000)
+	return &setupParams{servGood: true, servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPkEnc, adtrGood: true, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
 }

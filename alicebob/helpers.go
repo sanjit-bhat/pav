@@ -7,35 +7,6 @@ import (
 	"github.com/mit-pdos/pav/kt"
 )
 
-type setupParams struct {
-	servGood  bool
-	servAddr  uint64
-	servSigPk cryptoffi.SigPublicKey
-	servVrfPk []byte
-	adtrGood  bool
-	adtrAddrs []uint64
-	adtrPks   []cryptoffi.SigPublicKey
-}
-
-// setup starts server and auditors. it's mainly a logical convenience.
-// it consolidates the external parties, letting us more easily describe
-// different adversary configs.
-func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
-	serv, servSigPk, servVrfPk := kt.NewServer()
-	servVrfPkEnc := cryptoffi.VrfPublicKeyEncode(servVrfPk)
-	servRpc := kt.NewRpcServer(serv)
-	servRpc.Serve(servAddr)
-	var adtrPks []cryptoffi.SigPublicKey
-	for _, adtrAddr := range adtrAddrs {
-		adtr, adtrPk := kt.NewAuditor()
-		adtrRpc := kt.NewRpcAuditor(adtr)
-		adtrRpc.Serve(adtrAddr)
-		adtrPks = append(adtrPks, adtrPk)
-	}
-	primitive.Sleep(1_000_000)
-	return &setupParams{servGood: true, servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPkEnc, adtrGood: true, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
-}
-
 func mkRpcClients(addrs []uint64) []*advrpc.Client {
 	var c []*advrpc.Client
 	for _, addr := range addrs {
