@@ -43,19 +43,23 @@ func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
 	testAliceBob(s)
 }
 
-func checkServErr(servGood bool, err bool) {
+func checkCliErr(servGood bool, servPk cryptoffi.SigPublicKey, err *kt.ClientErr) {
+	if err.Evid != nil {
+		primitive.Assert(!err.Evid.Check(servPk))
+	}
+
 	if servGood {
-		primitive.Assert(!err)
+		primitive.Assert(!err.Err)
 	} else {
-		primitive.Assume(!err)
+		primitive.Assume(!err.Err)
 	}
 }
 
 func testAliceBob(setup *setupParams) {
 	aliceCli := kt.NewClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	alice := &alice{servGood: setup.servGood, cli: aliceCli}
+	alice := &alice{servGood: setup.servGood, servSigPk: setup.servSigPk, cli: aliceCli}
 	bobCli := kt.NewClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
-	bob := &bob{servGood: setup.servGood, cli: bobCli}
+	bob := &bob{servGood: setup.servGood, servSigPk: setup.servSigPk, cli: bobCli}
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
@@ -74,7 +78,7 @@ func testAliceBob(setup *setupParams) {
 
 	// alice self monitor. in real world, she'll come online at times and do this.
 	selfMonEp, err0 := alice.cli.SelfMon()
-	checkServErr(setup.servGood, err0.Err)
+	checkCliErr(setup.servGood, setup.servSigPk, err0)
 	alice.hist = extendHist(alice.hist, selfMonEp+1)
 
 	if setup.adtrGood {
@@ -96,9 +100,10 @@ func testAliceBob(setup *setupParams) {
 }
 
 type alice struct {
-	servGood bool
-	cli      *kt.Client
-	hist     []*histEntry
+	servGood  bool
+	servSigPk cryptoffi.SigPublicKey
+	cli       *kt.Client
+	hist      []*histEntry
 }
 
 func (a *alice) run() {
@@ -106,7 +111,7 @@ func (a *alice) run() {
 		primitive.Sleep(5_000_000)
 		pk := []byte{1}
 		epoch, err0 := a.cli.Put(pk)
-		checkServErr(a.servGood, err0.Err)
+		checkCliErr(a.servGood, a.servSigPk, err0)
 		// extend to numEpochs-1, leaving space for latest change.
 		a.hist = extendHist(a.hist, epoch)
 		a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
@@ -114,17 +119,18 @@ func (a *alice) run() {
 }
 
 type bob struct {
-	servGood bool
-	cli      *kt.Client
-	epoch    uint64
-	isReg    bool
-	alicePk  []byte
+	servGood  bool
+	servSigPk cryptoffi.SigPublicKey
+	cli       *kt.Client
+	epoch     uint64
+	isReg     bool
+	alicePk   []byte
 }
 
 func (b *bob) run() {
 	primitive.Sleep(120_000_000)
 	isReg, pk, epoch, err0 := b.cli.Get(aliceUid)
-	checkServErr(b.servGood, err0.Err)
+	checkCliErr(b.servGood, b.servSigPk, err0)
 	b.epoch = epoch
 	b.isReg = isReg
 	b.alicePk = pk
