@@ -17,6 +17,7 @@ const (
 func testSecurity(servAddr uint64, adtrAddrs []uint64) {
 	s := setup(servAddr, adtrAddrs)
 	s.servGood = false
+	s.adtrGood = true
 	testAliceBob(s)
 }
 
@@ -25,6 +26,7 @@ func testSecurity(servAddr uint64, adtrAddrs []uint64) {
 func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
 	s := setup(servAddr, adtrAddrs)
 	s.servGood = true
+	s.adtrGood = false
 	testAliceBob(s)
 }
 
@@ -62,7 +64,7 @@ func testAliceBob(setup *setupParams) {
 	checkServErr(setup.servGood, err0.Err)
 	alice.hist = extendHist(alice.hist, selfMonEp+1)
 
-	if !setup.servGood {
+	if setup.adtrGood {
 		// sync auditors. in real world, this'll happen periodically.
 		updAdtrsAll(setup.servAddr, setup.adtrAddrs)
 

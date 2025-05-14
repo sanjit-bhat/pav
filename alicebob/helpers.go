@@ -12,6 +12,7 @@ type setupParams struct {
 	servAddr  uint64
 	servSigPk cryptoffi.SigPublicKey
 	servVrfPk []byte
+	adtrGood  bool
 	adtrAddrs []uint64
 	adtrPks   []cryptoffi.SigPublicKey
 }
@@ -32,7 +33,7 @@ func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
 		adtrPks = append(adtrPks, adtrPk)
 	}
 	primitive.Sleep(1_000_000)
-	return &setupParams{servGood: true, servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPkEnc, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
+	return &setupParams{servGood: true, servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPkEnc, adtrGood: true, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
 }
 
 func mkRpcClients(addrs []uint64) []*advrpc.Client {
