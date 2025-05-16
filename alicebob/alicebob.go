@@ -45,11 +45,11 @@ func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
 
 func checkCliErr(servGood bool, servPk cryptoffi.SigPublicKey, err *kt.ClientErr) {
 	if err.Evid != nil {
-		primitive.Assert(!err.Evid.Check(servPk))
+		std.Assert(!err.Evid.Check(servPk))
 	}
 
 	if servGood {
-		primitive.Assert(!err.Err)
+		std.Assert(!err.Err)
 	} else {
 		primitive.Assume(!err.Err)
 	}

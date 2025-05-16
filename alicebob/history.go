@@ -1,7 +1,7 @@
 package alicebob
 
 import (
-	"github.com/goose-lang/primitive"
+	"github.com/goose-lang/std"
 )
 
 type histEntry struct {
@@ -13,7 +13,7 @@ type histEntry struct {
 // numEpochs must not be smaller than length hist.
 func extendHist(hist []*histEntry, numEpochs uint64) []*histEntry {
 	histLen := uint64(len(hist))
-	primitive.Assert(histLen <= numEpochs)
+	std.Assert(histLen <= numEpochs)
 	var last *histEntry
 	if histLen == 0 {
 		last = &histEntry{}
