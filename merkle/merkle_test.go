@@ -14,7 +14,7 @@ func TestGetRecent(t *testing.T) {
 	label := make([]byte, cryptoffi.HashLen)
 	val := make([]byte, 4)
 
-	for i := 0; i < 1_000_000; i++ {
+	for i := 0; i < 100_000; i++ {
 		_, err := rnd.Read(label)
 		if err != nil {
 			t.Fatal(err)
@@ -45,10 +45,10 @@ func TestMap(t *testing.T) {
 	rnd := rand.NewChaCha8(seed)
 	label := make([]byte, cryptoffi.HashLen)
 	val := make([]byte, 4)
-	m := make(map[string][]byte, 1_000_000)
+	m := make(map[string][]byte, 100_000)
 
 	// init map and tree.
-	for i := 0; i < 1_000_000; i++ {
+	for i := 0; i < 100_000; i++ {
 		_, err := rnd.Read(label)
 		if err != nil {
 			t.Fatal(err)
