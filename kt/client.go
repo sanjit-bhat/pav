@@ -47,9 +47,6 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	if checkMemb(c.servVrfPk, c.uid, c.nextVer, dig.Dig, latest) {
 		return 0, stdErr
 	}
-	if dig.Epoch != latest.EpochAdded {
-		return 0, stdErr
-	}
 	if !std.BytesEqual(pk, latest.PkOpen.Val) {
 		return 0, stdErr
 	}
@@ -209,7 +206,7 @@ func checkMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, m
 	if err {
 		return true
 	}
-	mapVal := compMapVal(memb.EpochAdded, memb.PkOpen)
+	mapVal := compMapVal(memb.PkOpen)
 	return merkle.Verify(true, label, mapVal, memb.MerkleProof, dig)
 }
 

@@ -21,14 +21,8 @@ type CommitOpen struct {
 	Rand []byte
 }
 
-type MapValPre struct {
-	Epoch    uint64
-	PkCommit []byte
-}
-
 type Memb struct {
 	LabelProof  []byte
-	EpochAdded  uint64
 	PkOpen      *CommitOpen
 	MerkleProof []byte
 }

@@ -224,10 +224,9 @@ func (s *Server) mapper0(in *WQReq, out *mapper0Out) {
 	latHash, latProof := compMapLabel(in.Uid, numVers, s.vrfSk)
 	boundHash, boundProof := compMapLabel(in.Uid, numVers+1, s.vrfSk)
 
-	nextEpoch := uint64(len(s.epochHist))
 	r := compCommitOpen(s.commitSecret, latHash)
 	open := &CommitOpen{Val: in.Pk, Rand: r}
-	mapVal := compMapVal(nextEpoch, open)
+	mapVal := compMapVal(open)
 
 	out.latestVrfHash = latHash
 	out.latestVrfProof = latProof
@@ -248,7 +247,6 @@ func (s *Server) mapper1(in *mapper0Out, out *WQResp) {
 	out.Dig = getDig(s.epochHist)
 	out.Lat = &Memb{
 		LabelProof:  in.latestVrfProof,
-		EpochAdded:  uint64(len(s.epochHist)) - 1,
 		PkOpen:      in.pkOpen,
 		MerkleProof: latMerk,
 	}
@@ -286,12 +284,10 @@ func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, 
 	return sk.Prove(lByt)
 }
 
-// compMapVal rets mapVal (epoch || Hash(pk || rand)).
-func compMapVal(epoch uint64, pkOpen *CommitOpen) []byte {
+// compMapVal rets mapVal (Hash(pk || rand)).
+func compMapVal(pkOpen *CommitOpen) []byte {
 	openByt := CommitOpenEncode(make([]byte, 0, 8+uint64(len(pkOpen.Val))+8+cryptoffi.HashLen), pkOpen)
-	commit := cryptoutil.Hash(openByt)
-	v := &MapValPre{Epoch: epoch, PkCommit: commit}
-	return MapValPreEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), v)
+	return cryptoutil.Hash(openByt)
 }
 
 func compCommitOpen(secret, label []byte) []byte {
@@ -348,13 +344,11 @@ func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPri
 		return false, &Memb{PkOpen: &CommitOpen{}}
 	}
 	label, labelProof := compMapLabel(uid, numVers-1, vrfSk)
-	inMap, mapVal, mapProof := keyMap.Prove(label)
+	inMap, _, mapProof := keyMap.Prove(label)
 	std.Assert(inMap)
-	valPre, _, err1 := MapValPreDecode(mapVal)
-	std.Assert(!err1)
 	r := compCommitOpen(commitSecret, label)
 	open := &CommitOpen{Val: pk, Rand: r}
-	return true, &Memb{LabelProof: labelProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: mapProof}
+	return true, &Memb{LabelProof: labelProof, PkOpen: open, MerkleProof: mapProof}
 }
 
 // getBound returns a non-membership proof for the boundary version.
