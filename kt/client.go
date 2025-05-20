@@ -28,7 +28,8 @@ type ClientErr struct {
 	Err  bool
 }
 
-// Put rets the epoch at which the key was put, and evid / error on fail.
+// Put rets an upper bound key insertion epoch, and evid / error on fail.
+// a lower bound from before the insertion comes from the previous SelfMon.
 func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	stdErr := &ClientErr{Err: true}
 	dig, latest, bound, err0 := CallServPut(c.servCli, c.uid, pk)
