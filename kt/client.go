@@ -28,8 +28,7 @@ type ClientErr struct {
 	Err  bool
 }
 
-// Put rets an upper bound key insertion epoch, and evid / error on fail.
-// a lower bound from before the insertion comes from the previous SelfMon.
+// Put rets the epoch at which the key was put, and evid / error on fail.
 func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	stdErr := &ClientErr{Err: true}
 	dig, latest, bound, err0 := CallServPut(c.servCli, c.uid, pk)
@@ -46,6 +45,9 @@ func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
 	}
 	// latest.
 	if checkMemb(c.servVrfPk, c.uid, c.nextVer, dig.Dig, latest) {
+		return 0, stdErr
+	}
+	if dig.Epoch != latest.EpochAdded {
 		return 0, stdErr
 	}
 	if !std.BytesEqual(pk, latest.PkOpen.Val) {
@@ -207,7 +209,7 @@ func checkMemb(servVrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, m
 	if err {
 		return true
 	}
-	mapVal := compMapVal(memb.PkOpen)
+	mapVal := compMapVal(memb.EpochAdded, memb.PkOpen)
 	return merkle.Verify(true, label, mapVal, memb.MerkleProof, dig)
 }
 

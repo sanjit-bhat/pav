@@ -18,7 +18,7 @@ type Auditor struct {
 func (a *Auditor) Update(proof *UpdateProof) bool {
 	a.mu.Lock()
 	nextEp := uint64(len(a.histInfo))
-	if checkUpd(a.keyMap, proof.Updates) {
+	if checkUpd(a.keyMap, nextEp, proof.Updates) {
 		a.mu.Unlock()
 		return true
 	}
@@ -59,10 +59,10 @@ func NewAuditor() (*Auditor, cryptoffi.SigPublicKey) {
 	return &Auditor{mu: mu, sk: sk, keyMap: m}, pk
 }
 
-func checkUpd(keys *merkle.Tree, upd map[string][]byte) bool {
+func checkUpd(keys *merkle.Tree, nextEp uint64, upd map[string][]byte) bool {
 	var loopErr bool
-	for mapLabel := range upd {
-		if checkOneUpd(keys, []byte(mapLabel)) {
+	for mapLabel, mapVal := range upd {
+		if checkOneUpd(keys, nextEp, []byte(mapLabel), mapVal) {
 			loopErr = true
 		}
 	}
@@ -70,7 +70,7 @@ func checkUpd(keys *merkle.Tree, upd map[string][]byte) bool {
 }
 
 // checkOneUpd checks that an update is safe to apply, and errs on fail.
-func checkOneUpd(keys *merkle.Tree, mapLabel []byte) bool {
+func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool {
 	// used in applyUpd.
 	if uint64(len(mapLabel)) != cryptoffi.HashLen {
 		return true
@@ -78,6 +78,21 @@ func checkOneUpd(keys *merkle.Tree, mapLabel []byte) bool {
 	inTree, _ := keys.Get(mapLabel)
 	// label not already in keyMap. map monotonicity.
 	if inTree {
+		return true
+	}
+
+	valPre, rem, err1 := MapValPreDecode(mapVal)
+	// val bytes exactly encode MapVal.
+	// could relax to at least encode epoch, but this is logically
+	// more straightforward to deal with.
+	if err1 {
+		return true
+	}
+	if len(rem) != 0 {
+		return true
+	}
+	// epoch ok.
+	if valPre.Epoch != nextEp {
 		return true
 	}
 	return false

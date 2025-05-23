@@ -76,6 +76,11 @@ func testAliceBob(setup *setupParams) {
 	}()
 	wg.Wait()
 
+	// alice self monitor. in real world, she'll come online at times and do this.
+	selfMonEp, err0 := alice.cli.SelfMon()
+	checkCliErr(setup.servGood, setup.servSigPk, err0)
+	alice.hist = extendHist(alice.hist, selfMonEp+1)
+
 	if setup.adtrGood {
 		// sync auditors. in real world, this'll happen periodically.
 		updAdtrsAll(setup.servAddr, setup.adtrAddrs)
@@ -86,7 +91,7 @@ func testAliceBob(setup *setupParams) {
 	}
 
 	// final check. bob got the right key.
-	primitive.Assume(bob.epoch < uint64(len(alice.hist)))
+	primitive.Assume(bob.epoch <= selfMonEp)
 	aliceKey := alice.hist[bob.epoch]
 	std.Assert(aliceKey.isReg == bob.isReg)
 	if aliceKey.isReg {
@@ -101,28 +106,14 @@ type alice struct {
 	hist      []*histEntry
 }
 
-type histEntry struct {
-	isReg bool
-	pk    []byte
-}
-
 func (a *alice) run() {
-	startEp, err0 := a.cli.SelfMon()
-	checkCliErr(a.servGood, a.servSigPk, err0)
-	// in this simple example, Alice is the only putter,
-	// so these Assume's will work.
-	// a more complex example would have multiple clients and a physical
-	// history structure that tracks upper bounds appropriately.
-	primitive.Assume(startEp == 0)
-	a.hist = append(a.hist, &histEntry{isReg: false})
-	primitive.Sleep(5_000_000)
-
 	for i := uint64(0); i < uint64(20); i++ {
 		primitive.Sleep(5_000_000)
 		pk := []byte{1}
-		putEpoch, err1 := a.cli.Put(pk)
-		checkCliErr(a.servGood, a.servSigPk, err1)
-		primitive.Assume(putEpoch == uint64(len(a.hist)))
+		epoch, err0 := a.cli.Put(pk)
+		checkCliErr(a.servGood, a.servSigPk, err0)
+		// extend to numEpochs-1, leaving space for latest change.
+		a.hist = extendHist(a.hist, epoch)
 		a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
 	}
 }

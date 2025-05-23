@@ -80,9 +80,27 @@ func CommitOpenDecode(b0 []byte) (*CommitOpen, []byte, bool) {
 	}
 	return &CommitOpen{Val: a1, Rand: a2}, b2, false
 }
+func MapValPreEncode(b0 []byte, o *MapValPre) []byte {
+	var b = b0
+	b = marshal.WriteInt(b, o.Epoch)
+	b = marshalutil.WriteSlice1D(b, o.PkCommit)
+	return b
+}
+func MapValPreDecode(b0 []byte) (*MapValPre, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadInt(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	return &MapValPre{Epoch: a1, PkCommit: a2}, b2, false
+}
 func MembEncode(b0 []byte, o *Memb) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
+	b = marshal.WriteInt(b, o.EpochAdded)
 	b = CommitOpenEncode(b, o.PkOpen)
 	b = marshalutil.WriteSlice1D(b, o.MerkleProof)
 	return b
@@ -92,15 +110,19 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := CommitOpenDecode(b1)
+	a2, b2, err2 := marshalutil.ReadInt(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	a3, b3, err3 := CommitOpenDecode(b2)
 	if err3 {
 		return nil, nil, true
 	}
-	return &Memb{LabelProof: a1, PkOpen: a2, MerkleProof: a3}, b3, false
+	a4, b4, err4 := marshalutil.ReadSlice1D(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	return &Memb{LabelProof: a1, EpochAdded: a2, PkOpen: a3, MerkleProof: a4}, b4, false
 }
 func MembHideEncode(b0 []byte, o *MembHide) []byte {
 	var b = b0
