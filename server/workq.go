@@ -1,4 +1,4 @@
-package kt
+package server
 
 import (
 	"sync"

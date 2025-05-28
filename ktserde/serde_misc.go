@@ -1,4 +1,4 @@
-package kt
+package ktserde
 
 import (
 	"github.com/mit-pdos/pav/marshalutil"

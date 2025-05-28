@@ -1,21 +1,22 @@
-package kt
+package client
 
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/ktserde"
 )
 
 // Check rets err if signed dig does not validate.
-func CheckSigDig(o *SigDig, pk cryptoffi.SigPublicKey) bool {
-	pre := &PreSigDig{Epoch: o.Epoch, Dig: o.Dig}
-	preByt := PreSigDigEncode(make([]byte, 0), pre)
+func CheckSigDig(o *ktserde.SigDig, pk cryptoffi.SigPublicKey) bool {
+	pre := &ktserde.PreSigDig{Epoch: o.Epoch, Dig: o.Dig}
+	preByt := ktserde.PreSigDigEncode(make([]byte, 0), pre)
 	return pk.Verify(preByt, o.Sig)
 }
 
 // Evid is evidence that the server signed two conflicting digs.
 type Evid struct {
-	sigDig0 *SigDig
-	sigDig1 *SigDig
+	sigDig0 *ktserde.SigDig
+	sigDig1 *ktserde.SigDig
 }
 
 // Check returns an error if the evidence does not check out.

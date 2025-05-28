@@ -1,8 +1,9 @@
-package kt
+package auditor
 
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/merkle"
 	"sync"
 )
@@ -15,7 +16,7 @@ type Auditor struct {
 }
 
 // Update checks new epoch updates, applies them, and errors on fail.
-func (a *Auditor) Update(proof *UpdateProof) bool {
+func (a *Auditor) Update(proof *ktserde.UpdateProof) bool {
 	a.mu.Lock()
 	nextEp := uint64(len(a.histInfo))
 	if checkUpd(a.keyMap, nextEp, proof.Updates) {
@@ -26,8 +27,8 @@ func (a *Auditor) Update(proof *UpdateProof) bool {
 
 	dig := a.keyMap.Digest()
 	// sign dig.
-	preSig := &PreSigDig{Epoch: nextEp, Dig: dig}
-	preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
+	preSig := &ktserde.PreSigDig{Epoch: nextEp, Dig: dig}
+	preSigByt := ktserde.PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
 	sig := a.sk.Sign(preSigByt)
 	// benchmark: turn off sigs for akd compat.
 	// var sig []byte
@@ -81,7 +82,7 @@ func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool
 		return true
 	}
 
-	valPre, rem, err1 := MapValPreDecode(mapVal)
+	valPre, rem, err1 := ktserde.MapValPreDecode(mapVal)
 	// val bytes exactly encode MapVal.
 	// could relax to at least encode epoch, but this is logically
 	// more straightforward to deal with.

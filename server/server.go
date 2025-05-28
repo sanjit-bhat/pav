@@ -1,4 +1,4 @@
-package kt
+package server
 
 import (
 	"sync"
@@ -6,6 +6,7 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
+	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/merkle"
 )
 
@@ -21,8 +22,8 @@ type Server struct {
 	userInfo map[uint64]*userState
 	// epochHist stores info about prior epochs, for auditing.
 	epochHist []*servEpochInfo
-	// workQ batch processes Put requests.
-	workQ *WorkQ
+	// WorkQ batch processes Put requests.
+	WorkQ *WorkQ
 }
 
 type userState struct {
@@ -41,15 +42,15 @@ type servEpochInfo struct {
 }
 
 // Put errors iff there's a put of the same uid at the same time.
-func (s *Server) Put(uid uint64, pk []byte) (*SigDig, *Memb, *NonMemb, bool) {
-	resp := s.workQ.Do(&WQReq{Uid: uid, Pk: pk})
+func (s *Server) Put(uid uint64, pk []byte) (*ktserde.SigDig, *ktserde.Memb, *ktserde.NonMemb, bool) {
+	resp := s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk})
 	return resp.Dig, resp.Lat, resp.Bound, resp.Err
 }
 
 // Get returns a complete history proof for uid.
 // if uid is not yet registered, it returns an empty memb proof for
 // for the latest version.
-func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
+func (s *Server) Get(uid uint64) (*ktserde.SigDig, []*ktserde.MembHide, bool, *ktserde.Memb, *ktserde.NonMemb) {
 	s.mu.RLock()
 	user := s.userInfo[uid]
 	var numVers uint64
@@ -67,7 +68,7 @@ func (s *Server) Get(uid uint64) (*SigDig, []*MembHide, bool, *Memb, *NonMemb) {
 	return dig, hist, isReg, latest, bound
 }
 
-func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
+func (s *Server) SelfMon(uid uint64) (*ktserde.SigDig, *ktserde.NonMemb) {
 	s.mu.RLock()
 	user := s.userInfo[uid]
 	var numVers uint64
@@ -82,15 +83,15 @@ func (s *Server) SelfMon(uid uint64) (*SigDig, *NonMemb) {
 }
 
 // Audit returns an err on fail.
-func (s *Server) Audit(epoch uint64) (*UpdateProof, bool) {
+func (s *Server) Audit(epoch uint64) (*ktserde.UpdateProof, bool) {
 	s.mu.RLock()
 	if epoch >= uint64(len(s.epochHist)) {
 		s.mu.RUnlock()
-		return &UpdateProof{Updates: make(map[string][]byte)}, true
+		return &ktserde.UpdateProof{Updates: make(map[string][]byte)}, true
 	}
 	info := s.epochHist[epoch]
 	s.mu.RUnlock()
-	return &UpdateProof{Updates: info.updates, Sig: info.sig}, false
+	return &ktserde.UpdateProof{Updates: info.updates, Sig: info.sig}, false
 }
 
 type WQReq struct {
@@ -99,9 +100,9 @@ type WQReq struct {
 }
 
 type WQResp struct {
-	Dig   *SigDig
-	Lat   *Memb
-	Bound *NonMemb
+	Dig   *ktserde.SigDig
+	Lat   *ktserde.Memb
+	Bound *ktserde.NonMemb
 	Err   bool
 }
 
@@ -111,11 +112,11 @@ type mapper0Out struct {
 	boundVrfHash   []byte
 	boundVrfProof  []byte
 	mapVal         []byte
-	pkOpen         *CommitOpen
+	pkOpen         *ktserde.CommitOpen
 }
 
 func (s *Server) Worker() {
-	work := s.workQ.Get()
+	work := s.WorkQ.Get()
 
 	// error out duplicates.
 	uidSet := make(map[uint64]bool, len(work))
@@ -125,8 +126,8 @@ func (s *Server) Worker() {
 		_, ok := uidSet[uid]
 		if ok {
 			w.Resp.Err = true
-			w.Resp.Lat = &Memb{PkOpen: &CommitOpen{}}
-			w.Resp.Bound = &NonMemb{}
+			w.Resp.Lat = &ktserde.Memb{PkOpen: &ktserde.CommitOpen{}}
+			w.Resp.Bound = &ktserde.NonMemb{}
 		} else {
 			uidSet[uid] = false
 		}
@@ -221,13 +222,13 @@ func (s *Server) mapper0(in *WQReq, out *mapper0Out) {
 	if user != nil {
 		numVers = user.numVers
 	}
-	latHash, latProof := compMapLabel(in.Uid, numVers, s.vrfSk)
-	boundHash, boundProof := compMapLabel(in.Uid, numVers+1, s.vrfSk)
+	latHash, latProof := CompMapLabel(in.Uid, numVers, s.vrfSk)
+	boundHash, boundProof := CompMapLabel(in.Uid, numVers+1, s.vrfSk)
 
 	nextEpoch := uint64(len(s.epochHist))
 	r := compCommitOpen(s.commitSecret, latHash)
-	open := &CommitOpen{Val: in.Pk, Rand: r}
-	mapVal := compMapVal(nextEpoch, open)
+	open := &ktserde.CommitOpen{Val: in.Pk, Rand: r}
+	mapVal := CompMapVal(nextEpoch, open)
 
 	out.latestVrfHash = latHash
 	out.latestVrfProof = latProof
@@ -246,13 +247,13 @@ func (s *Server) mapper1(in *mapper0Out, out *WQResp) {
 	std.Assert(!boundIn)
 
 	out.Dig = getDig(s.epochHist)
-	out.Lat = &Memb{
+	out.Lat = &ktserde.Memb{
 		LabelProof:  in.latestVrfProof,
 		EpochAdded:  uint64(len(s.epochHist)) - 1,
 		PkOpen:      in.pkOpen,
 		MerkleProof: latMerk,
 	}
-	out.Bound = &NonMemb{
+	out.Bound = &ktserde.NonMemb{
 		LabelProof:  in.boundVrfProof,
 		MerkleProof: boundMerk,
 	}
@@ -268,7 +269,7 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	var hist []*servEpochInfo
 	// commit empty tree as init epoch.
 	wq := NewWorkQ()
-	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, userInfo: users, epochHist: hist, workQ: wq}
+	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, userInfo: users, epochHist: hist, WorkQ: wq}
 	s.updEpochHist(make(map[string][]byte))
 
 	go func() {
@@ -279,19 +280,19 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	return s, sigPk, vrfPk
 }
 
-// compMapLabel rets the vrf output and proof for mapLabel (VRF(uid || ver)).
-func compMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
-	l := &MapLabelPre{Uid: uid, Ver: ver}
-	lByt := MapLabelPreEncode(make([]byte, 0, 16), l)
+// CompMapLabel rets the vrf output and proof for mapLabel (VRF(uid || ver)).
+func CompMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
+	l := &ktserde.MapLabelPre{Uid: uid, Ver: ver}
+	lByt := ktserde.MapLabelPreEncode(make([]byte, 0, 16), l)
 	return sk.Prove(lByt)
 }
 
-// compMapVal rets mapVal (epoch || Hash(pk || rand)).
-func compMapVal(epoch uint64, pkOpen *CommitOpen) []byte {
-	openByt := CommitOpenEncode(make([]byte, 0, 8+uint64(len(pkOpen.Val))+8+cryptoffi.HashLen), pkOpen)
+// CompMapVal rets mapVal (epoch || Hash(pk || rand)).
+func CompMapVal(epoch uint64, pkOpen *ktserde.CommitOpen) []byte {
+	openByt := ktserde.CommitOpenEncode(make([]byte, 0, 8+uint64(len(pkOpen.Val))+8+cryptoffi.HashLen), pkOpen)
 	commit := cryptoutil.Hash(openByt)
-	v := &MapValPre{Epoch: epoch, PkCommit: commit}
-	return MapValPreEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), v)
+	v := &ktserde.MapValPre{Epoch: epoch, PkCommit: commit}
+	return ktserde.MapValPreEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), v)
 }
 
 func compCommitOpen(secret, label []byte) []byte {
@@ -306,8 +307,8 @@ func (s *Server) updEpochHist(upd map[string][]byte) {
 	sk := s.sigSk
 	dig := s.keyMap.Digest()
 	epoch := uint64(len(s.epochHist))
-	preSig := &PreSigDig{Epoch: epoch, Dig: dig}
-	preSigByt := PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
+	preSig := &ktserde.PreSigDig{Epoch: epoch, Dig: dig}
+	preSigByt := ktserde.PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
 	sig := sk.Sign(preSigByt)
 	// benchmark: turn off sigs for akd compat.
 	// _ = sk
@@ -316,26 +317,26 @@ func (s *Server) updEpochHist(upd map[string][]byte) {
 	s.epochHist = append(s.epochHist, newInfo)
 }
 
-func getDig(hist []*servEpochInfo) *SigDig {
+func getDig(hist []*servEpochInfo) *ktserde.SigDig {
 	numEpochs := uint64(len(hist))
 	lastInfo := hist[numEpochs-1]
-	return &SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
+	return &ktserde.SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
 }
 
 // getHist returns membership proofs for the history of versions
 // up until the latest.
-func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) []*MembHide {
+func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) []*ktserde.MembHide {
 	if numVers == 0 {
 		return nil
 	}
 	// latest registered ver not included in hist.
-	var hist = make([]*MembHide, 0, numVers-1)
+	var hist = make([]*ktserde.MembHide, 0, numVers-1)
 	var ver = uint64(0)
 	for ver < numVers-1 {
-		label, labelProof := compMapLabel(uid, ver, vrfSk)
+		label, labelProof := CompMapLabel(uid, ver, vrfSk)
 		inMap, mapVal, mapProof := keyMap.Prove(label)
 		std.Assert(inMap)
-		hist = append(hist, &MembHide{LabelProof: labelProof, MapVal: mapVal, MerkleProof: mapProof})
+		hist = append(hist, &ktserde.MembHide{LabelProof: labelProof, MapVal: mapVal, MerkleProof: mapProof})
 		ver++
 	}
 	return hist
@@ -343,24 +344,24 @@ func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPriva
 
 // getLatest returns whether a version is registered, and if so,
 // a membership proof for the latest version.
-func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey, commitSecret, pk []byte) (bool, *Memb) {
+func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey, commitSecret, pk []byte) (bool, *ktserde.Memb) {
 	if numVers == 0 {
-		return false, &Memb{PkOpen: &CommitOpen{}}
+		return false, &ktserde.Memb{PkOpen: &ktserde.CommitOpen{}}
 	}
-	label, labelProof := compMapLabel(uid, numVers-1, vrfSk)
+	label, labelProof := CompMapLabel(uid, numVers-1, vrfSk)
 	inMap, mapVal, mapProof := keyMap.Prove(label)
 	std.Assert(inMap)
-	valPre, _, err1 := MapValPreDecode(mapVal)
+	valPre, _, err1 := ktserde.MapValPreDecode(mapVal)
 	std.Assert(!err1)
 	r := compCommitOpen(commitSecret, label)
-	open := &CommitOpen{Val: pk, Rand: r}
-	return true, &Memb{LabelProof: labelProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: mapProof}
+	open := &ktserde.CommitOpen{Val: pk, Rand: r}
+	return true, &ktserde.Memb{LabelProof: labelProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: mapProof}
 }
 
 // getBound returns a non-membership proof for the boundary version.
-func getBound(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) *NonMemb {
-	label, labelProof := compMapLabel(uid, numVers, vrfSk)
+func getBound(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) *ktserde.NonMemb {
+	label, labelProof := CompMapLabel(uid, numVers, vrfSk)
 	inMap, _, mapProof := keyMap.Prove(label)
 	std.Assert(!inMap)
-	return &NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
+	return &ktserde.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
 }

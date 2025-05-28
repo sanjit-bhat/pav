@@ -3,8 +3,10 @@ package alicebob
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
+	"github.com/mit-pdos/pav/auditor"
+	"github.com/mit-pdos/pav/client"
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/kt"
+	"github.com/mit-pdos/pav/server"
 	"sync"
 )
 
@@ -43,7 +45,7 @@ func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
 	testAliceBob(s)
 }
 
-func checkCliErr(servGood bool, servPk cryptoffi.SigPublicKey, err *kt.ClientErr) {
+func checkCliErr(servGood bool, servPk cryptoffi.SigPublicKey, err *client.ClientErr) {
 	if err.Evid != nil {
 		std.Assert(!err.Evid.Check(servPk))
 	}
@@ -56,9 +58,9 @@ func checkCliErr(servGood bool, servPk cryptoffi.SigPublicKey, err *kt.ClientErr
 }
 
 func testAliceBob(setup *setupParams) {
-	aliceCli := kt.NewClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	aliceCli := client.NewClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	alice := &alice{servGood: setup.servGood, servSigPk: setup.servSigPk, cli: aliceCli}
-	bobCli := kt.NewClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	bobCli := client.NewClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
 	bob := &bob{servGood: setup.servGood, servSigPk: setup.servSigPk, cli: bobCli}
 
 	wg := new(sync.WaitGroup)
@@ -102,7 +104,7 @@ func testAliceBob(setup *setupParams) {
 type alice struct {
 	servGood  bool
 	servSigPk cryptoffi.SigPublicKey
-	cli       *kt.Client
+	cli       *client.Client
 	hist      []*histEntry
 }
 
@@ -121,7 +123,7 @@ func (a *alice) run() {
 type bob struct {
 	servGood  bool
 	servSigPk cryptoffi.SigPublicKey
-	cli       *kt.Client
+	cli       *client.Client
 	epoch     uint64
 	isReg     bool
 	alicePk   []byte
@@ -138,14 +140,14 @@ func (b *bob) run() {
 
 // setup starts server and auditors.
 func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
-	serv, servSigPk, servVrfPk := kt.NewServer()
+	serv, servSigPk, servVrfPk := server.NewServer()
 	servVrfPkEnc := cryptoffi.VrfPublicKeyEncode(servVrfPk)
-	servRpc := kt.NewRpcServer(serv)
+	servRpc := server.NewRpcServer(serv)
 	servRpc.Serve(servAddr)
 	var adtrPks []cryptoffi.SigPublicKey
 	for _, adtrAddr := range adtrAddrs {
-		adtr, adtrPk := kt.NewAuditor()
-		adtrRpc := kt.NewRpcAuditor(adtr)
+		adtr, adtrPk := auditor.NewAuditor()
+		adtrRpc := auditor.NewRpcAuditor(adtr)
 		adtrRpc.Serve(adtrAddr)
 		adtrPks = append(adtrPks, adtrPk)
 	}
