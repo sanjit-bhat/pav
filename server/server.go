@@ -42,9 +42,9 @@ type servEpochInfo struct {
 }
 
 // Put errors iff there's a put of the same uid at the same time.
-func (s *Server) Put(uid uint64, pk []byte) (*ktserde.SigDig, *ktserde.Memb, *ktserde.NonMemb, bool) {
-	resp := s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk})
-	return resp.Dig, resp.Lat, resp.Bound, resp.Err
+func (s *Server) Put(uid uint64, pk []byte, ver uint64) bool {
+	resp := s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
+	return resp.Err
 }
 
 // Get returns a complete history proof for uid.
@@ -97,56 +97,52 @@ func (s *Server) Audit(epoch uint64) (*ktserde.UpdateProof, bool) {
 type WQReq struct {
 	Uid uint64
 	Pk  []byte
+	Ver uint64
 }
 
 type WQResp struct {
-	Dig   *ktserde.SigDig
-	Lat   *ktserde.Memb
-	Bound *ktserde.NonMemb
-	Err   bool
+	Err bool
 }
 
-type mapper0Out struct {
-	latestVrfHash  []byte
-	latestVrfProof []byte
-	boundVrfHash   []byte
-	boundVrfProof  []byte
-	mapVal         []byte
-	pkOpen         *ktserde.CommitOpen
+type mapperOut struct {
+	mapLabel []byte
+	mapVal   []byte
 }
 
 func (s *Server) Worker() {
 	work := s.WorkQ.Get()
 
-	// error out duplicates.
 	uidSet := make(map[uint64]bool, len(work))
 	for _, w := range work {
 		w.Resp = &WQResp{}
 		uid := w.Req.Uid
-		_, ok := uidSet[uid]
-		if ok {
+		ver := w.Req.Ver
+
+		// error out wrong versions.
+		user, ok0 := s.userInfo[uid]
+		if ok0 && ver != user.numVers {
 			w.Resp.Err = true
-			w.Resp.Lat = &ktserde.Memb{PkOpen: &ktserde.CommitOpen{}}
-			w.Resp.Bound = &ktserde.NonMemb{}
+			continue
+		}
+
+		// error out duplicate uid's. arbitrarily picks one to succeed.
+		_, ok1 := uidSet[uid]
+		if ok1 {
+			w.Resp.Err = true
 		} else {
 			uidSet[uid] = false
 		}
 	}
 
-	// NOTE: there are no other write lockers outside this fn.
-	// as a result, in this fn, the 3 critical sections view:
-	//
-	//  1. current server.
-	//  2. current server to new server.
-	//  3. new server.
-	//
-	// this is essential to make proper proofs and maintain the server invariant.
+	// NOTE: it's important that there are no write lockers outside this fn.
+	// this allows critical section #2 (write) to start with the
+	// same state as critical section #1 (read).
 
-	// map 0.
-	outs0 := make([]*mapper0Out, len(work))
+	// in parallel, map requests to keyMap updates.
+	outs := make([]*mapperOut, len(work))
 	var i uint64
 	for i < uint64(len(work)) {
-		outs0[i] = &mapper0Out{}
+		outs[i] = &mapperOut{}
 		i++
 	}
 	wg := new(sync.WaitGroup)
@@ -155,10 +151,10 @@ func (s *Server) Worker() {
 		resp := work[i].Resp
 		if !resp.Err {
 			req := work[i].Req
-			out0 := outs0[i]
+			out := outs[i]
 			wg.Add(1)
 			go func() {
-				s.mapper0(req, out0)
+				s.mapper(req, out)
 				wg.Done()
 			}()
 		}
@@ -166,7 +162,7 @@ func (s *Server) Worker() {
 	}
 	wg.Wait()
 
-	// update server with new entries.
+	// apply updates to server.
 	s.mu.Lock()
 	upd := make(map[string][]byte, len(work))
 	i = 0
@@ -174,8 +170,8 @@ func (s *Server) Worker() {
 		resp := work[i].Resp
 		if !resp.Err {
 			req := work[i].Req
-			out0 := outs0[i]
-			label := out0.latestVrfHash
+			out0 := outs[i]
+			label := out0.mapLabel
 
 			err0 := s.keyMap.Put(label, out0.mapVal)
 			std.Assert(!err0)
@@ -193,70 +189,28 @@ func (s *Server) Worker() {
 	s.updEpochHist(upd)
 	s.mu.Unlock()
 
-	// map 1.
-	wg1 := new(sync.WaitGroup)
-	i = 0
-	for i < uint64(len(work)) {
-		resp := work[i].Resp
-		if !resp.Err {
-			out0 := outs0[i]
-			wg1.Add(1)
-			go func() {
-				s.mapper1(out0, resp)
-				wg1.Done()
-			}()
-		}
-		i++
-	}
-	wg1.Wait()
-
+	// signal that we finished work.
 	for _, w := range work {
 		w.Finish()
 	}
 }
 
-// mapper0 makes mapLabels and mapVals.
-func (s *Server) mapper0(in *WQReq, out *mapper0Out) {
+// mapper makes mapLabels and mapVals.
+func (s *Server) mapper(in *WQReq, out *mapperOut) {
 	user := s.userInfo[in.Uid]
 	var numVers uint64
 	if user != nil {
 		numVers = user.numVers
 	}
-	latHash, latProof := CompMapLabel(in.Uid, numVers, s.vrfSk)
-	boundHash, boundProof := CompMapLabel(in.Uid, numVers+1, s.vrfSk)
+	mapLabel, _ := CompMapLabel(in.Uid, numVers, s.vrfSk)
 
 	nextEpoch := uint64(len(s.epochHist))
-	r := compCommitOpen(s.commitSecret, latHash)
+	r := compCommitOpen(s.commitSecret, mapLabel)
 	open := &ktserde.CommitOpen{Val: in.Pk, Rand: r}
 	mapVal := CompMapVal(nextEpoch, open)
 
-	out.latestVrfHash = latHash
-	out.latestVrfProof = latProof
-	out.boundVrfHash = boundHash
-	out.boundVrfProof = boundProof
+	out.mapLabel = mapLabel
 	out.mapVal = mapVal
-	out.pkOpen = open
-}
-
-// mapper1 computes merkle proofs and assembles full response.
-func (s *Server) mapper1(in *mapper0Out, out *WQResp) {
-	latIn, _, latMerk := s.keyMap.Prove(in.latestVrfHash)
-	std.Assert(latIn)
-
-	boundIn, _, boundMerk := s.keyMap.Prove(in.boundVrfHash)
-	std.Assert(!boundIn)
-
-	out.Dig = getDig(s.epochHist)
-	out.Lat = &ktserde.Memb{
-		LabelProof:  in.latestVrfProof,
-		EpochAdded:  uint64(len(s.epochHist)) - 1,
-		PkOpen:      in.pkOpen,
-		MerkleProof: latMerk,
-	}
-	out.Bound = &ktserde.NonMemb{
-		LabelProof:  in.boundVrfProof,
-		MerkleProof: boundMerk,
-	}
 }
 
 func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {

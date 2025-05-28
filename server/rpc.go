@@ -19,8 +19,8 @@ func NewRpcServer(s *Server) *advrpc.Server {
 		if err0 {
 			return
 		}
-		ret0, ret1, ret2, ret3 := s.Put(argObj.Uid, argObj.Pk)
-		replyObj := &ServerPutReply{Dig: ret0, Latest: ret1, Bound: ret2, Err: ret3}
+		ret0 := s.Put(argObj.Uid, argObj.Pk, argObj.Ver)
+		replyObj := &ServerPutReply{Err: ret0}
 		*reply = ServerPutReplyEncode(*reply, replyObj)
 	}
 	h[ServerGetRpc] = func(arg []byte, reply *[]byte) {
@@ -53,8 +53,8 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func CallServPut(c *advrpc.Client, uid uint64, pk []byte) (*ktserde.SigDig, *ktserde.Memb, *ktserde.NonMemb, bool) {
-	arg := &ServerPutArg{Uid: uid, Pk: pk}
+func CallServPut(c *advrpc.Client, uid uint64, pk []byte, ver uint64) bool {
+	arg := &ServerPutArg{Uid: uid, Pk: pk, Ver: ver}
 	argByt := ServerPutArgEncode(make([]byte, 0), arg)
 	replyByt := new([]byte)
 	var err0 = true
@@ -65,9 +65,9 @@ func CallServPut(c *advrpc.Client, uid uint64, pk []byte) (*ktserde.SigDig, *kts
 	}
 	reply, _, err1 := ServerPutReplyDecode(*replyByt)
 	if err1 {
-		return nil, nil, nil, true
+		return true
 	}
-	return reply.Dig, reply.Latest, reply.Bound, reply.Err
+	return reply.Err
 }
 
 func CallServGet(c *advrpc.Client, uid uint64) (*ktserde.SigDig, []*ktserde.MembHide, bool, *ktserde.Memb, *ktserde.NonMemb, bool) {

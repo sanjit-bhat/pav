@@ -11,8 +11,10 @@ import (
 )
 
 type Client struct {
-	uid     uint64
-	nextVer uint64
+	uid          uint64
+	nextVer      uint64
+	isPendingPut bool
+	pendingPut   []byte
 	// seenDigs stores, for an epoch, if we've gotten a digest for it.
 	seenDigs map[uint64]*ktserde.SigDig
 	// nextEpoch bounds the entries in seenDigs.
@@ -31,40 +33,18 @@ type ClientErr struct {
 	Err  bool
 }
 
-// Put rets the epoch at which the key was put, and evid / error on fail.
-func (c *Client) Put(pk []byte) (uint64, *ClientErr) {
-	stdErr := &ClientErr{Err: true}
-	dig, latest, bound, err0 := server.CallServPut(c.servCli, c.uid, pk)
-	if err0 {
-		return 0, stdErr
+// Put issues a Put and errors on fail.
+// if there's a pending Put, it requires the pk to be the same.
+func (c *Client) Put(pk []byte) bool {
+	if c.isPendingPut {
+		if !std.BytesEqual(c.pendingPut, pk) {
+			return true
+		}
+	} else {
+		c.isPendingPut = true
+		c.pendingPut = pk
 	}
-	// dig.
-	err1 := checkDig(c.servSigPk, c.seenDigs, dig)
-	if err1.Err {
-		return 0, err1
-	}
-	if dig.Epoch < c.nextEpoch {
-		return 0, stdErr
-	}
-	// latest.
-	if CheckMemb(c.servVrfPk, c.uid, c.nextVer, dig.Dig, latest) {
-		return 0, stdErr
-	}
-	if dig.Epoch != latest.EpochAdded {
-		return 0, stdErr
-	}
-	if !std.BytesEqual(pk, latest.PkOpen.Val) {
-		return 0, stdErr
-	}
-	// bound.
-	if CheckNonMemb(c.servVrfPk, c.uid, c.nextVer+1, dig.Dig, bound) {
-		return 0, stdErr
-	}
-	c.seenDigs[dig.Epoch] = dig
-	c.nextEpoch = dig.Epoch + 1
-	// this client controls nextVer, so no need to check for overflow.
-	c.nextVer = std.SumAssumeNoOverflow(c.nextVer, 1)
-	return dig.Epoch, &ClientErr{Err: false}
+	return server.CallServPut(c.servCli, c.uid, pk, c.nextVer)
 }
 
 // Get returns if the pk was registered, the pk, and the epoch

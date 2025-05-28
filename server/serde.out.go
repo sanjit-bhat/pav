@@ -25,30 +25,15 @@ func ServerPutArgDecode(b0 []byte) (*ServerPutArg, []byte, bool) {
 }
 func ServerPutReplyEncode(b0 []byte, o *ServerPutReply) []byte {
 	var b = b0
-	b = ktserde.SigDigEncode(b, o.Dig)
-	b = ktserde.MembEncode(b, o.Latest)
-	b = ktserde.NonMembEncode(b, o.Bound)
 	b = marshal.WriteBool(b, o.Err)
 	return b
 }
 func ServerPutReplyDecode(b0 []byte) (*ServerPutReply, []byte, bool) {
-	a1, b1, err1 := ktserde.SigDigDecode(b0)
+	a1, b1, err1 := marshalutil.ReadBool(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := ktserde.MembDecode(b1)
-	if err2 {
-		return nil, nil, true
-	}
-	a3, b3, err3 := ktserde.NonMembDecode(b2)
-	if err3 {
-		return nil, nil, true
-	}
-	a4, b4, err4 := marshalutil.ReadBool(b3)
-	if err4 {
-		return nil, nil, true
-	}
-	return &ServerPutReply{Dig: a1, Latest: a2, Bound: a3, Err: a4}, b4, false
+	return &ServerPutReply{Err: a1}, b1, false
 }
 func ServerGetArgEncode(b0 []byte, o *ServerGetArg) []byte {
 	var b = b0

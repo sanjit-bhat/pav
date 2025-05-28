@@ -7,13 +7,11 @@ import (
 type ServerPutArg struct {
 	Uid uint64
 	Pk  []byte
+	Ver uint64
 }
 
 type ServerPutReply struct {
-	Dig    *ktserde.SigDig
-	Latest *ktserde.Memb
-	Bound  *ktserde.NonMemb
-	Err    bool
+	Err bool
 }
 
 type ServerGetArg struct {
