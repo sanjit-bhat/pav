@@ -7,12 +7,13 @@ import (
 	"go/format"
 	"go/token"
 	"go/types"
-	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/packages"
 	"log"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/tools/go/ast/astutil"
+	"golang.org/x/tools/go/packages"
 )
 
 func compile(src string) []byte {

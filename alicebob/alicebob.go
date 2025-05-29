@@ -1,13 +1,14 @@
 package alicebob
 
 import (
+	"sync"
+
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/auditor"
 	"github.com/mit-pdos/pav/client"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/server"
-	"sync"
 )
 
 const (
@@ -45,7 +46,7 @@ func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
 	testAliceBob(s)
 }
 
-func checkCliErr(servGood bool, servPk cryptoffi.SigPublicKey, err *client.ClientErr) {
+func checkEvidErr(servGood bool, servPk cryptoffi.SigPublicKey, err *client.ClientErr) {
 	if err.Evid != nil {
 		std.Assert(!err.Evid.Check(servPk))
 	}
@@ -79,9 +80,11 @@ func testAliceBob(setup *setupParams) {
 	wg.Wait()
 
 	// alice self monitor. in real world, she'll come online at times and do this.
-	selfMonEp, err0 := alice.cli.SelfMon()
-	checkCliErr(setup.servGood, setup.servSigPk, err0)
-	alice.hist = extendHist(alice.hist, selfMonEp+1)
+	isInsert, _, err0 := alice.cli.SelfMon()
+	checkEvidErr(setup.servGood, setup.servSigPk, err0)
+	// alice has no keys in flight.
+	std.Assert(!isInsert)
+	alice.hist = extendHist(alice.hist, alice.cli.NextEpoch)
 
 	if setup.adtrGood {
 		// sync auditors. in real world, this'll happen periodically.
@@ -93,8 +96,8 @@ func testAliceBob(setup *setupParams) {
 	}
 
 	// final check. bob got the right key.
-	primitive.Assume(bob.epoch <= selfMonEp)
-	aliceKey := alice.hist[bob.epoch]
+	primitive.Assume(bob.cli.NextEpoch <= alice.cli.NextEpoch)
+	aliceKey := alice.hist[bob.cli.NextEpoch-1]
 	std.Assert(aliceKey.isReg == bob.isReg)
 	if aliceKey.isReg {
 		std.Assert(std.BytesEqual(aliceKey.pk, bob.alicePk))
@@ -111,12 +114,23 @@ type alice struct {
 func (a *alice) run() {
 	for i := uint64(0); i < uint64(20); i++ {
 		primitive.Sleep(5_000_000)
-		pk := []byte{1}
-		epoch, err0 := a.cli.Put(pk)
-		checkCliErr(a.servGood, a.servSigPk, err0)
-		// extend to numEpochs-1, leaving space for latest change.
-		a.hist = extendHist(a.hist, epoch)
-		a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
+		pk := cryptoffi.RandBytes(32)
+		// true bc alice waits until her old key is inserted before
+		// inserting a new one.
+		std.Assert(!a.cli.Put(pk))
+
+		var isPending = true
+		for isPending {
+			isInsert, insertEp, err0 := a.cli.SelfMon()
+			checkEvidErr(a.servGood, a.servSigPk, err0)
+			if isInsert {
+				// extend to insertEp-1, leaving space for latest key.
+				a.hist = extendHist(a.hist, insertEp)
+				a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
+				a.hist = extendHist(a.hist, a.cli.NextEpoch)
+				isPending = false
+			}
+		}
 	}
 }
 
@@ -124,16 +138,14 @@ type bob struct {
 	servGood  bool
 	servSigPk cryptoffi.SigPublicKey
 	cli       *client.Client
-	epoch     uint64
 	isReg     bool
 	alicePk   []byte
 }
 
 func (b *bob) run() {
 	primitive.Sleep(120_000_000)
-	isReg, pk, epoch, err0 := b.cli.Get(aliceUid)
-	checkCliErr(b.servGood, b.servSigPk, err0)
-	b.epoch = epoch
+	isReg, pk, err0 := b.cli.Get(aliceUid)
+	checkEvidErr(b.servGood, b.servSigPk, err0)
 	b.isReg = isReg
 	b.alicePk = pk
 }

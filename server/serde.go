@@ -10,29 +10,16 @@ type ServerPutArg struct {
 	Ver uint64
 }
 
-type ServerPutReply struct {
-	Err bool
+type ServerHistoryArg struct {
+	Uid       uint64
+	PrefixLen uint64
 }
 
-type ServerGetArg struct {
-	Uid uint64
-}
-
-type ServerGetReply struct {
-	Dig    *ktserde.SigDig
-	Hist   []*ktserde.MembHide
-	IsReg  bool
-	Latest *ktserde.Memb
-	Bound  *ktserde.NonMemb
-}
-
-type ServerSelfMonArg struct {
-	Uid uint64
-}
-
-type ServerSelfMonReply struct {
+type ServerHistoryReply struct {
 	Dig   *ktserde.SigDig
+	Hist  []*ktserde.Memb
 	Bound *ktserde.NonMemb
+	Err   bool
 }
 
 type ServerAuditArg struct {

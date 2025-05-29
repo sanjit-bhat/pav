@@ -2,12 +2,13 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/aclements/go-moremath/stats"
-	"github.com/mit-pdos/pav/benchutil"
 	"math"
 	"math/rand/v2"
 	"testing"
 	"time"
+
+	"github.com/aclements/go-moremath/stats"
+	"github.com/mit-pdos/pav/benchutil"
 )
 
 const (

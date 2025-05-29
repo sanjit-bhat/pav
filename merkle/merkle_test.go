@@ -2,9 +2,10 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/mit-pdos/pav/cryptoffi"
 	"math/rand/v2"
 	"testing"
+
+	"github.com/mit-pdos/pav/cryptoffi"
 )
 
 func TestGetRecent(t *testing.T) {

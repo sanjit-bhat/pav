@@ -124,28 +124,6 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	}
 	return &Memb{LabelProof: a1, EpochAdded: a2, PkOpen: a3, MerkleProof: a4}, b4, false
 }
-func MembHideEncode(b0 []byte, o *MembHide) []byte {
-	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.LabelProof)
-	b = marshalutil.WriteSlice1D(b, o.MapVal)
-	b = marshalutil.WriteSlice1D(b, o.MerkleProof)
-	return b
-}
-func MembHideDecode(b0 []byte) (*MembHide, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
-	if err1 {
-		return nil, nil, true
-	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
-	if err2 {
-		return nil, nil, true
-	}
-	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
-	if err3 {
-		return nil, nil, true
-	}
-	return &MembHide{LabelProof: a1, MapVal: a2, MerkleProof: a3}, b3, false
-}
 func NonMembEncode(b0 []byte, o *NonMemb) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)

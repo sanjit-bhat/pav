@@ -18,20 +18,13 @@ type Server struct {
 	commitSecret []byte
 	// keyMap stores (mapLabel, mapVal) entries.
 	keyMap *merkle.Tree
-	// userInfo stores info about every registered uid.
-	userInfo map[uint64]*userState
+	// plainPks stores all plaintext pks, whereas keyMap only has commitments.
+	// its length is the number of registered versions.
+	plainPks map[uint64][][]byte
 	// epochHist stores info about prior epochs, for auditing.
 	epochHist []*servEpochInfo
 	// WorkQ batch processes Put requests.
 	WorkQ *WorkQ
-}
-
-type userState struct {
-	// numVers provides the authoritative number of registered versions,
-	// which corresponds to keyMap entries.
-	numVers uint64
-	// plainPk stores the plaintext pk, whereas keyMap only has commitments.
-	plainPk []byte
 }
 
 type servEpochInfo struct {
@@ -41,45 +34,26 @@ type servEpochInfo struct {
 	sig     []byte
 }
 
-// Put errors iff there's a put of the same uid at the same time.
-func (s *Server) Put(uid uint64, pk []byte, ver uint64) bool {
-	resp := s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
-	return resp.Err
+// Put queues pk (at the specified version) for insertion.
+func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
+	// NOTE: this doesn't need to block.
+	s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
 }
 
-// Get returns a complete history proof for uid.
-// if uid is not yet registered, it returns an empty memb proof for
-// for the latest version.
-func (s *Server) Get(uid uint64) (*ktserde.SigDig, []*ktserde.MembHide, bool, *ktserde.Memb, *ktserde.NonMemb) {
+// History excludes the first prefixLen versions.
+func (s *Server) History(uid uint64, prefixLen uint64) (*ktserde.SigDig, []*ktserde.Memb, *ktserde.NonMemb, bool) {
 	s.mu.RLock()
-	user := s.userInfo[uid]
-	var numVers uint64
-	var plainPk []byte
-	if user != nil {
-		numVers = user.numVers
-		plainPk = user.plainPk
+	numVers := uint64(len(s.plainPks[uid]))
+	if prefixLen > numVers {
+		s.mu.RUnlock()
+		return nil, nil, nil, true
 	}
 
-	dig := getDig(s.epochHist)
-	hist := getHist(s.keyMap, uid, numVers, s.vrfSk)
-	isReg, latest := getLatest(s.keyMap, uid, numVers, s.vrfSk, s.commitSecret, plainPk)
-	bound := getBound(s.keyMap, uid, numVers, s.vrfSk)
+	dig := s.getDig()
+	hist := s.getHist(uid, prefixLen)
+	bound := s.getBound(uid, numVers)
 	s.mu.RUnlock()
-	return dig, hist, isReg, latest, bound
-}
-
-func (s *Server) SelfMon(uid uint64) (*ktserde.SigDig, *ktserde.NonMemb) {
-	s.mu.RLock()
-	user := s.userInfo[uid]
-	var numVers uint64
-	if user != nil {
-		numVers = user.numVers
-	}
-
-	dig := getDig(s.epochHist)
-	bound := getBound(s.keyMap, uid, numVers, s.vrfSk)
-	s.mu.RUnlock()
-	return dig, bound
+	return dig, hist, bound, false
 }
 
 // Audit returns an err on fail.
@@ -104,126 +78,39 @@ type WQResp struct {
 	Err bool
 }
 
-type mapperOut struct {
-	mapLabel []byte
-	mapVal   []byte
+type mapEntry struct {
+	label []byte
+	val   []byte
 }
 
 func (s *Server) Worker() {
 	work := s.WorkQ.Get()
+	s.checkRequests(work)
 
-	uidSet := make(map[uint64]bool, len(work))
-	for _, w := range work {
-		w.Resp = &WQResp{}
-		uid := w.Req.Uid
-		ver := w.Req.Ver
-
-		// error out wrong versions.
-		user, ok0 := s.userInfo[uid]
-		if ok0 && ver != user.numVers {
-			w.Resp.Err = true
-			continue
-		}
-
-		// error out duplicate uid's. arbitrarily picks one to succeed.
-		_, ok1 := uidSet[uid]
-		if ok1 {
-			w.Resp.Err = true
-		} else {
-			uidSet[uid] = false
-		}
-	}
-
-	// NOTE: it's important that there are no write lockers outside this fn.
-	// this allows critical section #2 (write) to start with the
-	// same state as critical section #1 (read).
-
-	// in parallel, map requests to keyMap updates.
-	outs := make([]*mapperOut, len(work))
-	var i uint64
-	for i < uint64(len(work)) {
-		outs[i] = &mapperOut{}
-		i++
-	}
-	wg := new(sync.WaitGroup)
-	i = 0
-	for i < uint64(len(work)) {
-		resp := work[i].Resp
-		if !resp.Err {
-			req := work[i].Req
-			out := outs[i]
-			wg.Add(1)
-			go func() {
-				s.mapper(req, out)
-				wg.Done()
-			}()
-		}
-		i++
-	}
-	wg.Wait()
-
-	// apply updates to server.
+	// NOTE: for correctness, addEntries (write) must start with the same
+	// state as makeEntries (read). we ensure this by not having any write
+	// lockers outside this fn.
+	ents := s.makeEntries(work)
 	s.mu.Lock()
-	upd := make(map[string][]byte, len(work))
-	i = 0
-	for i < uint64(len(work)) {
-		resp := work[i].Resp
-		if !resp.Err {
-			req := work[i].Req
-			out0 := outs[i]
-			label := out0.mapLabel
-
-			err0 := s.keyMap.Put(label, out0.mapVal)
-			std.Assert(!err0)
-			upd[string(label)] = out0.mapVal
-			var user = s.userInfo[req.Uid]
-			if user == nil {
-				user = &userState{}
-			}
-			user.numVers += 1
-			user.plainPk = req.Pk
-			s.userInfo[req.Uid] = user
-		}
-		i++
-	}
-	s.updEpochHist(upd)
+	s.addEntries(work, ents)
 	s.mu.Unlock()
 
-	// signal that we finished work.
 	for _, w := range work {
 		w.Finish()
 	}
-}
-
-// mapper makes mapLabels and mapVals.
-func (s *Server) mapper(in *WQReq, out *mapperOut) {
-	user := s.userInfo[in.Uid]
-	var numVers uint64
-	if user != nil {
-		numVers = user.numVers
-	}
-	mapLabel, _ := CompMapLabel(in.Uid, numVers, s.vrfSk)
-
-	nextEpoch := uint64(len(s.epochHist))
-	r := compCommitOpen(s.commitSecret, mapLabel)
-	open := &ktserde.CommitOpen{Val: in.Pk, Rand: r}
-	mapVal := CompMapVal(nextEpoch, open)
-
-	out.mapLabel = mapLabel
-	out.mapVal = mapVal
 }
 
 func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	mu := new(sync.RWMutex)
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
-	sec := cryptoffi.RandBytes(cryptoffi.HashLen)
+	secret := cryptoffi.RandBytes(cryptoffi.HashLen)
 	keys := merkle.NewTree()
-	users := make(map[uint64]*userState)
+	plainPks := make(map[uint64][][]byte)
 	var hist []*servEpochInfo
 	// commit empty tree as init epoch.
 	wq := NewWorkQ()
-	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: sec, keyMap: keys, userInfo: users, epochHist: hist, WorkQ: wq}
+	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: secret, keyMap: keys, plainPks: plainPks, epochHist: hist, WorkQ: wq}
 	s.updEpochHist(make(map[string][]byte))
 
 	go func() {
@@ -256,6 +143,89 @@ func compCommitOpen(secret, label []byte) []byte {
 	return cryptoutil.Hash(b)
 }
 
+func (s *Server) checkRequests(work []*Work) {
+	uidSet := make(map[uint64]bool, len(work))
+	for _, w := range work {
+		w.Resp = &WQResp{}
+		uid := w.Req.Uid
+		ver := w.Req.Ver
+
+		// error out wrong versions.
+		nextVer := uint64(len(s.plainPks[uid]))
+		if ver != nextVer {
+			w.Resp.Err = true
+			continue
+		}
+
+		// error out duplicate uid's. arbitrarily picks one to succeed.
+		_, ok := uidSet[uid]
+		if ok {
+			w.Resp.Err = true
+		} else {
+			uidSet[uid] = false
+		}
+	}
+}
+
+func (s *Server) makeEntries(work []*Work) []*mapEntry {
+	ents := make([]*mapEntry, len(work))
+	var i uint64
+	for i < uint64(len(work)) {
+		ents[i] = &mapEntry{}
+		i++
+	}
+	wg := new(sync.WaitGroup)
+	i = 0
+	for i < uint64(len(work)) {
+		resp := work[i].Resp
+		if !resp.Err {
+			req := work[i].Req
+			out := ents[i]
+			wg.Add(1)
+			go func() {
+				s.makeEntry(req, out)
+				wg.Done()
+			}()
+		}
+		i++
+	}
+	wg.Wait()
+	return ents
+}
+
+func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
+	numVers := uint64(len(s.plainPks[in.Uid]))
+	mapLabel, _ := CompMapLabel(in.Uid, numVers, s.vrfSk)
+
+	nextEpoch := uint64(len(s.epochHist))
+	rand := compCommitOpen(s.commitSecret, mapLabel)
+	open := &ktserde.CommitOpen{Val: in.Pk, Rand: rand}
+	mapVal := CompMapVal(nextEpoch, open)
+
+	out.label = mapLabel
+	out.val = mapVal
+}
+
+func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
+	upd := make(map[string][]byte, len(work))
+	var i = uint64(0)
+	for i < uint64(len(work)) {
+		resp := work[i].Resp
+		if !resp.Err {
+			req := work[i].Req
+			out0 := ents[i]
+			label := out0.label
+
+			err0 := s.keyMap.Put(label, out0.val)
+			std.Assert(!err0)
+			upd[string(label)] = out0.val
+			s.plainPks[req.Uid] = append(s.plainPks[req.Uid], req.Pk)
+		}
+		i++
+	}
+	s.updEpochHist(upd)
+}
+
 // updEpochHist does a signed history update with some new entries.
 func (s *Server) updEpochHist(upd map[string][]byte) {
 	sk := s.sigSk
@@ -271,51 +241,37 @@ func (s *Server) updEpochHist(upd map[string][]byte) {
 	s.epochHist = append(s.epochHist, newInfo)
 }
 
-func getDig(hist []*servEpochInfo) *ktserde.SigDig {
-	numEpochs := uint64(len(hist))
-	lastInfo := hist[numEpochs-1]
+func (s *Server) getDig() *ktserde.SigDig {
+	numEpochs := uint64(len(s.epochHist))
+	lastInfo := s.epochHist[numEpochs-1]
 	return &ktserde.SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
 }
 
-// getHist returns membership proofs for the history of versions
-// up until the latest.
-func getHist(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) []*ktserde.MembHide {
-	if numVers == 0 {
-		return nil
-	}
-	// latest registered ver not included in hist.
-	var hist = make([]*ktserde.MembHide, 0, numVers-1)
-	var ver = uint64(0)
-	for ver < numVers-1 {
-		label, labelProof := CompMapLabel(uid, ver, vrfSk)
-		inMap, mapVal, mapProof := keyMap.Prove(label)
+// getHist returns a history of membership proofs for all post-prefix versions.
+func (s *Server) getHist(uid, prefixLen uint64) []*ktserde.Memb {
+	pks := s.plainPks[uid]
+	numVers := uint64(len(pks))
+	var hist []*ktserde.Memb
+	var ver = prefixLen
+	for ver < numVers {
+		label, labelProof := CompMapLabel(uid, ver, s.vrfSk)
+		inMap, mapVal, mapProof := s.keyMap.Prove(label)
 		std.Assert(inMap)
-		hist = append(hist, &ktserde.MembHide{LabelProof: labelProof, MapVal: mapVal, MerkleProof: mapProof})
+		valPre, _, err0 := ktserde.MapValPreDecode(mapVal)
+		std.Assert(!err0)
+		rand := compCommitOpen(s.commitSecret, label)
+		open := &ktserde.CommitOpen{Val: pks[ver], Rand: rand}
+		memb := &ktserde.Memb{LabelProof: labelProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: mapProof}
+		hist = append(hist, memb)
 		ver++
 	}
 	return hist
 }
 
-// getLatest returns whether a version is registered, and if so,
-// a membership proof for the latest version.
-func getLatest(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey, commitSecret, pk []byte) (bool, *ktserde.Memb) {
-	if numVers == 0 {
-		return false, &ktserde.Memb{PkOpen: &ktserde.CommitOpen{}}
-	}
-	label, labelProof := CompMapLabel(uid, numVers-1, vrfSk)
-	inMap, mapVal, mapProof := keyMap.Prove(label)
-	std.Assert(inMap)
-	valPre, _, err1 := ktserde.MapValPreDecode(mapVal)
-	std.Assert(!err1)
-	r := compCommitOpen(commitSecret, label)
-	open := &ktserde.CommitOpen{Val: pk, Rand: r}
-	return true, &ktserde.Memb{LabelProof: labelProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: mapProof}
-}
-
 // getBound returns a non-membership proof for the boundary version.
-func getBound(keyMap *merkle.Tree, uid, numVers uint64, vrfSk *cryptoffi.VrfPrivateKey) *ktserde.NonMemb {
-	label, labelProof := CompMapLabel(uid, numVers, vrfSk)
-	inMap, _, mapProof := keyMap.Prove(label)
+func (s *Server) getBound(uid, numVers uint64) *ktserde.NonMemb {
+	label, labelProof := CompMapLabel(uid, numVers, s.vrfSk)
+	inMap, _, mapProof := s.keyMap.Prove(label)
 	std.Assert(!inMap)
 	return &ktserde.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
 }

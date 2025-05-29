@@ -2,10 +2,11 @@ package cryptoffi
 
 import (
 	"crypto/sha256"
-	"github.com/mit-pdos/pav/benchutil"
 	"math/rand/v2"
 	"testing"
 	"time"
+
+	"github.com/mit-pdos/pav/benchutil"
 )
 
 func TestBenchRand32(t *testing.T) {

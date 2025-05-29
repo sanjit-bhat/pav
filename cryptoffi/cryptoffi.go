@@ -4,8 +4,9 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
-	"github.com/mit-pdos/pav/cryptoffi/vrf"
 	"hash"
+
+	"github.com/mit-pdos/pav/cryptoffi/vrf"
 )
 
 const (

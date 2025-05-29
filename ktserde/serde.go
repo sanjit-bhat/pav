@@ -33,12 +33,6 @@ type Memb struct {
 	MerkleProof []byte
 }
 
-type MembHide struct {
-	LabelProof  []byte
-	MapVal      []byte
-	MerkleProof []byte
-}
-
 type NonMemb struct {
 	LabelProof  []byte
 	MerkleProof []byte

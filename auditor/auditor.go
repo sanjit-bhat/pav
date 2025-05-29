@@ -1,11 +1,12 @@
 package auditor
 
 import (
+	"sync"
+
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/merkle"
-	"sync"
 )
 
 type Auditor struct {

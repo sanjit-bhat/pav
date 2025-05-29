@@ -9,10 +9,11 @@ package netffi
 
 import (
 	"fmt"
-	"github.com/tchajed/marshal"
 	"io"
 	"net"
 	"sync"
+
+	"github.com/tchajed/marshal"
 )
 
 func addrToStr(addr uint64) string {
