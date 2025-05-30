@@ -102,6 +102,15 @@ func (sk *VrfPrivateKey) Prove(data []byte) ([]byte, []byte) {
 	return out[:HashLen], proof
 }
 
+// Evaluate computes the VRF on data, without the overhead of fetching a proof.
+func (sk *VrfPrivateKey) Evaluate(data []byte) []byte {
+	out, err := sk.sk.Evaluate(data)
+	if err != nil {
+		panic("cryptoffi: VrfPrivateKey.Evaluate")
+	}
+	return out[:HashLen]
+}
+
 // Verify verifies data against the proof and returns the output and an err.
 // it requires a valid pk.
 // it performs the ECVRF_verify checks to run even on adversarial proofs.

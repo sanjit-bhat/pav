@@ -121,11 +121,18 @@ func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	return s, sigPk, vrfPk
 }
 
-// CompMapLabel rets the vrf output and proof for mapLabel (VRF(uid || ver)).
-func CompMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
+// ProveMapLabel rets the vrf output and proof for mapLabel (VRF(uid || ver)).
+func ProveMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
 	l := &ktserde.MapLabelPre{Uid: uid, Ver: ver}
 	lByt := ktserde.MapLabelPreEncode(make([]byte, 0, 16), l)
 	return sk.Prove(lByt)
+}
+
+// EvalMapLabel rets the vrf output for mapLabel (VRF(uid || ver)).
+func EvalMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) []byte {
+	l := &ktserde.MapLabelPre{Uid: uid, Ver: ver}
+	lByt := ktserde.MapLabelPreEncode(make([]byte, 0, 16), l)
+	return sk.Evaluate(lByt)
 }
 
 // CompMapVal rets mapVal (epoch || Hash(pk || rand)).
@@ -195,7 +202,7 @@ func (s *Server) makeEntries(work []*Work) []*mapEntry {
 
 func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 	numVers := uint64(len(s.plainPks[in.Uid]))
-	mapLabel, _ := CompMapLabel(in.Uid, numVers, s.vrfSk)
+	mapLabel := EvalMapLabel(in.Uid, numVers, s.vrfSk)
 
 	nextEpoch := uint64(len(s.epochHist))
 	rand := compCommitOpen(s.commitSecret, mapLabel)
@@ -254,7 +261,7 @@ func (s *Server) getHist(uid, prefixLen uint64) []*ktserde.Memb {
 	var hist []*ktserde.Memb
 	var ver = prefixLen
 	for ver < numVers {
-		label, labelProof := CompMapLabel(uid, ver, s.vrfSk)
+		label, labelProof := ProveMapLabel(uid, ver, s.vrfSk)
 		inMap, mapVal, mapProof := s.keyMap.Prove(label)
 		std.Assert(inMap)
 		valPre, _, err0 := ktserde.MapValPreDecode(mapVal)
@@ -270,7 +277,7 @@ func (s *Server) getHist(uid, prefixLen uint64) []*ktserde.Memb {
 
 // getBound returns a non-membership proof for the boundary version.
 func (s *Server) getBound(uid, numVers uint64) *ktserde.NonMemb {
-	label, labelProof := CompMapLabel(uid, numVers, s.vrfSk)
+	label, labelProof := ProveMapLabel(uid, numVers, s.vrfSk)
 	inMap, _, mapProof := s.keyMap.Prove(label)
 	std.Assert(!inMap)
 	return &ktserde.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
