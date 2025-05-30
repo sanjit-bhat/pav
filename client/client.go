@@ -46,7 +46,7 @@ func (c *Client) Put(pk []byte) bool {
 		c.pendingPut = pk
 	}
 	server.CallServPut(c.servCli, c.uid, pk, c.nextVer)
-	return true
+	return false
 }
 
 // Get returns if the pk was registered and the pk.
