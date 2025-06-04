@@ -231,7 +231,8 @@ func verifySiblings(label, lastHash, siblings, dig []byte) bool {
 	return !std.BytesEqual(currHash, dig)
 }
 
-// VerifyMono checks that label not in oldDig and (label, val) in newDig.
+// VerifyMono checks label not in oldDig and
+// newDig is oldDig with (label, val) inserted.
 // it returns an error.
 func VerifyMono(label, val, oldProof, oldDig, newDig []byte) bool {
 	// label not in oldDig.
