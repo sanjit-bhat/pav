@@ -90,3 +90,30 @@ func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal
 		t.Fatal()
 	}
 }
+
+func TestMono(t *testing.T) {
+	tr := NewTree()
+	var seed [32]byte
+	rnd := rand.NewChaCha8(seed)
+
+	for i := 0; i < 100; i++ {
+		l := make([]byte, cryptoffi.HashLen)
+		v := make([]byte, 4)
+		rnd.Read(l)
+		rnd.Read(v)
+		inTree, _, p := tr.Prove(l)
+		if inTree {
+			t.Fatal()
+		}
+
+		dOld := tr.Digest()
+		if tr.Put(l, v) {
+			t.Fatal()
+		}
+		dNew := tr.Digest()
+
+		if VerifyMono(l, v, p, dOld, dNew) {
+			t.Fatal()
+		}
+	}
+}

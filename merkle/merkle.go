@@ -231,6 +231,51 @@ func verifySiblings(label, lastHash, siblings, dig []byte) bool {
 	return !std.BytesEqual(currHash, dig)
 }
 
+// VerifyMono checks that label not in oldDig and (label, val) in newDig.
+// it returns an error.
+func VerifyMono(label, val, oldProof, oldDig, newDig []byte) bool {
+	// label not in oldDig.
+	if Verify(false, label, nil, oldProof, oldDig) {
+		return true
+	}
+
+	// make new proof by inserting new entry into last node of old proof.
+	// everything else in tree (the old sibling hashes) is constant.
+
+	proofDec, _, err0 := MerkleProofDecode(oldProof)
+	std.Assert(!err0)
+	last := NewTree()
+	if proofDec.FoundOtherLeaf {
+		last.root = &node{label: proofDec.LeafLabel, val: proofDec.LeafVal}
+		setLeafHash(last.root)
+	}
+
+	depth := uint64(len(proofDec.Siblings)) / cryptoffi.HashLen
+	// for liveness, not safety.
+	if uint64(len(label)) != cryptoffi.HashLen {
+		return true
+	}
+	put(&last.root, depth, label, val, last.ctx)
+	found, foundLabel, foundVal, newProof0 := find(label, true, last.ctx, last.root, depth)
+	var newProof = newProof0
+	std.Assert(found)
+	std.Assert(std.BytesEqual(label, foundLabel))
+	std.Assert(std.BytesEqual(val, foundVal))
+
+	// unfort, this causes slice re-allocs.
+	newProof = append(newProof, proofDec.Siblings...)
+	primitive.UInt64Put(newProof, uint64(len(newProof))-8) // SibsLen
+	newProof = marshal.WriteBool(newProof, false)          // FoundOtherLeaf
+	newProof = marshal.WriteInt(newProof, 0)               // empty LeafLabelLen
+	newProof = marshal.WriteInt(newProof, 0)               // empty LeafValLen
+
+	// check new proof against newDig.
+	if Verify(true, label, val, newProof, newDig) {
+		return true
+	}
+	return false
+}
+
 func (t *Tree) Digest() []byte {
 	return getNodeHash(t.root, t.ctx)
 }
