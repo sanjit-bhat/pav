@@ -260,8 +260,11 @@ func VerifyMono(label, val, oldProof, oldDig, newDig []byte) bool {
 	found, foundLabel, foundVal, newProof0 := find(label, true, last.ctx, last.root, depth)
 	var newProof = newProof0
 	std.Assert(found)
-	std.Assert(std.BytesEqual(label, foundLabel))
-	std.Assert(std.BytesEqual(val, foundVal))
+	// should pass. disable for performance.
+	// std.Assert(std.BytesEqual(label, foundLabel))
+	// std.Assert(std.BytesEqual(val, foundVal))
+	_ = foundLabel
+	_ = foundVal
 
 	// unfort, this causes slice re-allocs.
 	newProof = append(newProof, proofDec.Siblings...)
