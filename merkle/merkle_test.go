@@ -112,7 +112,7 @@ func TestMono(t *testing.T) {
 		}
 		dNew := tr.Digest()
 
-		if VerifyMono(l, v, p, dOld, dNew) {
+		if VerifyUpdate(l, v, p, dOld, dNew) {
 			t.Fatal()
 		}
 	}
