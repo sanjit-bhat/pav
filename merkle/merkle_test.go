@@ -16,14 +16,8 @@ func TestGetRecent(t *testing.T) {
 	val := make([]byte, 4)
 
 	for i := 0; i < 100_000; i++ {
-		_, err := rnd.Read(label)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = rnd.Read(val)
-		if err != nil {
-			t.Fatal(err)
-		}
+		rnd.Read(label)
+		rnd.Read(val)
 
 		// initially, label shouldn't be there.
 		proveAndVerify(t, tr, label, false, nil)
@@ -50,14 +44,8 @@ func TestMap(t *testing.T) {
 
 	// init map and tree.
 	for i := 0; i < 100_000; i++ {
-		_, err := rnd.Read(label)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = rnd.Read(val)
-		if err != nil {
-			t.Fatal(err)
-		}
+		rnd.Read(label)
+		rnd.Read(val)
 
 		l0 := bytes.Clone(label)
 		v0 := bytes.Clone(val)

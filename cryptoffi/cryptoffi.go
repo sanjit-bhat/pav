@@ -146,9 +146,6 @@ func VrfPublicKeyDecode(b []byte) *VrfPublicKey {
 // RandBytes returns [n] random bytes.
 func RandBytes(n uint64) []byte {
 	b := make([]byte, n)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic("cryptoffi: crypto/rand err")
-	}
+	rand.Read(b)
 	return b
 }
