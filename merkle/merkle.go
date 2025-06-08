@@ -169,31 +169,33 @@ func getProofLen(depth uint64) uint64 {
 	return 8 + depth*cryptoffi.HashLen + 1 + 8 + cryptoffi.HashLen + 8 + 32
 }
 
-// Verify checks proof and returns the expected dig.
-// it errors upon failure.
-// there are two types of inputs:
-// if inTree, (label, val) should be in the tree.
-// if !inTree, label should not be in the tree.
-func Verify(inTree bool, label, val, proof []byte) ([]byte, bool) {
+// VerifyMemb checks that (label, val) in tree described by proof,
+// returning the tree dig and an error on failure.
+func VerifyMemb(label, val, proof []byte) ([]byte, bool) {
 	proofDec, _, err0 := MerkleProofDecode(proof)
 	if err0 {
 		return nil, true
 	}
+	lastHash := compLeafHash(label, val)
+	return verifySiblings(label, lastHash, proofDec.Siblings)
+}
 
-	// hash last node.
+// VerifyNonMemb checks that label not in tree described by proof,
+// returning the tree dig and an error on failure.
+func VerifyNonMemb(label, proof []byte) ([]byte, bool) {
+	proofDec, _, err0 := MerkleProofDecode(proof)
+	if err0 {
+		return nil, true
+	}
 	var lastHash []byte
 	var err1 bool
-	if inTree {
-		lastHash = compLeafHash(label, val)
-	} else {
-		if proofDec.FoundOtherLeaf {
-			lastHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
-			if std.BytesEqual(label, proofDec.LeafLabel) {
-				err1 = true
-			}
-		} else {
-			lastHash = compEmptyHash()
+	if proofDec.FoundOtherLeaf {
+		lastHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
+		if std.BytesEqual(label, proofDec.LeafLabel) {
+			err1 = true
 		}
+	} else {
+		lastHash = compEmptyHash()
 	}
 	if err1 {
 		return nil, true
@@ -265,7 +267,7 @@ func VerifyUpdate(label, val, oldProof []byte) ([]byte, bool) {
 	newProof = marshal.WriteInt(newProof, 0)               // empty LeafLabelLen
 	newProof = marshal.WriteInt(newProof, 0)               // empty LeafValLen
 
-	newDig, err1 := Verify(true, label, val, newProof)
+	newDig, err1 := VerifyMemb(label, val, newProof)
 	if err1 {
 		return nil, true
 	}

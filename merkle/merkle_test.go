@@ -73,8 +73,14 @@ func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal
 		t.Fatal()
 	}
 	dig := tr.Digest()
-	dig0, errb := Verify(inTree, label, val, proof)
-	if errb {
+	var dig0 []byte
+	var err bool
+	if inTree {
+		dig0, err = VerifyMemb(label, val, proof)
+	} else {
+		dig0, err = VerifyNonMemb(label, proof)
+	}
+	if err {
 		t.Fatal()
 	}
 	if !bytes.Equal(dig, dig0) {
@@ -103,7 +109,7 @@ func TestUpdate(t *testing.T) {
 		}
 		dNew := tr.Digest()
 
-		dOld0, err := Verify(false, l, nil, p)
+		dOld0, err := VerifyNonMemb(l, p)
 		if err {
 			t.Fatal()
 		}

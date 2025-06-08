@@ -234,7 +234,7 @@ func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb 
 		return true
 	}
 	mapVal := server.CompMapVal(memb.EpochAdded, memb.PkOpen)
-	dig0, err1 := merkle.Verify(true, label, mapVal, memb.MerkleProof)
+	dig0, err1 := merkle.VerifyMemb(label, mapVal, memb.MerkleProof)
 	if err1 {
 		return true
 	}
@@ -261,7 +261,7 @@ func CheckNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, no
 	if err0 {
 		return true
 	}
-	dig0, err1 := merkle.Verify(false, label, nil, nonMemb.MerkleProof)
+	dig0, err1 := merkle.VerifyNonMemb(label, nonMemb.MerkleProof)
 	if err1 {
 		return true
 	}

@@ -78,7 +78,7 @@ func TestBenchMerkGenVer(t *testing.T) {
 		d := tr.Digest()
 
 		t1 := time.Now()
-		d0, _ := Verify(true, l, v, p)
+		d0, _ := VerifyMemb(l, v, p)
 		std.BytesEqual(d, d0)
 		t2 := time.Now()
 
