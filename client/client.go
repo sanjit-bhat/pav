@@ -229,12 +229,19 @@ func CheckLabel(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) ([
 
 // CheckMemb errors on fail.
 func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *ktserde.Memb) bool {
-	label, err := CheckLabel(vrfPk, uid, ver, memb.LabelProof)
-	if err {
+	label, err0 := CheckLabel(vrfPk, uid, ver, memb.LabelProof)
+	if err0 {
 		return true
 	}
 	mapVal := server.CompMapVal(memb.EpochAdded, memb.PkOpen)
-	return merkle.Verify(true, label, mapVal, memb.MerkleProof, dig)
+	dig0, err1 := merkle.Verify(true, label, mapVal, memb.MerkleProof)
+	if err1 {
+		return true
+	}
+	if !std.BytesEqual(dig, dig0) {
+		return true
+	}
+	return false
 }
 
 // CheckHist errors on fail.
@@ -250,9 +257,16 @@ func CheckHist(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte,
 
 // CheckNonMemb errors on fail.
 func CheckNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *ktserde.NonMemb) bool {
-	label, err := CheckLabel(vrfPk, uid, ver, nonMemb.LabelProof)
-	if err {
+	label, err0 := CheckLabel(vrfPk, uid, ver, nonMemb.LabelProof)
+	if err0 {
 		return true
 	}
-	return merkle.Verify(false, label, nil, nonMemb.MerkleProof, dig)
+	dig0, err1 := merkle.Verify(false, label, nil, nonMemb.MerkleProof)
+	if err1 {
+		return true
+	}
+	if !std.BytesEqual(dig, dig0) {
+		return true
+	}
+	return false
 }

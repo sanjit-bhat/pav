@@ -169,15 +169,15 @@ func getProofLen(depth uint64) uint64 {
 	return 8 + depth*cryptoffi.HashLen + 1 + 8 + cryptoffi.HashLen + 8 + 32
 }
 
-// Verify verifies proof against the tree rooted at dig
-// and returns an error upon failure.
+// Verify checks proof and returns the expected dig.
+// it errors upon failure.
 // there are two types of inputs:
 // if inTree, (label, val) should be in the tree.
 // if !inTree, label should not be in the tree.
-func Verify(inTree bool, label, val, proof, dig []byte) bool {
+func Verify(inTree bool, label, val, proof []byte) ([]byte, bool) {
 	proofDec, _, err0 := MerkleProofDecode(proof)
 	if err0 {
-		return true
+		return nil, true
 	}
 
 	// hash last node.
@@ -196,15 +196,15 @@ func Verify(inTree bool, label, val, proof, dig []byte) bool {
 		}
 	}
 	if err1 {
-		return true
+		return nil, true
 	}
-	return verifySiblings(label, lastHash, proofDec.Siblings, dig)
+	return verifySiblings(label, lastHash, proofDec.Siblings)
 }
 
-func verifySiblings(label, lastHash, siblings, dig []byte) bool {
+func verifySiblings(label, lastHash, siblings []byte) ([]byte, bool) {
 	sibsLen := uint64(len(siblings))
 	if sibsLen%cryptoffi.HashLen != 0 {
-		return true
+		return nil, true
 	}
 
 	// hash up the tree.
@@ -226,23 +226,15 @@ func verifySiblings(label, lastHash, siblings, dig []byte) bool {
 		currHash = append(currHash[:0], hashOut...)
 		hashOut = hashOut[:0]
 	}
-
-	// check against supplied dig.
-	return !std.BytesEqual(currHash, dig)
+	return currHash, false
 }
 
-// VerifyUpdate checks label not in oldDig and
-// newDig is oldDig with (label, val) inserted.
+// VerifyUpdate assumes that label not in tree described by oldProof.
+// it returns the newDig that has (label, val) inserted into old tree.
 // it returns an error.
-func VerifyUpdate(label, val, oldProof, oldDig, newDig []byte) bool {
-	// label not in oldDig.
-	if Verify(false, label, nil, oldProof, oldDig) {
-		return true
-	}
-
+func VerifyUpdate(label, val, oldProof []byte) ([]byte, bool) {
 	// make new proof by inserting new entry into last node of old proof.
 	// everything else in tree (the old sibling hashes) is constant.
-
 	proofDec, _, err0 := MerkleProofDecode(oldProof)
 	std.Assert(!err0)
 	last := NewTree()
@@ -254,13 +246,13 @@ func VerifyUpdate(label, val, oldProof, oldDig, newDig []byte) bool {
 	depth := uint64(len(proofDec.Siblings)) / cryptoffi.HashLen
 	// for liveness, not safety.
 	if uint64(len(label)) != cryptoffi.HashLen {
-		return true
+		return nil, true
 	}
 	put(&last.root, depth, label, val, last.ctx)
 	found, foundLabel, foundVal, newProof0 := find(label, true, last.ctx, last.root, depth)
 	var newProof = newProof0
 	std.Assert(found)
-	// should pass. disable for performance.
+	// asserts should pass. disable for perf.
 	// std.Assert(std.BytesEqual(label, foundLabel))
 	// std.Assert(std.BytesEqual(val, foundVal))
 	_ = foundLabel
@@ -273,11 +265,11 @@ func VerifyUpdate(label, val, oldProof, oldDig, newDig []byte) bool {
 	newProof = marshal.WriteInt(newProof, 0)               // empty LeafLabelLen
 	newProof = marshal.WriteInt(newProof, 0)               // empty LeafValLen
 
-	// check new proof against newDig.
-	if Verify(true, label, val, newProof, newDig) {
-		return true
+	newDig, err1 := Verify(true, label, val, newProof)
+	if err1 {
+		return nil, true
 	}
-	return false
+	return newDig, false
 }
 
 func (t *Tree) Digest() []byte {

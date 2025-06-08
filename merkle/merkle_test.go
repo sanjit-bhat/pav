@@ -73,13 +73,16 @@ func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal
 		t.Fatal()
 	}
 	dig := tr.Digest()
-	errb := Verify(inTree, label, val, proof, dig)
+	dig0, errb := Verify(inTree, label, val, proof)
 	if errb {
+		t.Fatal()
+	}
+	if !bytes.Equal(dig, dig0) {
 		t.Fatal()
 	}
 }
 
-func TestMono(t *testing.T) {
+func TestUpdate(t *testing.T) {
 	tr := NewTree()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
@@ -100,7 +103,19 @@ func TestMono(t *testing.T) {
 		}
 		dNew := tr.Digest()
 
-		if VerifyUpdate(l, v, p, dOld, dNew) {
+		dOld0, err := Verify(false, l, nil, p)
+		if err {
+			t.Fatal()
+		}
+		if !bytes.Equal(dOld, dOld0) {
+			t.Fatal()
+		}
+
+		dNew0, err := VerifyUpdate(l, v, p)
+		if err {
+			t.Fatal()
+		}
+		if !bytes.Equal(dNew, dNew0) {
 			t.Fatal()
 		}
 	}
