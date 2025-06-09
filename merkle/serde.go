@@ -1,10 +1,10 @@
 package merkle
 
-// MerkleProof has non-nil leaf data for non-membership proofs
-// that terminate in a different leaf.
+// MerkleProof defines a tree shell around an external label.
+// the shell might have another leaf.
 type MerkleProof struct {
-	Siblings       []byte
-	FoundOtherLeaf bool
-	LeafLabel      []byte
-	LeafVal        []byte
+	Siblings    []byte
+	IsOtherLeaf bool
+	LeafLabel   []byte
+	LeafVal     []byte
 }

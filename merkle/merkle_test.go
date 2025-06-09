@@ -109,16 +109,11 @@ func TestUpdate(t *testing.T) {
 		}
 		dNew := tr.Digest()
 
-		dOld0, err := VerifyNonMemb(l, p)
+		dOld0, dNew0, err := VerifyUpdate(l, v, p)
 		if err {
 			t.Fatal()
 		}
 		if !bytes.Equal(dOld, dOld0) {
-			t.Fatal()
-		}
-
-		dNew0, err := VerifyUpdate(l, v, p)
-		if err {
 			t.Fatal()
 		}
 		if !bytes.Equal(dNew, dNew0) {

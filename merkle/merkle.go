@@ -9,9 +9,16 @@ import (
 )
 
 const (
-	emptyNodeTag byte = 0
-	leafNodeTag  byte = 1
-	innerNodeTag byte = 2
+	// tags used as hash domain separation prefixes.
+	// cut nodes don't have a tag.
+	// they could represent anything, even invalid sub-trees.
+	emptyNodeTag byte = 1
+	leafNodeTag  byte = 2
+	innerNodeTag byte = 3
+
+	cutNodeTy   byte = 1
+	leafNodeTy  byte = 2
+	innerNodeTy byte = 3
 )
 
 type Tree struct {
@@ -19,12 +26,11 @@ type Tree struct {
 	root *node
 }
 
-// node contains the union of different node types, which distinguish as:
-//  1. empty node. if node ptr is nil.
-//  2. leaf node. if child0 and child1 nil. has hash, label, and val.
-//  3. inner node. else. has hash.
+// node contains union of different nodeTy's.
+// empty node is nil node ptr.
 type node struct {
-	hash []byte
+	nodeTy byte
+	hash   []byte
 	// only for inner node.
 	child0 *node
 	// only for inner node.
@@ -39,7 +45,7 @@ type context struct {
 	emptyHash []byte
 }
 
-// Put adds (label, val) to the tree, storing immutable references to both.
+// Put adds the leaf (label, val), storing immutable references to both.
 // for liveness (not safety) reasons, it returns an error
 // if the label does not have a fixed length.
 func (t *Tree) Put(label []byte, val []byte) bool {
@@ -50,19 +56,20 @@ func (t *Tree) Put(label []byte, val []byte) bool {
 	return false
 }
 
+// put inserts leaf node (label, val) into the n0 sub-tree.
+// it never drops the update.
 func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 	n := *n0
-	// empty node.
-	if n == nil {
-		// replace with leaf node.
-		leaf := &node{label: label, val: val}
+	// empty or cut node.
+	if n == nil || n.nodeTy == cutNodeTy {
+		// replace with leaf.
+		leaf := &node{nodeTy: leafNodeTy, label: label, val: val}
 		*n0 = leaf
 		setLeafHash(leaf)
 		return
 	}
 
-	// leaf node.
-	if n.child0 == nil && n.child1 == nil {
+	if n.nodeTy == leafNodeTy {
 		// on exact label match, replace val.
 		if std.BytesEqual(n.label, label) {
 			n.val = val
@@ -72,7 +79,7 @@ func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 
 		// otherwise, replace with inner node that links
 		// to existing leaf, and recurse.
-		inner := &node{}
+		inner := &node{nodeTy: innerNodeTy}
 		*n0 = inner
 		leafChild, _ := getChild(inner, n.label, depth)
 		*leafChild = n
@@ -82,89 +89,111 @@ func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 		return
 	}
 
-	// inner node. recurse.
+	std.Assert(n.nodeTy == innerNodeTy)
 	c, _ := getChild(n, label, depth)
 	put(c, depth+1, label, val, ctx)
+	// recurse.
 	setInnerHash(n, ctx)
 }
 
 // Get returns if label is in the tree and if so, the val.
+// it should only be called on complete trees (no cuts).
 func (t *Tree) Get(label []byte) (bool, []byte) {
-	in, val, _ := t.prove(label, false)
+	in, val, _, err0 := t.prove(label, false)
+	std.Assert(!err0)
 	return in, val
 }
 
 // Prove returns if label is in tree (and if so, the val) and
 // a cryptographic proof of this.
+// it should only be called on complete trees (no cuts).
 func (t *Tree) Prove(label []byte) (bool, []byte, []byte) {
-	return t.prove(label, true)
+	in, val, proof, err0 := t.prove(label, true)
+	std.Assert(!err0)
+	return in, val, proof
 }
 
-func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte) {
-	found, foundLabel, foundVal, proof0 := find(label, getProof, t.ctx, t.root, 0)
+// prove returns whether label is in the tree (and if so, the val) and
+// a cryptographic proof of this.
+// it errors if search lands on a cut node.
+func (t *Tree) prove(label []byte, getProof bool) (bool, []byte, []byte, bool) {
+	found, foundLabel, foundVal, proof0, err0 := find(label, getProof, t.ctx, t.root, 0)
 	var proof = proof0
+	if err0 {
+		return false, nil, nil, true
+	}
 	if getProof {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
 
 	if !found {
 		if getProof {
-			proof = marshal.WriteBool(proof, false) // FoundOtherLeaf
+			proof = marshal.WriteBool(proof, false) // IsOtherLeaf
 			proof = marshal.WriteInt(proof, 0)      // empty LeafLabelLen
 			proof = marshal.WriteInt(proof, 0)      // empty LeafValLen
 		}
-		return false, nil, proof
+		return false, nil, proof, false
 	}
 	if !std.BytesEqual(foundLabel, label) {
 		if getProof {
-			proof = marshal.WriteBool(proof, true) // FoundOtherLeaf
+			proof = marshal.WriteBool(proof, true) // IsOtherLeaf
 			proof = marshal.WriteInt(proof, uint64(len(foundLabel)))
 			proof = marshal.WriteBytes(proof, foundLabel)
 			proof = marshal.WriteInt(proof, uint64(len(foundVal)))
 			proof = marshal.WriteBytes(proof, foundVal)
 		}
-		return false, nil, proof
+		return false, nil, proof, false
 	}
 	if getProof {
-		proof = marshal.WriteBool(proof, false) // FoundOtherLeaf
+		proof = marshal.WriteBool(proof, false) // IsOtherLeaf
 		proof = marshal.WriteInt(proof, 0)      // empty LeafLabelLen
 		proof = marshal.WriteInt(proof, 0)      // empty LeafValLen
 	}
-	return true, foundVal, proof
+	return true, foundVal, proof, false
 }
 
-// find returns whether label path was found (and if so, the found label and val)
-// and the sibling proof.
-func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) (bool, []byte, []byte, []byte) {
-	// break on empty node.
+// find searches the tree for label, returning whether a leaf was found
+// (and if so, the leaf label and val) and the sibling proof.
+// it errors if search lands on a cut node.
+func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) (bool, []byte, []byte, []byte, bool) {
+	// if empty, not found.
 	if n == nil {
 		var proof []byte
 		if getProof {
 			proof = make([]byte, 8, getProofLen(depth))
 		}
-		return false, nil, nil, proof
+		return false, nil, nil, proof, false
 	}
-	// break on leaf node.
-	if n.child0 == nil && n.child1 == nil {
+	// cut hides the sub-tree, so don't know if there or not. error.
+	if n.nodeTy == cutNodeTy {
+		return false, nil, nil, nil, true
+	}
+	// if leaf, found!
+	if n.nodeTy == leafNodeTy {
 		var proof []byte
 		if getProof {
 			proof = make([]byte, 8, getProofLen(depth))
 		}
-		return true, n.label, n.val, proof
+		return true, n.label, n.val, proof, false
 	}
 
+	// recurse down inner.
+	std.Assert(n.nodeTy == innerNodeTy)
 	child, sib := getChild(n, label, depth)
-	f, fl, fv, proof0 := find(label, getProof, ctx, *child, depth+1)
+	f, fl, fv, proof0, err0 := find(label, getProof, ctx, *child, depth+1)
 	var proof = proof0
+	if err0 {
+		return false, nil, nil, nil, true
+	}
 	if getProof {
 		// proof will have sibling hash for each inner node.
-		proof = append(proof, getNodeHash(sib, ctx)...)
+		proof = append(proof, getNodeHash(*sib, ctx)...)
 	}
-	return f, fl, fv, proof
+	return f, fl, fv, proof, false
 }
 
 func getProofLen(depth uint64) uint64 {
-	// proof = SibsLen ++ Sibs ++ FoundOtherLeaf ++
+	// proof = SibsLen ++ Sibs ++ IsOtherLeaf ++
 	// LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk).
 	return 8 + depth*cryptoffi.HashLen + 1 + 8 + cryptoffi.HashLen + 8 + 32
 }
@@ -172,106 +201,54 @@ func getProofLen(depth uint64) uint64 {
 // VerifyMemb checks that (label, val) in tree described by proof,
 // returning the tree dig and an error on failure.
 func VerifyMemb(label, val, proof []byte) ([]byte, bool) {
-	proofDec, _, err0 := MerkleProofDecode(proof)
+	tr, err0 := proofToTree(label, proof)
 	if err0 {
 		return nil, true
 	}
-	lastHash := compLeafHash(label, val)
-	return verifySiblings(label, lastHash, proofDec.Siblings)
+	tr.Put(label, val)
+	return tr.Digest(), false
 }
 
 // VerifyNonMemb checks that label not in tree described by proof,
 // returning the tree dig and an error on failure.
 func VerifyNonMemb(label, proof []byte) ([]byte, bool) {
-	proofDec, _, err0 := MerkleProofDecode(proof)
+	tr, err0 := proofToTree(label, proof)
 	if err0 {
 		return nil, true
 	}
-	var lastHash []byte
-	var err1 bool
-	if proofDec.FoundOtherLeaf {
-		lastHash = compLeafHash(proofDec.LeafLabel, proofDec.LeafVal)
-		if std.BytesEqual(label, proofDec.LeafLabel) {
-			err1 = true
-		}
-	} else {
-		lastHash = compEmptyHash()
-	}
+	found, _, _, err1 := tr.prove(label, false)
 	if err1 {
 		return nil, true
 	}
-	return verifySiblings(label, lastHash, proofDec.Siblings)
-}
-
-func verifySiblings(label, lastHash, siblings []byte) ([]byte, bool) {
-	sibsLen := uint64(len(siblings))
-	if sibsLen%cryptoffi.HashLen != 0 {
+	if found {
 		return nil, true
 	}
-
-	// hash up the tree.
-	var currHash = lastHash
-	var hashOut = make([]byte, 0, cryptoffi.HashLen)
-	maxDepth := sibsLen / cryptoffi.HashLen
-	var depthInv uint64
-	for ; depthInv < maxDepth; depthInv++ {
-		begin := depthInv * cryptoffi.HashLen
-		end := (depthInv + 1) * cryptoffi.HashLen
-		sib := siblings[begin:end]
-
-		depth := maxDepth - depthInv - 1
-		if !getBit(label, depth) {
-			hashOut = compInnerHash(currHash, sib, hashOut)
-		} else {
-			hashOut = compInnerHash(sib, currHash, hashOut)
-		}
-		currHash = append(currHash[:0], hashOut...)
-		hashOut = hashOut[:0]
-	}
-	return currHash, false
+	return tr.Digest(), false
 }
 
-// VerifyUpdate assumes that label not in tree described by oldProof.
-// it returns the newDig that has (label, val) inserted into old tree.
-// it returns an error.
-func VerifyUpdate(label, val, oldProof []byte) ([]byte, bool) {
-	// make new proof by inserting new entry into last node of old proof.
-	// everything else in tree (the old sibling hashes) is constant.
-	proofDec, _, err0 := MerkleProofDecode(oldProof)
-	std.Assert(!err0)
-	last := NewTree()
-	if proofDec.FoundOtherLeaf {
-		last.root = &node{label: proofDec.LeafLabel, val: proofDec.LeafVal}
-		setLeafHash(last.root)
+// VerifyUpdate returns the dig for an old tree without label and
+// the dig after inserting (label, val).
+// it errors on failure.
+func VerifyUpdate(label, val, proof []byte) ([]byte, []byte, bool) {
+	tr, err0 := proofToTree(label, proof)
+	if err0 {
+		return nil, nil, true
 	}
-
-	depth := uint64(len(proofDec.Siblings)) / cryptoffi.HashLen
-	// for liveness, not safety.
-	if uint64(len(label)) != cryptoffi.HashLen {
-		return nil, true
-	}
-	put(&last.root, depth, label, val, last.ctx)
-	found, foundLabel, foundVal, newProof0 := find(label, true, last.ctx, last.root, depth)
-	var newProof = newProof0
-	std.Assert(found)
-	// asserts should pass. disable for perf.
-	// std.Assert(std.BytesEqual(label, foundLabel))
-	// std.Assert(std.BytesEqual(val, foundVal))
-	_ = foundLabel
-	_ = foundVal
-
-	// unfort, this causes slice re-allocs.
-	newProof = append(newProof, proofDec.Siblings...)
-	primitive.UInt64Put(newProof, uint64(len(newProof))-8) // SibsLen
-	newProof = marshal.WriteBool(newProof, false)          // FoundOtherLeaf
-	newProof = marshal.WriteInt(newProof, 0)               // empty LeafLabelLen
-	newProof = marshal.WriteInt(newProof, 0)               // empty LeafValLen
-
-	newDig, err1 := VerifyMemb(label, val, newProof)
+	oldDig := tr.Digest()
+	// label doesn't exist.
+	found, _, _, err1 := tr.prove(label, false)
 	if err1 {
-		return nil, true
+		return nil, nil, true
 	}
-	return newDig, false
+	if found {
+		return nil, nil, true
+	}
+	// insert (label, val).
+	if tr.Put(label, val) {
+		return nil, nil, true
+	}
+	newDig := tr.Digest()
+	return oldDig, newDig, false
 }
 
 func (t *Tree) Digest() []byte {
@@ -281,6 +258,43 @@ func (t *Tree) Digest() []byte {
 func NewTree() *Tree {
 	c := &context{emptyHash: compEmptyHash()}
 	return &Tree{ctx: c}
+}
+
+// newShell makes a tree shell from sibs,
+// guaranteeing that down label is empty.
+func newShell(label []byte, ctx *context, depth uint64, sibs []byte) *node {
+	sibsLen := uint64(len(sibs))
+	if sibsLen == 0 {
+		return nil
+	}
+	split := sibsLen-cryptoffi.HashLen
+	sibs0 := sibs[:split]
+	hash := sibs[split:]
+	cut := &node{nodeTy: cutNodeTy, hash: hash}
+	inner := &node{nodeTy: innerNodeTy}
+	child, sib := getChild(inner, label, depth)
+	*sib = cut
+	*child = newShell(label, ctx, depth+1, sibs0)
+	setInnerHash(inner, ctx)
+	return inner
+}
+
+// proofToTree errors on failure.
+func proofToTree(label, proof []byte) (*Tree, bool) {
+	proof0, _, err0 := MerkleProofDecode(proof)
+	if err0 {
+		return nil, true
+	}
+	if uint64(len(proof0.Siblings))%cryptoffi.HashLen != 0 {
+		return nil, true
+	}
+	ctx := &context{emptyHash: compEmptyHash()}
+	root := newShell(label, ctx, 0, proof0.Siblings)
+	tr := &Tree{ctx: ctx, root: root}
+	if proof0.IsOtherLeaf {
+		tr.Put(proof0.LeafLabel, proof0.LeafVal)
+	}
+	return tr, false
 }
 
 func getNodeHash(n *node, c *context) []byte {
@@ -324,11 +338,11 @@ func compInnerHash(child0, child1, h []byte) []byte {
 
 // getChild returns a child and its sibling child,
 // relative to the bit referenced by label and depth.
-func getChild(n *node, label []byte, depth uint64) (**node, *node) {
+func getChild(n *node, label []byte, depth uint64) (**node, **node) {
 	if !getBit(label, depth) {
-		return &n.child0, n.child1
+		return &n.child0, &n.child1
 	} else {
-		return &n.child1, n.child0
+		return &n.child1, &n.child0
 	}
 }
 

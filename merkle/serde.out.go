@@ -10,7 +10,7 @@ import (
 func MerkleProofEncode(b0 []byte, o *MerkleProof) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.Siblings)
-	b = marshal.WriteBool(b, o.FoundOtherLeaf)
+	b = marshal.WriteBool(b, o.IsOtherLeaf)
 	b = marshalutil.WriteSlice1D(b, o.LeafLabel)
 	b = marshalutil.WriteSlice1D(b, o.LeafVal)
 	return b
@@ -32,5 +32,5 @@ func MerkleProofDecode(b0 []byte) (*MerkleProof, []byte, bool) {
 	if err4 {
 		return nil, nil, true
 	}
-	return &MerkleProof{Siblings: a1, FoundOtherLeaf: a2, LeafLabel: a3, LeafVal: a4}, b4, false
+	return &MerkleProof{Siblings: a1, IsOtherLeaf: a2, LeafLabel: a3, LeafVal: a4}, b4, false
 }
