@@ -6,35 +6,52 @@ import (
 	"testing"
 
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/cryptoutil"
 )
 
 func TestHashChain(t *testing.T) {
-	c := New()
-	links := [][]byte{cryptoutil.Hash(nil)}
+	var seed [32]byte
+	rndSrc := rand.NewChaCha8(seed)
+	rnd := rand.New(rndSrc)
+	chain := New()
+	links := [][]byte{getEmptyLink()}
 
-	for i := uint64(0); i < 1_000; i++ {
-		v := make([]byte, cryptoffi.HashLen)
-		newLink, err := c.Append(v)
+	{
+		// empty chain.
+		p := chain.Prove(0)
+		newLen, newVal, newLink, err := Verify(links[0], p)
 		if err {
 			t.Fatal()
 		}
+		if newLen != 0 {
+			t.Fatal()
+		}
+		if newVal != nil {
+			t.Fatal()
+		}
+		if !bytes.Equal(links[0], newLink) {
+			t.Fatal()
+		}
+	}
+
+	for newLen := uint64(1); newLen < 1_000; newLen++ {
+		newVal := make([]byte, cryptoffi.HashLen)
+		rndSrc.Read(newVal)
+		newLink := chain.Append(newVal)
 		links = append(links, newLink)
 
-		prevLen := rand.Uint64N(i + 1)
-		proof, v0, err := c.Prove(prevLen)
+		prevLen := rnd.Uint64N(newLen + 1)
+		proof := chain.Prove(prevLen)
+		extLen, newVal0, newLink0, err := Verify(links[prevLen], proof)
 		if err {
 			t.Fatal()
 		}
-		if !bytes.Equal(v, v0) {
+		if extLen != newLen-prevLen {
 			t.Fatal()
 		}
-
-		newLen, newLink0, err := Verify(prevLen, links[prevLen], proof, v)
-		if err {
+		if extLen == 0 && newVal0 != nil {
 			t.Fatal()
 		}
-		if newLen != i+1 {
+		if extLen != 0 && !bytes.Equal(newVal, newVal0) {
 			t.Fatal()
 		}
 		if !bytes.Equal(newLink, newLink0) {
