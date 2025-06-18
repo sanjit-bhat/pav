@@ -157,12 +157,10 @@ func EvalMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) []byte {
 	return sk.Evaluate(lByt)
 }
 
-// CompMapVal rets mapVal (epoch || Hash(pk || rand)).
-func CompMapVal(epoch uint64, pkOpen *ktserde.CommitOpen) []byte {
+// CompMapVal rets mapVal (Hash(pk || rand)).
+func CompMapVal(pkOpen *ktserde.CommitOpen) []byte {
 	openByt := ktserde.CommitOpenEncode(make([]byte, 0, 8+uint64(len(pkOpen.Val))+8+cryptoffi.HashLen), pkOpen)
-	commit := cryptoutil.Hash(openByt)
-	v := &ktserde.MapValPre{Epoch: epoch, PkCommit: commit}
-	return ktserde.MapValPreEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), v)
+	return cryptoutil.Hash(openByt)
 }
 
 func compCommitOpen(secret, label []byte) []byte {
@@ -225,11 +223,9 @@ func (s *Server) makeEntries(work []*Work) []*mapEntry {
 func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 	numVers := uint64(len(s.plainPks[in.Uid]))
 	mapLabel := EvalMapLabel(in.Uid, numVers, s.vrfSk)
-
-	nextEpoch := uint64(len(s.auditHist))
 	rand := compCommitOpen(s.commitSecret, mapLabel)
 	open := &ktserde.CommitOpen{Val: in.Pk, Rand: rand}
-	mapVal := CompMapVal(nextEpoch, open)
+	mapVal := CompMapVal(open)
 
 	out.label = mapLabel
 	out.val = mapVal
@@ -282,13 +278,11 @@ func (s *Server) getHist(uid, prefixLen uint64) []*ktserde.Memb {
 	var ver = prefixLen
 	for ver < numVers {
 		label, labelProof := ProveMapLabel(uid, ver, s.vrfSk)
-		inMap, mapVal, mapProof := s.keyMap.Prove(label)
+		inMap, _, mapProof := s.keyMap.Prove(label)
 		std.Assert(inMap)
-		valPre, _, err0 := ktserde.MapValPreDecode(mapVal)
-		std.Assert(!err0)
 		rand := compCommitOpen(s.commitSecret, label)
 		open := &ktserde.CommitOpen{Val: pks[ver], Rand: rand}
-		memb := &ktserde.Memb{LabelProof: labelProof, EpochAdded: valPre.Epoch, PkOpen: open, MerkleProof: mapProof}
+		memb := &ktserde.Memb{LabelProof: labelProof, PkOpen: open, MerkleProof: mapProof}
 		hist = append(hist, memb)
 		ver++
 	}

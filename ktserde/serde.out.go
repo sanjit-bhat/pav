@@ -100,7 +100,6 @@ func MapValPreDecode(b0 []byte) (*MapValPre, []byte, bool) {
 func MembEncode(b0 []byte, o *Memb) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.LabelProof)
-	b = marshal.WriteInt(b, o.EpochAdded)
 	b = CommitOpenEncode(b, o.PkOpen)
 	b = marshalutil.WriteSlice1D(b, o.MerkleProof)
 	return b
@@ -110,19 +109,15 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadInt(b1)
+	a2, b2, err2 := CommitOpenDecode(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := CommitOpenDecode(b2)
+	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
 	if err3 {
 		return nil, nil, true
 	}
-	a4, b4, err4 := marshalutil.ReadSlice1D(b3)
-	if err4 {
-		return nil, nil, true
-	}
-	return &Memb{LabelProof: a1, EpochAdded: a2, PkOpen: a3, MerkleProof: a4}, b4, false
+	return &Memb{LabelProof: a1, PkOpen: a2, MerkleProof: a3}, b3, false
 }
 func NonMembEncode(b0 []byte, o *NonMemb) []byte {
 	var b = b0

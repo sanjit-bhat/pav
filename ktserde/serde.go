@@ -29,7 +29,6 @@ type MapValPre struct {
 
 type Memb struct {
 	LabelProof  []byte
-	EpochAdded  uint64
 	PkOpen      *CommitOpen
 	MerkleProof []byte
 }

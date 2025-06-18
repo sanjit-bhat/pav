@@ -88,57 +88,49 @@ func (c *Client) Get(uid uint64) (bool, []byte, bool) {
 }
 
 // SelfMon self-monitors a client's own uid in the latest epoch.
-// it returns if the key changed and the insertion epoch.
-func (c *Client) SelfMon() (bool, uint64, bool) {
+// it returns if the key changed.
+// the insertion happened sometime since the last SelfMon.
+func (c *Client) SelfMon() (bool, bool) {
 	chainProof, sig, hist, bound, err0 := server.CallHistory(c.server.cli, c.uid, c.LastEpoch.Epoch, c.pendingPut.nextVer)
 	if err0 {
-		return false, 0, true
+		return false, true
 	}
 	// check.
 	last, err1 := c.getChainExt(chainProof, sig)
 	if err1 {
-		return false, 0, true
+		return false, true
 	}
 	if CheckHist(c.server.vrfPk, c.uid, c.pendingPut.nextVer, last.dig, hist) {
-		return false, 0, true
+		return false, true
 	}
 	histLen := uint64(len(hist))
 	boundVer := c.pendingPut.nextVer + histLen
 	if CheckNonMemb(c.server.vrfPk, c.uid, boundVer, last.dig, bound) {
-		return false, 0, true
+		return false, true
 	}
 
 	// check consistency with pending.
 	if !c.pendingPut.isSome {
 		// if no pending, shouldn't have any updates.
 		if histLen != 0 {
-			return false, 0, true
+			return false, true
 		}
 		c.LastEpoch = last
-		return false, 0, false
+		return false, false
 	}
 	// good client only has one version update at a time.
 	if histLen > 1 {
-		return false, 0, false
+		return false, false
 	}
 	// update hasn't yet fired.
 	if histLen == 0 {
 		c.LastEpoch = last
-		return false, 0, false
+		return false, false
 	}
 	newKey := hist[0]
 	// equals pending put.
 	if !std.BytesEqual(newKey.PkOpen.Val, c.pendingPut.pk) {
-		return false, 0, false
-	}
-	// TODO: rm with epoch-less protocol.
-	// old epoch < insert epoch.
-	if newKey.EpochAdded < c.LastEpoch.Epoch {
-		return false, 0, false
-	}
-	// insert epoch <= new epoch.
-	if newKey.EpochAdded > last.Epoch {
-		return false, 0, false
+		return false, false
 	}
 
 	// update.
@@ -147,7 +139,7 @@ func (c *Client) SelfMon() (bool, uint64, bool) {
 	c.pendingPut.pk = nil
 	// this client controls nextVer, so no need to check for overflow.
 	c.pendingPut.nextVer = std.SumAssumeNoOverflow(c.pendingPut.nextVer, 1)
-	return true, newKey.EpochAdded, false
+	return true, false
 }
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientErr {
@@ -242,7 +234,7 @@ func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb 
 	if err0 {
 		return true
 	}
-	mapVal := server.CompMapVal(memb.EpochAdded, memb.PkOpen)
+	mapVal := server.CompMapVal(memb.PkOpen)
 	dig0, err1 := merkle.VerifyMemb(label, mapVal, memb.MerkleProof)
 	if err1 {
 		return true

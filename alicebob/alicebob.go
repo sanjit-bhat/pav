@@ -91,13 +91,6 @@ func testAliceBob(setup *setupParams) {
 	}()
 	wg.Wait()
 
-	// alice self monitor. in real world, she'll come online at times and do this.
-	isInsert, _, err2 := alice.cli.SelfMon()
-	checkWorldErr(setup.servGood, err2)
-	// alice has no keys in flight.
-	std.Assert(!isInsert)
-	alice.hist = extendHist(alice.hist, alice.cli.LastEpoch.Epoch+1)
-
 	if setup.adtrGood {
 		// sync auditors. in real world, this'll happen periodically.
 		updAdtrsAll(setup.servGood, setup.servAddr, setup.adtrAddrs)
@@ -108,6 +101,7 @@ func testAliceBob(setup *setupParams) {
 	}
 
 	// final check. bob got the right key.
+	// Assume alice monitored bob's Get epoch.
 	primitive.Assume(bob.cli.LastEpoch.Epoch <= alice.cli.LastEpoch.Epoch)
 	aliceKey := alice.hist[bob.cli.LastEpoch.Epoch]
 	std.Assert(aliceKey.isReg == bob.isReg)
@@ -123,7 +117,23 @@ type alice struct {
 	hist      []*histEntry
 }
 
+type histEntry struct {
+	isReg bool
+	pk    []byte
+}
+
 func (a *alice) run() {
+	// in this simple example, alice is the only putter.
+	// she can Assume that epochs update iff her Put executes,
+	// which leads to a simple history structure.
+	{
+		isInsert, err0 := a.cli.SelfMon()
+		checkWorldErr(a.servGood, err0)
+		std.Assert(!isInsert)
+		primitive.Assume(a.cli.LastEpoch.Epoch == 0)
+		a.hist = append(a.hist, &histEntry{})
+	}
+
 	for i := uint64(0); i < uint64(20); i++ {
 		primitive.Sleep(5_000_000)
 		pk := cryptoffi.RandBytes(32)
@@ -133,13 +143,11 @@ func (a *alice) run() {
 
 		var isPending = true
 		for isPending {
-			isInsert, insertEp, err0 := a.cli.SelfMon()
+			isInsert, err0 := a.cli.SelfMon()
 			checkWorldErr(a.servGood, err0)
 			if isInsert {
-				// extend to insertEp-1, leaving space for latest key.
-				a.hist = extendHist(a.hist, insertEp)
+				primitive.Assume(a.cli.LastEpoch.Epoch == uint64(len(a.hist)))
 				a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
-				a.hist = extendHist(a.hist, a.cli.LastEpoch.Epoch+1)
 				isPending = false
 			}
 		}
