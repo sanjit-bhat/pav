@@ -32,9 +32,10 @@ type lastInfo struct {
 }
 
 type serverInfo struct {
-	cli   *advrpc.Client
-	sigPk cryptoffi.SigPublicKey
-	vrfPk *cryptoffi.VrfPublicKey
+	cli    *advrpc.Client
+	sigPk  cryptoffi.SigPublicKey
+	vrfPk  *cryptoffi.VrfPublicKey
+	vrfSig []byte
 }
 
 // ClientErr abstracts errors that potentially have irrefutable evidence.
@@ -146,35 +147,48 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientEr
 	stdErr := &ClientErr{Err: true}
 	cli := advrpc.Dial(adtrAddr)
 	last := c.LastEpoch
-	audit, err0 := auditor.CallGet(cli, last.Epoch)
-	if err0 {
+	audit := auditor.CallGet(cli, last.Epoch)
+	if audit.Err {
 		return stdErr
 	}
-	// consistency under untrusted server and trusted auditor.
-	if checkLinkSig(adtrPk, last.Epoch, audit.Link, audit.AdtrSig) {
+
+	// check adtr sig for consistency under untrusted server and trusted auditor.
+	// check serv sig to catch serv misbehavior.
+
+	// vrf evidence.
+	if ktserde.VerifyVrfSig(adtrPk, audit.VrfPk, audit.AdtrVrfSig) {
 		return stdErr
 	}
-	// potentially catch server misbehavior.
-	if checkLinkSig(c.server.sigPk, last.Epoch, audit.Link, audit.ServSig) {
+	if ktserde.VerifyVrfSig(c.server.sigPk, audit.VrfPk, audit.ServVrfSig) {
+		return stdErr
+	}
+	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.server.vrfPk)
+	if !std.BytesEqual(vrfPkB, audit.VrfPk) {
+		evid := &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.server.vrfSig, vrfPk1: audit.VrfPk, sig1: audit.ServVrfSig}}
+		return &ClientErr{Evid: evid, Err: true}
+	}
+
+	// link evidence.
+	if ktserde.VerifyLinkSig(adtrPk, last.Epoch, audit.Link, audit.AdtrLinkSig) {
+		return stdErr
+	}
+	if ktserde.VerifyLinkSig(c.server.sigPk, last.Epoch, audit.Link, audit.ServLinkSig) {
 		return stdErr
 	}
 	if !std.BytesEqual(last.link, audit.Link) {
-		// TODO: simplify this.
-		sd0 := &ktserde.SigDig{Epoch: last.Epoch, Dig: last.link, Sig: last.sig}
-		sd1 := &ktserde.SigDig{Epoch: last.Epoch, Dig: audit.Link, Sig: audit.ServSig}
-		evid := &Evid{sigDig0: sd0, sigDig1: sd1}
+		evid := &Evid{link: &evidLink{epoch: last.Epoch, link0: last.link, sig0: last.sig, link1: audit.Link, sig1: audit.ServLinkSig}}
 		return &ClientErr{Evid: evid, Err: true}
 	}
 	return &ClientErr{Err: false}
 }
 
-func New(uid, servAddr uint64, servSigPk cryptoffi.SigPublicKey, servVrfPk []byte) (*Client, bool) {
+func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (*Client, bool) {
 	cli := advrpc.Dial(servAddr)
-	startEpLen, startLink, proof, sig, err0 := server.CallStartCli(cli)
+	reply, err0 := server.CallStart(cli)
 	if err0 {
 		return nil, true
 	}
-	extLen, newDig, newLink, err1 := hashchain.Verify(startLink, proof)
+	extLen, newDig, newLink, err1 := hashchain.Verify(reply.StartLink, reply.ChainProof)
 	if err1 {
 		return nil, true
 	}
@@ -182,25 +196,25 @@ func New(uid, servAddr uint64, servSigPk cryptoffi.SigPublicKey, servVrfPk []byt
 	if extLen == 0 {
 		return nil, true
 	}
-	if !std.SumNoOverflow(startEpLen, extLen-1) {
+	if !std.SumNoOverflow(reply.StartEpochLen, extLen-1) {
 		return nil, true
 	}
-	lastEp := startEpLen + extLen - 1
-	if checkLinkSig(servSigPk, lastEp, newLink, sig) {
+	lastEp := reply.StartEpochLen + extLen - 1
+	if ktserde.VerifyLinkSig(servPk, lastEp, newLink, reply.LinkSig) {
+		return nil, true
+	}
+	vrfPk, err2 := cryptoffi.VrfPublicKeyDecode(reply.VrfPk)
+	if err2 {
+		return nil, true
+	}
+	if ktserde.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
 		return nil, true
 	}
 
 	pendingPut := &pendingInfo{}
-	last := &lastInfo{Epoch: lastEp, dig: newDig, link: newLink, sig: sig}
-	vrfPk := cryptoffi.VrfPublicKeyDecode(servVrfPk)
-	serv := &serverInfo{cli: cli, sigPk: servSigPk, vrfPk: vrfPk}
+	last := &lastInfo{Epoch: lastEp, dig: newDig, link: newLink, sig: reply.LinkSig}
+	serv := &serverInfo{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: reply.VrfSig}
 	return &Client{uid: uid, pendingPut: pendingPut, LastEpoch: last, server: serv}, false
-}
-
-func checkLinkSig(pk cryptoffi.SigPublicKey, epoch uint64, link []byte, sig []byte) bool {
-	pre := &ktserde.PreSigDig{Epoch: epoch, Dig: link}
-	preByt := ktserde.PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), pre)
-	return pk.Verify(preByt, sig)
 }
 
 func (c *Client) getChainExt(chainProof, sig []byte) (*lastInfo, bool) {
@@ -215,26 +229,19 @@ func (c *Client) getChainExt(chainProof, sig []byte) (*lastInfo, bool) {
 		return nil, true
 	}
 	newEp := c.LastEpoch.Epoch + extLen
-	if checkLinkSig(c.server.sigPk, newEp, newLink, sig) {
+	if ktserde.VerifyLinkSig(c.server.sigPk, newEp, newLink, sig) {
 		return nil, true
 	}
 	return &lastInfo{Epoch: newEp, dig: newDig, link: newLink, sig: sig}, false
 }
 
-// CheckLabel checks the vrf proof, computes the label, and errors on fail.
-func CheckLabel(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) ([]byte, bool) {
-	pre := &ktserde.MapLabelPre{Uid: uid, Ver: ver}
-	preByt := ktserde.MapLabelPreEncode(make([]byte, 0, 16), pre)
-	return vrfPk.Verify(preByt, proof)
-}
-
 // CheckMemb errors on fail.
 func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *ktserde.Memb) bool {
-	label, err0 := CheckLabel(vrfPk, uid, ver, memb.LabelProof)
+	label, err0 := ktserde.CheckMapLabel(vrfPk, uid, ver, memb.LabelProof)
 	if err0 {
 		return true
 	}
-	mapVal := server.CompMapVal(memb.PkOpen)
+	mapVal := ktserde.GetMapVal(memb.PkOpen)
 	dig0, err1 := merkle.VerifyMemb(label, mapVal, memb.MerkleProof)
 	if err1 {
 		return true
@@ -258,7 +265,7 @@ func CheckHist(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte,
 
 // CheckNonMemb errors on fail.
 func CheckNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *ktserde.NonMemb) bool {
-	label, err0 := CheckLabel(vrfPk, uid, ver, nonMemb.LabelProof)
+	label, err0 := ktserde.CheckMapLabel(vrfPk, uid, ver, nonMemb.LabelProof)
 	if err0 {
 		return true
 	}

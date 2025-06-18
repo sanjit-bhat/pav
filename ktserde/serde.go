@@ -1,18 +1,22 @@
 package ktserde
 
-// TODO: rename.
-type PreSigDig struct {
-	Epoch uint64
-	Dig   []byte
+const (
+	VrfSigTag  byte = 1
+	LinkSigTag byte = 2
+)
+
+type VrfSig struct {
+	SigTag byte
+	VrfPk  []byte
 }
 
-type SigDig struct {
-	Epoch uint64
-	Dig   []byte
-	Sig   []byte
+type LinkSig struct {
+	SigTag byte
+	Epoch  uint64
+	Link   []byte
 }
 
-type MapLabelPre struct {
+type MapLabel struct {
 	Uid uint64
 	Ver uint64
 }
@@ -20,11 +24,6 @@ type MapLabelPre struct {
 type CommitOpen struct {
 	Val  []byte
 	Rand []byte
-}
-
-type MapValPre struct {
-	Epoch    uint64
-	PkCommit []byte
 }
 
 type Memb struct {

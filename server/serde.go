@@ -4,11 +4,13 @@ import (
 	"github.com/mit-pdos/pav/ktserde"
 )
 
-type StartCliReply struct {
+type StartReply struct {
 	StartEpochLen uint64
 	StartLink     []byte
 	ChainProof    []byte
 	LinkSig       []byte
+	VrfPk         []byte
+	VrfSig        []byte
 }
 
 type PutArg struct {

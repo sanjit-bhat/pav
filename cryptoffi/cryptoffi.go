@@ -80,16 +80,12 @@ type VrfPublicKey struct {
 	pk *vrf.PublicKey
 }
 
-func VrfGenerateKey() (*VrfPublicKey, *VrfPrivateKey) {
+func VrfGenerateKey() *VrfPrivateKey {
 	sk, err := vrf.GenerateKey(nil)
 	if err != nil {
 		panic("cryptoffi: VrfGenerateKey")
 	}
-	pk, err := sk.Public()
-	if err != nil {
-		panic("cryptoffi: VrfGenerateKey")
-	}
-	return &VrfPublicKey{pk: pk}, &VrfPrivateKey{sk: sk}
+	return &VrfPrivateKey{sk: sk}
 }
 
 // Prove evaluates the VRF on data, returning the output and a proof.
@@ -126,6 +122,10 @@ func (pk *VrfPublicKey) Verify(data, proof []byte) ([]byte, bool) {
 	return out[:HashLen], false
 }
 
+func (sk *VrfPrivateKey) PublicKey() []byte {
+	return sk.sk.PublicKey()
+}
+
 // VrfPublicKeyEncodes encodes a valid pk as bytes.
 func VrfPublicKeyEncode(pk *VrfPublicKey) []byte {
 	return pk.pk.Bytes()
@@ -133,13 +133,13 @@ func VrfPublicKeyEncode(pk *VrfPublicKey) []byte {
 
 // VrfPublicKeyDecode decodes [b].
 // it performs the ECVRF_validate_key checks to run even on adversarial pks.
-// TODO: err since vrf might come from adv now.
-func VrfPublicKeyDecode(b []byte) *VrfPublicKey {
+// it errors on failure.
+func VrfPublicKeyDecode(b []byte) (*VrfPublicKey, bool) {
 	pk, err := vrf.NewPublicKey(b)
 	if err != nil {
-		panic("cryptoffi: VrfPublicKeyDecode")
+		return nil, true
 	}
-	return &VrfPublicKey{pk: pk}
+	return &VrfPublicKey{pk: pk}, false
 }
 
 // # Random

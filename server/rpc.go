@@ -6,18 +6,17 @@ import (
 )
 
 const (
-	StartCliRpc uint64 = 1
-	PutRpc      uint64 = 2
-	HistoryRpc  uint64 = 3
-	AuditRpc    uint64 = 4
+	StartRpc   uint64 = 1
+	PutRpc     uint64 = 2
+	HistoryRpc uint64 = 3
+	AuditRpc   uint64 = 4
 )
 
 func NewRpcServer(s *Server) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
-	h[StartCliRpc] = func(arg []byte, reply *[]byte) {
-		r0, r1, r2, r3 := s.StartCli()
-		r := &StartCliReply{StartEpochLen: r0, StartLink: r1, ChainProof: r2, LinkSig: r3}
-		*reply = StartCliReplyEncode(*reply, r)
+	h[StartRpc] = func(arg []byte, reply *[]byte) {
+		r := s.Start()
+		*reply = StartReplyEncode(*reply, r)
 	}
 	h[PutRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err0 := PutArgDecode(arg)
@@ -53,17 +52,17 @@ func NewRpcServer(s *Server) *advrpc.Server {
 // come from server code.
 // client should be able to assert that they don't happen.
 
-func CallStartCli(c *advrpc.Client) (uint64, []byte, []byte, []byte, bool) {
+func CallStart(c *advrpc.Client) (*StartReply, bool) {
 	rb := new([]byte)
 	var err0 = true
 	for err0 {
-		err0 = c.Call(StartCliRpc, nil, rb)
+		err0 = c.Call(StartRpc, nil, rb)
 	}
-	r, _, err1 := StartCliReplyDecode(*rb)
+	r, _, err1 := StartReplyDecode(*rb)
 	if err1 {
-		return 0, nil, nil, nil, true
+		return nil, true
 	}
-	return r.StartEpochLen, r.StartLink, r.ChainProof, r.LinkSig, false
+	return r, false
 }
 
 func CallPut(c *advrpc.Client, uid uint64, pk []byte, ver uint64) {

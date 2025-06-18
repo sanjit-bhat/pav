@@ -60,7 +60,12 @@ func TestSig(t *testing.T) {
 }
 
 func TestVRF(t *testing.T) {
-	pk0, sk0 := VrfGenerateKey()
+	sk0 := VrfGenerateKey()
+	pkB0 := sk0.PublicKey()
+	pk0, err := VrfPublicKeyDecode(pkB0)
+	if err {
+		t.Fatal()
+	}
 
 	// verify true.
 	d0 := []byte("d0")
@@ -73,8 +78,6 @@ func TestVRF(t *testing.T) {
 		t.Fatal()
 	}
 	if !bytes.Equal(o0, o0Again) {
-		t.Log("h0", o0)
-		t.Log("h0Again", o0Again)
 		t.Fatal()
 	}
 
@@ -92,7 +95,12 @@ func TestVRF(t *testing.T) {
 	}
 
 	// verify false for bad pk.
-	pk1, _ := VrfGenerateKey()
+	sk1 := VrfGenerateKey()
+	pkB1 := sk1.PublicKey()
+	pk1, err := VrfPublicKeyDecode(pkB1)
+	if err {
+		t.Fatal()
+	}
 	if _, err = pk1.Verify(d0, p); !err {
 		t.Fatal()
 	}
@@ -101,18 +109,6 @@ func TestVRF(t *testing.T) {
 	p1 := bytes.Clone(p)
 	p1[0] = ^p1[0]
 	if _, err = pk0.Verify(d0, p1); !err {
-		t.Fatal()
-	}
-}
-
-func TestVRFSerde(t *testing.T) {
-	pk0, sk := VrfGenerateKey()
-	d := []byte("d")
-	_, p := sk.Prove(d)
-
-	pk0B := VrfPublicKeyEncode(pk0)
-	pk1 := VrfPublicKeyDecode(pk0B)
-	if _, err := pk1.Verify(d, p); err {
 		t.Fatal()
 	}
 }

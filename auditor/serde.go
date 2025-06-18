@@ -17,12 +17,11 @@ type GetArg struct {
 }
 
 type GetReply struct {
-	X   *EpochInfo
-	Err bool
-}
-
-type EpochInfo struct {
-	Link    []byte
-	ServSig []byte
-	AdtrSig []byte
+	Link        []byte
+	ServLinkSig []byte
+	AdtrLinkSig []byte
+	VrfPk       []byte
+	ServVrfSig  []byte
+	AdtrVrfSig  []byte
+	Err         bool
 }

@@ -71,7 +71,7 @@ func TestBenchHash(t *testing.T) {
 }
 
 func TestBenchVrfProve(t *testing.T) {
-	_, sk := VrfGenerateKey()
+	sk := VrfGenerateKey()
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	data := make([]byte, 16)
@@ -93,7 +93,12 @@ func TestBenchVrfProve(t *testing.T) {
 }
 
 func TestBenchVrfVerify(t *testing.T) {
-	pk, sk := VrfGenerateKey()
+	sk := VrfGenerateKey()
+	pkB := sk.PublicKey()
+	pk, err := VrfPublicKeyDecode(pkB)
+	if err {
+		t.Fatal()
+	}
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	data := make([]byte, 16)
@@ -118,7 +123,7 @@ func TestBenchVrfVerify(t *testing.T) {
 }
 
 func TestBenchVrfSize(t *testing.T) {
-	_, sk := VrfGenerateKey()
+	sk := VrfGenerateKey()
 	data := make([]byte, 16)
 	_, p := sk.Prove(data)
 	benchutil.Report(0, []*benchutil.Metric{

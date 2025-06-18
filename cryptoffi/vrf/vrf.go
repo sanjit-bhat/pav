@@ -88,6 +88,10 @@ func (sk *PrivateKey) Public() (*PublicKey, error) {
 	return NewPublicKey(sk.pk)
 }
 
+func (sk *PrivateKey) PublicKey() []byte {
+	return sk.pk
+}
+
 // Bytes serialises the private VRF key in a bytearray.
 func (sk *PrivateKey) Bytes() []byte {
 	buf := make([]byte, PrivateKeySize)

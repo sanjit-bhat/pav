@@ -7,14 +7,14 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func PreSigDigEncode(b0 []byte, o *PreSigDig) []byte {
+func VrfSigEncode(b0 []byte, o *VrfSig) []byte {
 	var b = b0
-	b = marshal.WriteInt(b, o.Epoch)
-	b = marshalutil.WriteSlice1D(b, o.Dig)
+	b = marshalutil.WriteByte(b, o.SigTag)
+	b = marshalutil.WriteSlice1D(b, o.VrfPk)
 	return b
 }
-func PreSigDigDecode(b0 []byte) (*PreSigDig, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+func VrfSigDecode(b0 []byte) (*VrfSig, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadByte(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -22,21 +22,21 @@ func PreSigDigDecode(b0 []byte) (*PreSigDig, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	return &PreSigDig{Epoch: a1, Dig: a2}, b2, false
+	return &VrfSig{SigTag: a1, VrfPk: a2}, b2, false
 }
-func SigDigEncode(b0 []byte, o *SigDig) []byte {
+func LinkSigEncode(b0 []byte, o *LinkSig) []byte {
 	var b = b0
+	b = marshalutil.WriteByte(b, o.SigTag)
 	b = marshal.WriteInt(b, o.Epoch)
-	b = marshalutil.WriteSlice1D(b, o.Dig)
-	b = marshalutil.WriteSlice1D(b, o.Sig)
+	b = marshalutil.WriteSlice1D(b, o.Link)
 	return b
 }
-func SigDigDecode(b0 []byte) (*SigDig, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+func LinkSigDecode(b0 []byte) (*LinkSig, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadByte(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := marshalutil.ReadInt(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -44,15 +44,15 @@ func SigDigDecode(b0 []byte) (*SigDig, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &SigDig{Epoch: a1, Dig: a2, Sig: a3}, b3, false
+	return &LinkSig{SigTag: a1, Epoch: a2, Link: a3}, b3, false
 }
-func MapLabelPreEncode(b0 []byte, o *MapLabelPre) []byte {
+func MapLabelEncode(b0 []byte, o *MapLabel) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.Uid)
 	b = marshal.WriteInt(b, o.Ver)
 	return b
 }
-func MapLabelPreDecode(b0 []byte) (*MapLabelPre, []byte, bool) {
+func MapLabelDecode(b0 []byte) (*MapLabel, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
@@ -61,7 +61,7 @@ func MapLabelPreDecode(b0 []byte) (*MapLabelPre, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	return &MapLabelPre{Uid: a1, Ver: a2}, b2, false
+	return &MapLabel{Uid: a1, Ver: a2}, b2, false
 }
 func CommitOpenEncode(b0 []byte, o *CommitOpen) []byte {
 	var b = b0
@@ -79,23 +79,6 @@ func CommitOpenDecode(b0 []byte) (*CommitOpen, []byte, bool) {
 		return nil, nil, true
 	}
 	return &CommitOpen{Val: a1, Rand: a2}, b2, false
-}
-func MapValPreEncode(b0 []byte, o *MapValPre) []byte {
-	var b = b0
-	b = marshal.WriteInt(b, o.Epoch)
-	b = marshalutil.WriteSlice1D(b, o.PkCommit)
-	return b
-}
-func MapValPreDecode(b0 []byte) (*MapValPre, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
-	if err1 {
-		return nil, nil, true
-	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
-	if err2 {
-		return nil, nil, true
-	}
-	return &MapValPre{Epoch: a1, PkCommit: a2}, b2, false
 }
 func MembEncode(b0 []byte, o *Memb) []byte {
 	var b = b0

@@ -26,8 +26,7 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 		if err0 {
 			return
 		}
-		r0, r1 := adtr.Get(a.Epoch)
-		r := &GetReply{X: r0, Err: r1}
+		r := adtr.Get(a.Epoch)
 		*reply = GetReplyEncode(*reply, r)
 	}
 	return advrpc.NewServer(h)
@@ -48,26 +47,24 @@ func CallUpdate(c *advrpc.Client, proof *ktserde.AuditProof) bool {
 	return r.Err
 }
 
-func CallGet(c *advrpc.Client, epoch uint64) (*EpochInfo, bool) {
-	var info *EpochInfo
-	var err bool
+func CallGet(c *advrpc.Client, epoch uint64) *GetReply {
+	var reply *GetReply
 	// retry net and invalid-epoch errs:
 	// client can't assert that adtr has requested epoch.
 	// pass thru decoding err, which client can assert away in correctness world.
 	// NOTE: malicious server could send a very large epoch to the client,
 	// causing it to infinite loop, but this is a bigger liveness bug.
 	for {
-		info0, err0 := callGetAux(c, epoch)
-		info = info0
+		reply0, err0 := callGetAux(c, epoch)
+		reply = reply0
 		if err0 == errNone {
 			break
 		}
 		if err0 == errDecode {
-			err = true
 			break
 		}
 	}
-	return info, err
+	return reply
 }
 
 const (
@@ -77,7 +74,7 @@ const (
 	errAdtr   uint64 = 4
 )
 
-func callGetAux(c *advrpc.Client, epoch uint64) (*EpochInfo, uint64) {
+func callGetAux(c *advrpc.Client, epoch uint64) (*GetReply, uint64) {
 	a := &GetArg{Epoch: epoch}
 	ab := GetArgEncode(make([]byte, 0), a)
 	rb := new([]byte)
@@ -92,5 +89,5 @@ func callGetAux(c *advrpc.Client, epoch uint64) (*EpochInfo, uint64) {
 	if r.Err {
 		return nil, errAdtr
 	}
-	return r.X, errNone
+	return r, errNone
 }

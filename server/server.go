@@ -5,7 +5,6 @@ import (
 
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/cryptoutil"
 	"github.com/mit-pdos/pav/hashchain"
 	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/merkle"
@@ -26,18 +25,20 @@ type Server struct {
 	chain *hashchain.HashChain
 	// auditHist stores auditing info on prior epochs.
 	auditHist []*ktserde.AuditProof
+	vrfPkSig  []byte
 	// WorkQ batch processes Put requests.
 	WorkQ *WorkQ
 }
 
-// StartCli bootstraps a client with knowledge of the last merkle dig.
-func (s *Server) StartCli() (uint64, []byte, []byte, []byte) {
+// Start bootstraps a party with knowledge of the hashchain and vrf.
+func (s *Server) Start() *StartReply {
 	s.mu.RLock()
 	predLen := uint64(len(s.auditHist)) - 1
 	predLink, proof := s.chain.ProveLast()
 	lastSig := s.auditHist[predLen].LinkSig
+	pk := s.vrfSk.PublicKey()
 	s.mu.RUnlock()
-	return predLen, predLink, proof, lastSig
+	return &StartReply{StartEpochLen: predLen, StartLink: predLink, ChainProof: proof, LinkSig: lastSig, VrfPk: pk, VrfSig: s.vrfPkSig}
 }
 
 // Put queues pk (at the specified version) for insertion.
@@ -118,56 +119,37 @@ func (s *Server) Worker() {
 	}
 }
 
-func New() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
+func New() (*Server, cryptoffi.SigPublicKey) {
 	mu := new(sync.RWMutex)
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
-	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
+	vrfSk := cryptoffi.VrfGenerateKey()
+	vrfSig := ktserde.SignVrf(sigSk, vrfSk.PublicKey())
 	secret := cryptoffi.RandBytes(cryptoffi.HashLen)
 	keys := merkle.New()
 	plainPks := make(map[uint64][][]byte)
 	chain := hashchain.New()
 	wq := NewWorkQ()
-	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: secret, keyMap: keys, plainPks: plainPks, chain: chain, WorkQ: wq}
+	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: secret, keyMap: keys, plainPks: plainPks, chain: chain, vrfPkSig: vrfSig, WorkQ: wq}
 
 	// commit empty tree as epoch 0.
 	dig := keys.Digest()
 	link := chain.Append(dig)
-	sig := s.getLinkSig(0, link)
-	s.auditHist = append(s.auditHist, &ktserde.AuditProof{LinkSig: sig})
+	linkSig := ktserde.SignLink(s.sigSk, 0, link)
+	s.auditHist = append(s.auditHist, &ktserde.AuditProof{LinkSig: linkSig})
 
 	go func() {
 		for {
 			s.Worker()
 		}
 	}()
-	return s, sigPk, vrfPk
+	return s, sigPk
 }
 
-// ProveMapLabel rets the vrf output and proof for mapLabel (VRF(uid || ver)).
-func ProveMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) ([]byte, []byte) {
-	l := &ktserde.MapLabelPre{Uid: uid, Ver: ver}
-	lByt := ktserde.MapLabelPreEncode(make([]byte, 0, 16), l)
-	return sk.Prove(lByt)
-}
-
-// EvalMapLabel rets the vrf output for mapLabel (VRF(uid || ver)).
-func EvalMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) []byte {
-	l := &ktserde.MapLabelPre{Uid: uid, Ver: ver}
-	lByt := ktserde.MapLabelPreEncode(make([]byte, 0, 16), l)
-	return sk.Evaluate(lByt)
-}
-
-// CompMapVal rets mapVal (Hash(pk || rand)).
-func CompMapVal(pkOpen *ktserde.CommitOpen) []byte {
-	openByt := ktserde.CommitOpenEncode(make([]byte, 0, 8+uint64(len(pkOpen.Val))+8+cryptoffi.HashLen), pkOpen)
-	return cryptoutil.Hash(openByt)
-}
-
-func compCommitOpen(secret, label []byte) []byte {
-	var b = make([]byte, 0, 2*cryptoffi.HashLen)
-	b = append(b, secret...)
-	b = append(b, label...)
-	return cryptoutil.Hash(b)
+func getCommitRand(secret, label []byte) []byte {
+	hr := cryptoffi.NewHasher()
+	hr.Write(secret)
+	hr.Write(label)
+	return hr.Sum(nil)
 }
 
 func (s *Server) checkRequests(work []*Work) {
@@ -222,10 +204,10 @@ func (s *Server) makeEntries(work []*Work) []*mapEntry {
 
 func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 	numVers := uint64(len(s.plainPks[in.Uid]))
-	mapLabel := EvalMapLabel(in.Uid, numVers, s.vrfSk)
-	rand := compCommitOpen(s.commitSecret, mapLabel)
+	mapLabel := ktserde.EvalMapLabel(in.Uid, numVers, s.vrfSk)
+	rand := getCommitRand(s.commitSecret, mapLabel)
 	open := &ktserde.CommitOpen{Val: in.Pk, Rand: rand}
-	mapVal := CompMapVal(open)
+	mapVal := ktserde.GetMapVal(open)
 
 	out.label = mapLabel
 	out.val = mapVal
@@ -256,18 +238,8 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 	dig := s.keyMap.Digest()
 	link := s.chain.Append(dig)
 	epoch := uint64(len(s.auditHist))
-	sig := s.getLinkSig(epoch, link)
+	sig := ktserde.SignLink(s.sigSk, epoch, link)
 	s.auditHist = append(s.auditHist, &ktserde.AuditProof{Updates: upd, LinkSig: sig})
-}
-
-func (s *Server) getLinkSig(epoch uint64, link []byte) []byte {
-	preSig := &ktserde.PreSigDig{Epoch: epoch, Dig: link}
-	preSigByt := ktserde.PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
-	sig := s.sigSk.Sign(preSigByt)
-	// benchmark: turn off sigs for akd compat.
-	// _ = sk
-	// var sig []byte
-	return sig
 }
 
 // getHist returns a history of membership proofs for all post-prefix versions.
@@ -277,10 +249,10 @@ func (s *Server) getHist(uid, prefixLen uint64) []*ktserde.Memb {
 	var hist []*ktserde.Memb
 	var ver = prefixLen
 	for ver < numVers {
-		label, labelProof := ProveMapLabel(uid, ver, s.vrfSk)
+		label, labelProof := ktserde.ProveMapLabel(uid, ver, s.vrfSk)
 		inMap, _, mapProof := s.keyMap.Prove(label)
 		std.Assert(inMap)
-		rand := compCommitOpen(s.commitSecret, label)
+		rand := getCommitRand(s.commitSecret, label)
 		open := &ktserde.CommitOpen{Val: pks[ver], Rand: rand}
 		memb := &ktserde.Memb{LabelProof: labelProof, PkOpen: open, MerkleProof: mapProof}
 		hist = append(hist, memb)
@@ -291,7 +263,7 @@ func (s *Server) getHist(uid, prefixLen uint64) []*ktserde.Memb {
 
 // getBound returns a non-membership proof for the boundary version.
 func (s *Server) getBound(uid, numVers uint64) *ktserde.NonMemb {
-	label, labelProof := ProveMapLabel(uid, numVers, s.vrfSk)
+	label, labelProof := ktserde.ProveMapLabel(uid, numVers, s.vrfSk)
 	inMap, _, mapProof := s.keyMap.Prove(label)
 	std.Assert(!inMap)
 	return &ktserde.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}

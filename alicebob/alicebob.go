@@ -23,8 +23,7 @@ const (
 type setupParams struct {
 	servGood  bool
 	servAddr  uint64
-	servSigPk cryptoffi.SigPublicKey
-	servVrfPk []byte
+	servPk    cryptoffi.SigPublicKey
 	adtrGood  bool
 	adtrAddrs []uint64
 	adtrPks   []cryptoffi.SigPublicKey
@@ -33,18 +32,14 @@ type setupParams struct {
 // testSecurity Assume's no errors in client-server calls and
 // has clients contact the auditor.
 func testSecurity(servAddr uint64, adtrAddrs []uint64) {
-	s := setup(servAddr, adtrAddrs)
-	s.servGood = false
-	s.adtrGood = true
+	s := setup(servAddr, adtrAddrs, false, true)
 	testAliceBob(s)
 }
 
 // testCorrectness Assert's no errors in client-server calls and
 // does not use auditors.
 func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
-	s := setup(servAddr, adtrAddrs)
-	s.servGood = true
-	s.adtrGood = false
+	s := setup(servAddr, adtrAddrs, true, false)
 	testAliceBob(s)
 }
 
@@ -69,12 +64,12 @@ func checkEvidErr(servGood bool, servPk cryptoffi.SigPublicKey, err *client.Clie
 }
 
 func testAliceBob(setup *setupParams) {
-	aliceCli, err0 := client.New(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	aliceCli, err0 := client.New(aliceUid, setup.servAddr, setup.servPk)
 	checkWorldErr(setup.servGood, err0)
-	alice := &alice{servGood: setup.servGood, servSigPk: setup.servSigPk, cli: aliceCli}
-	bobCli, err1 := client.New(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	alice := &alice{servGood: setup.servGood, servSigPk: setup.servPk, cli: aliceCli}
+	bobCli, err1 := client.New(bobUid, setup.servAddr, setup.servPk)
 	checkWorldErr(setup.servGood, err1)
-	bob := &bob{servGood: setup.servGood, servSigPk: setup.servSigPk, cli: bobCli}
+	bob := &bob{servGood: setup.servGood, servSigPk: setup.servPk, cli: bobCli}
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
@@ -96,8 +91,8 @@ func testAliceBob(setup *setupParams) {
 		updAdtrsAll(setup.servGood, setup.servAddr, setup.adtrAddrs)
 
 		// alice and bob audit. ordering irrelevant across clients.
-		doAudits(alice.cli, setup.servGood, setup.servSigPk, setup.adtrAddrs, setup.adtrPks)
-		doAudits(bob.cli, setup.servGood, setup.servSigPk, setup.adtrAddrs, setup.adtrPks)
+		doAudits(alice.cli, setup.servGood, setup.servPk, setup.adtrAddrs, setup.adtrPks)
+		doAudits(bob.cli, setup.servGood, setup.servPk, setup.adtrAddrs, setup.adtrPks)
 	}
 
 	// final check. bob got the right key.
@@ -171,20 +166,22 @@ func (b *bob) run() {
 }
 
 // setup starts server and auditors.
-func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
-	serv, servSigPk, servVrfPk := server.New()
-	servVrfPkEnc := cryptoffi.VrfPublicKeyEncode(servVrfPk)
+func setup(servAddr uint64, adtrAddrs []uint64, servGood, adtrGood bool) *setupParams {
+	serv, servSigPk := server.New()
 	servRpc := server.NewRpcServer(serv)
 	servRpc.Serve(servAddr)
+	primitive.Sleep(1_000_000)
+
 	var adtrPks []cryptoffi.SigPublicKey
 	for _, adtrAddr := range adtrAddrs {
-		adtr, adtrPk := auditor.New(servSigPk)
+		adtr, adtrPk, err0 := auditor.New(servAddr, servSigPk)
+		checkWorldErr(servGood, err0)
 		adtrRpc := auditor.NewRpcAuditor(adtr)
 		adtrRpc.Serve(adtrAddr)
 		adtrPks = append(adtrPks, adtrPk)
 	}
 	primitive.Sleep(1_000_000)
-	return &setupParams{servGood: true, servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPkEnc, adtrGood: true, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
+	return &setupParams{servGood: servGood, servAddr: servAddr, servPk: servSigPk, adtrGood: adtrGood, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
 }
 
 func doAudits(cli *client.Client, servGood bool, servPk cryptoffi.SigPublicKey, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) {

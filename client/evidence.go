@@ -6,32 +6,55 @@ import (
 	"github.com/mit-pdos/pav/ktserde"
 )
 
-// Check rets err if signed dig does not validate.
-func CheckSigDig(o *ktserde.SigDig, pk cryptoffi.SigPublicKey) bool {
-	pre := &ktserde.PreSigDig{Epoch: o.Epoch, Dig: o.Dig}
-	preByt := ktserde.PreSigDigEncode(make([]byte, 0), pre)
-	return pk.Verify(preByt, o.Sig)
+// Evid is evidence that the server misbehaved.
+type Evid struct {
+	vrf  *evidVrf
+	link *evidLink
 }
 
-// Evid is evidence that the server signed two conflicting digs.
-type Evid struct {
-	sigDig0 *ktserde.SigDig
-	sigDig1 *ktserde.SigDig
+type evidVrf struct {
+	vrfPk0 []byte
+	sig0   []byte
+	vrfPk1 []byte
+	sig1   []byte
+}
+
+type evidLink struct {
+	epoch uint64
+	link0 []byte
+	sig0  []byte
+	link1 []byte
+	sig1  []byte
+}
+
+func (e *evidVrf) Check(pk cryptoffi.SigPublicKey) bool {
+	if ktserde.VerifyVrfSig(pk, e.vrfPk0, e.sig0) {
+		return true
+	}
+	if ktserde.VerifyVrfSig(pk, e.vrfPk1, e.sig1) {
+		return true
+	}
+	return std.BytesEqual(e.vrfPk0, e.vrfPk1)
+}
+
+func (e *evidLink) Check(pk cryptoffi.SigPublicKey) bool {
+	if ktserde.VerifyLinkSig(pk, e.epoch, e.link0, e.sig0) {
+		return true
+	}
+	if ktserde.VerifyLinkSig(pk, e.epoch, e.link1, e.sig1) {
+		return true
+	}
+	return std.BytesEqual(e.link0, e.link1)
 }
 
 // Check returns an error if the evidence does not check out.
 // otherwise, it proves that the server was dishonest.
-func (e *Evid) Check(servPk cryptoffi.SigPublicKey) bool {
-	err0 := CheckSigDig(e.sigDig0, servPk)
-	if err0 {
-		return true
+func (e *Evid) Check(pk cryptoffi.SigPublicKey) bool {
+	if e.vrf != nil {
+		return e.vrf.Check(pk)
 	}
-	err1 := CheckSigDig(e.sigDig1, servPk)
-	if err1 {
-		return true
+	if e.link != nil {
+		return e.link.Check(pk)
 	}
-	if e.sigDig0.Epoch != e.sigDig1.Epoch {
-		return true
-	}
-	return std.BytesEqual(e.sigDig0.Dig, e.sigDig1.Dig)
+	return true
 }
