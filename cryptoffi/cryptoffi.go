@@ -133,6 +133,7 @@ func VrfPublicKeyEncode(pk *VrfPublicKey) []byte {
 
 // VrfPublicKeyDecode decodes [b].
 // it performs the ECVRF_validate_key checks to run even on adversarial pks.
+// TODO: err since vrf might come from adv now.
 func VrfPublicKeyDecode(b []byte) *VrfPublicKey {
 	pk, err := vrf.NewPublicKey(b)
 	if err != nil {

@@ -6,76 +6,91 @@ import (
 )
 
 const (
-	AdtrUpdateRpc uint64 = 0
-	AdtrGetRpc    uint64 = 1
+	UpdateRpc uint64 = 1
+	GetRpc    uint64 = 2
 )
 
-func NewRpcAuditor(a *Auditor) *advrpc.Server {
+func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
-	h[AdtrUpdateRpc] = func(arg []byte, reply *[]byte) {
-		argObj, _, err0 := AdtrUpdateArgDecode(arg)
+	h[UpdateRpc] = func(arg []byte, reply *[]byte) {
+		a, _, err0 := UpdateArgDecode(arg)
 		if err0 {
 			return
 		}
-		ret0 := a.Update(argObj.P)
-		replyObj := &AdtrUpdateReply{Err: ret0}
-		*reply = AdtrUpdateReplyEncode(*reply, replyObj)
+		r0 := adtr.Update(a.P)
+		replyObj := &UpdateReply{Err: r0}
+		*reply = UpdateReplyEncode(*reply, replyObj)
 	}
-	h[AdtrGetRpc] = func(arg []byte, reply *[]byte) {
-		argObj, _, err0 := AdtrGetArgDecode(arg)
+	h[GetRpc] = func(arg []byte, reply *[]byte) {
+		a, _, err0 := GetArgDecode(arg)
 		if err0 {
 			return
 		}
-		ret0, ret1 := a.Get(argObj.Epoch)
-		replyObj := &AdtrGetReply{X: ret0, Err: ret1}
-		*reply = AdtrGetReplyEncode(*reply, replyObj)
+		r0, r1 := adtr.Get(a.Epoch)
+		r := &GetReply{X: r0, Err: r1}
+		*reply = GetReplyEncode(*reply, r)
 	}
 	return advrpc.NewServer(h)
 }
 
-func CallAdtrUpdate(c *advrpc.Client, proof *ktserde.UpdateProof) bool {
-	arg := &AdtrUpdateArg{P: proof}
-	argByt := AdtrUpdateArgEncode(make([]byte, 0), arg)
-	replyByt := new([]byte)
+func CallUpdate(c *advrpc.Client, proof *ktserde.AuditProof) bool {
+	a := &UpdateArg{P: proof}
+	ab := UpdateArgEncode(make([]byte, 0), a)
+	rb := new([]byte)
 	var err0 = true
 	for err0 {
-		err0 = c.Call(AdtrUpdateRpc, argByt, replyByt)
+		err0 = c.Call(UpdateRpc, ab, rb)
 	}
-	reply, _, err1 := AdtrUpdateReplyDecode(*replyByt)
+	r, _, err1 := UpdateReplyDecode(*rb)
 	if err1 {
 		return true
 	}
-	return reply.Err
+	return r.Err
 }
 
-func CallAdtrGet(c *advrpc.Client, epoch uint64) *AdtrEpochInfo {
-	var adtrInfo *AdtrEpochInfo
-	var err = true
-	// this "removes" errors from the auditor, which arise from
-	// not yet having seen an epoch.
-	// this allows us to prove that client.Audit never errors
-	// in a correctness setting.
-	// a malicious server could send a very large epoch to the client,
-	// causing it to infinitely loop.
-	for err {
-		adtrInfo0, err0 := callAdtrGetInner(c, epoch)
-		adtrInfo = adtrInfo0
-		err = err0
+func CallGet(c *advrpc.Client, epoch uint64) (*EpochInfo, bool) {
+	var info *EpochInfo
+	var err bool
+	// retry net and invalid-epoch errs:
+	// client can't assert that adtr has requested epoch.
+	// pass thru decoding err, which client can assert away in correctness world.
+	// NOTE: malicious server could send a very large epoch to the client,
+	// causing it to infinite loop, but this is a bigger liveness bug.
+	for {
+		info0, err0 := callGetAux(c, epoch)
+		info = info0
+		if err0 == errNone {
+			break
+		}
+		if err0 == errDecode {
+			err = true
+			break
+		}
 	}
-	return adtrInfo
+	return info, err
 }
 
-func callAdtrGetInner(c *advrpc.Client, epoch uint64) (*AdtrEpochInfo, bool) {
-	arg := &AdtrGetArg{Epoch: epoch}
-	argByt := AdtrGetArgEncode(make([]byte, 0), arg)
-	replyByt := new([]byte)
-	var err0 = true
-	for err0 {
-		err0 = c.Call(AdtrGetRpc, argByt, replyByt)
+const (
+	errNone   uint64 = 1
+	errNet    uint64 = 2
+	errDecode uint64 = 3
+	errAdtr   uint64 = 4
+)
+
+func callGetAux(c *advrpc.Client, epoch uint64) (*EpochInfo, uint64) {
+	a := &GetArg{Epoch: epoch}
+	ab := GetArgEncode(make([]byte, 0), a)
+	rb := new([]byte)
+	err0 := c.Call(GetRpc, ab, rb)
+	if err0 {
+		return nil, errNet
 	}
-	reply, _, err1 := AdtrGetReplyDecode(*replyByt)
+	r, _, err1 := GetReplyDecode(*rb)
 	if err1 {
-		return nil, true
+		return nil, errDecode
 	}
-	return reply.X, reply.Err
+	if r.Err {
+		return nil, errAdtr
+	}
+	return r.X, errNone
 }

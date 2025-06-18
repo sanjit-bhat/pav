@@ -5,9 +5,11 @@ import (
 
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
+	"github.com/mit-pdos/pav/advrpc"
 	"github.com/mit-pdos/pav/auditor"
 	"github.com/mit-pdos/pav/client"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/server"
 )
 
@@ -46,6 +48,14 @@ func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
 	testAliceBob(s)
 }
 
+func checkWorldErr(servGood bool, err bool) {
+	if servGood {
+		std.Assert(!err)
+	} else {
+		primitive.Assume(!err)
+	}
+}
+
 func checkEvidErr(servGood bool, servPk cryptoffi.SigPublicKey, err *client.ClientErr) {
 	if err.Evid != nil {
 		std.Assert(!err.Evid.Check(servPk))
@@ -59,9 +69,11 @@ func checkEvidErr(servGood bool, servPk cryptoffi.SigPublicKey, err *client.Clie
 }
 
 func testAliceBob(setup *setupParams) {
-	aliceCli := client.NewClient(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	aliceCli, err0 := client.New(aliceUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	checkWorldErr(setup.servGood, err0)
 	alice := &alice{servGood: setup.servGood, servSigPk: setup.servSigPk, cli: aliceCli}
-	bobCli := client.NewClient(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	bobCli, err1 := client.New(bobUid, setup.servAddr, setup.servSigPk, setup.servVrfPk)
+	checkWorldErr(setup.servGood, err1)
 	bob := &bob{servGood: setup.servGood, servSigPk: setup.servSigPk, cli: bobCli}
 
 	wg := new(sync.WaitGroup)
@@ -80,24 +92,24 @@ func testAliceBob(setup *setupParams) {
 	wg.Wait()
 
 	// alice self monitor. in real world, she'll come online at times and do this.
-	isInsert, _, err0 := alice.cli.SelfMon()
-	checkEvidErr(setup.servGood, setup.servSigPk, err0)
+	isInsert, _, err2 := alice.cli.SelfMon()
+	checkWorldErr(setup.servGood, err2)
 	// alice has no keys in flight.
 	std.Assert(!isInsert)
-	alice.hist = extendHist(alice.hist, alice.cli.NextEpoch)
+	alice.hist = extendHist(alice.hist, alice.cli.LastEpoch.Epoch+1)
 
 	if setup.adtrGood {
 		// sync auditors. in real world, this'll happen periodically.
-		updAdtrsAll(setup.servAddr, setup.adtrAddrs)
+		updAdtrsAll(setup.servGood, setup.servAddr, setup.adtrAddrs)
 
 		// alice and bob audit. ordering irrelevant across clients.
-		doAudits(alice.cli, setup.adtrAddrs, setup.adtrPks)
-		doAudits(bob.cli, setup.adtrAddrs, setup.adtrPks)
+		doAudits(alice.cli, setup.servGood, setup.servSigPk, setup.adtrAddrs, setup.adtrPks)
+		doAudits(bob.cli, setup.servGood, setup.servSigPk, setup.adtrAddrs, setup.adtrPks)
 	}
 
 	// final check. bob got the right key.
-	primitive.Assume(bob.cli.NextEpoch <= alice.cli.NextEpoch)
-	aliceKey := alice.hist[bob.cli.NextEpoch-1]
+	primitive.Assume(bob.cli.LastEpoch.Epoch <= alice.cli.LastEpoch.Epoch)
+	aliceKey := alice.hist[bob.cli.LastEpoch.Epoch]
 	std.Assert(aliceKey.isReg == bob.isReg)
 	if aliceKey.isReg {
 		std.Assert(std.BytesEqual(aliceKey.pk, bob.alicePk))
@@ -122,12 +134,12 @@ func (a *alice) run() {
 		var isPending = true
 		for isPending {
 			isInsert, insertEp, err0 := a.cli.SelfMon()
-			checkEvidErr(a.servGood, a.servSigPk, err0)
+			checkWorldErr(a.servGood, err0)
 			if isInsert {
 				// extend to insertEp-1, leaving space for latest key.
 				a.hist = extendHist(a.hist, insertEp)
 				a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
-				a.hist = extendHist(a.hist, a.cli.NextEpoch)
+				a.hist = extendHist(a.hist, a.cli.LastEpoch.Epoch+1)
 				isPending = false
 			}
 		}
@@ -145,24 +157,65 @@ type bob struct {
 func (b *bob) run() {
 	primitive.Sleep(120_000_000)
 	isReg, pk, err0 := b.cli.Get(aliceUid)
-	checkEvidErr(b.servGood, b.servSigPk, err0)
+	checkWorldErr(b.servGood, err0)
 	b.isReg = isReg
 	b.alicePk = pk
 }
 
 // setup starts server and auditors.
 func setup(servAddr uint64, adtrAddrs []uint64) *setupParams {
-	serv, servSigPk, servVrfPk := server.NewServer()
+	serv, servSigPk, servVrfPk := server.New()
 	servVrfPkEnc := cryptoffi.VrfPublicKeyEncode(servVrfPk)
 	servRpc := server.NewRpcServer(serv)
 	servRpc.Serve(servAddr)
 	var adtrPks []cryptoffi.SigPublicKey
 	for _, adtrAddr := range adtrAddrs {
-		adtr, adtrPk := auditor.NewAuditor()
+		adtr, adtrPk := auditor.New(servSigPk)
 		adtrRpc := auditor.NewRpcAuditor(adtr)
 		adtrRpc.Serve(adtrAddr)
 		adtrPks = append(adtrPks, adtrPk)
 	}
 	primitive.Sleep(1_000_000)
 	return &setupParams{servGood: true, servAddr: servAddr, servSigPk: servSigPk, servVrfPk: servVrfPkEnc, adtrGood: true, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
+}
+
+func doAudits(cli *client.Client, servGood bool, servPk cryptoffi.SigPublicKey, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) {
+	numAdtrs := uint64(len(adtrAddrs))
+	for i := uint64(0); i < numAdtrs; i++ {
+		addr := adtrAddrs[i]
+		pk := adtrPks[i]
+		err := cli.Audit(addr, pk)
+		checkEvidErr(servGood, servPk, err)
+		primitive.Assume(!err.Err)
+	}
+}
+
+func mkRpcClients(addrs []uint64) []*advrpc.Client {
+	var c []*advrpc.Client
+	for _, addr := range addrs {
+		cli := advrpc.Dial(addr)
+		c = append(c, cli)
+	}
+	return c
+}
+
+func updAdtrsOnce(servGood bool, upd *ktserde.AuditProof, adtrs []*advrpc.Client) {
+	for _, cli := range adtrs {
+		err := auditor.CallUpdate(cli, upd)
+		checkWorldErr(servGood, err)
+	}
+}
+
+func updAdtrsAll(servGood bool, servAddr uint64, adtrAddrs []uint64) {
+	servCli := advrpc.Dial(servAddr)
+	adtrs := mkRpcClients(adtrAddrs)
+	var epoch uint64
+	for {
+		upd, err := server.CallAudit(servCli, epoch)
+		if err {
+			break
+		}
+		updAdtrsOnce(servGood, upd, adtrs)
+		epoch++
+	}
 }

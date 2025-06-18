@@ -5,105 +5,96 @@ import (
 
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/hashchain"
 	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/merkle"
 )
 
 type Auditor struct {
-	mu       *sync.Mutex
-	sk       *cryptoffi.SigPrivateKey
-	keyMap   *merkle.Tree
-	histInfo []*AdtrEpochInfo
+	mu      *sync.RWMutex
+	sk      *cryptoffi.SigPrivateKey
+	servPk  cryptoffi.SigPublicKey
+	lastDig []byte
+	hist    []*EpochInfo
 }
 
-// Update checks new epoch updates, applies them, and errors on fail.
-func (a *Auditor) Update(proof *ktserde.UpdateProof) bool {
+// Update checks a new epoch update, applies it, and errors on fail.
+func (a *Auditor) Update(proof *ktserde.AuditProof) bool {
 	a.mu.Lock()
-	nextEp := uint64(len(a.histInfo))
-	if checkUpd(a.keyMap, nextEp, proof.Updates) {
+	nextEp := uint64(len(a.hist))
+	var lastLink []byte
+	if nextEp == 0 {
+		// start off with empty chain.
+		lastLink = hashchain.GetEmptyLink()
+	} else {
+		lastLink = a.hist[nextEp-1].Link
+	}
+
+	// check update.
+	nextDig, err0 := getNextDig(a.lastDig, proof.Updates)
+	if err0 {
 		a.mu.Unlock()
 		return true
 	}
-	applyUpd(a.keyMap, proof.Updates)
-
-	dig := a.keyMap.Digest()
-	// sign dig.
-	preSig := &ktserde.PreSigDig{Epoch: nextEp, Dig: dig}
+	nextLink := hashchain.GetNextLink(lastLink, nextDig)
+	preSig := &ktserde.PreSigDig{Epoch: nextEp, Dig: nextLink}
 	preSigByt := ktserde.PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
+	if a.servPk.Verify(preSigByt, proof.LinkSig) {
+		a.mu.Unlock()
+		return true
+	}
+
+	// sign and apply update.
 	sig := a.sk.Sign(preSigByt)
 	// benchmark: turn off sigs for akd compat.
 	// var sig []byte
-
-	newInfo := &AdtrEpochInfo{Dig: dig, ServSig: proof.Sig, AdtrSig: sig}
-	a.histInfo = append(a.histInfo, newInfo)
+	a.lastDig = nextDig
+	info := &EpochInfo{Link: nextLink, ServSig: proof.LinkSig, AdtrSig: sig}
+	a.hist = append(a.hist, info)
 	a.mu.Unlock()
 	return false
 }
 
-// Get returns the auditor's dig for a particular epoch, and errors on fail.
-func (a *Auditor) Get(epoch uint64) (*AdtrEpochInfo, bool) {
-	a.mu.Lock()
-	numEpochs := uint64(len(a.histInfo))
+// Get returns the auditor's info for a particular epoch, and errors on fail.
+func (a *Auditor) Get(epoch uint64) (*EpochInfo, bool) {
+	a.mu.RLock()
+	numEpochs := uint64(len(a.hist))
 	if epoch >= numEpochs {
-		a.mu.Unlock()
-		return &AdtrEpochInfo{}, true
+		a.mu.RUnlock()
+		return &EpochInfo{}, true
 	}
 
-	info := a.histInfo[epoch]
-	a.mu.Unlock()
+	info := a.hist[epoch]
+	a.mu.RUnlock()
 	return info, false
 }
 
-func NewAuditor() (*Auditor, cryptoffi.SigPublicKey) {
-	mu := new(sync.Mutex)
+func New(servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.SigPublicKey) {
+	mu := new(sync.RWMutex)
 	pk, sk := cryptoffi.SigGenerateKey()
-	m := merkle.NewTree()
-	return &Auditor{mu: mu, sk: sk, keyMap: m}, pk
+	// start off with dig of empty map.
+	tr := merkle.New()
+	dig := tr.Digest()
+	return &Auditor{mu: mu, sk: sk, servPk: servPk, lastDig: dig}, pk
 }
 
-func checkUpd(keys *merkle.Tree, nextEp uint64, upd map[string][]byte) bool {
-	var loopErr bool
-	for mapLabel, mapVal := range upd {
-		if checkOneUpd(keys, nextEp, []byte(mapLabel), mapVal) {
-			loopErr = true
+func getNextDig(lastDig []byte, updates []*ktserde.UpdateProof) ([]byte, bool) {
+	var lastDig0 = lastDig
+	var err bool
+	for _, u := range updates {
+		prev, next, err0 := merkle.VerifyUpdate(u.MapLabel, u.MapVal, u.NonMembProof)
+		if err0 {
+			err = true
+			break
 		}
+		if !std.BytesEqual(lastDig0, prev) {
+			err = true
+			break
+		}
+		lastDig0 = next
 	}
-	return loopErr
-}
-
-// checkOneUpd checks that an update is safe to apply, and errs on fail.
-func checkOneUpd(keys *merkle.Tree, nextEp uint64, mapLabel, mapVal []byte) bool {
-	// used in applyUpd.
-	if uint64(len(mapLabel)) != cryptoffi.HashLen {
-		return true
+	if err {
+		return nil, true
 	}
-	inTree, _ := keys.Get(mapLabel)
-	// label not already in keyMap. map monotonicity.
-	if inTree {
-		return true
-	}
-
-	valPre, rem, err1 := ktserde.MapValPreDecode(mapVal)
-	// val bytes exactly encode MapVal.
-	// could relax to at least encode epoch, but this is logically
-	// more straightforward to deal with.
-	if err1 {
-		return true
-	}
-	if len(rem) != 0 {
-		return true
-	}
-	// epoch ok.
-	if valPre.Epoch != nextEp {
-		return true
-	}
-	return false
-}
-
-// applyUpd applies a valid update to the previous map.
-func applyUpd(keys *merkle.Tree, upd map[string][]byte) {
-	for label, val := range upd {
-		err0 := keys.Put([]byte(label), val)
-		std.Assert(!err0)
-	}
+	return lastDig0, false
 }

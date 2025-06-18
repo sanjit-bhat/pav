@@ -8,7 +8,8 @@ import (
 )
 
 type HashChain struct {
-	lastLink []byte
+	predLastLink []byte
+	lastLink     []byte
 	// vals is pre-flattened to quickly convert it to a proof.
 	vals []byte
 }
@@ -17,7 +18,8 @@ type HashChain struct {
 // it expects val to be of constant len, which lets us encode smaller proofs.
 func (c *HashChain) Append(val []byte) []byte {
 	std.Assert(uint64(len(val)) == cryptoffi.HashLen)
-	c.lastLink = getNextLink(c.lastLink, val)
+	c.predLastLink = c.lastLink
+	c.lastLink = GetNextLink(c.lastLink, val)
 	c.vals = append(c.vals, val...)
 	return c.lastLink
 }
@@ -29,11 +31,22 @@ func (c *HashChain) Prove(prevLen uint64) []byte {
 	return std.BytesClone(c.vals[start:])
 }
 
+// ProveLast bootstraps hashchain verifiers with a commit to the
+// second-to-last list and a proof of the last value.
+// it expects non-empty values.
+func (c *HashChain) ProveLast() ([]byte, []byte) {
+	start := uint64(len(c.vals)) - cryptoffi.HashLen
+	return c.predLastLink, std.BytesClone(c.vals[start:])
+}
+
 // Verify updates prevLink with proof, returning the extended length,
 // new val, and new link.
 // if length extension is 0, new val is nil.
 // it errors on failure.
 func Verify(prevLink, proof []byte) (uint64, []byte, []byte, bool) {
+	if uint64(len(prevLink)) != cryptoffi.HashLen {
+		return 0, nil, nil, true
+	}
 	proofLen := uint64(len(proof))
 	if proofLen%cryptoffi.HashLen != 0 {
 		return 0, nil, nil, true
@@ -46,20 +59,20 @@ func Verify(prevLink, proof []byte) (uint64, []byte, []byte, bool) {
 		start := i * cryptoffi.HashLen
 		end := (i + 1) * cryptoffi.HashLen
 		newVal = proof[start:end]
-		newLink = getNextLink(newLink, newVal)
+		newLink = GetNextLink(newLink, newVal)
 	}
 	return lenVals, newVal, newLink, false
 }
 
 func New() *HashChain {
-	return &HashChain{lastLink: getEmptyLink()}
+	return &HashChain{lastLink: GetEmptyLink()}
 }
 
-func getEmptyLink() []byte {
+func GetEmptyLink() []byte {
 	return cryptoutil.Hash(nil)
 }
 
-func getNextLink(prevLink, nextVal []byte) []byte {
+func GetNextLink(prevLink, nextVal []byte) []byte {
 	hr := cryptoffi.NewHasher()
 	hr.Write(prevLink)
 	hr.Write(nextVal)

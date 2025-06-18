@@ -141,14 +141,14 @@ func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
 	}
 	return &NonMemb{LabelProof: a1, MerkleProof: a2}, b2, false
 }
-func UpdateProofEncode(b0 []byte, o *UpdateProof) []byte {
+func AuditProofEncode(b0 []byte, o *AuditProof) []byte {
 	var b = b0
-	b = MapstringSlbyteEncode(b, o.Updates)
-	b = marshalutil.WriteSlice1D(b, o.Sig)
+	b = UpdateProofSlice1DEncode(b, o.Updates)
+	b = marshalutil.WriteSlice1D(b, o.LinkSig)
 	return b
 }
-func UpdateProofDecode(b0 []byte) (*UpdateProof, []byte, bool) {
-	a1, b1, err1 := MapstringSlbyteDecode(b0)
+func AuditProofDecode(b0 []byte) (*AuditProof, []byte, bool) {
+	a1, b1, err1 := UpdateProofSlice1DDecode(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -156,5 +156,27 @@ func UpdateProofDecode(b0 []byte) (*UpdateProof, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	return &UpdateProof{Updates: a1, Sig: a2}, b2, false
+	return &AuditProof{Updates: a1, LinkSig: a2}, b2, false
+}
+func UpdateProofEncode(b0 []byte, o *UpdateProof) []byte {
+	var b = b0
+	b = marshalutil.WriteSlice1D(b, o.MapLabel)
+	b = marshalutil.WriteSlice1D(b, o.MapVal)
+	b = marshalutil.WriteSlice1D(b, o.NonMembProof)
+	return b
+}
+func UpdateProofDecode(b0 []byte) (*UpdateProof, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	if err3 {
+		return nil, nil, true
+	}
+	return &UpdateProof{MapLabel: a1, MapVal: a2, NonMembProof: a3}, b3, false
 }

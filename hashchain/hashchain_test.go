@@ -13,7 +13,7 @@ func TestHashChain(t *testing.T) {
 	rndSrc := rand.NewChaCha8(seed)
 	rnd := rand.New(rndSrc)
 	chain := New()
-	links := [][]byte{getEmptyLink()}
+	links := [][]byte{GetEmptyLink()}
 
 	{
 		// empty chain.
@@ -40,21 +40,36 @@ func TestHashChain(t *testing.T) {
 		links = append(links, newLink)
 
 		prevLen := rnd.Uint64N(newLen + 1)
-		proof := chain.Prove(prevLen)
-		extLen, newVal0, newLink0, err := Verify(links[prevLen], proof)
+		proof0 := chain.Prove(prevLen)
+		extLen0, newVal0, newLink0, err := Verify(links[prevLen], proof0)
 		if err {
 			t.Fatal()
 		}
-		if extLen != newLen-prevLen {
+		if extLen0 != newLen-prevLen {
 			t.Fatal()
 		}
-		if extLen == 0 && newVal0 != nil {
+		if extLen0 == 0 && newVal0 != nil {
 			t.Fatal()
 		}
-		if extLen != 0 && !bytes.Equal(newVal, newVal0) {
+		if extLen0 != 0 && !bytes.Equal(newVal, newVal0) {
 			t.Fatal()
 		}
 		if !bytes.Equal(newLink, newLink0) {
+			t.Fatal()
+		}
+
+		startLink, startVal := chain.ProveLast()
+		extLen1, newVal1, newLink1, err := Verify(startLink, startVal)
+		if err {
+			t.Fatal()
+		}
+		if extLen1 != 1 {
+			t.Fatal()
+		}
+		if !bytes.Equal(newVal, newVal1) {
+			t.Fatal()
+		}
+		if !bytes.Equal(newLink, newLink1) {
 			t.Fatal()
 		}
 	}

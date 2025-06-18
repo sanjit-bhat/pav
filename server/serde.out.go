@@ -1,3 +1,5 @@
+// Auto-generated from spec "github.com/mit-pdos/pav/server/serde.go"
+// using compiler "github.com/mit-pdos/pav/serde".
 package server
 
 import (
@@ -6,14 +8,41 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func ServerPutArgEncode(b0 []byte, o *ServerPutArg) []byte {
+func StartCliReplyEncode(b0 []byte, o *StartCliReply) []byte {
+	var b = b0
+	b = marshal.WriteInt(b, o.StartEpochLen)
+	b = marshalutil.WriteSlice1D(b, o.StartLink)
+	b = marshalutil.WriteSlice1D(b, o.ChainProof)
+	b = marshalutil.WriteSlice1D(b, o.LinkSig)
+	return b
+}
+func StartCliReplyDecode(b0 []byte) (*StartCliReply, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadInt(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	if err3 {
+		return nil, nil, true
+	}
+	a4, b4, err4 := marshalutil.ReadSlice1D(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	return &StartCliReply{StartEpochLen: a1, StartLink: a2, ChainProof: a3, LinkSig: a4}, b4, false
+}
+func PutArgEncode(b0 []byte, o *PutArg) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.Uid)
 	b = marshalutil.WriteSlice1D(b, o.Pk)
 	b = marshal.WriteInt(b, o.Ver)
 	return b
 }
-func ServerPutArgDecode(b0 []byte) (*ServerPutArg, []byte, bool) {
+func PutArgDecode(b0 []byte) (*PutArg, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
@@ -26,15 +55,16 @@ func ServerPutArgDecode(b0 []byte) (*ServerPutArg, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &ServerPutArg{Uid: a1, Pk: a2, Ver: a3}, b3, false
+	return &PutArg{Uid: a1, Pk: a2, Ver: a3}, b3, false
 }
-func ServerHistoryArgEncode(b0 []byte, o *ServerHistoryArg) []byte {
+func HistoryArgEncode(b0 []byte, o *HistoryArg) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.Uid)
-	b = marshal.WriteInt(b, o.PrefixLen)
+	b = marshal.WriteInt(b, o.PrevEpoch)
+	b = marshal.WriteInt(b, o.PrevVerLen)
 	return b
 }
-func ServerHistoryArgDecode(b0 []byte) (*ServerHistoryArg, []byte, bool) {
+func HistoryArgDecode(b0 []byte) (*HistoryArg, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
@@ -43,55 +73,64 @@ func ServerHistoryArgDecode(b0 []byte) (*ServerHistoryArg, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	return &ServerHistoryArg{Uid: a1, PrefixLen: a2}, b2, false
+	a3, b3, err3 := marshalutil.ReadInt(b2)
+	if err3 {
+		return nil, nil, true
+	}
+	return &HistoryArg{Uid: a1, PrevEpoch: a2, PrevVerLen: a3}, b3, false
 }
-func ServerHistoryReplyEncode(b0 []byte, o *ServerHistoryReply) []byte {
+func HistoryReplyEncode(b0 []byte, o *HistoryReply) []byte {
 	var b = b0
-	b = ktserde.SigDigEncode(b, o.Dig)
+	b = marshalutil.WriteSlice1D(b, o.ChainProof)
+	b = marshalutil.WriteSlice1D(b, o.LinkSig)
 	b = ktserde.MembSlice1DEncode(b, o.Hist)
 	b = ktserde.NonMembEncode(b, o.Bound)
 	b = marshal.WriteBool(b, o.Err)
 	return b
 }
-func ServerHistoryReplyDecode(b0 []byte) (*ServerHistoryReply, []byte, bool) {
-	a1, b1, err1 := ktserde.SigDigDecode(b0)
+func HistoryReplyDecode(b0 []byte) (*HistoryReply, []byte, bool) {
+	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := ktserde.MembSlice1DDecode(b1)
+	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := ktserde.NonMembDecode(b2)
+	a3, b3, err3 := ktserde.MembSlice1DDecode(b2)
 	if err3 {
 		return nil, nil, true
 	}
-	a4, b4, err4 := marshalutil.ReadBool(b3)
+	a4, b4, err4 := ktserde.NonMembDecode(b3)
 	if err4 {
 		return nil, nil, true
 	}
-	return &ServerHistoryReply{Dig: a1, Hist: a2, Bound: a3, Err: a4}, b4, false
+	a5, b5, err5 := marshalutil.ReadBool(b4)
+	if err5 {
+		return nil, nil, true
+	}
+	return &HistoryReply{ChainProof: a1, LinkSig: a2, Hist: a3, Bound: a4, Err: a5}, b5, false
 }
-func ServerAuditArgEncode(b0 []byte, o *ServerAuditArg) []byte {
+func AuditArgEncode(b0 []byte, o *AuditArg) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.Epoch)
 	return b
 }
-func ServerAuditArgDecode(b0 []byte) (*ServerAuditArg, []byte, bool) {
+func AuditArgDecode(b0 []byte) (*AuditArg, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	return &ServerAuditArg{Epoch: a1}, b1, false
+	return &AuditArg{Epoch: a1}, b1, false
 }
-func ServerAuditReplyEncode(b0 []byte, o *ServerAuditReply) []byte {
+func AuditReplyEncode(b0 []byte, o *AuditReply) []byte {
 	var b = b0
-	b = ktserde.UpdateProofEncode(b, o.P)
+	b = ktserde.AuditProofEncode(b, o.P)
 	b = marshal.WriteBool(b, o.Err)
 	return b
 }
-func ServerAuditReplyDecode(b0 []byte) (*ServerAuditReply, []byte, bool) {
-	a1, b1, err1 := ktserde.UpdateProofDecode(b0)
+func AuditReplyDecode(b0 []byte) (*AuditReply, []byte, bool) {
+	a1, b1, err1 := ktserde.AuditProofDecode(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -99,5 +138,5 @@ func ServerAuditReplyDecode(b0 []byte) (*ServerAuditReply, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	return &ServerAuditReply{P: a1, Err: a2}, b2, false
+	return &AuditReply{P: a1, Err: a2}, b2, false
 }

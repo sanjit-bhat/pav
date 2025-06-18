@@ -4,29 +4,38 @@ import (
 	"github.com/mit-pdos/pav/ktserde"
 )
 
-type ServerPutArg struct {
+type StartCliReply struct {
+	StartEpochLen uint64
+	StartLink     []byte
+	ChainProof    []byte
+	LinkSig       []byte
+}
+
+type PutArg struct {
 	Uid uint64
 	Pk  []byte
 	Ver uint64
 }
 
-type ServerHistoryArg struct {
-	Uid       uint64
-	PrefixLen uint64
+type HistoryArg struct {
+	Uid        uint64
+	PrevEpoch  uint64
+	PrevVerLen uint64
 }
 
-type ServerHistoryReply struct {
-	Dig   *ktserde.SigDig
-	Hist  []*ktserde.Memb
-	Bound *ktserde.NonMemb
-	Err   bool
+type HistoryReply struct {
+	ChainProof []byte
+	LinkSig    []byte
+	Hist       []*ktserde.Memb
+	Bound      *ktserde.NonMemb
+	Err        bool
 }
 
-type ServerAuditArg struct {
+type AuditArg struct {
 	Epoch uint64
 }
 
-type ServerAuditReply struct {
-	P   *ktserde.UpdateProof
+type AuditReply struct {
+	P   *ktserde.AuditProof
 	Err bool
 }

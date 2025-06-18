@@ -1,3 +1,5 @@
+// Auto-generated from spec "github.com/mit-pdos/pav/auditor/serde.go"
+// using compiler "github.com/mit-pdos/pav/serde".
 package auditor
 
 import (
@@ -6,50 +8,67 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func AdtrUpdateArgEncode(b0 []byte, o *AdtrUpdateArg) []byte {
+func UpdateArgEncode(b0 []byte, o *UpdateArg) []byte {
 	var b = b0
-	b = ktserde.UpdateProofEncode(b, o.P)
+	b = ktserde.AuditProofEncode(b, o.P)
 	return b
 }
-func AdtrUpdateArgDecode(b0 []byte) (*AdtrUpdateArg, []byte, bool) {
-	a1, b1, err1 := ktserde.UpdateProofDecode(b0)
+func UpdateArgDecode(b0 []byte) (*UpdateArg, []byte, bool) {
+	a1, b1, err1 := ktserde.AuditProofDecode(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	return &AdtrUpdateArg{P: a1}, b1, false
+	return &UpdateArg{P: a1}, b1, false
 }
-func AdtrUpdateReplyEncode(b0 []byte, o *AdtrUpdateReply) []byte {
+func UpdateReplyEncode(b0 []byte, o *UpdateReply) []byte {
 	var b = b0
 	b = marshal.WriteBool(b, o.Err)
 	return b
 }
-func AdtrUpdateReplyDecode(b0 []byte) (*AdtrUpdateReply, []byte, bool) {
+func UpdateReplyDecode(b0 []byte) (*UpdateReply, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadBool(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	return &AdtrUpdateReply{Err: a1}, b1, false
+	return &UpdateReply{Err: a1}, b1, false
 }
-func AdtrGetArgEncode(b0 []byte, o *AdtrGetArg) []byte {
+func GetArgEncode(b0 []byte, o *GetArg) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.Epoch)
 	return b
 }
-func AdtrGetArgDecode(b0 []byte) (*AdtrGetArg, []byte, bool) {
+func GetArgDecode(b0 []byte) (*GetArg, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	return &AdtrGetArg{Epoch: a1}, b1, false
+	return &GetArg{Epoch: a1}, b1, false
 }
-func AdtrEpochInfoEncode(b0 []byte, o *AdtrEpochInfo) []byte {
+func GetReplyEncode(b0 []byte, o *GetReply) []byte {
 	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.Dig)
+	b = EpochInfoEncode(b, o.X)
+	b = marshal.WriteBool(b, o.Err)
+	return b
+}
+func GetReplyDecode(b0 []byte) (*GetReply, []byte, bool) {
+	a1, b1, err1 := EpochInfoDecode(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := marshalutil.ReadBool(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	return &GetReply{X: a1, Err: a2}, b2, false
+}
+func EpochInfoEncode(b0 []byte, o *EpochInfo) []byte {
+	var b = b0
+	b = marshalutil.WriteSlice1D(b, o.Link)
 	b = marshalutil.WriteSlice1D(b, o.ServSig)
 	b = marshalutil.WriteSlice1D(b, o.AdtrSig)
 	return b
 }
-func AdtrEpochInfoDecode(b0 []byte) (*AdtrEpochInfo, []byte, bool) {
+func EpochInfoDecode(b0 []byte) (*EpochInfo, []byte, bool) {
 	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
@@ -62,22 +81,5 @@ func AdtrEpochInfoDecode(b0 []byte) (*AdtrEpochInfo, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &AdtrEpochInfo{Dig: a1, ServSig: a2, AdtrSig: a3}, b3, false
-}
-func AdtrGetReplyEncode(b0 []byte, o *AdtrGetReply) []byte {
-	var b = b0
-	b = AdtrEpochInfoEncode(b, o.X)
-	b = marshal.WriteBool(b, o.Err)
-	return b
-}
-func AdtrGetReplyDecode(b0 []byte) (*AdtrGetReply, []byte, bool) {
-	a1, b1, err1 := AdtrEpochInfoDecode(b0)
-	if err1 {
-		return nil, nil, true
-	}
-	a2, b2, err2 := marshalutil.ReadBool(b1)
-	if err2 {
-		return nil, nil, true
-	}
-	return &AdtrGetReply{X: a1, Err: a2}, b2, false
+	return &EpochInfo{Link: a1, ServSig: a2, AdtrSig: a3}, b3, false
 }

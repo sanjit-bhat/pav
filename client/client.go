@@ -5,27 +5,36 @@ import (
 	"github.com/mit-pdos/pav/advrpc"
 	"github.com/mit-pdos/pav/auditor"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/hashchain"
 	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/merkle"
 	"github.com/mit-pdos/pav/server"
 )
 
 type Client struct {
-	uid          uint64
-	nextVer      uint64
-	isPendingPut bool
-	pendingPut   []byte
-	// seenDigs stores, for an epoch, if we've gotten a digest for it.
-	// it's bounded by NextEpoch.
-	seenDigs map[uint64]*ktserde.SigDig
-	// NextEpoch upper bounds the length of a client's transparency history.
-	// NOTE: storing the next (instead of last) epoch yields a correct
-	// zero val on client init, with the downside of having to check
-	// that NextEpoch doesn't overflow.
-	NextEpoch uint64
-	servCli   *advrpc.Client
-	servSigPk cryptoffi.SigPublicKey
-	servVrfPk *cryptoffi.VrfPublicKey
+	uid        uint64
+	pendingPut *pendingInfo
+	LastEpoch  *lastInfo
+	server     *serverInfo
+}
+
+type pendingInfo struct {
+	nextVer uint64
+	isSome  bool
+	pk      []byte
+}
+
+type lastInfo struct {
+	Epoch uint64
+	dig   []byte
+	link  []byte
+	sig   []byte
+}
+
+type serverInfo struct {
+	cli   *advrpc.Client
+	sigPk cryptoffi.SigPublicKey
+	vrfPk *cryptoffi.VrfPublicKey
 }
 
 // ClientErr abstracts errors that potentially have irrefutable evidence.
@@ -37,187 +46,187 @@ type ClientErr struct {
 // Put queues pk for insertion.
 // if we have a pending Put, it requires the pk to be the same.
 func (c *Client) Put(pk []byte) bool {
-	if c.isPendingPut {
-		if !std.BytesEqual(c.pendingPut, pk) {
+	if c.pendingPut.isSome {
+		if !std.BytesEqual(c.pendingPut.pk, pk) {
 			return true
 		}
 	} else {
-		c.isPendingPut = true
-		c.pendingPut = pk
+		c.pendingPut.isSome = true
+		c.pendingPut.pk = pk
 	}
-	server.CallServPut(c.servCli, c.uid, pk, c.nextVer)
+	server.CallPut(c.server.cli, c.uid, pk, c.pendingPut.nextVer)
 	return false
 }
 
 // Get returns if the pk was registered and the pk.
-func (c *Client) Get(uid uint64) (bool, []byte, *ClientErr) {
-	stdErr := &ClientErr{Err: true}
-	dig, hist, bound, err0 := server.CallServHistory(c.servCli, uid, 0)
+func (c *Client) Get(uid uint64) (bool, []byte, bool) {
+	chainProof, sig, hist, bound, err0 := server.CallHistory(c.server.cli, uid, c.LastEpoch.Epoch, 0)
 	if err0 {
-		return false, nil, stdErr
+		return false, nil, true
 	}
-	// dig.
-	err1 := checkDig(c.servSigPk, c.seenDigs, dig)
-	if err1.Err {
-		return false, nil, err1
+	// check.
+	last, err1 := c.getChainExt(chainProof, sig)
+	if err1 {
+		return false, nil, true
 	}
-	// old epoch <= new epoch.
-	if dig.Epoch+1 < c.NextEpoch {
-		return false, nil, stdErr
+	if CheckHist(c.server.vrfPk, uid, 0, last.dig, hist) {
+		return false, nil, true
 	}
-	// hist.
-	if CheckHist(c.servVrfPk, uid, 0, dig.Dig, hist) {
-		return false, nil, stdErr
-	}
-	// bound.
 	boundVer := uint64(len(hist))
-	if CheckNonMemb(c.servVrfPk, uid, boundVer, dig.Dig, bound) {
-		return false, nil, stdErr
+	if CheckNonMemb(c.server.vrfPk, uid, boundVer, last.dig, bound) {
+		return false, nil, true
 	}
 
-	c.seenDigs[dig.Epoch] = dig
-	c.NextEpoch = dig.Epoch + 1
+	// update.
+	c.LastEpoch = last
 	if boundVer == 0 {
-		return false, nil, &ClientErr{Err: false}
+		return false, nil, false
 	} else {
 		lastKey := hist[boundVer-1]
-		return true, lastKey.PkOpen.Val, &ClientErr{Err: false}
+		return true, lastKey.PkOpen.Val, false
 	}
 }
 
 // SelfMon self-monitors a client's own uid in the latest epoch.
 // it returns if the key changed and the insertion epoch.
-func (c *Client) SelfMon() (bool, uint64, *ClientErr) {
-	stdErr := &ClientErr{Err: true}
-	dig, hist, bound, err0 := server.CallServHistory(c.servCli, c.uid, c.nextVer)
+func (c *Client) SelfMon() (bool, uint64, bool) {
+	chainProof, sig, hist, bound, err0 := server.CallHistory(c.server.cli, c.uid, c.LastEpoch.Epoch, c.pendingPut.nextVer)
 	if err0 {
-		return false, 0, stdErr
+		return false, 0, true
 	}
-	// dig.
-	err1 := checkDig(c.servSigPk, c.seenDigs, dig)
-	if err1.Err {
-		return false, 0, err1
+	// check.
+	last, err1 := c.getChainExt(chainProof, sig)
+	if err1 {
+		return false, 0, true
 	}
-	// old epoch <= new epoch.
-	if dig.Epoch+1 < c.NextEpoch {
-		return false, 0, stdErr
+	if CheckHist(c.server.vrfPk, c.uid, c.pendingPut.nextVer, last.dig, hist) {
+		return false, 0, true
 	}
-	// hist.
-	if CheckHist(c.servVrfPk, c.uid, c.nextVer, dig.Dig, hist) {
-		return false, 0, stdErr
-	}
-	// bound.
 	histLen := uint64(len(hist))
-	boundVer := c.nextVer + histLen
-	if CheckNonMemb(c.servVrfPk, c.uid, boundVer, dig.Dig, bound) {
-		return false, 0, stdErr
+	boundVer := c.pendingPut.nextVer + histLen
+	if CheckNonMemb(c.server.vrfPk, c.uid, boundVer, last.dig, bound) {
+		return false, 0, true
 	}
 
-	if !c.isPendingPut {
+	// check consistency with pending.
+	if !c.pendingPut.isSome {
 		// if no pending, shouldn't have any updates.
 		if histLen != 0 {
-			return false, 0, stdErr
+			return false, 0, true
 		}
-		c.seenDigs[dig.Epoch] = dig
-		c.NextEpoch = dig.Epoch + 1
-		return false, 0, &ClientErr{Err: false}
+		c.LastEpoch = last
+		return false, 0, false
 	}
-
 	// good client only has one version update at a time.
 	if histLen > 1 {
-		return false, 0, stdErr
+		return false, 0, false
 	}
-
 	// update hasn't yet fired.
 	if histLen == 0 {
-		c.seenDigs[dig.Epoch] = dig
-		c.NextEpoch = dig.Epoch + 1
-		return false, 0, &ClientErr{Err: false}
+		c.LastEpoch = last
+		return false, 0, false
 	}
-
 	newKey := hist[0]
-	// update aligns with pending put.
-	if !std.BytesEqual(newKey.PkOpen.Val, c.pendingPut) {
-		return false, 0, stdErr
+	// equals pending put.
+	if !std.BytesEqual(newKey.PkOpen.Val, c.pendingPut.pk) {
+		return false, 0, false
 	}
+	// TODO: rm with epoch-less protocol.
 	// old epoch < insert epoch.
-	if newKey.EpochAdded < c.NextEpoch {
-		return false, 0, stdErr
+	if newKey.EpochAdded < c.LastEpoch.Epoch {
+		return false, 0, false
 	}
 	// insert epoch <= new epoch.
-	if newKey.EpochAdded > dig.Epoch {
-		return false, 0, stdErr
+	if newKey.EpochAdded > last.Epoch {
+		return false, 0, false
 	}
 
-	c.seenDigs[dig.Epoch] = dig
-	c.NextEpoch = dig.Epoch + 1
-	c.isPendingPut = false
+	// update.
+	c.LastEpoch = last
+	c.pendingPut.isSome = false
+	c.pendingPut.pk = nil
 	// this client controls nextVer, so no need to check for overflow.
-	c.nextVer = std.SumAssumeNoOverflow(c.nextVer, 1)
-	return true, newKey.EpochAdded, &ClientErr{Err: false}
+	c.pendingPut.nextVer = std.SumAssumeNoOverflow(c.pendingPut.nextVer, 1)
+	return true, newKey.EpochAdded, false
 }
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientErr {
-	adtrCli := advrpc.Dial(adtrAddr)
-	// check all epochs that we've seen before.
-	var err0 = &ClientErr{Err: false}
-	for _, dig := range c.seenDigs {
-		err1 := auditEpoch(dig, c.servSigPk, adtrCli, adtrPk)
-		if err1.Err {
-			err0 = err1
-		}
-	}
-	return err0
-}
-
-// auditEpoch checks a single epoch against an auditor, and evid / error on fail.
-func auditEpoch(seenDig *ktserde.SigDig, servSigPk []byte, adtrCli *advrpc.Client, adtrPk cryptoffi.SigPublicKey) *ClientErr {
 	stdErr := &ClientErr{Err: true}
-	adtrInfo := auditor.CallAdtrGet(adtrCli, seenDig.Epoch)
-
-	// check sigs.
-	servDig := &ktserde.SigDig{Epoch: seenDig.Epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.ServSig}
-	adtrDig := &ktserde.SigDig{Epoch: seenDig.Epoch, Dig: adtrInfo.Dig, Sig: adtrInfo.AdtrSig}
-	if CheckSigDig(servDig, servSigPk) {
-		return stdErr
-	}
-	if CheckSigDig(adtrDig, adtrPk) {
-		return stdErr
-	}
-
-	// compare against our dig.
-	if !std.BytesEqual(adtrInfo.Dig, seenDig.Dig) {
-		evid := &Evid{sigDig0: servDig, sigDig1: seenDig}
-		return &ClientErr{Evid: evid, Err: true}
-	}
-	return &ClientErr{Err: false}
-}
-
-func NewClient(uid, servAddr uint64, servSigPk cryptoffi.SigPublicKey, servVrfPk []byte) *Client {
-	c := advrpc.Dial(servAddr)
-	pk := cryptoffi.VrfPublicKeyDecode(servVrfPk)
-	digs := make(map[uint64]*ktserde.SigDig)
-	return &Client{uid: uid, servCli: c, servSigPk: servSigPk, servVrfPk: pk, seenDigs: digs}
-}
-
-func checkDig(sigPk []byte, seenDigs map[uint64]*ktserde.SigDig, dig *ktserde.SigDig) *ClientErr {
-	stdErr := &ClientErr{Err: true}
-	// sig.
-	err0 := CheckSigDig(dig, sigPk)
+	cli := advrpc.Dial(adtrAddr)
+	last := c.LastEpoch
+	audit, err0 := auditor.CallGet(cli, last.Epoch)
 	if err0 {
 		return stdErr
 	}
-	// doesn't overflow c.nextEpoch.
-	if !std.SumNoOverflow(dig.Epoch, 1) {
+	// consistency under untrusted server and trusted auditor.
+	if checkLinkSig(adtrPk, last.Epoch, audit.Link, audit.AdtrSig) {
 		return stdErr
 	}
-	// agrees with prior digs.
-	seenDig, ok0 := seenDigs[dig.Epoch]
-	if ok0 && !std.BytesEqual(seenDig.Dig, dig.Dig) {
-		evid := &Evid{sigDig0: dig, sigDig1: seenDig}
+	// potentially catch server misbehavior.
+	if checkLinkSig(c.server.sigPk, last.Epoch, audit.Link, audit.ServSig) {
+		return stdErr
+	}
+	if !std.BytesEqual(last.link, audit.Link) {
+		// TODO: simplify this.
+		sd0 := &ktserde.SigDig{Epoch: last.Epoch, Dig: last.link, Sig: last.sig}
+		sd1 := &ktserde.SigDig{Epoch: last.Epoch, Dig: audit.Link, Sig: audit.ServSig}
+		evid := &Evid{sigDig0: sd0, sigDig1: sd1}
 		return &ClientErr{Evid: evid, Err: true}
 	}
 	return &ClientErr{Err: false}
+}
+
+func New(uid, servAddr uint64, servSigPk cryptoffi.SigPublicKey, servVrfPk []byte) (*Client, bool) {
+	cli := advrpc.Dial(servAddr)
+	startEpLen, startLink, proof, sig, err0 := server.CallStartCli(cli)
+	if err0 {
+		return nil, true
+	}
+	extLen, newDig, newLink, err1 := hashchain.Verify(startLink, proof)
+	if err1 {
+		return nil, true
+	}
+	// want a starting dig.
+	if extLen == 0 {
+		return nil, true
+	}
+	if !std.SumNoOverflow(startEpLen, extLen-1) {
+		return nil, true
+	}
+	lastEp := startEpLen + extLen - 1
+	if checkLinkSig(servSigPk, lastEp, newLink, sig) {
+		return nil, true
+	}
+
+	pendingPut := &pendingInfo{}
+	last := &lastInfo{Epoch: lastEp, dig: newDig, link: newLink, sig: sig}
+	vrfPk := cryptoffi.VrfPublicKeyDecode(servVrfPk)
+	serv := &serverInfo{cli: cli, sigPk: servSigPk, vrfPk: vrfPk}
+	return &Client{uid: uid, pendingPut: pendingPut, LastEpoch: last, server: serv}, false
+}
+
+func checkLinkSig(pk cryptoffi.SigPublicKey, epoch uint64, link []byte, sig []byte) bool {
+	pre := &ktserde.PreSigDig{Epoch: epoch, Dig: link}
+	preByt := ktserde.PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), pre)
+	return pk.Verify(preByt, sig)
+}
+
+func (c *Client) getChainExt(chainProof, sig []byte) (*lastInfo, bool) {
+	extLen, newDig, newLink, err0 := hashchain.Verify(c.LastEpoch.link, chainProof)
+	if err0 {
+		return nil, true
+	}
+	if extLen == 0 {
+		return c.LastEpoch, false
+	}
+	if !std.SumNoOverflow(c.LastEpoch.Epoch, extLen) {
+		return nil, true
+	}
+	newEp := c.LastEpoch.Epoch + extLen
+	if checkLinkSig(c.server.sigPk, newEp, newLink, sig) {
+		return nil, true
+	}
+	return &lastInfo{Epoch: newEp, dig: newDig, link: newLink, sig: sig}, false
 }
 
 // CheckLabel checks the vrf proof, computes the label, and errors on fail.

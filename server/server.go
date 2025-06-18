@@ -6,6 +6,7 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/cryptoutil"
+	"github.com/mit-pdos/pav/hashchain"
 	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/merkle"
 )
@@ -21,17 +22,22 @@ type Server struct {
 	// plainPks stores all plaintext pks, whereas keyMap only has commitments.
 	// its length is the number of registered versions.
 	plainPks map[uint64][][]byte
-	// epochHist stores info about prior epochs, for auditing.
-	epochHist []*servEpochInfo
+	// chain is a hashchain of merkle digests across the epochs.
+	chain *hashchain.HashChain
+	// auditHist stores auditing info on prior epochs.
+	auditHist []*ktserde.AuditProof
 	// WorkQ batch processes Put requests.
 	WorkQ *WorkQ
 }
 
-type servEpochInfo struct {
-	// updates stores (mapLabel, mapVal) keyMap updates.
-	updates map[string][]byte
-	dig     []byte
-	sig     []byte
+// StartCli bootstraps a client with knowledge of the last merkle dig.
+func (s *Server) StartCli() (uint64, []byte, []byte, []byte) {
+	s.mu.RLock()
+	predLen := uint64(len(s.auditHist)) - 1
+	predLink, proof := s.chain.ProveLast()
+	lastSig := s.auditHist[predLen].LinkSig
+	s.mu.RUnlock()
+	return predLen, predLink, proof, lastSig
 }
 
 // Put queues pk (at the specified version) for insertion.
@@ -40,32 +46,44 @@ func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
 	s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
 }
 
-// History excludes the first prefixLen versions.
-func (s *Server) History(uid uint64, prefixLen uint64) (*ktserde.SigDig, []*ktserde.Memb, *ktserde.NonMemb, bool) {
+// History gives key history for uid, excluding first prevVerLen versions.
+// the caller already saw prevEpoch.
+func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktserde.Memb, *ktserde.NonMemb, bool) {
 	s.mu.RLock()
-	numVers := uint64(len(s.plainPks[uid]))
-	if prefixLen > numVers {
+	numEps := uint64(len(s.auditHist))
+	if prevEpoch >= numEps {
 		s.mu.RUnlock()
-		return nil, nil, nil, true
+		return nil, nil, nil, nil, true
+	}
+	numVers := uint64(len(s.plainPks[uid]))
+	if prevVerLen > numVers {
+		s.mu.RUnlock()
+		return nil, nil, nil, nil, true
 	}
 
-	dig := s.getDig()
-	hist := s.getHist(uid, prefixLen)
+	epochProof := s.chain.Prove(prevEpoch + 1)
+	sig := s.auditHist[len(s.auditHist)-1].LinkSig
+	hist := s.getHist(uid, prevVerLen)
 	bound := s.getBound(uid, numVers)
 	s.mu.RUnlock()
-	return dig, hist, bound, false
+
+	if prevEpoch+1 == numEps {
+		// client already saw sig. don't send.
+		return epochProof, nil, hist, bound, false
+	}
+	return epochProof, sig, hist, bound, false
 }
 
 // Audit returns an err on fail.
-func (s *Server) Audit(epoch uint64) (*ktserde.UpdateProof, bool) {
+func (s *Server) Audit(epoch uint64) (*ktserde.AuditProof, bool) {
 	s.mu.RLock()
-	if epoch >= uint64(len(s.epochHist)) {
+	if epoch >= uint64(len(s.auditHist)) {
 		s.mu.RUnlock()
-		return &ktserde.UpdateProof{Updates: make(map[string][]byte)}, true
+		return &ktserde.AuditProof{}, true
 	}
-	info := s.epochHist[epoch]
+	proof := s.auditHist[epoch]
 	s.mu.RUnlock()
-	return &ktserde.UpdateProof{Updates: info.updates, Sig: info.sig}, false
+	return proof, false
 }
 
 type WQReq struct {
@@ -100,18 +118,22 @@ func (s *Server) Worker() {
 	}
 }
 
-func NewServer() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
+func New() (*Server, cryptoffi.SigPublicKey, *cryptoffi.VrfPublicKey) {
 	mu := new(sync.RWMutex)
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfPk, vrfSk := cryptoffi.VrfGenerateKey()
 	secret := cryptoffi.RandBytes(cryptoffi.HashLen)
-	keys := merkle.NewTree()
+	keys := merkle.New()
 	plainPks := make(map[uint64][][]byte)
-	var hist []*servEpochInfo
-	// commit empty tree as init epoch.
+	chain := hashchain.New()
 	wq := NewWorkQ()
-	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: secret, keyMap: keys, plainPks: plainPks, epochHist: hist, WorkQ: wq}
-	s.updEpochHist(make(map[string][]byte))
+	s := &Server{mu: mu, sigSk: sigSk, vrfSk: vrfSk, commitSecret: secret, keyMap: keys, plainPks: plainPks, chain: chain, WorkQ: wq}
+
+	// commit empty tree as epoch 0.
+	dig := keys.Digest()
+	link := chain.Append(dig)
+	sig := s.getLinkSig(0, link)
+	s.auditHist = append(s.auditHist, &ktserde.AuditProof{LinkSig: sig})
 
 	go func() {
 		for {
@@ -204,7 +226,7 @@ func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 	numVers := uint64(len(s.plainPks[in.Uid]))
 	mapLabel := EvalMapLabel(in.Uid, numVers, s.vrfSk)
 
-	nextEpoch := uint64(len(s.epochHist))
+	nextEpoch := uint64(len(s.auditHist))
 	rand := compCommitOpen(s.commitSecret, mapLabel)
 	open := &ktserde.CommitOpen{Val: in.Pk, Rand: rand}
 	mapVal := CompMapVal(nextEpoch, open)
@@ -214,7 +236,7 @@ func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 }
 
 func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
-	upd := make(map[string][]byte, len(work))
+	upd := make([]*ktserde.UpdateProof, 0, len(work))
 	var i = uint64(0)
 	for i < uint64(len(work)) {
 		resp := work[i].Resp
@@ -223,35 +245,33 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 			out0 := ents[i]
 			label := out0.label
 
+			inTree, _, proof := s.keyMap.Prove(label)
+			std.Assert(!inTree)
+			info := &ktserde.UpdateProof{MapLabel: label, MapVal: out0.val, NonMembProof: proof}
+			upd = append(upd, info)
+
 			err0 := s.keyMap.Put(label, out0.val)
 			std.Assert(!err0)
-			upd[string(label)] = out0.val
 			s.plainPks[req.Uid] = append(s.plainPks[req.Uid], req.Pk)
 		}
 		i++
 	}
-	s.updEpochHist(upd)
+
+	dig := s.keyMap.Digest()
+	link := s.chain.Append(dig)
+	epoch := uint64(len(s.auditHist))
+	sig := s.getLinkSig(epoch, link)
+	s.auditHist = append(s.auditHist, &ktserde.AuditProof{Updates: upd, LinkSig: sig})
 }
 
-// updEpochHist does a signed history update with some new entries.
-func (s *Server) updEpochHist(upd map[string][]byte) {
-	sk := s.sigSk
-	dig := s.keyMap.Digest()
-	epoch := uint64(len(s.epochHist))
-	preSig := &ktserde.PreSigDig{Epoch: epoch, Dig: dig}
+func (s *Server) getLinkSig(epoch uint64, link []byte) []byte {
+	preSig := &ktserde.PreSigDig{Epoch: epoch, Dig: link}
 	preSigByt := ktserde.PreSigDigEncode(make([]byte, 0, 8+8+cryptoffi.HashLen), preSig)
-	sig := sk.Sign(preSigByt)
+	sig := s.sigSk.Sign(preSigByt)
 	// benchmark: turn off sigs for akd compat.
 	// _ = sk
 	// var sig []byte
-	newInfo := &servEpochInfo{updates: upd, dig: dig, sig: sig}
-	s.epochHist = append(s.epochHist, newInfo)
-}
-
-func (s *Server) getDig() *ktserde.SigDig {
-	numEpochs := uint64(len(s.epochHist))
-	lastInfo := s.epochHist[numEpochs-1]
-	return &ktserde.SigDig{Epoch: numEpochs - 1, Dig: lastInfo.dig, Sig: lastInfo.sig}
+	return sig
 }
 
 // getHist returns a history of membership proofs for all post-prefix versions.

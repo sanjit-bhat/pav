@@ -96,7 +96,7 @@ func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 	setInnerHash(n, ctx)
 }
 
-// Get returns if label is in the tree and if so, the val.
+// Get returns if label is in the tree (and if so, the val).
 // it should only be called on complete trees (no cuts).
 func (t *Tree) Get(label []byte) (bool, []byte) {
 	in, val, _, err0 := t.prove(label, false)
@@ -164,7 +164,7 @@ func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) (boo
 		}
 		return false, nil, nil, proof, false
 	}
-	// cut hides the sub-tree, so don't know if there or not. error.
+	// cut hides the sub-tree, so don't know if there. error.
 	if n.nodeTy == cutNodeTy {
 		return false, nil, nil, nil, true
 	}
@@ -255,7 +255,7 @@ func (t *Tree) Digest() []byte {
 	return getNodeHash(t.root, t.ctx)
 }
 
-func NewTree() *Tree {
+func New() *Tree {
 	c := &context{emptyHash: compEmptyHash()}
 	return &Tree{ctx: c}
 }
@@ -267,7 +267,7 @@ func newShell(label []byte, ctx *context, depth uint64, sibs []byte) *node {
 	if sibsLen == 0 {
 		return nil
 	}
-	split := sibsLen-cryptoffi.HashLen
+	split := sibsLen - cryptoffi.HashLen
 	sibs0 := sibs[:split]
 	hash := sibs[split:]
 	cut := &node{nodeTy: cutNodeTy, hash: hash}

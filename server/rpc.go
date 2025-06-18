@@ -6,79 +6,102 @@ import (
 )
 
 const (
-	ServerPutRpc     uint64 = 0
-	ServerHistoryRpc uint64 = 1
-	ServerAuditRpc   uint64 = 2
+	StartCliRpc uint64 = 1
+	PutRpc      uint64 = 2
+	HistoryRpc  uint64 = 3
+	AuditRpc    uint64 = 4
 )
 
 func NewRpcServer(s *Server) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
-	h[ServerPutRpc] = func(arg []byte, reply *[]byte) {
-		argObj, _, err0 := ServerPutArgDecode(arg)
+	h[StartCliRpc] = func(arg []byte, reply *[]byte) {
+		r0, r1, r2, r3 := s.StartCli()
+		r := &StartCliReply{StartEpochLen: r0, StartLink: r1, ChainProof: r2, LinkSig: r3}
+		*reply = StartCliReplyEncode(*reply, r)
+	}
+	h[PutRpc] = func(arg []byte, reply *[]byte) {
+		a, _, err0 := PutArgDecode(arg)
 		if err0 {
 			return
 		}
-		s.Put(argObj.Uid, argObj.Pk, argObj.Ver)
+		s.Put(a.Uid, a.Pk, a.Ver)
 		*reply = nil
 	}
-	h[ServerHistoryRpc] = func(arg []byte, reply *[]byte) {
-		argObj, _, err0 := ServerHistoryArgDecode(arg)
+	h[HistoryRpc] = func(arg []byte, reply *[]byte) {
+		a, _, err0 := HistoryArgDecode(arg)
 		if err0 {
 			return
 		}
-		ret0, ret1, ret2, ret3 := s.History(argObj.Uid, argObj.PrefixLen)
-		replyObj := &ServerHistoryReply{Dig: ret0, Hist: ret1, Bound: ret2, Err: ret3}
-		*reply = ServerHistoryReplyEncode(*reply, replyObj)
+		r0, r1, r2, r3, r4 := s.History(a.Uid, a.PrevEpoch, a.PrevVerLen)
+		r := &HistoryReply{ChainProof: r0, LinkSig: r1, Hist: r2, Bound: r3, Err: r4}
+		*reply = HistoryReplyEncode(*reply, r)
 	}
-	h[ServerAuditRpc] = func(arg []byte, reply *[]byte) {
-		argObj, _, err0 := ServerAuditArgDecode(arg)
+	h[AuditRpc] = func(arg []byte, reply *[]byte) {
+		a, _, err0 := AuditArgDecode(arg)
 		if err0 {
 			return
 		}
-		ret0, ret1 := s.Audit(argObj.Epoch)
-		replyObj := &ServerAuditReply{P: ret0, Err: ret1}
-		*reply = ServerAuditReplyEncode(*reply, replyObj)
+		r0, r1 := s.Audit(a.Epoch)
+		r := &AuditReply{P: r0, Err: r1}
+		*reply = AuditReplyEncode(*reply, r)
 	}
 	return advrpc.NewServer(h)
 }
 
-func CallServPut(c *advrpc.Client, uid uint64, pk []byte, ver uint64) {
-	arg := &ServerPutArg{Uid: uid, Pk: pk, Ver: ver}
-	argByt := ServerPutArgEncode(make([]byte, 0), arg)
-	replyByt := new([]byte)
-	var err0 = true
-	for err0 {
-		// this "removes" possibility of net failure.
-		err0 = c.Call(ServerPutRpc, argByt, replyByt)
-	}
-}
+// in below, loop on calls to "remove" possibility of net failure.
+// in correctness world, all remaining errors (including reply decoding)
+// come from server code.
+// client should be able to assert that they don't happen.
 
-func CallServHistory(c *advrpc.Client, uid uint64, prefixLen uint64) (*ktserde.SigDig, []*ktserde.Memb, *ktserde.NonMemb, bool) {
-	arg := &ServerHistoryArg{Uid: uid, PrefixLen: prefixLen}
-	argByt := ServerHistoryArgEncode(make([]byte, 0), arg)
-	replyByt := new([]byte)
+func CallStartCli(c *advrpc.Client) (uint64, []byte, []byte, []byte, bool) {
+	rb := new([]byte)
 	var err0 = true
 	for err0 {
-		err0 = c.Call(ServerHistoryRpc, argByt, replyByt)
+		err0 = c.Call(StartCliRpc, nil, rb)
 	}
-	reply, _, err1 := ServerHistoryReplyDecode(*replyByt)
+	r, _, err1 := StartCliReplyDecode(*rb)
 	if err1 {
-		return nil, nil, nil, true
+		return 0, nil, nil, nil, true
 	}
-	return reply.Dig, reply.Hist, reply.Bound, false
+	return r.StartEpochLen, r.StartLink, r.ChainProof, r.LinkSig, false
 }
 
-func CallServAudit(c *advrpc.Client, epoch uint64) (*ktserde.UpdateProof, bool) {
-	arg := &ServerAuditArg{Epoch: epoch}
-	argByt := ServerAuditArgEncode(make([]byte, 0), arg)
-	replyByt := new([]byte)
+func CallPut(c *advrpc.Client, uid uint64, pk []byte, ver uint64) {
+	a := &PutArg{Uid: uid, Pk: pk, Ver: ver}
+	ab := PutArgEncode(make([]byte, 0), a)
+	rb := new([]byte)
 	var err0 = true
 	for err0 {
-		err0 = c.Call(ServerAuditRpc, argByt, replyByt)
+		err0 = c.Call(PutRpc, ab, rb)
 	}
-	reply, _, err1 := ServerAuditReplyDecode(*replyByt)
+}
+
+func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktserde.Memb, *ktserde.NonMemb, bool) {
+	a := &HistoryArg{Uid: uid, PrevEpoch: prevEpoch, PrevVerLen: prevVerLen}
+	ab := HistoryArgEncode(make([]byte, 0), a)
+	rb := new([]byte)
+	var err0 = true
+	for err0 {
+		err0 = c.Call(HistoryRpc, ab, rb)
+	}
+	r, _, err1 := HistoryReplyDecode(*rb)
+	if err1 {
+		return nil, nil, nil, nil, true
+	}
+	return r.ChainProof, r.LinkSig, r.Hist, r.Bound, r.Err
+}
+
+func CallAudit(c *advrpc.Client, epoch uint64) (*ktserde.AuditProof, bool) {
+	a := &AuditArg{Epoch: epoch}
+	ab := AuditArgEncode(make([]byte, 0), a)
+	rb := new([]byte)
+	var err0 = true
+	for err0 {
+		err0 = c.Call(AuditRpc, ab, rb)
+	}
+	r, _, err1 := AuditReplyDecode(*rb)
 	if err1 {
 		return nil, true
 	}
-	return reply.P, reply.Err
+	return r.P, r.Err
 }

@@ -4,25 +4,25 @@ import (
 	"github.com/mit-pdos/pav/ktserde"
 )
 
-type AdtrUpdateArg struct {
-	P *ktserde.UpdateProof
+type UpdateArg struct {
+	P *ktserde.AuditProof
 }
 
-type AdtrUpdateReply struct {
+type UpdateReply struct {
 	Err bool
 }
 
-type AdtrGetArg struct {
+type GetArg struct {
 	Epoch uint64
 }
 
-type AdtrEpochInfo struct {
-	Dig     []byte
-	ServSig []byte
-	AdtrSig []byte
+type GetReply struct {
+	X   *EpochInfo
+	Err bool
 }
 
-type AdtrGetReply struct {
-	X   *AdtrEpochInfo
-	Err bool
+type EpochInfo struct {
+	Link    []byte
+	ServSig []byte
+	AdtrSig []byte
 }

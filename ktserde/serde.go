@@ -1,5 +1,6 @@
 package ktserde
 
+// TODO: rename.
 type PreSigDig struct {
 	Epoch uint64
 	Dig   []byte
@@ -38,7 +39,13 @@ type NonMemb struct {
 	MerkleProof []byte
 }
 
+type AuditProof struct {
+	Updates []*UpdateProof
+	LinkSig []byte
+}
+
 type UpdateProof struct {
-	Updates map[string][]byte
-	Sig     []byte
+	MapLabel     []byte
+	MapVal       []byte
+	NonMembProof []byte
 }
