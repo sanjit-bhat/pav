@@ -31,10 +31,10 @@ func (c *HashChain) Prove(prevLen uint64) []byte {
 	return std.BytesClone(c.vals[start:])
 }
 
-// ProveLast bootstraps hashchain verifiers with a commit to the
+// Bootstrap hashchain verifiers with a commit to the
 // second-to-last list and a proof of the last value.
 // it expects non-empty values.
-func (c *HashChain) ProveLast() ([]byte, []byte) {
+func (c *HashChain) Bootstrap() ([]byte, []byte) {
 	start := uint64(len(c.vals)) - cryptoffi.HashLen
 	return c.predLastLink, std.BytesClone(c.vals[start:])
 }

@@ -58,7 +58,7 @@ func TestHashChain(t *testing.T) {
 			t.Fatal()
 		}
 
-		startLink, startVal := chain.ProveLast()
+		startLink, startVal := chain.Bootstrap()
 		extLen1, newVal1, newLink1, err := Verify(startLink, startVal)
 		if err {
 			t.Fatal()

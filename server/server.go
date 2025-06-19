@@ -34,7 +34,7 @@ type Server struct {
 func (s *Server) Start() *StartReply {
 	s.mu.RLock()
 	predLen := uint64(len(s.auditHist)) - 1
-	predLink, proof := s.chain.ProveLast()
+	predLink, proof := s.chain.Bootstrap()
 	lastSig := s.auditHist[predLen].LinkSig
 	pk := s.vrfSk.PublicKey()
 	s.mu.RUnlock()
