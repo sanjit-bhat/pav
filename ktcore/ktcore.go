@@ -5,6 +5,23 @@ import (
 	"github.com/mit-pdos/pav/cryptoutil"
 )
 
+// Blame helps connect the abstract notion of correctness with the impl.
+//  1. correctness (abstractly) asks us to guarantee stronger properties
+//     when various parties are good. this contrasts to security,
+//     which provides a minimal property under an all-bad assumption.
+//  2. [Blame] is an error along with a set of "blamed" parties.
+//     it says that the error could happen if any of the parties are bad.
+//     if all blamed parties are good, the error should not happen.
+type Blame uint64
+
+const (
+	BlameNet     Blame = 1 << 1
+	BlameServer  Blame = 1 << 2
+	BlameAuditor Blame = 1 << 3
+	BlameClients Blame = 1 << 4
+	BlameUnknown Blame = 1 << 5
+)
+
 func SignVrf(sk *cryptoffi.SigPrivateKey, vrfPk []byte) []byte {
 	var b = make([]byte, 0, 1+8+cryptoffi.HashLen)
 	b = VrfSigEncode(b, &VrfSig{SigTag: VrfSigTag, VrfPk: vrfPk})

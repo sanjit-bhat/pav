@@ -47,6 +47,12 @@ func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
 	s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
 }
 
+/* TODO: what should [History] blame spec be?
+[History] errors with bad prev epoch or prev ver.
+the caller is usually a client, so blame client?
+but malicious parties could make bad History calls as well.
+also, network could always tamper with inputs, so always blame it? */
+
 // History gives key history for uid, excluding first prevVerLen versions.
 // the caller already saw prevEpoch.
 func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktcore.Memb, *ktcore.NonMemb, bool) {
