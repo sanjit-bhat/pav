@@ -7,7 +7,7 @@ import (
 	"github.com/mit-pdos/pav/advrpc"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/hashchain"
-	"github.com/mit-pdos/pav/ktserde"
+	"github.com/mit-pdos/pav/ktcore"
 	"github.com/mit-pdos/pav/merkle"
 	"github.com/mit-pdos/pav/server"
 )
@@ -59,13 +59,13 @@ func (a *Auditor) Update() bool {
 		return true
 	}
 	nextLink := hashchain.GetNextLink(lastLink, nextDig)
-	if ktserde.VerifyLinkSig(a.server.sigPk, nextEp, nextLink, upd.LinkSig) {
+	if ktcore.VerifyLinkSig(a.server.sigPk, nextEp, nextLink, upd.LinkSig) {
 		a.mu.Unlock()
 		return true
 	}
 
 	// sign and apply update.
-	sig := ktserde.SignLink(a.sk, nextEp, nextLink)
+	sig := ktcore.SignLink(a.sk, nextEp, nextLink)
 	a.lastDig = nextDig
 	info := &epochInfo{link: nextLink, servSig: upd.LinkSig, adtrSig: sig}
 	a.hist = append(a.hist, info)
@@ -94,7 +94,7 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.Si
 	if err0 {
 		return nil, nil, true
 	}
-	if ktserde.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
+	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
 		return nil, nil, true
 	}
 
@@ -103,12 +103,12 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.Si
 	// start off with dig of empty map.
 	tr := merkle.New()
 	dig := tr.Digest()
-	sig := ktserde.SignVrf(sk, reply.VrfPk)
+	sig := ktcore.SignVrf(sk, reply.VrfPk)
 	serv := &serverInfo{cli: cli, sigPk: servPk, vrfPk: reply.VrfPk, servVrfSig: reply.VrfSig, adtrVrfSig: sig}
 	return &Auditor{mu: mu, sk: sk, lastDig: dig, server: serv}, pk, false
 }
 
-func getNextDig(lastDig []byte, updates []*ktserde.UpdateProof) ([]byte, bool) {
+func getNextDig(lastDig []byte, updates []*ktcore.UpdateProof) ([]byte, bool) {
 	var lastDig0 = lastDig
 	var err bool
 	for _, u := range updates {

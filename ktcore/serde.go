@@ -1,4 +1,4 @@
-package ktserde
+package ktcore
 
 const (
 	VrfSigTag  byte = 1

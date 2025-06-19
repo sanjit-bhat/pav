@@ -1,6 +1,6 @@
-// Auto-generated from spec "github.com/mit-pdos/pav/ktserde/serde.go"
+// Auto-generated from spec "github.com/mit-pdos/pav/ktcore/serde.go"
 // using compiler "github.com/mit-pdos/pav/serde".
-package ktserde
+package ktcore
 
 import (
 	"github.com/mit-pdos/pav/marshalutil"

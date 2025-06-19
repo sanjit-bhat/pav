@@ -3,7 +3,7 @@
 package server
 
 import (
-	"github.com/mit-pdos/pav/ktserde"
+	"github.com/mit-pdos/pav/ktcore"
 	"github.com/mit-pdos/pav/marshalutil"
 	"github.com/tchajed/marshal"
 )
@@ -93,8 +93,8 @@ func HistoryReplyEncode(b0 []byte, o *HistoryReply) []byte {
 	var b = b0
 	b = marshalutil.WriteSlice1D(b, o.ChainProof)
 	b = marshalutil.WriteSlice1D(b, o.LinkSig)
-	b = ktserde.MembSlice1DEncode(b, o.Hist)
-	b = ktserde.NonMembEncode(b, o.Bound)
+	b = ktcore.MembSlice1DEncode(b, o.Hist)
+	b = ktcore.NonMembEncode(b, o.Bound)
 	b = marshal.WriteBool(b, o.Err)
 	return b
 }
@@ -107,11 +107,11 @@ func HistoryReplyDecode(b0 []byte) (*HistoryReply, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := ktserde.MembSlice1DDecode(b2)
+	a3, b3, err3 := ktcore.MembSlice1DDecode(b2)
 	if err3 {
 		return nil, nil, true
 	}
-	a4, b4, err4 := ktserde.NonMembDecode(b3)
+	a4, b4, err4 := ktcore.NonMembDecode(b3)
 	if err4 {
 		return nil, nil, true
 	}
@@ -135,12 +135,12 @@ func AuditArgDecode(b0 []byte) (*AuditArg, []byte, bool) {
 }
 func AuditReplyEncode(b0 []byte, o *AuditReply) []byte {
 	var b = b0
-	b = ktserde.AuditProofEncode(b, o.P)
+	b = ktcore.AuditProofEncode(b, o.P)
 	b = marshal.WriteBool(b, o.Err)
 	return b
 }
 func AuditReplyDecode(b0 []byte) (*AuditReply, []byte, bool) {
-	a1, b1, err1 := ktserde.AuditProofDecode(b0)
+	a1, b1, err1 := ktcore.AuditProofDecode(b0)
 	if err1 {
 		return nil, nil, true
 	}

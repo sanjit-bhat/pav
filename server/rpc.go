@@ -2,7 +2,7 @@ package server
 
 import (
 	"github.com/mit-pdos/pav/advrpc"
-	"github.com/mit-pdos/pav/ktserde"
+	"github.com/mit-pdos/pav/ktcore"
 )
 
 const (
@@ -75,7 +75,7 @@ func CallPut(c *advrpc.Client, uid uint64, pk []byte, ver uint64) {
 	}
 }
 
-func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktserde.Memb, *ktserde.NonMemb, bool) {
+func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktcore.Memb, *ktcore.NonMemb, bool) {
 	a := &HistoryArg{Uid: uid, PrevEpoch: prevEpoch, PrevVerLen: prevVerLen}
 	ab := HistoryArgEncode(make([]byte, 0), a)
 	rb := new([]byte)
@@ -90,7 +90,7 @@ func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) ([]byte, [
 	return r.ChainProof, r.LinkSig, r.Hist, r.Bound, r.Err
 }
 
-func CallAudit(c *advrpc.Client, epoch uint64) (*ktserde.AuditProof, bool) {
+func CallAudit(c *advrpc.Client, epoch uint64) (*ktcore.AuditProof, bool) {
 	a := &AuditArg{Epoch: epoch}
 	ab := AuditArgEncode(make([]byte, 0), a)
 	rb := new([]byte)

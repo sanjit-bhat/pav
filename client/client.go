@@ -6,7 +6,7 @@ import (
 	"github.com/mit-pdos/pav/auditor"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/hashchain"
-	"github.com/mit-pdos/pav/ktserde"
+	"github.com/mit-pdos/pav/ktcore"
 	"github.com/mit-pdos/pav/merkle"
 	"github.com/mit-pdos/pav/server"
 )
@@ -156,10 +156,10 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientEr
 	// check serv sig to catch serv misbehavior.
 
 	// vrf evidence.
-	if ktserde.VerifyVrfSig(adtrPk, audit.VrfPk, audit.AdtrVrfSig) {
+	if ktcore.VerifyVrfSig(adtrPk, audit.VrfPk, audit.AdtrVrfSig) {
 		return stdErr
 	}
-	if ktserde.VerifyVrfSig(c.server.sigPk, audit.VrfPk, audit.ServVrfSig) {
+	if ktcore.VerifyVrfSig(c.server.sigPk, audit.VrfPk, audit.ServVrfSig) {
 		return stdErr
 	}
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.server.vrfPk)
@@ -169,10 +169,10 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientEr
 	}
 
 	// link evidence.
-	if ktserde.VerifyLinkSig(adtrPk, last.Epoch, audit.Link, audit.AdtrLinkSig) {
+	if ktcore.VerifyLinkSig(adtrPk, last.Epoch, audit.Link, audit.AdtrLinkSig) {
 		return stdErr
 	}
-	if ktserde.VerifyLinkSig(c.server.sigPk, last.Epoch, audit.Link, audit.ServLinkSig) {
+	if ktcore.VerifyLinkSig(c.server.sigPk, last.Epoch, audit.Link, audit.ServLinkSig) {
 		return stdErr
 	}
 	if !std.BytesEqual(last.link, audit.Link) {
@@ -200,14 +200,14 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (*Client, bool) {
 		return nil, true
 	}
 	lastEp := reply.StartEpochLen + extLen - 1
-	if ktserde.VerifyLinkSig(servPk, lastEp, newLink, reply.LinkSig) {
+	if ktcore.VerifyLinkSig(servPk, lastEp, newLink, reply.LinkSig) {
 		return nil, true
 	}
 	vrfPk, err2 := cryptoffi.VrfPublicKeyDecode(reply.VrfPk)
 	if err2 {
 		return nil, true
 	}
-	if ktserde.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
+	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
 		return nil, true
 	}
 
@@ -229,19 +229,19 @@ func (c *Client) getChainExt(chainProof, sig []byte) (*lastInfo, bool) {
 		return nil, true
 	}
 	newEp := c.LastEpoch.Epoch + extLen
-	if ktserde.VerifyLinkSig(c.server.sigPk, newEp, newLink, sig) {
+	if ktcore.VerifyLinkSig(c.server.sigPk, newEp, newLink, sig) {
 		return nil, true
 	}
 	return &lastInfo{Epoch: newEp, dig: newDig, link: newLink, sig: sig}, false
 }
 
 // CheckMemb errors on fail.
-func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *ktserde.Memb) bool {
-	label, err0 := ktserde.CheckMapLabel(vrfPk, uid, ver, memb.LabelProof)
+func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *ktcore.Memb) bool {
+	label, err0 := ktcore.CheckMapLabel(vrfPk, uid, ver, memb.LabelProof)
 	if err0 {
 		return true
 	}
-	mapVal := ktserde.GetMapVal(memb.PkOpen)
+	mapVal := ktcore.GetMapVal(memb.PkOpen)
 	dig0, err1 := merkle.VerifyMemb(label, mapVal, memb.MerkleProof)
 	if err1 {
 		return true
@@ -253,7 +253,7 @@ func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb 
 }
 
 // CheckHist errors on fail.
-func CheckHist(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte, hist []*ktserde.Memb) bool {
+func CheckHist(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte, hist []*ktcore.Memb) bool {
 	var err0 bool
 	for ver, memb := range hist {
 		if CheckMemb(vrfPk, uid, prefixLen+uint64(ver), dig, memb) {
@@ -264,8 +264,8 @@ func CheckHist(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte,
 }
 
 // CheckNonMemb errors on fail.
-func CheckNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *ktserde.NonMemb) bool {
-	label, err0 := ktserde.CheckMapLabel(vrfPk, uid, ver, nonMemb.LabelProof)
+func CheckNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *ktcore.NonMemb) bool {
+	label, err0 := ktcore.CheckMapLabel(vrfPk, uid, ver, nonMemb.LabelProof)
 	if err0 {
 		return true
 	}

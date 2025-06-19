@@ -1,4 +1,4 @@
-package ktserde
+package ktcore
 
 import (
 	"github.com/mit-pdos/pav/cryptoffi"

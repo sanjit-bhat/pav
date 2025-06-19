@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/mit-pdos/pav/ktserde"
+	"github.com/mit-pdos/pav/ktcore"
 )
 
 type StartReply struct {
@@ -28,8 +28,8 @@ type HistoryArg struct {
 type HistoryReply struct {
 	ChainProof []byte
 	LinkSig    []byte
-	Hist       []*ktserde.Memb
-	Bound      *ktserde.NonMemb
+	Hist       []*ktcore.Memb
+	Bound      *ktcore.NonMemb
 	Err        bool
 }
 
@@ -38,6 +38,6 @@ type AuditArg struct {
 }
 
 type AuditReply struct {
-	P   *ktserde.AuditProof
+	P   *ktcore.AuditProof
 	Err bool
 }

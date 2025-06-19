@@ -6,7 +6,7 @@ import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
 	"github.com/mit-pdos/pav/hashchain"
-	"github.com/mit-pdos/pav/ktserde"
+	"github.com/mit-pdos/pav/ktcore"
 	"github.com/mit-pdos/pav/merkle"
 )
 
@@ -24,7 +24,7 @@ type Server struct {
 	// chain is a hashchain of merkle digests across the epochs.
 	chain *hashchain.HashChain
 	// auditHist stores auditing info on prior epochs.
-	auditHist []*ktserde.AuditProof
+	auditHist []*ktcore.AuditProof
 	vrfPkSig  []byte
 	// WorkQ batch processes Put requests.
 	WorkQ *WorkQ
@@ -49,7 +49,7 @@ func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
 
 // History gives key history for uid, excluding first prevVerLen versions.
 // the caller already saw prevEpoch.
-func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktserde.Memb, *ktserde.NonMemb, bool) {
+func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktcore.Memb, *ktcore.NonMemb, bool) {
 	s.mu.RLock()
 	numEps := uint64(len(s.auditHist))
 	if prevEpoch >= numEps {
@@ -76,11 +76,11 @@ func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*
 }
 
 // Audit returns an err on fail.
-func (s *Server) Audit(epoch uint64) (*ktserde.AuditProof, bool) {
+func (s *Server) Audit(epoch uint64) (*ktcore.AuditProof, bool) {
 	s.mu.RLock()
 	if epoch >= uint64(len(s.auditHist)) {
 		s.mu.RUnlock()
-		return &ktserde.AuditProof{}, true
+		return &ktcore.AuditProof{}, true
 	}
 	proof := s.auditHist[epoch]
 	s.mu.RUnlock()
@@ -123,7 +123,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	mu := new(sync.RWMutex)
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfSk := cryptoffi.VrfGenerateKey()
-	vrfSig := ktserde.SignVrf(sigSk, vrfSk.PublicKey())
+	vrfSig := ktcore.SignVrf(sigSk, vrfSk.PublicKey())
 	secret := cryptoffi.RandBytes(cryptoffi.HashLen)
 	keys := merkle.New()
 	plainPks := make(map[uint64][][]byte)
@@ -134,8 +134,8 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	// commit empty tree as epoch 0.
 	dig := keys.Digest()
 	link := chain.Append(dig)
-	linkSig := ktserde.SignLink(s.sigSk, 0, link)
-	s.auditHist = append(s.auditHist, &ktserde.AuditProof{LinkSig: linkSig})
+	linkSig := ktcore.SignLink(s.sigSk, 0, link)
+	s.auditHist = append(s.auditHist, &ktcore.AuditProof{LinkSig: linkSig})
 
 	go func() {
 		for {
@@ -204,17 +204,17 @@ func (s *Server) makeEntries(work []*Work) []*mapEntry {
 
 func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 	numVers := uint64(len(s.plainPks[in.Uid]))
-	mapLabel := ktserde.EvalMapLabel(in.Uid, numVers, s.vrfSk)
+	mapLabel := ktcore.EvalMapLabel(in.Uid, numVers, s.vrfSk)
 	rand := getCommitRand(s.commitSecret, mapLabel)
-	open := &ktserde.CommitOpen{Val: in.Pk, Rand: rand}
-	mapVal := ktserde.GetMapVal(open)
+	open := &ktcore.CommitOpen{Val: in.Pk, Rand: rand}
+	mapVal := ktcore.GetMapVal(open)
 
 	out.label = mapLabel
 	out.val = mapVal
 }
 
 func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
-	upd := make([]*ktserde.UpdateProof, 0, len(work))
+	upd := make([]*ktcore.UpdateProof, 0, len(work))
 	var i = uint64(0)
 	for i < uint64(len(work)) {
 		resp := work[i].Resp
@@ -225,7 +225,7 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 
 			inTree, _, proof := s.keyMap.Prove(label)
 			std.Assert(!inTree)
-			info := &ktserde.UpdateProof{MapLabel: label, MapVal: out0.val, NonMembProof: proof}
+			info := &ktcore.UpdateProof{MapLabel: label, MapVal: out0.val, NonMembProof: proof}
 			upd = append(upd, info)
 
 			err0 := s.keyMap.Put(label, out0.val)
@@ -238,23 +238,23 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 	dig := s.keyMap.Digest()
 	link := s.chain.Append(dig)
 	epoch := uint64(len(s.auditHist))
-	sig := ktserde.SignLink(s.sigSk, epoch, link)
-	s.auditHist = append(s.auditHist, &ktserde.AuditProof{Updates: upd, LinkSig: sig})
+	sig := ktcore.SignLink(s.sigSk, epoch, link)
+	s.auditHist = append(s.auditHist, &ktcore.AuditProof{Updates: upd, LinkSig: sig})
 }
 
 // getHist returns a history of membership proofs for all post-prefix versions.
-func (s *Server) getHist(uid, prefixLen uint64) []*ktserde.Memb {
+func (s *Server) getHist(uid, prefixLen uint64) []*ktcore.Memb {
 	pks := s.plainPks[uid]
 	numVers := uint64(len(pks))
-	var hist []*ktserde.Memb
+	var hist []*ktcore.Memb
 	var ver = prefixLen
 	for ver < numVers {
-		label, labelProof := ktserde.ProveMapLabel(uid, ver, s.vrfSk)
+		label, labelProof := ktcore.ProveMapLabel(uid, ver, s.vrfSk)
 		inMap, _, mapProof := s.keyMap.Prove(label)
 		std.Assert(inMap)
 		rand := getCommitRand(s.commitSecret, label)
-		open := &ktserde.CommitOpen{Val: pks[ver], Rand: rand}
-		memb := &ktserde.Memb{LabelProof: labelProof, PkOpen: open, MerkleProof: mapProof}
+		open := &ktcore.CommitOpen{Val: pks[ver], Rand: rand}
+		memb := &ktcore.Memb{LabelProof: labelProof, PkOpen: open, MerkleProof: mapProof}
 		hist = append(hist, memb)
 		ver++
 	}
@@ -262,9 +262,9 @@ func (s *Server) getHist(uid, prefixLen uint64) []*ktserde.Memb {
 }
 
 // getBound returns a non-membership proof for the boundary version.
-func (s *Server) getBound(uid, numVers uint64) *ktserde.NonMemb {
-	label, labelProof := ktserde.ProveMapLabel(uid, numVers, s.vrfSk)
+func (s *Server) getBound(uid, numVers uint64) *ktcore.NonMemb {
+	label, labelProof := ktcore.ProveMapLabel(uid, numVers, s.vrfSk)
 	inMap, _, mapProof := s.keyMap.Prove(label)
 	std.Assert(!inMap)
-	return &ktserde.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
+	return &ktcore.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
 }

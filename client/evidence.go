@@ -3,7 +3,7 @@ package client
 import (
 	"github.com/goose-lang/std"
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/ktserde"
+	"github.com/mit-pdos/pav/ktcore"
 )
 
 // Evid is evidence that the server misbehaved.
@@ -28,20 +28,20 @@ type evidLink struct {
 }
 
 func (e *evidVrf) Check(pk cryptoffi.SigPublicKey) bool {
-	if ktserde.VerifyVrfSig(pk, e.vrfPk0, e.sig0) {
+	if ktcore.VerifyVrfSig(pk, e.vrfPk0, e.sig0) {
 		return true
 	}
-	if ktserde.VerifyVrfSig(pk, e.vrfPk1, e.sig1) {
+	if ktcore.VerifyVrfSig(pk, e.vrfPk1, e.sig1) {
 		return true
 	}
 	return std.BytesEqual(e.vrfPk0, e.vrfPk1)
 }
 
 func (e *evidLink) Check(pk cryptoffi.SigPublicKey) bool {
-	if ktserde.VerifyLinkSig(pk, e.epoch, e.link0, e.sig0) {
+	if ktcore.VerifyLinkSig(pk, e.epoch, e.link0, e.sig0) {
 		return true
 	}
-	if ktserde.VerifyLinkSig(pk, e.epoch, e.link1, e.sig1) {
+	if ktcore.VerifyLinkSig(pk, e.epoch, e.link1, e.sig1) {
 		return true
 	}
 	return std.BytesEqual(e.link0, e.link1)
