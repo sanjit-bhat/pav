@@ -34,10 +34,16 @@ type serverInfo struct {
 	adtrVrfSig []byte
 }
 
-// Update checks a new epoch update, applies it, and errors on fail.
-func (a *Auditor) Update(proof *ktserde.AuditProof) bool {
+// Update queries server for a new epoch update, applies it, and errors on fail.
+func (a *Auditor) Update() bool {
 	a.mu.Lock()
 	nextEp := uint64(len(a.hist))
+	upd, err0 := server.CallAudit(a.server.cli, nextEp)
+	if err0 {
+		a.mu.Unlock()
+		return true
+	}
+
 	var lastLink []byte
 	if nextEp == 0 {
 		// start off with empty chain.
@@ -47,13 +53,13 @@ func (a *Auditor) Update(proof *ktserde.AuditProof) bool {
 	}
 
 	// check update.
-	nextDig, err0 := getNextDig(a.lastDig, proof.Updates)
-	if err0 {
+	nextDig, err1 := getNextDig(a.lastDig, upd.Updates)
+	if err1 {
 		a.mu.Unlock()
 		return true
 	}
 	nextLink := hashchain.GetNextLink(lastLink, nextDig)
-	if ktserde.VerifyLinkSig(a.server.sigPk, nextEp, nextLink, proof.LinkSig) {
+	if ktserde.VerifyLinkSig(a.server.sigPk, nextEp, nextLink, upd.LinkSig) {
 		a.mu.Unlock()
 		return true
 	}
@@ -61,7 +67,7 @@ func (a *Auditor) Update(proof *ktserde.AuditProof) bool {
 	// sign and apply update.
 	sig := ktserde.SignLink(a.sk, nextEp, nextLink)
 	a.lastDig = nextDig
-	info := &epochInfo{link: nextLink, servSig: proof.LinkSig, adtrSig: sig}
+	info := &epochInfo{link: nextLink, servSig: upd.LinkSig, adtrSig: sig}
 	a.hist = append(a.hist, info)
 	a.mu.Unlock()
 	return false

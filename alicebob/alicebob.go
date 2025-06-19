@@ -9,7 +9,6 @@ import (
 	"github.com/mit-pdos/pav/auditor"
 	"github.com/mit-pdos/pav/client"
 	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/server"
 )
 
@@ -88,7 +87,7 @@ func testAliceBob(setup *setupParams) {
 
 	if setup.adtrGood {
 		// sync auditors. in real world, this'll happen periodically.
-		updAdtrsAll(setup.servGood, setup.servAddr, setup.adtrAddrs)
+		updAdtrs(setup.adtrAddrs)
 
 		// alice and bob audit. ordering irrelevant across clients.
 		doAudits(alice.cli, setup.servGood, setup.servPk, setup.adtrAddrs, setup.adtrPks)
@@ -204,23 +203,13 @@ func mkRpcClients(addrs []uint64) []*advrpc.Client {
 	return c
 }
 
-func updAdtrsOnce(servGood bool, upd *ktserde.AuditProof, adtrs []*advrpc.Client) {
-	for _, cli := range adtrs {
-		err := auditor.CallUpdate(cli, upd)
-		checkWorldErr(servGood, err)
-	}
-}
-
-func updAdtrsAll(servGood bool, servAddr uint64, adtrAddrs []uint64) {
-	servCli := advrpc.Dial(servAddr)
+func updAdtrs(adtrAddrs []uint64) {
 	adtrs := mkRpcClients(adtrAddrs)
-	var epoch uint64
-	for {
-		upd, err := server.CallAudit(servCli, epoch)
-		if err {
-			break
+	for _, cli := range adtrs {
+		var err = false
+		for !err {
+			// TODO: more fine-grained err handling here.
+			err = auditor.CallUpdate(cli)
 		}
-		updAdtrsOnce(servGood, upd, adtrs)
-		epoch++
 	}
 }

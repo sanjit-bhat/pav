@@ -1,13 +1,5 @@
 package auditor
 
-import (
-	"github.com/mit-pdos/pav/ktserde"
-)
-
-type UpdateArg struct {
-	P *ktserde.AuditProof
-}
-
 type UpdateReply struct {
 	Err bool
 }

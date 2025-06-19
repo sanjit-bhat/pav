@@ -3,23 +3,10 @@
 package auditor
 
 import (
-	"github.com/mit-pdos/pav/ktserde"
 	"github.com/mit-pdos/pav/marshalutil"
 	"github.com/tchajed/marshal"
 )
 
-func UpdateArgEncode(b0 []byte, o *UpdateArg) []byte {
-	var b = b0
-	b = ktserde.AuditProofEncode(b, o.P)
-	return b
-}
-func UpdateArgDecode(b0 []byte) (*UpdateArg, []byte, bool) {
-	a1, b1, err1 := ktserde.AuditProofDecode(b0)
-	if err1 {
-		return nil, nil, true
-	}
-	return &UpdateArg{P: a1}, b1, false
-}
 func UpdateReplyEncode(b0 []byte, o *UpdateReply) []byte {
 	var b = b0
 	b = marshal.WriteBool(b, o.Err)

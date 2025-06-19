@@ -2,7 +2,6 @@ package auditor
 
 import (
 	"github.com/mit-pdos/pav/advrpc"
-	"github.com/mit-pdos/pav/ktserde"
 )
 
 const (
@@ -13,11 +12,7 @@ const (
 func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
 	h[UpdateRpc] = func(arg []byte, reply *[]byte) {
-		a, _, err0 := UpdateArgDecode(arg)
-		if err0 {
-			return
-		}
-		r0 := adtr.Update(a.P)
+		r0 := adtr.Update()
 		replyObj := &UpdateReply{Err: r0}
 		*reply = UpdateReplyEncode(*reply, replyObj)
 	}
@@ -32,13 +27,11 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func CallUpdate(c *advrpc.Client, proof *ktserde.AuditProof) bool {
-	a := &UpdateArg{P: proof}
-	ab := UpdateArgEncode(make([]byte, 0), a)
+func CallUpdate(c *advrpc.Client) bool {
 	rb := new([]byte)
 	var err0 = true
 	for err0 {
-		err0 = c.Call(UpdateRpc, ab, rb)
+		err0 = c.Call(UpdateRpc, nil, rb)
 	}
 	r, _, err1 := UpdateReplyDecode(*rb)
 	if err1 {
