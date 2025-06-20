@@ -40,7 +40,7 @@ func NewRpcServer(s *Server) *advrpc.Server {
 		if err0 {
 			return
 		}
-		r0, r1 := s.Audit(a.Epoch)
+		r0, r1 := s.Audit(a.PrevEpochLen)
 		r := &AuditReply{P: r0, Err: r1}
 		*reply = AuditReplyEncode(*reply, r)
 	}
@@ -90,8 +90,8 @@ func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) ([]byte, [
 	return r.ChainProof, r.LinkSig, r.Hist, r.Bound, r.Err
 }
 
-func CallAudit(c *advrpc.Client, epoch uint64) (*ktcore.AuditProof, bool) {
-	a := &AuditArg{Epoch: epoch}
+func CallAudit(c *advrpc.Client, prevEpochLen uint64) ([]*ktcore.AuditProof, bool) {
+	a := &AuditArg{PrevEpochLen: prevEpochLen}
 	ab := AuditArgEncode(make([]byte, 0), a)
 	rb := new([]byte)
 	var err0 = true

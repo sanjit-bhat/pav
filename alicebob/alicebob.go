@@ -87,7 +87,7 @@ func testAliceBob(setup *setupParams) {
 
 	if setup.adtrGood {
 		// sync auditors. in real world, this'll happen periodically.
-		updAdtrs(setup.adtrAddrs)
+		updAdtrs(setup.servGood, setup.adtrAddrs)
 
 		// alice and bob audit. ordering irrelevant across clients.
 		doAudits(alice.cli, setup.servGood, setup.servPk, setup.adtrAddrs, setup.adtrPks)
@@ -182,6 +182,14 @@ func setup(servAddr uint64, adtrAddrs []uint64, servGood, adtrGood bool) *setupP
 	return &setupParams{servGood: servGood, servAddr: servAddr, servPk: servSigPk, adtrGood: adtrGood, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
 }
 
+func updAdtrs(servGood bool, adtrAddrs []uint64) {
+	for _, addr := range adtrAddrs {
+		cli := advrpc.Dial(addr)
+		err0 := auditor.CallUpdate(cli)
+		checkWorldErr(servGood, err0)
+	}
+}
+
 func doAudits(cli *client.Client, servGood bool, servPk cryptoffi.SigPublicKey, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) {
 	numAdtrs := uint64(len(adtrAddrs))
 	for i := uint64(0); i < numAdtrs; i++ {
@@ -190,25 +198,5 @@ func doAudits(cli *client.Client, servGood bool, servPk cryptoffi.SigPublicKey, 
 		err := cli.Audit(addr, pk)
 		checkEvidErr(servGood, servPk, err)
 		primitive.Assume(!err.Err)
-	}
-}
-
-func mkRpcClients(addrs []uint64) []*advrpc.Client {
-	var c []*advrpc.Client
-	for _, addr := range addrs {
-		cli := advrpc.Dial(addr)
-		c = append(c, cli)
-	}
-	return c
-}
-
-func updAdtrs(adtrAddrs []uint64) {
-	adtrs := mkRpcClients(adtrAddrs)
-	for _, cli := range adtrs {
-		var err = false
-		for !err {
-			// TODO: more fine-grained err handling here.
-			err = auditor.CallUpdate(cli)
-		}
 	}
 }

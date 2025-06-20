@@ -37,39 +37,49 @@ type serverInfo struct {
 // Update queries server for a new epoch update, applies it, and errors on fail.
 func (a *Auditor) Update() bool {
 	a.mu.Lock()
-	nextEp := uint64(len(a.hist))
-	upd, err0 := server.CallAudit(a.server.cli, nextEp)
+	numEps := uint64(len(a.hist))
+	upd, err0 := server.CallAudit(a.server.cli, numEps)
 	if err0 {
 		a.mu.Unlock()
 		return true
 	}
 
+	var err bool
+	for _, p := range upd {
+		err0 := a.updOnce(p)
+		if err0 {
+			err = true
+		}
+	}
+	a.mu.Unlock()
+	return err
+}
+
+func (a *Auditor) updOnce(p *ktcore.AuditProof) bool {
+	numEps := uint64(len(a.hist))
 	var lastLink []byte
-	if nextEp == 0 {
+	if numEps == 0 {
 		// start off with empty chain.
 		lastLink = hashchain.GetEmptyLink()
 	} else {
-		lastLink = a.hist[nextEp-1].link
+		lastLink = a.hist[numEps-1].link
 	}
 
 	// check update.
-	nextDig, err1 := getNextDig(a.lastDig, upd.Updates)
+	nextDig, err1 := getNextDig(a.lastDig, p.Updates)
 	if err1 {
-		a.mu.Unlock()
 		return true
 	}
 	nextLink := hashchain.GetNextLink(lastLink, nextDig)
-	if ktcore.VerifyLinkSig(a.server.sigPk, nextEp, nextLink, upd.LinkSig) {
-		a.mu.Unlock()
+	if ktcore.VerifyLinkSig(a.server.sigPk, numEps, nextLink, p.LinkSig) {
 		return true
 	}
 
 	// sign and apply update.
-	sig := ktcore.SignLink(a.sk, nextEp, nextLink)
+	sig := ktcore.SignLink(a.sk, numEps, nextLink)
 	a.lastDig = nextDig
-	info := &epochInfo{link: nextLink, servSig: upd.LinkSig, adtrSig: sig}
+	info := &epochInfo{link: nextLink, servSig: p.LinkSig, adtrSig: sig}
 	a.hist = append(a.hist, info)
-	a.mu.Unlock()
 	return false
 }
 

@@ -68,3 +68,35 @@ func MembSlice1DDecode(b0 []byte) ([]*Memb, []byte, bool) {
 	}
 	return loopO, loopB, false
 }
+
+func AuditProofSlice1DEncode(b0 []byte, o []*AuditProof) []byte {
+	var b = b0
+	b = marshal.WriteInt(b, uint64(len(o)))
+	for _, e := range o {
+		b = AuditProofEncode(b, e)
+	}
+	return b
+}
+
+func AuditProofSlice1DDecode(b0 []byte) ([]*AuditProof, []byte, bool) {
+	length, b1, err1 := marshalutil.ReadInt(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	var loopO = make([]*AuditProof, 0, length)
+	var loopErr bool
+	var loopB = b1
+	for i := uint64(0); i < length; i++ {
+		a2, loopB1, err2 := AuditProofDecode(loopB)
+		loopB = loopB1
+		if err2 {
+			loopErr = true
+			break
+		}
+		loopO = append(loopO, a2)
+	}
+	if loopErr {
+		return nil, nil, true
+	}
+	return loopO, loopB, false
+}

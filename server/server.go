@@ -82,13 +82,20 @@ func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*
 }
 
 // Audit returns an err on fail.
-func (s *Server) Audit(epoch uint64) (*ktcore.AuditProof, bool) {
+func (s *Server) Audit(prevEpochLen uint64) ([]*ktcore.AuditProof, bool) {
 	s.mu.RLock()
-	if epoch >= uint64(len(s.auditHist)) {
+	numEps := uint64(len(s.auditHist))
+	if prevEpochLen > numEps {
 		s.mu.RUnlock()
-		return &ktcore.AuditProof{}, true
+		return nil, true
 	}
-	proof := s.auditHist[epoch]
+
+	var proof []*ktcore.AuditProof
+	var ep = prevEpochLen
+	for ep < numEps {
+		proof = append(proof, s.auditHist[ep])
+		ep++
+	}
 	s.mu.RUnlock()
 	return proof, false
 }

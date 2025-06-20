@@ -123,7 +123,7 @@ func HistoryReplyDecode(b0 []byte) (*HistoryReply, []byte, bool) {
 }
 func AuditArgEncode(b0 []byte, o *AuditArg) []byte {
 	var b = b0
-	b = marshal.WriteInt(b, o.Epoch)
+	b = marshal.WriteInt(b, o.PrevEpochLen)
 	return b
 }
 func AuditArgDecode(b0 []byte) (*AuditArg, []byte, bool) {
@@ -131,16 +131,16 @@ func AuditArgDecode(b0 []byte) (*AuditArg, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	return &AuditArg{Epoch: a1}, b1, false
+	return &AuditArg{PrevEpochLen: a1}, b1, false
 }
 func AuditReplyEncode(b0 []byte, o *AuditReply) []byte {
 	var b = b0
-	b = ktcore.AuditProofEncode(b, o.P)
+	b = ktcore.AuditProofSlice1DEncode(b, o.P)
 	b = marshal.WriteBool(b, o.Err)
 	return b
 }
 func AuditReplyDecode(b0 []byte) (*AuditReply, []byte, bool) {
-	a1, b1, err1 := ktcore.AuditProofDecode(b0)
+	a1, b1, err1 := ktcore.AuditProofSlice1DDecode(b0)
 	if err1 {
 		return nil, nil, true
 	}

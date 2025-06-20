@@ -34,10 +34,10 @@ type HistoryReply struct {
 }
 
 type AuditArg struct {
-	Epoch uint64
+	PrevEpochLen uint64
 }
 
 type AuditReply struct {
-	P   *ktcore.AuditProof
+	P   []*ktcore.AuditProof
 	Err bool
 }
