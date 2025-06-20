@@ -131,9 +131,8 @@ func (a *alice) run() {
 	for i := uint64(0); i < uint64(20); i++ {
 		primitive.Sleep(5_000_000)
 		pk := cryptoffi.RandBytes(32)
-		// true bc alice waits until her old key is inserted before
-		// inserting a new one.
-		std.Assert(!a.cli.Put(pk))
+		// no pending puts at this pt. we waited until prior put was inserted.
+		a.cli.Put(pk)
 
 		var isPending = true
 		for isPending {

@@ -46,17 +46,14 @@ type ClientErr struct {
 
 // Put queues pk for insertion.
 // if we have a pending Put, it requires the pk to be the same.
-func (c *Client) Put(pk []byte) bool {
+func (c *Client) Put(pk []byte) {
 	if c.pendingPut.isSome {
-		if !std.BytesEqual(c.pendingPut.pk, pk) {
-			return true
-		}
+		std.Assert(std.BytesEqual(c.pendingPut.pk, pk))
 	} else {
 		c.pendingPut.isSome = true
 		c.pendingPut.pk = pk
 	}
 	server.CallPut(c.server.cli, c.uid, pk, c.pendingPut.nextVer)
-	return false
 }
 
 // Get returns if the pk was registered and the pk.
