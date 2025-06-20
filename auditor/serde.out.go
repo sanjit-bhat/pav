@@ -3,21 +3,22 @@
 package auditor
 
 import (
+	"github.com/mit-pdos/pav/ktcore"
 	"github.com/mit-pdos/pav/marshalutil"
 	"github.com/tchajed/marshal"
 )
 
 func UpdateReplyEncode(b0 []byte, o *UpdateReply) []byte {
 	var b = b0
-	b = marshal.WriteBool(b, o.Err)
+	b = marshal.WriteInt(b, uint64(o.Err))
 	return b
 }
 func UpdateReplyDecode(b0 []byte) (*UpdateReply, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadBool(b0)
+	a1, b1, err1 := marshalutil.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	return &UpdateReply{Err: a1}, b1, false
+	return &UpdateReply{Err: ktcore.Blame(a1)}, b1, false
 }
 func GetArgEncode(b0 []byte, o *GetArg) []byte {
 	var b = b0
@@ -39,7 +40,7 @@ func GetReplyEncode(b0 []byte, o *GetReply) []byte {
 	b = marshalutil.WriteSlice1D(b, o.VrfPk)
 	b = marshalutil.WriteSlice1D(b, o.ServVrfSig)
 	b = marshalutil.WriteSlice1D(b, o.AdtrVrfSig)
-	b = marshal.WriteBool(b, o.Err)
+	b = marshal.WriteInt(b, uint64(o.Err))
 	return b
 }
 func GetReplyDecode(b0 []byte) (*GetReply, []byte, bool) {
@@ -67,9 +68,9 @@ func GetReplyDecode(b0 []byte) (*GetReply, []byte, bool) {
 	if err6 {
 		return nil, nil, true
 	}
-	a7, b7, err7 := marshalutil.ReadBool(b6)
+	a7, b7, err7 := marshalutil.ReadInt(b6)
 	if err7 {
 		return nil, nil, true
 	}
-	return &GetReply{Link: a1, ServLinkSig: a2, AdtrLinkSig: a3, VrfPk: a4, ServVrfSig: a5, AdtrVrfSig: a6, Err: a7}, b7, false
+	return &GetReply{Link: a1, ServLinkSig: a2, AdtrLinkSig: a3, VrfPk: a4, ServVrfSig: a5, AdtrVrfSig: a6, Err: ktcore.Blame(a7)}, b7, false
 }

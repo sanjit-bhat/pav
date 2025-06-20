@@ -47,25 +47,19 @@ func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
 	s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
 }
 
-/* TODO: what should [History] blame spec be?
-[History] errors with bad prev epoch or prev ver.
-the caller is usually a client, so blame client?
-but malicious parties could make bad History calls as well.
-also, network could always tamper with inputs, so always blame it? */
-
 // History gives key history for uid, excluding first prevVerLen versions.
 // the caller already saw prevEpoch.
-func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktcore.Memb, *ktcore.NonMemb, bool) {
+func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktcore.Memb, *ktcore.NonMemb, ktcore.Blame) {
 	s.mu.RLock()
 	numEps := uint64(len(s.auditHist))
 	if prevEpoch >= numEps {
 		s.mu.RUnlock()
-		return nil, nil, nil, nil, true
+		return nil, nil, nil, nil, ktcore.BlameClients
 	}
 	numVers := uint64(len(s.plainPks[uid]))
 	if prevVerLen > numVers {
 		s.mu.RUnlock()
-		return nil, nil, nil, nil, true
+		return nil, nil, nil, nil, ktcore.BlameClients
 	}
 
 	epochProof := s.chain.Prove(prevEpoch + 1)
@@ -76,18 +70,18 @@ func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*
 
 	if prevEpoch+1 == numEps {
 		// client already saw sig. don't send.
-		return epochProof, nil, hist, bound, false
+		return epochProof, nil, hist, bound, ktcore.BlameNone
 	}
-	return epochProof, sig, hist, bound, false
+	return epochProof, sig, hist, bound, ktcore.BlameNone
 }
 
 // Audit returns an err on fail.
-func (s *Server) Audit(prevEpochLen uint64) ([]*ktcore.AuditProof, bool) {
+func (s *Server) Audit(prevEpochLen uint64) ([]*ktcore.AuditProof, ktcore.Blame) {
 	s.mu.RLock()
 	numEps := uint64(len(s.auditHist))
 	if prevEpochLen > numEps {
 		s.mu.RUnlock()
-		return nil, true
+		return nil, ktcore.BlameAuditors
 	}
 
 	var proof []*ktcore.AuditProof
@@ -97,7 +91,7 @@ func (s *Server) Audit(prevEpochLen uint64) ([]*ktcore.AuditProof, bool) {
 		ep++
 	}
 	s.mu.RUnlock()
-	return proof, false
+	return proof, ktcore.BlameNone
 }
 
 type WQReq struct {

@@ -1,7 +1,11 @@
 package auditor
 
+import (
+	"github.com/mit-pdos/pav/ktcore"
+)
+
 type UpdateReply struct {
-	Err bool
+	Err ktcore.Blame
 }
 
 type GetArg struct {
@@ -15,5 +19,5 @@ type GetReply struct {
 	VrfPk       []byte
 	ServVrfSig  []byte
 	AdtrVrfSig  []byte
-	Err         bool
+	Err         ktcore.Blame
 }

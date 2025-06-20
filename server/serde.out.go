@@ -95,7 +95,7 @@ func HistoryReplyEncode(b0 []byte, o *HistoryReply) []byte {
 	b = marshalutil.WriteSlice1D(b, o.LinkSig)
 	b = ktcore.MembSlice1DEncode(b, o.Hist)
 	b = ktcore.NonMembEncode(b, o.Bound)
-	b = marshal.WriteBool(b, o.Err)
+	b = marshal.WriteInt(b, uint64(o.Err))
 	return b
 }
 func HistoryReplyDecode(b0 []byte) (*HistoryReply, []byte, bool) {
@@ -115,11 +115,11 @@ func HistoryReplyDecode(b0 []byte) (*HistoryReply, []byte, bool) {
 	if err4 {
 		return nil, nil, true
 	}
-	a5, b5, err5 := marshalutil.ReadBool(b4)
+	a5, b5, err5 := marshalutil.ReadInt(b4)
 	if err5 {
 		return nil, nil, true
 	}
-	return &HistoryReply{ChainProof: a1, LinkSig: a2, Hist: a3, Bound: a4, Err: a5}, b5, false
+	return &HistoryReply{ChainProof: a1, LinkSig: a2, Hist: a3, Bound: a4, Err: ktcore.Blame(a5)}, b5, false
 }
 func AuditArgEncode(b0 []byte, o *AuditArg) []byte {
 	var b = b0
@@ -136,7 +136,7 @@ func AuditArgDecode(b0 []byte) (*AuditArg, []byte, bool) {
 func AuditReplyEncode(b0 []byte, o *AuditReply) []byte {
 	var b = b0
 	b = ktcore.AuditProofSlice1DEncode(b, o.P)
-	b = marshal.WriteBool(b, o.Err)
+	b = marshal.WriteInt(b, uint64(o.Err))
 	return b
 }
 func AuditReplyDecode(b0 []byte) (*AuditReply, []byte, bool) {
@@ -144,9 +144,9 @@ func AuditReplyDecode(b0 []byte) (*AuditReply, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadBool(b1)
+	a2, b2, err2 := marshalutil.ReadInt(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	return &AuditReply{P: a1, Err: a2}, b2, false
+	return &AuditReply{P: a1, Err: ktcore.Blame(a2)}, b2, false
 }

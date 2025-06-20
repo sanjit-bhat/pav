@@ -35,27 +35,24 @@ type serverInfo struct {
 }
 
 // Update queries server for a new epoch update, applies it, and errors on fail.
-func (a *Auditor) Update() bool {
+func (a *Auditor) Update() ktcore.Blame {
 	a.mu.Lock()
 	numEps := uint64(len(a.hist))
 	upd, err0 := server.CallAudit(a.server.cli, numEps)
-	if err0 {
+	if err0 != ktcore.BlameNone {
 		a.mu.Unlock()
-		return true
+		return err0
 	}
 
-	var err bool
+	var err1 ktcore.Blame
 	for _, p := range upd {
-		err0 := a.updOnce(p)
-		if err0 {
-			err = true
-		}
+		err1 |= a.updOnce(p)
 	}
 	a.mu.Unlock()
-	return err
+	return err1
 }
 
-func (a *Auditor) updOnce(p *ktcore.AuditProof) bool {
+func (a *Auditor) updOnce(p *ktcore.AuditProof) ktcore.Blame {
 	numEps := uint64(len(a.hist))
 	var lastLink []byte
 	if numEps == 0 {
@@ -66,13 +63,13 @@ func (a *Auditor) updOnce(p *ktcore.AuditProof) bool {
 	}
 
 	// check update.
-	nextDig, err1 := getNextDig(a.lastDig, p.Updates)
-	if err1 {
-		return true
+	nextDig, err0 := getNextDig(a.lastDig, p.Updates)
+	if err0 {
+		return ktcore.BlameServer
 	}
 	nextLink := hashchain.GetNextLink(lastLink, nextDig)
 	if ktcore.VerifyLinkSig(a.server.sigPk, numEps, nextLink, p.LinkSig) {
-		return true
+		return ktcore.BlameServer
 	}
 
 	// sign and apply update.
@@ -80,17 +77,17 @@ func (a *Auditor) updOnce(p *ktcore.AuditProof) bool {
 	a.lastDig = nextDig
 	info := &epochInfo{link: nextLink, servSig: p.LinkSig, adtrSig: sig}
 	a.hist = append(a.hist, info)
-	return false
+	return ktcore.BlameNone
 }
 
 // Get returns the auditor's info for a particular epoch, and errors on fail.
 func (a *Auditor) Get(epoch uint64) *GetReply {
-	stdErr := &GetReply{Err: true}
 	a.mu.RLock()
 	numEpochs := uint64(len(a.hist))
 	if epoch >= numEpochs {
 		a.mu.RUnlock()
-		return stdErr
+		// could legitimately get bad epoch if we're lagging behind.
+		return &GetReply{Err: ktcore.BlameUnknown}
 	}
 
 	x := a.hist[epoch]
@@ -98,14 +95,14 @@ func (a *Auditor) Get(epoch uint64) *GetReply {
 	return &GetReply{Link: x.link, ServLinkSig: x.servSig, AdtrLinkSig: x.adtrSig, VrfPk: a.server.vrfPk, ServVrfSig: a.server.servVrfSig, AdtrVrfSig: a.server.adtrVrfSig}
 }
 
-func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.SigPublicKey, bool) {
+func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.SigPublicKey, ktcore.Blame) {
 	cli := advrpc.Dial(servAddr)
 	reply, err0 := server.CallStart(cli)
-	if err0 {
-		return nil, nil, true
+	if err0 != ktcore.BlameNone {
+		return nil, nil, err0
 	}
 	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
-		return nil, nil, true
+		return nil, nil, ktcore.BlameServer
 	}
 
 	mu := new(sync.RWMutex)
@@ -115,7 +112,7 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.Si
 	dig := tr.Digest()
 	sig := ktcore.SignVrf(sk, reply.VrfPk)
 	serv := &serverInfo{cli: cli, sigPk: servPk, vrfPk: reply.VrfPk, servVrfSig: reply.VrfSig, adtrVrfSig: sig}
-	return &Auditor{mu: mu, sk: sk, lastDig: dig, server: serv}, pk, false
+	return &Auditor{mu: mu, sk: sk, lastDig: dig, server: serv}, pk, ktcore.BlameNone
 }
 
 func getNextDig(lastDig []byte, updates []*ktcore.UpdateProof) ([]byte, bool) {

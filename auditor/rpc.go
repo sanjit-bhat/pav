@@ -2,6 +2,7 @@ package auditor
 
 import (
 	"github.com/mit-pdos/pav/advrpc"
+	"github.com/mit-pdos/pav/ktcore"
 )
 
 const (
@@ -19,6 +20,8 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 	h[GetRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err0 := GetArgDecode(arg)
 		if err0 {
+			r := &GetReply{Err: ktcore.BlameClients}
+			*reply = GetReplyEncode(*reply, r)
 			return
 		}
 		r := adtr.Get(a.Epoch)
@@ -27,60 +30,35 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func CallUpdate(c *advrpc.Client) bool {
+func CallUpdate(c *advrpc.Client) ktcore.Blame {
 	rb := new([]byte)
-	var err0 = true
-	for err0 {
-		err0 = c.Call(UpdateRpc, nil, rb)
+	if c.Call(UpdateRpc, nil, rb) {
+		return ktcore.BlameNet
 	}
-	r, _, err1 := UpdateReplyDecode(*rb)
-	if err1 {
-		return true
+	r, _, err0 := UpdateReplyDecode(*rb)
+	if err0 {
+		return ktcore.BlameAuditors
 	}
-	return r.Err
+	// since Update calls and checks serv, might have these errs.
+	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameNet, ktcore.BlameServer}) {
+		return ktcore.BlameAuditors
+	}
+	return ktcore.BlameNone
 }
 
 func CallGet(c *advrpc.Client, epoch uint64) *GetReply {
-	var reply *GetReply
-	// retry net and invalid-epoch errs:
-	// client can't assert that adtr has requested epoch.
-	// pass thru decoding err, which client can assert away in correctness world.
-	// NOTE: malicious server could send a very large epoch to the client,
-	// causing it to infinite loop, but this is a bigger liveness bug.
-	for {
-		reply0, err0 := callGetAux(c, epoch)
-		reply = reply0
-		if err0 == errNone {
-			break
-		}
-		if err0 == errDecode {
-			break
-		}
-	}
-	return reply
-}
-
-const (
-	errNone   uint64 = 1
-	errNet    uint64 = 2
-	errDecode uint64 = 3
-	errAdtr   uint64 = 4
-)
-
-func callGetAux(c *advrpc.Client, epoch uint64) (*GetReply, uint64) {
 	a := &GetArg{Epoch: epoch}
 	ab := GetArgEncode(make([]byte, 0), a)
 	rb := new([]byte)
-	err0 := c.Call(GetRpc, ab, rb)
+	if c.Call(GetRpc, ab, rb) {
+		return &GetReply{Err: ktcore.BlameNet}
+	}
+	r, _, err0 := GetReplyDecode(*rb)
 	if err0 {
-		return nil, errNet
+		return &GetReply{Err: ktcore.BlameAuditors}
 	}
-	r, _, err1 := GetReplyDecode(*rb)
-	if err1 {
-		return nil, errDecode
+	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameUnknown}) {
+		return &GetReply{Err: ktcore.BlameAuditors}
 	}
-	if r.Err {
-		return nil, errAdtr
-	}
-	return r, errNone
+	return r
 }
