@@ -15,12 +15,12 @@ import (
 type Blame uint64
 
 const (
-	BlameNone     Blame = 0
-	BlameNet      Blame = 1 << 1
-	BlameServer   Blame = 1 << 2
-	BlameAuditors Blame = 1 << 3
-	BlameClients  Blame = 1 << 4
-	BlameUnknown  Blame = 1 << 5
+	BlameNone    Blame = 0
+	BlameNet     Blame = 1 << 1
+	BlameServer  Blame = 1 << 2
+	BlameAuditor Blame = 1 << 3
+	BlameClients Blame = 1 << 4
+	BlameUnknown Blame = 1 << 5
 )
 
 // CheckBlame helps catch bad parties giving bad blame codes.

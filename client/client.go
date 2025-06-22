@@ -154,10 +154,10 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientEr
 
 	// vrf evidence.
 	if ktcore.VerifyVrfSig(adtrPk, audit.VrfPk, audit.AdtrVrfSig) {
-		return &ClientErr{Err: ktcore.BlameAuditors}
+		return &ClientErr{Err: ktcore.BlameAuditor}
 	}
 	if ktcore.VerifyVrfSig(c.server.sigPk, audit.VrfPk, audit.ServVrfSig) {
-		return &ClientErr{Err: ktcore.BlameAuditors}
+		return &ClientErr{Err: ktcore.BlameAuditor}
 	}
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.server.vrfPk)
 	if !std.BytesEqual(vrfPkB, audit.VrfPk) {
@@ -167,10 +167,10 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientEr
 
 	// link evidence.
 	if ktcore.VerifyLinkSig(adtrPk, last.Epoch, audit.Link, audit.AdtrLinkSig) {
-		return &ClientErr{Err: ktcore.BlameAuditors}
+		return &ClientErr{Err: ktcore.BlameAuditor}
 	}
 	if ktcore.VerifyLinkSig(c.server.sigPk, last.Epoch, audit.Link, audit.ServLinkSig) {
-		return &ClientErr{Err: ktcore.BlameAuditors}
+		return &ClientErr{Err: ktcore.BlameAuditor}
 	}
 	if !std.BytesEqual(last.link, audit.Link) {
 		evid := &Evid{link: &evidLink{epoch: last.Epoch, link0: last.link, sig0: last.sig, link1: audit.Link, sig1: audit.ServLinkSig}}

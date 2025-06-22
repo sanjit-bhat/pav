@@ -37,11 +37,11 @@ func CallUpdate(c *advrpc.Client) ktcore.Blame {
 	}
 	r, _, err0 := UpdateReplyDecode(*rb)
 	if err0 {
-		return ktcore.BlameAuditors
+		return ktcore.BlameAuditor
 	}
 	// since Update calls and checks serv, might have these errs.
 	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameNet, ktcore.BlameServer}) {
-		return ktcore.BlameAuditors
+		return ktcore.BlameAuditor
 	}
 	return ktcore.BlameNone
 }
@@ -55,10 +55,10 @@ func CallGet(c *advrpc.Client, epoch uint64) *GetReply {
 	}
 	r, _, err0 := GetReplyDecode(*rb)
 	if err0 {
-		return &GetReply{Err: ktcore.BlameAuditors}
+		return &GetReply{Err: ktcore.BlameAuditor}
 	}
 	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameUnknown}) {
-		return &GetReply{Err: ktcore.BlameAuditors}
+		return &GetReply{Err: ktcore.BlameAuditor}
 	}
 	return r
 }

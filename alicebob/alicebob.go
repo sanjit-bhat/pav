@@ -18,25 +18,27 @@ const (
 	bobUid   uint64 = 1
 )
 
-// setupParams describes different security configs with the
-// servGood and adtrGood params.
-type setupParams struct {
-	servAddr  uint64
-	servPk    cryptoffi.SigPublicKey
-	adtrAddrs []uint64
-	adtrPks   []cryptoffi.SigPublicKey
-}
+func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
+	// setup server and auditor.
+	serv, servSigPk := server.New()
+	servRpc := server.NewRpcServer(serv)
+	servRpc.Serve(servAddr)
+	primitive.Sleep(1_000_000)
 
-func testAliceBob(servAddr uint64, adtrAddrs []uint64) *client.ClientErr {
-	setup, err0 := setup(servAddr, adtrAddrs)
+	adtr, adtrPk, err0 := auditor.New(servAddr, servSigPk)
 	if err0 != ktcore.BlameNone {
 		return &client.ClientErr{Err: err0}
 	}
-	alice, err1 := client.New(aliceUid, setup.servAddr, setup.servPk)
+	adtrRpc := auditor.NewRpcAuditor(adtr)
+	adtrRpc.Serve(adtrAddr)
+	primitive.Sleep(1_000_000)
+
+	// start alice and bob.
+	alice, err1 := client.New(aliceUid, servAddr, servSigPk)
 	if err1 != ktcore.BlameNone {
 		return &client.ClientErr{Err: err1}
 	}
-	bob, err2 := client.New(bobUid, setup.servAddr, setup.servPk)
+	bob, err2 := client.New(bobUid, servAddr, servSigPk)
 	if err2 != ktcore.BlameNone {
 		return &client.ClientErr{Err: err2}
 	}
@@ -71,16 +73,17 @@ func testAliceBob(servAddr uint64, adtrAddrs []uint64) *client.ClientErr {
 		return &client.ClientErr{Err: bobErr}
 	}
 
-	// in real world, auditor sync will happen periodically.
-	err3 := updAdtrs(setup.adtrAddrs)
+	// sync auditors and audit. in real world, this'll happen periodically.
+	adtrCli := advrpc.Dial(adtrAddr)
+	err3 := auditor.CallUpdate(adtrCli)
 	if err3 != ktcore.BlameNone {
 		return &client.ClientErr{Err: err3}
 	}
-	err4 := doAudits(alice, setup.adtrAddrs, setup.adtrPks)
+	err4 := alice.Audit(adtrAddr, adtrPk)
 	if err4.Err != ktcore.BlameNone {
 		return err4
 	}
-	err5 := doAudits(bob, setup.adtrAddrs, setup.adtrPks)
+	err5 := bob.Audit(adtrAddr, adtrPk)
 	if err5.Err != ktcore.BlameNone {
 		return err5
 	}
@@ -90,10 +93,10 @@ func testAliceBob(servAddr uint64, adtrAddrs []uint64) *client.ClientErr {
 	primitive.Assume(bob.LastEpoch.Epoch <= alice.LastEpoch.Epoch)
 	aliceKey := aliceHist[bob.LastEpoch.Epoch]
 	if aliceKey.isReg != bobIsReg {
-		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditors}
+		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditor}
 	}
 	if aliceKey.isReg && !std.BytesEqual(aliceKey.pk, bobAlicePk) {
-		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditors}
+		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditor}
 	}
 	return &client.ClientErr{}
 }
@@ -145,49 +148,4 @@ func runAlice(cli *client.Client) ([]*histEntry, ktcore.Blame) {
 func runBob(cli *client.Client) (bool, []byte, ktcore.Blame) {
 	primitive.Sleep(120_000_000)
 	return cli.Get(aliceUid)
-}
-
-// setup starts server and auditors.
-func setup(servAddr uint64, adtrAddrs []uint64) (*setupParams, ktcore.Blame) {
-	serv, servSigPk := server.New()
-	servRpc := server.NewRpcServer(serv)
-	servRpc.Serve(servAddr)
-	primitive.Sleep(1_000_000)
-
-	var adtrPks []cryptoffi.SigPublicKey
-	for _, adtrAddr := range adtrAddrs {
-		adtr, adtrPk, err0 := auditor.New(servAddr, servSigPk)
-		if err0 != ktcore.BlameNone {
-			return nil, err0
-		}
-		adtrRpc := auditor.NewRpcAuditor(adtr)
-		adtrRpc.Serve(adtrAddr)
-		adtrPks = append(adtrPks, adtrPk)
-	}
-	primitive.Sleep(1_000_000)
-	return &setupParams{servAddr: servAddr, servPk: servSigPk, adtrAddrs: adtrAddrs, adtrPks: adtrPks}, ktcore.BlameNone
-}
-
-func updAdtrs(adtrAddrs []uint64) ktcore.Blame {
-	for _, addr := range adtrAddrs {
-		cli := advrpc.Dial(addr)
-		err0 := auditor.CallUpdate(cli)
-		if err0 != ktcore.BlameNone {
-			return err0
-		}
-	}
-	return ktcore.BlameNone
-}
-
-func doAudits(cli *client.Client, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) *client.ClientErr {
-	numAdtrs := uint64(len(adtrAddrs))
-	for i := uint64(0); i < numAdtrs; i++ {
-		addr := adtrAddrs[i]
-		pk := adtrPks[i]
-		err := cli.Audit(addr, pk)
-		if err.Err != ktcore.BlameNone {
-			return err
-		}
-	}
-	return &client.ClientErr{}
 }

@@ -41,7 +41,7 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	h[AuditRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err0 := AuditArgDecode(arg)
 		if err0 {
-			r := &AuditReply{Err: ktcore.BlameAuditors}
+			r := &AuditReply{Err: ktcore.BlameAuditor}
 			*reply = AuditReplyEncode(*reply, r)
 			return
 		}

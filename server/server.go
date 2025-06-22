@@ -81,7 +81,7 @@ func (s *Server) Audit(prevEpochLen uint64) ([]*ktcore.AuditProof, ktcore.Blame)
 	numEps := uint64(len(s.auditHist))
 	if prevEpochLen > numEps {
 		s.mu.RUnlock()
-		return nil, ktcore.BlameAuditors
+		return nil, ktcore.BlameAuditor
 	}
 
 	var proof []*ktcore.AuditProof
