@@ -9,6 +9,7 @@ import (
 	"github.com/mit-pdos/pav/auditor"
 	"github.com/mit-pdos/pav/client"
 	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/mit-pdos/pav/ktcore"
 	"github.com/mit-pdos/pav/server"
 )
 
@@ -20,95 +21,81 @@ const (
 // setupParams describes different security configs with the
 // servGood and adtrGood params.
 type setupParams struct {
-	servGood  bool
 	servAddr  uint64
 	servPk    cryptoffi.SigPublicKey
-	adtrGood  bool
 	adtrAddrs []uint64
 	adtrPks   []cryptoffi.SigPublicKey
 }
 
-// testSecurity Assume's no errors in client-server calls and
-// has clients contact the auditor.
-func testSecurity(servAddr uint64, adtrAddrs []uint64) {
-	s := setup(servAddr, adtrAddrs, false, true)
-	testAliceBob(s)
-}
-
-// testCorrectness Assert's no errors in client-server calls and
-// does not use auditors.
-func testCorrectness(servAddr uint64, adtrAddrs []uint64) {
-	s := setup(servAddr, adtrAddrs, true, false)
-	testAliceBob(s)
-}
-
-func checkWorldErr(servGood bool, err bool) {
-	if servGood {
-		std.Assert(!err)
-	} else {
-		primitive.Assume(!err)
+func testAliceBob(servAddr uint64, adtrAddrs []uint64) *client.ClientErr {
+	setup, err0 := setup(servAddr, adtrAddrs)
+	if err0 != ktcore.BlameNone {
+		return &client.ClientErr{Err: err0}
 	}
-}
-
-func checkEvidErr(servGood bool, servPk cryptoffi.SigPublicKey, err *client.ClientErr) {
-	if err.Evid != nil {
-		std.Assert(!err.Evid.Check(servPk))
+	alice, err1 := client.New(aliceUid, setup.servAddr, setup.servPk)
+	if err1 != ktcore.BlameNone {
+		return &client.ClientErr{Err: err1}
 	}
-
-	if servGood {
-		std.Assert(!err.Err)
-	} else {
-		primitive.Assume(!err.Err)
+	bob, err2 := client.New(bobUid, setup.servAddr, setup.servPk)
+	if err2 != ktcore.BlameNone {
+		return &client.ClientErr{Err: err2}
 	}
-}
-
-func testAliceBob(setup *setupParams) {
-	aliceCli, err0 := client.New(aliceUid, setup.servAddr, setup.servPk)
-	checkWorldErr(setup.servGood, err0)
-	alice := &alice{servGood: setup.servGood, servSigPk: setup.servPk, cli: aliceCli}
-	bobCli, err1 := client.New(bobUid, setup.servAddr, setup.servPk)
-	checkWorldErr(setup.servGood, err1)
-	bob := &bob{servGood: setup.servGood, servSigPk: setup.servPk, cli: bobCli}
+	var aliceHist []*histEntry
+	var aliceErr ktcore.Blame
+	var bobIsReg bool
+	var bobAlicePk []byte
+	var bobErr ktcore.Blame
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	wg.Add(1)
-	// alice does a bunch of puts.
 	go func() {
-		alice.run()
+		r0, r1 := runAlice(alice)
+		aliceHist = r0
+		aliceErr = r1
 		wg.Done()
 	}()
-	// bob does a get at some time in the middle of alice's puts.
 	go func() {
-		bob.run()
+		r0, r1, r2 := runBob(bob)
+		bobIsReg = r0
+		bobAlicePk = r1
+		bobErr = r2
 		wg.Done()
 	}()
 	wg.Wait()
 
-	if setup.adtrGood {
-		// sync auditors. in real world, this'll happen periodically.
-		updAdtrs(setup.servGood, setup.adtrAddrs)
+	if aliceErr != ktcore.BlameNone {
+		return &client.ClientErr{Err: aliceErr}
+	}
+	if bobErr != ktcore.BlameNone {
+		return &client.ClientErr{Err: bobErr}
+	}
 
-		// alice and bob audit. ordering irrelevant across clients.
-		doAudits(alice.cli, setup.servGood, setup.servPk, setup.adtrAddrs, setup.adtrPks)
-		doAudits(bob.cli, setup.servGood, setup.servPk, setup.adtrAddrs, setup.adtrPks)
+	// in real world, auditor sync will happen periodically.
+	err3 := updAdtrs(setup.adtrAddrs)
+	if err3 != ktcore.BlameNone {
+		return &client.ClientErr{Err: err3}
+	}
+	err4 := doAudits(alice, setup.adtrAddrs, setup.adtrPks)
+	if err4.Err != ktcore.BlameNone {
+		return err4
+	}
+	err5 := doAudits(bob, setup.adtrAddrs, setup.adtrPks)
+	if err5.Err != ktcore.BlameNone {
+		return err5
 	}
 
 	// final check. bob got the right key.
 	// Assume alice monitored bob's Get epoch.
-	primitive.Assume(bob.cli.LastEpoch.Epoch <= alice.cli.LastEpoch.Epoch)
-	aliceKey := alice.hist[bob.cli.LastEpoch.Epoch]
-	std.Assert(aliceKey.isReg == bob.isReg)
-	if aliceKey.isReg {
-		std.Assert(std.BytesEqual(aliceKey.pk, bob.alicePk))
+	primitive.Assume(bob.LastEpoch.Epoch <= alice.LastEpoch.Epoch)
+	aliceKey := aliceHist[bob.LastEpoch.Epoch]
+	if aliceKey.isReg != bobIsReg {
+		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditors}
 	}
-}
-
-type alice struct {
-	servGood  bool
-	servSigPk cryptoffi.SigPublicKey
-	cli       *client.Client
-	hist      []*histEntry
+	if aliceKey.isReg && !std.BytesEqual(aliceKey.pk, bobAlicePk) {
+		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditors}
+	}
+	return &client.ClientErr{}
 }
 
 type histEntry struct {
@@ -116,55 +103,52 @@ type histEntry struct {
 	pk    []byte
 }
 
-func (a *alice) run() {
+// runAlice does a bunch of puts.
+func runAlice(cli *client.Client) ([]*histEntry, ktcore.Blame) {
 	// in this simple example, alice is the only putter.
 	// she can Assume that epochs update iff her Put executes,
 	// which leads to a simple history structure.
+	var hist []*histEntry
 	{
-		isInsert, err0 := a.cli.SelfMon()
-		checkWorldErr(a.servGood, err0)
+		isInsert, err0 := cli.SelfMon()
+		if err0 != ktcore.BlameNone {
+			return nil, err0
+		}
 		std.Assert(!isInsert)
-		primitive.Assume(a.cli.LastEpoch.Epoch == 0)
-		a.hist = append(a.hist, &histEntry{})
+		primitive.Assume(cli.LastEpoch.Epoch == 0)
+		hist = append(hist, &histEntry{})
 	}
 
 	for i := uint64(0); i < uint64(20); i++ {
 		primitive.Sleep(5_000_000)
 		pk := cryptoffi.RandBytes(32)
 		// no pending puts at this pt. we waited until prior put was inserted.
-		a.cli.Put(pk)
+		cli.Put(pk)
 
 		var isPending = true
 		for isPending {
-			isInsert, err0 := a.cli.SelfMon()
-			checkWorldErr(a.servGood, err0)
+			isInsert, err0 := cli.SelfMon()
+			if err0 != ktcore.BlameNone {
+				return nil, err0
+			}
 			if isInsert {
-				primitive.Assume(a.cli.LastEpoch.Epoch == uint64(len(a.hist)))
-				a.hist = append(a.hist, &histEntry{isReg: true, pk: pk})
+				primitive.Assume(cli.LastEpoch.Epoch == uint64(len(hist)))
+				hist = append(hist, &histEntry{isReg: true, pk: pk})
 				isPending = false
 			}
 		}
 	}
+	return hist, ktcore.BlameNone
 }
 
-type bob struct {
-	servGood  bool
-	servSigPk cryptoffi.SigPublicKey
-	cli       *client.Client
-	isReg     bool
-	alicePk   []byte
-}
-
-func (b *bob) run() {
+// runBob does a get at some time in the middle of alice's puts.
+func runBob(cli *client.Client) (bool, []byte, ktcore.Blame) {
 	primitive.Sleep(120_000_000)
-	isReg, pk, err0 := b.cli.Get(aliceUid)
-	checkWorldErr(b.servGood, err0)
-	b.isReg = isReg
-	b.alicePk = pk
+	return cli.Get(aliceUid)
 }
 
 // setup starts server and auditors.
-func setup(servAddr uint64, adtrAddrs []uint64, servGood, adtrGood bool) *setupParams {
+func setup(servAddr uint64, adtrAddrs []uint64) (*setupParams, ktcore.Blame) {
 	serv, servSigPk := server.New()
 	servRpc := server.NewRpcServer(serv)
 	servRpc.Serve(servAddr)
@@ -173,30 +157,37 @@ func setup(servAddr uint64, adtrAddrs []uint64, servGood, adtrGood bool) *setupP
 	var adtrPks []cryptoffi.SigPublicKey
 	for _, adtrAddr := range adtrAddrs {
 		adtr, adtrPk, err0 := auditor.New(servAddr, servSigPk)
-		checkWorldErr(servGood, err0)
+		if err0 != ktcore.BlameNone {
+			return nil, err0
+		}
 		adtrRpc := auditor.NewRpcAuditor(adtr)
 		adtrRpc.Serve(adtrAddr)
 		adtrPks = append(adtrPks, adtrPk)
 	}
 	primitive.Sleep(1_000_000)
-	return &setupParams{servGood: servGood, servAddr: servAddr, servPk: servSigPk, adtrGood: adtrGood, adtrAddrs: adtrAddrs, adtrPks: adtrPks}
+	return &setupParams{servAddr: servAddr, servPk: servSigPk, adtrAddrs: adtrAddrs, adtrPks: adtrPks}, ktcore.BlameNone
 }
 
-func updAdtrs(servGood bool, adtrAddrs []uint64) {
+func updAdtrs(adtrAddrs []uint64) ktcore.Blame {
 	for _, addr := range adtrAddrs {
 		cli := advrpc.Dial(addr)
 		err0 := auditor.CallUpdate(cli)
-		checkWorldErr(servGood, err0)
+		if err0 != ktcore.BlameNone {
+			return err0
+		}
 	}
+	return ktcore.BlameNone
 }
 
-func doAudits(cli *client.Client, servGood bool, servPk cryptoffi.SigPublicKey, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) {
+func doAudits(cli *client.Client, adtrAddrs []uint64, adtrPks []cryptoffi.SigPublicKey) *client.ClientErr {
 	numAdtrs := uint64(len(adtrAddrs))
 	for i := uint64(0); i < numAdtrs; i++ {
 		addr := adtrAddrs[i]
 		pk := adtrPks[i]
 		err := cli.Audit(addr, pk)
-		checkEvidErr(servGood, servPk, err)
-		primitive.Assume(!err.Err)
+		if err.Err != ktcore.BlameNone {
+			return err
+		}
 	}
+	return &client.ClientErr{}
 }

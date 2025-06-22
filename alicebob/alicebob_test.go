@@ -3,18 +3,17 @@ package alicebob
 import (
 	"net"
 	"testing"
+
+	"github.com/mit-pdos/pav/ktcore"
 )
 
-func TestSecurity(t *testing.T) {
+func TestAliceBob(t *testing.T) {
 	servAddr := makeUniqueAddr()
 	adtrAddrs := []uint64{makeUniqueAddr(), makeUniqueAddr()}
-	testSecurity(servAddr, adtrAddrs)
-}
-
-func TestCorrectness(t *testing.T) {
-	servAddr := makeUniqueAddr()
-	adtrAddrs := []uint64{makeUniqueAddr(), makeUniqueAddr()}
-	testCorrectness(servAddr, adtrAddrs)
+	err := testAliceBob(servAddr, adtrAddrs)
+	if err.Err != ktcore.BlameNone {
+		t.Fatal()
+	}
 }
 
 func getFreePort() (port uint64, err error) {
