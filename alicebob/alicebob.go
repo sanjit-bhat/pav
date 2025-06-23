@@ -91,6 +91,7 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 	primitive.Assume(bob.LastEpoch.Epoch <= alice.LastEpoch.Epoch)
 	alicePk := aliceHist[bob.LastEpoch.Epoch]
 	if !equal(alicePk, bobAlicePk) {
+		// server committed sin and auditor failed to check it.
 		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditor}
 	}
 	return &client.ClientErr{}

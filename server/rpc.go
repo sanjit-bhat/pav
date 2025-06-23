@@ -52,13 +52,6 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-/*
-Call* methods are run by the caller.
-a good caller knows that they gave good inputs,
-so after the potential for net and decoding errors,
-they check that there's no more blame.
-*/
-
 func CallStart(c *advrpc.Client) (*StartReply, ktcore.Blame) {
 	rb := new([]byte)
 	if c.Call(StartRpc, nil, rb) {
@@ -75,7 +68,7 @@ func CallPut(c *advrpc.Client, uid uint64, pk []byte, ver uint64) {
 	a := &PutArg{Uid: uid, Pk: pk, Ver: ver}
 	ab := PutArgEncode(make([]byte, 0), a)
 	rb := new([]byte)
-	// don't check Put errs bc caller doesn't care to know.
+	// don't bubble up Put errs bc caller doesn't care to know.
 	c.Call(PutRpc, ab, rb)
 }
 

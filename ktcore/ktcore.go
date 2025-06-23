@@ -5,13 +5,8 @@ import (
 	"github.com/mit-pdos/pav/cryptoutil"
 )
 
-// Blame helps connect the abstract notion of correctness with the impl.
-//  1. correctness (abstractly) asks us to guarantee stronger properties
-//     when various parties are good. this contrasts to security,
-//     which provides a minimal property under an all-bad assumption.
-//  2. [Blame] is an error along with a set of "blamed" parties.
-//     it says that the error could happen if any of the parties are bad.
-//     if all blamed parties are good, the error should not happen.
+// Blame a specific party when a bad thing happens.
+// if a party is good, we should not see its [Blame] code.
 type Blame uint64
 
 const (
@@ -20,10 +15,12 @@ const (
 	BlameServer  Blame = 1 << 2
 	BlameAuditor Blame = 1 << 3
 	BlameClients Blame = 1 << 4
+	// BlameUnknown should only be used sparingly.
+	// it's the equivalent of throwing up your hands in despair.
 	BlameUnknown Blame = 1 << 5
 )
 
-// CheckBlame helps catch bad parties giving bad blame codes.
+// CheckBlame prevents bad parties from giving bad [Blame] codes.
 func CheckBlame(b Blame, allowed []Blame) bool {
 	var all Blame
 	for _, x := range allowed {
