@@ -44,8 +44,7 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 	}
 	var aliceHist []*histEntry
 	var aliceErr ktcore.Blame
-	var bobIsReg bool
-	var bobAlicePk []byte
+	var bobAlicePk *histEntry
 	var bobErr ktcore.Blame
 
 	wg := new(sync.WaitGroup)
@@ -58,10 +57,9 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 		wg.Done()
 	}()
 	go func() {
-		r0, r1, r2 := runBob(bob)
-		bobIsReg = r0
-		bobAlicePk = r1
-		bobErr = r2
+		r0, r1 := runBob(bob)
+		bobAlicePk = r0
+		bobErr = r1
 		wg.Done()
 	}()
 	wg.Wait()
@@ -91,11 +89,8 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 	// final check. bob got the right key.
 	// Assume alice monitored bob's Get epoch.
 	primitive.Assume(bob.LastEpoch.Epoch <= alice.LastEpoch.Epoch)
-	aliceKey := aliceHist[bob.LastEpoch.Epoch]
-	if aliceKey.isReg != bobIsReg {
-		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditor}
-	}
-	if aliceKey.isReg && !std.BytesEqual(aliceKey.pk, bobAlicePk) {
+	alicePk := aliceHist[bob.LastEpoch.Epoch]
+	if !equal(alicePk, bobAlicePk) {
 		return &client.ClientErr{Err: ktcore.BlameServer | ktcore.BlameAuditor}
 	}
 	return &client.ClientErr{}
@@ -104,6 +99,16 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 type histEntry struct {
 	isReg bool
 	pk    []byte
+}
+
+func equal(o0, o1 *histEntry) bool {
+	if o0.isReg != o1.isReg {
+		return false
+	}
+	if o0.isReg {
+		return std.BytesEqual(o0.pk, o1.pk)
+	}
+	return true
 }
 
 // runAlice does a bunch of puts.
@@ -145,7 +150,8 @@ func runAlice(cli *client.Client) ([]*histEntry, ktcore.Blame) {
 }
 
 // runBob does a get at some time in the middle of alice's puts.
-func runBob(cli *client.Client) (bool, []byte, ktcore.Blame) {
+func runBob(cli *client.Client) (*histEntry, ktcore.Blame) {
 	primitive.Sleep(120_000_000)
-	return cli.Get(aliceUid)
+	isReg, pk, err0 := cli.Get(aliceUid)
+	return &histEntry{isReg: isReg, pk: pk}, err0
 }
