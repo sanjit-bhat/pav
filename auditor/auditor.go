@@ -65,11 +65,11 @@ func (a *Auditor) updOnce(p *ktcore.AuditProof) ktcore.Blame {
 	// check update.
 	nextDig, err0 := getNextDig(a.lastDig, p.Updates)
 	if err0 {
-		return ktcore.BlameServer
+		return ktcore.BlameServFull
 	}
 	nextLink := hashchain.GetNextLink(lastLink, nextDig)
 	if ktcore.VerifyLinkSig(a.server.sigPk, numEps, nextLink, p.LinkSig) {
-		return ktcore.BlameServer
+		return ktcore.BlameServFull
 	}
 
 	// sign and apply update.
@@ -102,7 +102,7 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.Si
 		return nil, nil, err0
 	}
 	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
-		return nil, nil, ktcore.BlameServer
+		return nil, nil, ktcore.BlameServFull
 	}
 
 	mu := new(sync.RWMutex)

@@ -59,7 +59,7 @@ func CallStart(c *advrpc.Client) (*StartReply, ktcore.Blame) {
 	}
 	r, _, err0 := StartReplyDecode(*rb)
 	if err0 {
-		return nil, ktcore.BlameServer
+		return nil, ktcore.BlameServFull
 	}
 	return r, ktcore.BlameNone
 }
@@ -81,10 +81,10 @@ func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) ([]byte, [
 	}
 	r, _, err0 := HistoryReplyDecode(*rb)
 	if err0 {
-		return nil, nil, nil, nil, ktcore.BlameServer
+		return nil, nil, nil, nil, ktcore.BlameServFull
 	}
 	if ktcore.CheckBlame(r.Err, []ktcore.Blame{}) {
-		return nil, nil, nil, nil, ktcore.BlameServer
+		return nil, nil, nil, nil, ktcore.BlameServFull
 	}
 	return r.ChainProof, r.LinkSig, r.Hist, r.Bound, ktcore.BlameNone
 }
@@ -98,10 +98,10 @@ func CallAudit(c *advrpc.Client, prevEpochLen uint64) ([]*ktcore.AuditProof, ktc
 	}
 	r, _, err0 := AuditReplyDecode(*rb)
 	if err0 {
-		return nil, ktcore.BlameServer
+		return nil, ktcore.BlameServFull
 	}
 	if ktcore.CheckBlame(r.Err, []ktcore.Blame{}) {
-		return nil, ktcore.BlameServer
+		return nil, ktcore.BlameServFull
 	}
 	return r.P, ktcore.BlameNone
 }
