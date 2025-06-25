@@ -112,14 +112,14 @@ func (c *Client) SelfMon() (bool, ktcore.Blame) {
 		// if no pending, shouldn't have any updates.
 		if histLen != 0 {
 			// conflicting updates could also come from other bad clients.
-			return false, ktcore.BlameServer|ktcore.BlameClients
+			return false, ktcore.BlameServer | ktcore.BlameClients
 		}
 		c.LastEpoch = last
 		return false, ktcore.BlameNone
 	}
 	// good client only has one version update at a time.
 	if histLen > 1 {
-		return false, ktcore.BlameServer|ktcore.BlameClients
+		return false, ktcore.BlameServer | ktcore.BlameClients
 	}
 	// update hasn't yet fired.
 	if histLen == 0 {
@@ -129,7 +129,7 @@ func (c *Client) SelfMon() (bool, ktcore.Blame) {
 	newKey := hist[0]
 	// equals pending put.
 	if !std.BytesEqual(newKey.PkOpen.Val, c.pendingPut.pk) {
-		return false, ktcore.BlameServer|ktcore.BlameClients
+		return false, ktcore.BlameServer | ktcore.BlameClients
 	}
 
 	// update.
