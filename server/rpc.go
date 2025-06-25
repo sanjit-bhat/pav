@@ -30,7 +30,7 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	h[HistoryRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err0 := HistoryArgDecode(arg)
 		if err0 {
-			r := &HistoryReply{Err: ktcore.BlameClients}
+			r := &HistoryReply{Err: ktcore.BlameUnknown}
 			*reply = HistoryReplyEncode(*reply, r)
 			return
 		}
@@ -41,7 +41,7 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	h[AuditRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err0 := AuditArgDecode(arg)
 		if err0 {
-			r := &AuditReply{Err: ktcore.BlameAuditor}
+			r := &AuditReply{Err: ktcore.BlameUnknown}
 			*reply = AuditReplyEncode(*reply, r)
 			return
 		}

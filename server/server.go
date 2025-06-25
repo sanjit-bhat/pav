@@ -54,12 +54,12 @@ func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*
 	numEps := uint64(len(s.auditHist))
 	if prevEpoch >= numEps {
 		s.mu.RUnlock()
-		return nil, nil, nil, nil, ktcore.BlameClients
+		return nil, nil, nil, nil, ktcore.BlameUnknown
 	}
 	numVers := uint64(len(s.plainPks[uid]))
 	if prevVerLen > numVers {
 		s.mu.RUnlock()
-		return nil, nil, nil, nil, ktcore.BlameClients
+		return nil, nil, nil, nil, ktcore.BlameUnknown
 	}
 
 	epochProof := s.chain.Prove(prevEpoch + 1)
@@ -81,7 +81,7 @@ func (s *Server) Audit(prevEpochLen uint64) ([]*ktcore.AuditProof, ktcore.Blame)
 	numEps := uint64(len(s.auditHist))
 	if prevEpochLen > numEps {
 		s.mu.RUnlock()
-		return nil, ktcore.BlameAuditor
+		return nil, ktcore.BlameUnknown
 	}
 
 	var proof []*ktcore.AuditProof
