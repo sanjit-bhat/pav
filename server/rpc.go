@@ -55,7 +55,7 @@ func NewRpcServer(s *Server) *advrpc.Server {
 func CallStart(c *advrpc.Client) (*StartReply, ktcore.Blame) {
 	rb := new([]byte)
 	if c.Call(StartRpc, nil, rb) {
-		return nil, ktcore.BlameNet
+		return nil, ktcore.BlameUnknown
 	}
 	r, _, err0 := StartReplyDecode(*rb)
 	if err0 {
@@ -77,7 +77,7 @@ func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) ([]byte, [
 	ab := HistoryArgEncode(make([]byte, 0), a)
 	rb := new([]byte)
 	if c.Call(HistoryRpc, ab, rb) {
-		return nil, nil, nil, nil, ktcore.BlameNet
+		return nil, nil, nil, nil, ktcore.BlameUnknown
 	}
 	r, _, err0 := HistoryReplyDecode(*rb)
 	if err0 {
@@ -94,7 +94,7 @@ func CallAudit(c *advrpc.Client, prevEpochLen uint64) ([]*ktcore.AuditProof, ktc
 	ab := AuditArgEncode(make([]byte, 0), a)
 	rb := new([]byte)
 	if c.Call(AuditRpc, ab, rb) {
-		return nil, ktcore.BlameNet
+		return nil, ktcore.BlameUnknown
 	}
 	r, _, err0 := AuditReplyDecode(*rb)
 	if err0 {

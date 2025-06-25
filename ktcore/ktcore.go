@@ -11,13 +11,12 @@ type Blame uint64
 
 const (
 	BlameNone    Blame = 0
-	BlameNet     Blame = 1 << 1
-	BlameServer  Blame = 1 << 2
-	BlameAuditor Blame = 1 << 3
-	BlameClients Blame = 1 << 4
+	BlameServer  Blame = 1 << 1
+	BlameAuditor Blame = 1 << 2
+	BlameClients Blame = 1 << 3
 	// BlameUnknown should only be used sparingly.
 	// it's the equivalent of throwing up your hands in despair.
-	BlameUnknown Blame = 1 << 5
+	BlameUnknown Blame = 1 << 4
 )
 
 // CheckBlame prevents bad parties from giving bad [Blame] codes.

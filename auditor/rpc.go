@@ -33,14 +33,14 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 func CallUpdate(c *advrpc.Client) ktcore.Blame {
 	rb := new([]byte)
 	if c.Call(UpdateRpc, nil, rb) {
-		return ktcore.BlameNet
+		return ktcore.BlameUnknown
 	}
 	r, _, err0 := UpdateReplyDecode(*rb)
 	if err0 {
 		return ktcore.BlameAuditor
 	}
 	// since Update calls and checks serv, might have these errs.
-	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameNet, ktcore.BlameServer}) {
+	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameServer, ktcore.BlameUnknown}) {
 		return ktcore.BlameAuditor
 	}
 	return ktcore.BlameNone
@@ -51,7 +51,7 @@ func CallGet(c *advrpc.Client, epoch uint64) *GetReply {
 	ab := GetArgEncode(make([]byte, 0), a)
 	rb := new([]byte)
 	if c.Call(GetRpc, ab, rb) {
-		return &GetReply{Err: ktcore.BlameNet}
+		return &GetReply{Err: ktcore.BlameUnknown}
 	}
 	r, _, err0 := GetReplyDecode(*rb)
 	if err0 {
