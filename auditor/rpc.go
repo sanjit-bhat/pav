@@ -40,7 +40,10 @@ func CallUpdate(c *advrpc.Client) ktcore.Blame {
 		return ktcore.BlameAdtrFull
 	}
 	// since Update calls and checks serv, might have these errs.
-	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameServFull, ktcore.BlameUnknown}) {
+	var allowed []ktcore.Blame
+	allowed = append(allowed, ktcore.BlameServFull)
+	allowed = append(allowed, ktcore.BlameUnknown)
+	if ktcore.CheckBlame(r.Err, allowed) {
 		return ktcore.BlameAdtrFull
 	}
 	return ktcore.BlameNone

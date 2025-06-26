@@ -177,14 +177,14 @@ func (s *Server) checkRequests(work []*Work) {
 		nextVer := uint64(len(s.keys.plain[uid]))
 		if ver != nextVer {
 			w.Resp.Err = true
-			continue
 		}
-
 		// error out duplicate uid's. arbitrarily picks one to succeed.
 		_, ok := uidSet[uid]
 		if ok {
 			w.Resp.Err = true
-		} else {
+		}
+
+		if !w.Resp.Err {
 			uidSet[uid] = false
 		}
 	}
@@ -228,7 +228,7 @@ func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 }
 
 func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
-	upd := make([]*ktcore.UpdateProof, 0, len(work))
+	var upd = make([]*ktcore.UpdateProof, 0, len(work))
 	var i = uint64(0)
 	for i < uint64(len(work)) {
 		resp := work[i].Resp

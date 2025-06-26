@@ -46,7 +46,10 @@ func (a *Auditor) Update() ktcore.Blame {
 
 	var err1 ktcore.Blame
 	for _, p := range upd {
-		err1 |= a.updOnce(p)
+		err2 := a.updOnce(p)
+		if err2 != ktcore.BlameNone {
+			err1 = err2
+		}
 	}
 	a.mu.Unlock()
 	return err1
@@ -120,18 +123,10 @@ func getNextDig(lastDig []byte, updates []*ktcore.UpdateProof) ([]byte, bool) {
 	var err bool
 	for _, u := range updates {
 		prev, next, err0 := merkle.VerifyUpdate(u.MapLabel, u.MapVal, u.NonMembProof)
-		if err0 {
+		if err0 || !std.BytesEqual(lastDig0, prev) {
 			err = true
-			break
-		}
-		if !std.BytesEqual(lastDig0, prev) {
-			err = true
-			break
 		}
 		lastDig0 = next
 	}
-	if err {
-		return nil, true
-	}
-	return lastDig0, false
+	return lastDig0, err
 }

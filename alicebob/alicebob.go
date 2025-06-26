@@ -121,36 +121,45 @@ func runAlice(cli *client.Client) ([]*histEntry, ktcore.Blame) {
 	// she can Assume that epochs update iff her Put executes,
 	// which leads to a simple history structure.
 	var hist []*histEntry
-	{
-		ep, isInsert, err0 := cli.SelfMon()
-		if err0 != ktcore.BlameNone {
-			return nil, err0
-		}
-		std.Assert(!isInsert)
-		primitive.Assume(ep == 0)
-		hist = append(hist, &histEntry{})
+	ep, isInsert, err0 := cli.SelfMon()
+	if err0 != ktcore.BlameNone {
+		return nil, err0
 	}
+	std.Assert(!isInsert)
+	primitive.Assume(ep == 0)
+	hist = append(hist, &histEntry{})
 
-	for i := uint64(0); i < uint64(20); i++ {
+	var err1 ktcore.Blame
+	var i uint64
+	for err1 != ktcore.BlameNone && i < uint64(20) {
 		primitive.Sleep(5_000_000)
 		pk := cryptoffi.RandBytes(32)
 		// no pending puts at this pt. we waited until prior put was inserted.
 		cli.Put(pk)
 
-		var isPending = true
-		for isPending {
-			ep, isInsert, err0 := cli.SelfMon()
-			if err0 != ktcore.BlameNone {
-				return nil, err0
-			}
-			if isInsert {
-				primitive.Assume(ep == uint64(len(hist)))
-				hist = append(hist, &histEntry{isReg: true, pk: pk})
-				isPending = false
-			}
+		err2 := loopPending(cli, uint64(len(hist)))
+		if err2 != ktcore.BlameNone {
+			err1 = err2
+		}
+		hist = append(hist, &histEntry{isReg: true, pk: pk})
+		i++
+	}
+	return hist, err1
+}
+
+func loopPending(cli *client.Client, epoch uint64) ktcore.Blame {
+	var err ktcore.Blame
+	var isPending = true
+	for err != ktcore.BlameNone && isPending {
+		ep, done, err0 := cli.SelfMon()
+		if err0 != ktcore.BlameNone {
+			err = err0
+		} else if done {
+			primitive.Assume(ep == epoch)
+			isPending = false
 		}
 	}
-	return hist, ktcore.BlameNone
+	return err
 }
 
 // runBob does a get at some time in the middle of alice's puts.
