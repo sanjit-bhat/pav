@@ -12,26 +12,26 @@ import (
 )
 
 type Client struct {
-	uid        uint64
-	pendingPut *pendingInfo
-	LastEpoch  *lastInfo
-	server     *serverInfo
+	uid  uint64
+	pend *pending
+	last *epoch
+	serv *serv
 }
 
-type pendingInfo struct {
-	nextVer uint64
-	isSome  bool
-	pk      []byte
+type pending struct {
+	nextVer   uint64
+	isPending bool
+	pk        []byte
 }
 
-type lastInfo struct {
-	Epoch uint64
+type epoch struct {
+	epoch uint64
 	dig   []byte
 	link  []byte
 	sig   []byte
 }
 
-type serverInfo struct {
+type serv struct {
 	cli    *advrpc.Client
 	sigPk  cryptoffi.SigPublicKey
 	vrfPk  *cryptoffi.VrfPublicKey
@@ -47,104 +47,104 @@ type ClientErr struct {
 // Put queues pk for insertion.
 // if we have a pending Put, it requires the pk to be the same.
 func (c *Client) Put(pk []byte) {
-	if c.pendingPut.isSome {
-		std.Assert(std.BytesEqual(c.pendingPut.pk, pk))
+	if c.pend.isPending {
+		std.Assert(std.BytesEqual(c.pend.pk, pk))
 	} else {
-		c.pendingPut.isSome = true
-		c.pendingPut.pk = pk
+		c.pend.isPending = true
+		c.pend.pk = pk
 	}
-	server.CallPut(c.server.cli, c.uid, pk, c.pendingPut.nextVer)
+	server.CallPut(c.serv.cli, c.uid, pk, c.pend.nextVer)
 }
 
-// Get returns if the pk was registered and the pk.
-func (c *Client) Get(uid uint64) (bool, []byte, ktcore.Blame) {
-	chainProof, sig, hist, bound, err0 := server.CallHistory(c.server.cli, uid, c.LastEpoch.Epoch, 0)
+// Get returns the epoch, if the pk was registered, and the pk.
+func (c *Client) Get(uid uint64) (uint64, bool, []byte, ktcore.Blame) {
+	chainProof, sig, hist, bound, err0 := server.CallHistory(c.serv.cli, uid, c.last.epoch, 0)
 	if err0 != ktcore.BlameNone {
-		return false, nil, err0
+		return 0, false, nil, err0
 	}
 	// check.
 	last, err1 := c.getChainExt(chainProof, sig)
 	if err1 {
-		return false, nil, ktcore.BlameServFull
+		return 0, false, nil, ktcore.BlameServFull
 	}
-	if CheckHist(c.server.vrfPk, uid, 0, last.dig, hist) {
-		return false, nil, ktcore.BlameServFull
+	if CheckHist(c.serv.vrfPk, uid, 0, last.dig, hist) {
+		return 0, false, nil, ktcore.BlameServFull
 	}
 	boundVer := uint64(len(hist))
-	if CheckNonMemb(c.server.vrfPk, uid, boundVer, last.dig, bound) {
-		return false, nil, ktcore.BlameServFull
+	if CheckNonMemb(c.serv.vrfPk, uid, boundVer, last.dig, bound) {
+		return 0, false, nil, ktcore.BlameServFull
 	}
 
 	// update.
-	c.LastEpoch = last
+	c.last = last
 	if boundVer == 0 {
-		return false, nil, ktcore.BlameNone
+		return last.epoch, false, nil, ktcore.BlameNone
 	} else {
 		lastKey := hist[boundVer-1]
-		return true, lastKey.PkOpen.Val, ktcore.BlameNone
+		return last.epoch, true, lastKey.PkOpen.Val, ktcore.BlameNone
 	}
 }
 
 // SelfMon self-monitors a client's own uid in the latest epoch.
-// it returns if the key changed.
+// it returns the epoch and if the key changed.
 // the insertion happened sometime since the last SelfMon.
-func (c *Client) SelfMon() (bool, ktcore.Blame) {
-	chainProof, sig, hist, bound, err0 := server.CallHistory(c.server.cli, c.uid, c.LastEpoch.Epoch, c.pendingPut.nextVer)
+func (c *Client) SelfMon() (uint64, bool, ktcore.Blame) {
+	chainProof, sig, hist, bound, err0 := server.CallHistory(c.serv.cli, c.uid, c.last.epoch, c.pend.nextVer)
 	if err0 != ktcore.BlameNone {
-		return false, err0
+		return 0, false, err0
 	}
 	// check.
 	last, err1 := c.getChainExt(chainProof, sig)
 	if err1 {
-		return false, ktcore.BlameServFull
+		return 0, false, ktcore.BlameServFull
 	}
-	if CheckHist(c.server.vrfPk, c.uid, c.pendingPut.nextVer, last.dig, hist) {
-		return false, ktcore.BlameServFull
+	if CheckHist(c.serv.vrfPk, c.uid, c.pend.nextVer, last.dig, hist) {
+		return 0, false, ktcore.BlameServFull
 	}
 	histLen := uint64(len(hist))
-	boundVer := c.pendingPut.nextVer + histLen
-	if CheckNonMemb(c.server.vrfPk, c.uid, boundVer, last.dig, bound) {
-		return false, ktcore.BlameServFull
+	boundVer := c.pend.nextVer + histLen
+	if CheckNonMemb(c.serv.vrfPk, c.uid, boundVer, last.dig, bound) {
+		return 0, false, ktcore.BlameServFull
 	}
 
 	// check consistency with pending.
-	if !c.pendingPut.isSome {
+	if !c.pend.isPending {
 		// if no pending, shouldn't have any updates.
 		if histLen != 0 {
 			// conflicting updates could also come from other bad clients.
-			return false, ktcore.BlameServFull | ktcore.BlameClients
+			return 0, false, ktcore.BlameServFull | ktcore.BlameClients
 		}
-		c.LastEpoch = last
-		return false, ktcore.BlameNone
+		c.last = last
+		return last.epoch, false, ktcore.BlameNone
 	}
 	// good client only has one version update at a time.
 	if histLen > 1 {
-		return false, ktcore.BlameServFull | ktcore.BlameClients
+		return 0, false, ktcore.BlameServFull | ktcore.BlameClients
 	}
 	// update hasn't yet fired.
 	if histLen == 0 {
-		c.LastEpoch = last
-		return false, ktcore.BlameNone
+		c.last = last
+		return last.epoch, false, ktcore.BlameNone
 	}
 	newKey := hist[0]
 	// equals pending put.
-	if !std.BytesEqual(newKey.PkOpen.Val, c.pendingPut.pk) {
-		return false, ktcore.BlameServFull | ktcore.BlameClients
+	if !std.BytesEqual(newKey.PkOpen.Val, c.pend.pk) {
+		return 0, false, ktcore.BlameServFull | ktcore.BlameClients
 	}
 
 	// update.
-	c.LastEpoch = last
-	c.pendingPut.isSome = false
-	c.pendingPut.pk = nil
+	c.last = last
+	c.pend.isPending = false
+	c.pend.pk = nil
 	// this client controls nextVer, so no need to check for overflow.
-	c.pendingPut.nextVer = std.SumAssumeNoOverflow(c.pendingPut.nextVer, 1)
-	return true, ktcore.BlameNone
+	c.pend.nextVer = std.SumAssumeNoOverflow(c.pend.nextVer, 1)
+	return last.epoch, true, ktcore.BlameNone
 }
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientErr {
 	cli := advrpc.Dial(adtrAddr)
-	last := c.LastEpoch
-	audit := auditor.CallGet(cli, last.Epoch)
+	last := c.last
+	audit := auditor.CallGet(cli, last.epoch)
 	if audit.Err != ktcore.BlameNone {
 		return &ClientErr{Err: audit.Err}
 	}
@@ -156,24 +156,24 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) *ClientEr
 	if ktcore.VerifyVrfSig(adtrPk, audit.VrfPk, audit.AdtrVrfSig) {
 		return &ClientErr{Err: ktcore.BlameAdtrFull}
 	}
-	if ktcore.VerifyVrfSig(c.server.sigPk, audit.VrfPk, audit.ServVrfSig) {
+	if ktcore.VerifyVrfSig(c.serv.sigPk, audit.VrfPk, audit.ServVrfSig) {
 		return &ClientErr{Err: ktcore.BlameAdtrFull}
 	}
-	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.server.vrfPk)
+	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.serv.vrfPk)
 	if !std.BytesEqual(vrfPkB, audit.VrfPk) {
-		evid := &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.server.vrfSig, vrfPk1: audit.VrfPk, sig1: audit.ServVrfSig}}
+		evid := &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.serv.vrfSig, vrfPk1: audit.VrfPk, sig1: audit.ServVrfSig}}
 		return &ClientErr{Evid: evid, Err: ktcore.BlameServSig}
 	}
 
 	// link evidence.
-	if ktcore.VerifyLinkSig(adtrPk, last.Epoch, audit.Link, audit.AdtrLinkSig) {
+	if ktcore.VerifyLinkSig(adtrPk, last.epoch, audit.Link, audit.AdtrLinkSig) {
 		return &ClientErr{Err: ktcore.BlameAdtrFull}
 	}
-	if ktcore.VerifyLinkSig(c.server.sigPk, last.Epoch, audit.Link, audit.ServLinkSig) {
+	if ktcore.VerifyLinkSig(c.serv.sigPk, last.epoch, audit.Link, audit.ServLinkSig) {
 		return &ClientErr{Err: ktcore.BlameAdtrFull}
 	}
 	if !std.BytesEqual(last.link, audit.Link) {
-		evid := &Evid{link: &evidLink{epoch: last.Epoch, link0: last.link, sig0: last.sig, link1: audit.Link, sig1: audit.ServLinkSig}}
+		evid := &Evid{link: &evidLink{epoch: last.epoch, link0: last.link, sig0: last.sig, link1: audit.Link, sig1: audit.ServLinkSig}}
 		return &ClientErr{Evid: evid, Err: ktcore.BlameServSig}
 	}
 	return &ClientErr{Err: ktcore.BlameNone}
@@ -208,28 +208,28 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (*Client, ktcore.B
 		return nil, ktcore.BlameServFull
 	}
 
-	pendingPut := &pendingInfo{}
-	last := &lastInfo{Epoch: lastEp, dig: newDig, link: newLink, sig: reply.LinkSig}
-	serv := &serverInfo{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: reply.VrfSig}
-	return &Client{uid: uid, pendingPut: pendingPut, LastEpoch: last, server: serv}, ktcore.BlameNone
+	pendingPut := &pending{}
+	last := &epoch{epoch: lastEp, dig: newDig, link: newLink, sig: reply.LinkSig}
+	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: reply.VrfSig}
+	return &Client{uid: uid, pend: pendingPut, last: last, serv: serv}, ktcore.BlameNone
 }
 
-func (c *Client) getChainExt(chainProof, sig []byte) (*lastInfo, bool) {
-	extLen, newDig, newLink, err0 := hashchain.Verify(c.LastEpoch.link, chainProof)
+func (c *Client) getChainExt(chainProof, sig []byte) (*epoch, bool) {
+	extLen, newDig, newLink, err0 := hashchain.Verify(c.last.link, chainProof)
 	if err0 {
 		return nil, true
 	}
 	if extLen == 0 {
-		return c.LastEpoch, false
+		return c.last, false
 	}
-	if !std.SumNoOverflow(c.LastEpoch.Epoch, extLen) {
+	if !std.SumNoOverflow(c.last.epoch, extLen) {
 		return nil, true
 	}
-	newEp := c.LastEpoch.Epoch + extLen
-	if ktcore.VerifyLinkSig(c.server.sigPk, newEp, newLink, sig) {
+	newEp := c.last.epoch + extLen
+	if ktcore.VerifyLinkSig(c.serv.sigPk, newEp, newLink, sig) {
 		return nil, true
 	}
-	return &lastInfo{Epoch: newEp, dig: newDig, link: newLink, sig: sig}, false
+	return &epoch{epoch: newEp, dig: newDig, link: newLink, sig: sig}, false
 }
 
 // CheckMemb errors on fail.

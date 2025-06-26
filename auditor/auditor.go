@@ -16,17 +16,17 @@ type Auditor struct {
 	mu      *sync.RWMutex
 	sk      *cryptoffi.SigPrivateKey
 	lastDig []byte
-	hist    []*epochInfo
-	server  *serverInfo
+	hist    []*history
+	serv    *serv
 }
 
-type epochInfo struct {
+type history struct {
 	link    []byte
 	servSig []byte
 	adtrSig []byte
 }
 
-type serverInfo struct {
+type serv struct {
 	cli        *advrpc.Client
 	sigPk      cryptoffi.SigPublicKey
 	vrfPk      []byte
@@ -38,7 +38,7 @@ type serverInfo struct {
 func (a *Auditor) Update() ktcore.Blame {
 	a.mu.Lock()
 	numEps := uint64(len(a.hist))
-	upd, err0 := server.CallAudit(a.server.cli, numEps)
+	upd, err0 := server.CallAudit(a.serv.cli, numEps)
 	if err0 != ktcore.BlameNone {
 		a.mu.Unlock()
 		return err0
@@ -68,14 +68,14 @@ func (a *Auditor) updOnce(p *ktcore.AuditProof) ktcore.Blame {
 		return ktcore.BlameServFull
 	}
 	nextLink := hashchain.GetNextLink(lastLink, nextDig)
-	if ktcore.VerifyLinkSig(a.server.sigPk, numEps, nextLink, p.LinkSig) {
+	if ktcore.VerifyLinkSig(a.serv.sigPk, numEps, nextLink, p.LinkSig) {
 		return ktcore.BlameServFull
 	}
 
 	// sign and apply update.
 	sig := ktcore.SignLink(a.sk, numEps, nextLink)
 	a.lastDig = nextDig
-	info := &epochInfo{link: nextLink, servSig: p.LinkSig, adtrSig: sig}
+	info := &history{link: nextLink, servSig: p.LinkSig, adtrSig: sig}
 	a.hist = append(a.hist, info)
 	return ktcore.BlameNone
 }
@@ -92,7 +92,7 @@ func (a *Auditor) Get(epoch uint64) *GetReply {
 
 	x := a.hist[epoch]
 	a.mu.RUnlock()
-	return &GetReply{Link: x.link, ServLinkSig: x.servSig, AdtrLinkSig: x.adtrSig, VrfPk: a.server.vrfPk, ServVrfSig: a.server.servVrfSig, AdtrVrfSig: a.server.adtrVrfSig}
+	return &GetReply{Link: x.link, ServLinkSig: x.servSig, AdtrLinkSig: x.adtrSig, VrfPk: a.serv.vrfPk, ServVrfSig: a.serv.servVrfSig, AdtrVrfSig: a.serv.adtrVrfSig}
 }
 
 func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.SigPublicKey, ktcore.Blame) {
@@ -111,8 +111,8 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (*Auditor, cryptoffi.Si
 	tr := merkle.New()
 	dig := tr.Digest()
 	sig := ktcore.SignVrf(sk, reply.VrfPk)
-	serv := &serverInfo{cli: cli, sigPk: servPk, vrfPk: reply.VrfPk, servVrfSig: reply.VrfSig, adtrVrfSig: sig}
-	return &Auditor{mu: mu, sk: sk, lastDig: dig, server: serv}, pk, ktcore.BlameNone
+	serv := &serv{cli: cli, sigPk: servPk, vrfPk: reply.VrfPk, servVrfSig: reply.VrfSig, adtrVrfSig: sig}
+	return &Auditor{mu: mu, sk: sk, lastDig: dig, serv: serv}, pk, ktcore.BlameNone
 }
 
 func getNextDig(lastDig []byte, updates []*ktcore.UpdateProof) ([]byte, bool) {

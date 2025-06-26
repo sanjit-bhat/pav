@@ -15,8 +15,8 @@ type Server struct {
 	secs *secrets
 	keys *keyStore
 	hist *history
-	// WorkQ batch processes Put requests.
-	WorkQ *WorkQ
+	// workQ batch processes Put requests.
+	workQ *WorkQ
 }
 
 type secrets struct {
@@ -55,7 +55,7 @@ func (s *Server) Start() *StartReply {
 // Put queues pk (at the specified version) for insertion.
 func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
 	// NOTE: this doesn't need to block.
-	s.WorkQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
+	s.workQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
 }
 
 // History gives key history for uid, excluding first prevVerLen versions.
@@ -121,7 +121,7 @@ type mapEntry struct {
 }
 
 func (s *Server) Worker() {
-	work := s.WorkQ.Get()
+	work := s.workQ.Get()
 	s.checkRequests(work)
 
 	// NOTE: for correctness, addEntries (write) must start with the same
@@ -150,7 +150,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	chain := hashchain.New()
 	hist := &history{chain: chain, vrfPkSig: vrfSig}
 	wq := NewWorkQ()
-	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, WorkQ: wq}
+	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, workQ: wq}
 
 	// commit empty tree as epoch 0.
 	dig := keys.hidden.Digest()

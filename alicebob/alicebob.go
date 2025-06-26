@@ -44,6 +44,7 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 	}
 	var aliceHist []*histEntry
 	var aliceErr ktcore.Blame
+	var bobEp uint64
 	var bobAlicePk *histEntry
 	var bobErr ktcore.Blame
 
@@ -57,9 +58,10 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 		wg.Done()
 	}()
 	go func() {
-		r0, r1 := runBob(bob)
-		bobAlicePk = r0
-		bobErr = r1
+		r0, r1, r2 := runBob(bob)
+		bobEp = r0
+		bobAlicePk = r1
+		bobErr = r2
 		wg.Done()
 	}()
 	wg.Wait()
@@ -88,8 +90,8 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 
 	// final check. bob got the right key.
 	// Assume alice monitored bob's Get epoch.
-	primitive.Assume(bob.LastEpoch.Epoch <= alice.LastEpoch.Epoch)
-	alicePk := aliceHist[bob.LastEpoch.Epoch]
+	primitive.Assume(bobEp < uint64(len(aliceHist)))
+	alicePk := aliceHist[bobEp]
 	if !equal(alicePk, bobAlicePk) {
 		// [ktcore.BlameServSig] works equally well.
 		// both assumptions specify correct auditing.
@@ -120,12 +122,12 @@ func runAlice(cli *client.Client) ([]*histEntry, ktcore.Blame) {
 	// which leads to a simple history structure.
 	var hist []*histEntry
 	{
-		isInsert, err0 := cli.SelfMon()
+		ep, isInsert, err0 := cli.SelfMon()
 		if err0 != ktcore.BlameNone {
 			return nil, err0
 		}
 		std.Assert(!isInsert)
-		primitive.Assume(cli.LastEpoch.Epoch == 0)
+		primitive.Assume(ep == 0)
 		hist = append(hist, &histEntry{})
 	}
 
@@ -137,12 +139,12 @@ func runAlice(cli *client.Client) ([]*histEntry, ktcore.Blame) {
 
 		var isPending = true
 		for isPending {
-			isInsert, err0 := cli.SelfMon()
+			ep, isInsert, err0 := cli.SelfMon()
 			if err0 != ktcore.BlameNone {
 				return nil, err0
 			}
 			if isInsert {
-				primitive.Assume(cli.LastEpoch.Epoch == uint64(len(hist)))
+				primitive.Assume(ep == uint64(len(hist)))
 				hist = append(hist, &histEntry{isReg: true, pk: pk})
 				isPending = false
 			}
@@ -152,8 +154,8 @@ func runAlice(cli *client.Client) ([]*histEntry, ktcore.Blame) {
 }
 
 // runBob does a get at some time in the middle of alice's puts.
-func runBob(cli *client.Client) (*histEntry, ktcore.Blame) {
+func runBob(cli *client.Client) (uint64, *histEntry, ktcore.Blame) {
 	primitive.Sleep(120_000_000)
-	isReg, pk, err0 := cli.Get(aliceUid)
-	return &histEntry{isReg: isReg, pk: pk}, err0
+	ep, isReg, pk, err0 := cli.Get(aliceUid)
+	return ep, &histEntry{isReg: isReg, pk: pk}, err0
 }
