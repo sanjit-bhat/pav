@@ -11,7 +11,7 @@ import (
 const (
 	// tags used as hash domain separation prefixes.
 	// cut nodes don't have a tag.
-	// they could represent anything, even invalid sub-trees.
+	// their hashes could represent anything, even invalid sub-trees.
 	emptyNodeTag byte = 1
 	leafNodeTag  byte = 2
 	innerNodeTag byte = 3
