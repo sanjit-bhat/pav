@@ -10,7 +10,9 @@ import (
 type Blame uint64
 
 const (
-	BlameNone     Blame = 0
+	BlameNone Blame = 0
+	// BlameServSig only faults a signing predicate, whereas
+	// [BlameServFull] additionally faults the full server RPC spec.
 	BlameServSig  Blame = 1 << 1
 	BlameServFull Blame = 1 << 2
 	BlameAdtrSig  Blame = 1 << 3
@@ -86,4 +88,13 @@ func GetMapVal(pkOpen *CommitOpen) []byte {
 	var b = make([]byte, 0, 8+uint64(len(pkOpen.Val))+8+cryptoffi.HashLen)
 	b = CommitOpenEncode(b, pkOpen)
 	return cryptoutil.Hash(b)
+}
+
+// GetCommitRand computes the psuedo-random (wrt commitSecret) bits
+// used in a mapVal commitment.
+func GetCommitRand(commitSecret, label []byte) []byte {
+	hr := cryptoffi.NewHasher()
+	hr.Write(commitSecret)
+	hr.Write(label)
+	return hr.Sum(nil)
 }
