@@ -9,7 +9,7 @@ import (
 
 	"github.com/aclements/go-moremath/stats"
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/pav/benchutil"
+	"github.com/sanjit-bhat/pav/benchutil"
 )
 
 const (

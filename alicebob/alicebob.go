@@ -5,12 +5,12 @@ import (
 
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/pav/advrpc"
-	"github.com/mit-pdos/pav/auditor"
-	"github.com/mit-pdos/pav/client"
-	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/ktcore"
-	"github.com/mit-pdos/pav/server"
+	"github.com/sanjit-bhat/pav/advrpc"
+	"github.com/sanjit-bhat/pav/auditor"
+	"github.com/sanjit-bhat/pav/client"
+	"github.com/sanjit-bhat/pav/cryptoffi"
+	"github.com/sanjit-bhat/pav/ktcore"
+	"github.com/sanjit-bhat/pav/server"
 )
 
 const (

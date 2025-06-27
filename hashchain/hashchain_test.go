@@ -5,7 +5,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/sanjit-bhat/pav/cryptoffi"
 )
 
 func TestHashChain(t *testing.T) {

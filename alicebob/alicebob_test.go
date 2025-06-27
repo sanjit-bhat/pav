@@ -4,7 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/mit-pdos/pav/ktcore"
+	"github.com/sanjit-bhat/pav/ktcore"
 )
 
 func TestAliceBob(t *testing.T) {

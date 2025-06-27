@@ -1,10 +1,10 @@
-// Auto-generated from spec "github.com/mit-pdos/pav/auditor/serde.go"
-// using compiler "github.com/mit-pdos/pav/serde".
+// Auto-generated from spec "github.com/sanjit-bhat/pav/auditor/serde.go"
+// using compiler "github.com/sanjit-bhat/pav/serde".
 package auditor
 
 import (
-	"github.com/mit-pdos/pav/ktcore"
-	"github.com/mit-pdos/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/ktcore"
+	"github.com/sanjit-bhat/pav/marshalutil"
 	"github.com/tchajed/marshal"
 )
 

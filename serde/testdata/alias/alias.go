@@ -1,7 +1,7 @@
 package serde
 
 import (
-	"github.com/mit-pdos/pav/serde/testdata/alias/other"
+	"github.com/sanjit-bhat/pav/serde/testdata/alias/other"
 )
 
 type arg struct {

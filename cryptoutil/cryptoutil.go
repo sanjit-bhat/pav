@@ -1,7 +1,7 @@
 package cryptoutil
 
 import (
-	"github.com/mit-pdos/pav/cryptoffi"
+	"github.com/sanjit-bhat/pav/cryptoffi"
 )
 
 func Hash(b []byte) []byte {

@@ -113,7 +113,7 @@ func genFileHeader(pkgName, fileId string) *ast.File {
 			&ast.ImportSpec{
 				Path: &ast.BasicLit{
 					Kind:  token.STRING,
-					Value: "\"github.com/mit-pdos/pav/marshalutil\"",
+					Value: "\"github.com/sanjit-bhat/pav/marshalutil\"",
 				},
 			},
 			&ast.ImportSpec{
@@ -132,7 +132,7 @@ func genFileHeader(pkgName, fileId string) *ast.File {
 	}
 	comm2 := &ast.Comment{
 		Slash: commPos,
-		Text:  "// using compiler \"github.com/mit-pdos/pav/serde\".",
+		Text:  "// using compiler \"github.com/sanjit-bhat/pav/serde\".",
 	}
 	file := &ast.File{
 		Doc:     &ast.CommentGroup{List: []*ast.Comment{comm1, comm2}},

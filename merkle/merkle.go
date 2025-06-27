@@ -3,8 +3,8 @@ package merkle
 import (
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/cryptoutil"
+	"github.com/sanjit-bhat/pav/cryptoffi"
+	"github.com/sanjit-bhat/pav/cryptoutil"
 	"github.com/tchajed/marshal"
 )
 

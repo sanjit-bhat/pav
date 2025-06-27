@@ -1,4 +1,4 @@
-module github.com/mit-pdos/pav
+module github.com/sanjit-bhat/pav
 
 go 1.24
 

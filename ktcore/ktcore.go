@@ -1,8 +1,8 @@
 package ktcore
 
 import (
-	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/cryptoutil"
+	"github.com/sanjit-bhat/pav/cryptoffi"
+	"github.com/sanjit-bhat/pav/cryptoutil"
 )
 
 // Blame a specific party when a bad thing happens.

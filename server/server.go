@@ -4,10 +4,10 @@ import (
 	"sync"
 
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/hashchain"
-	"github.com/mit-pdos/pav/ktcore"
-	"github.com/mit-pdos/pav/merkle"
+	"github.com/sanjit-bhat/pav/cryptoffi"
+	"github.com/sanjit-bhat/pav/hashchain"
+	"github.com/sanjit-bhat/pav/ktcore"
+	"github.com/sanjit-bhat/pav/merkle"
 )
 
 type Server struct {

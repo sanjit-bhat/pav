@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"hash"
 
-	"github.com/mit-pdos/pav/cryptoffi/vrf"
+	"github.com/sanjit-bhat/pav/cryptoffi/vrf"
 )
 
 const (

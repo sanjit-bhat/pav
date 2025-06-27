@@ -2,8 +2,8 @@ package client
 
 import (
 	"github.com/goose-lang/std"
-	"github.com/mit-pdos/pav/cryptoffi"
-	"github.com/mit-pdos/pav/ktcore"
+	"github.com/sanjit-bhat/pav/cryptoffi"
+	"github.com/sanjit-bhat/pav/ktcore"
 )
 
 // Evid is evidence that the server misbehaved.

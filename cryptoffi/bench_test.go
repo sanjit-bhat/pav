@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mit-pdos/pav/benchutil"
+	"github.com/sanjit-bhat/pav/benchutil"
 )
 
 func TestBenchRand32(t *testing.T) {

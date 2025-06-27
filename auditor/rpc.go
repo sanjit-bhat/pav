@@ -1,8 +1,8 @@
 package auditor
 
 import (
-	"github.com/mit-pdos/pav/advrpc"
-	"github.com/mit-pdos/pav/ktcore"
+	"github.com/sanjit-bhat/pav/advrpc"
+	"github.com/sanjit-bhat/pav/ktcore"
 )
 
 const (

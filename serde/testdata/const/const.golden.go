@@ -1,9 +1,9 @@
-// Auto-generated from spec "github.com/mit-pdos/pav/serde/testdata/const/const.go"
-// using compiler "github.com/mit-pdos/pav/serde".
+// Auto-generated from spec "github.com/sanjit-bhat/pav/serde/testdata/const/const.go"
+// using compiler "github.com/sanjit-bhat/pav/serde".
 package serde
 
 import (
-	"github.com/mit-pdos/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/marshalutil"
 	"github.com/tchajed/marshal"
 )
 

@@ -1,7 +1,7 @@
 package auditor
 
 import (
-	"github.com/mit-pdos/pav/ktcore"
+	"github.com/sanjit-bhat/pav/ktcore"
 )
 
 type UpdateReply struct {
