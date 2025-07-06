@@ -21,8 +21,12 @@ const (
 	innerNodeTy byte = 3
 )
 
+var (
+	// emptyHash pre-computed. frequently used.
+	emptyHash = compEmptyHash()
+)
+
 type Tree struct {
-	ctx  *context
 	root *node
 }
 
@@ -41,10 +45,6 @@ type node struct {
 	val []byte
 }
 
-type context struct {
-	emptyHash []byte
-}
-
 // Put adds the leaf (label, val), storing immutable references to both.
 // for liveness (not safety) reasons, it returns an error
 // if the label does not have a fixed length.
@@ -52,13 +52,13 @@ func (t *Tree) Put(label []byte, val []byte) (err bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		return true
 	}
-	put(&t.root, 0, label, val, t.ctx)
+	put(&t.root, 0, label, val)
 	return
 }
 
 // put inserts leaf node (label, val) into the n0 sub-tree.
 // it never drops the update.
-func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
+func put(n0 **node, depth uint64, label, val []byte) {
 	n := *n0
 	// empty or cut node.
 	if n == nil || n.nodeTy == cutNodeTy {
@@ -84,16 +84,16 @@ func put(n0 **node, depth uint64, label, val []byte, ctx *context) {
 		leafChild, _ := getChild(inner, n.label, depth)
 		*leafChild = n
 		recurChild, _ := getChild(inner, label, depth)
-		put(recurChild, depth+1, label, val, ctx)
-		setInnerHash(inner, ctx)
+		put(recurChild, depth+1, label, val)
+		setInnerHash(inner)
 		return
 	}
 
 	std.Assert(n.nodeTy == innerNodeTy)
 	c, _ := getChild(n, label, depth)
-	put(c, depth+1, label, val, ctx)
+	put(c, depth+1, label, val)
 	// recurse.
-	setInnerHash(n, ctx)
+	setInnerHash(n)
 }
 
 // Get should only be called on complete trees (no cuts).
@@ -112,7 +112,7 @@ func (t *Tree) Prove(label []byte) (inTree bool, val, proof []byte) {
 
 // prove errors if search lands on a cut node.
 func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byte, err bool) {
-	found, foundLabel, val, proof, err := find(label, getProof, t.ctx, t.root, 0)
+	found, foundLabel, val, proof, err := find(label, getProof, t.root, 0)
 	if err {
 		return
 	}
@@ -149,7 +149,7 @@ func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byt
 
 // find searches the tree for a leaf node down path label.
 // it errors if search lands on a cut node.
-func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) (found bool, foundLabel, foundVal, proof []byte, err bool) {
+func find(label []byte, getProof bool, n *node, depth uint64) (found bool, foundLabel, foundVal, proof []byte, err bool) {
 	// if empty, not found.
 	if n == nil {
 		if getProof {
@@ -176,13 +176,13 @@ func find(label []byte, getProof bool, ctx *context, n *node, depth uint64) (fou
 	// recurse down inner.
 	std.Assert(n.nodeTy == innerNodeTy)
 	child, sib := getChild(n, label, depth)
-	found, foundLabel, foundVal, proof, err = find(label, getProof, ctx, *child, depth+1)
+	found, foundLabel, foundVal, proof, err = find(label, getProof, *child, depth+1)
 	if err {
 		return
 	}
 	if getProof {
 		// proof will have sibling hash for each inner node.
-		proof = append(proof, getNodeHash(*sib, ctx)...)
+		proof = append(proof, getNodeHash(*sib)...)
 	}
 	return
 }
@@ -248,16 +248,15 @@ func VerifyUpdate(label, val, proof []byte) (oldDig, newDig []byte, err bool) {
 }
 
 func (t *Tree) Digest() []byte {
-	return getNodeHash(t.root, t.ctx)
+	return getNodeHash(t.root)
 }
 
 func New() *Tree {
-	c := &context{emptyHash: compEmptyHash()}
-	return &Tree{ctx: c}
+	return &Tree{}
 }
 
 // newShell makes a tree shell from sibs, guaranteeing that down label is empty.
-func newShell(label []byte, ctx *context, depth uint64, sibs []byte) (n *node) {
+func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
 	sibsLen := uint64(len(sibs))
 	if sibsLen == 0 {
 		return
@@ -269,8 +268,8 @@ func newShell(label []byte, ctx *context, depth uint64, sibs []byte) (n *node) {
 	inner := &node{nodeTy: innerNodeTy}
 	child, sib := getChild(inner, label, depth)
 	*sib = cut
-	*child = newShell(label, ctx, depth+1, sibs0)
-	setInnerHash(inner, ctx)
+	*child = newShell(label, depth+1, sibs0)
+	setInnerHash(inner)
 	return inner
 }
 
@@ -283,18 +282,17 @@ func proofToTree(label, proof []byte) (tr *Tree, err bool) {
 		err = true
 		return
 	}
-	ctx := &context{emptyHash: compEmptyHash()}
-	root := newShell(label, ctx, 0, p.Siblings)
-	tr = &Tree{ctx: ctx, root: root}
+	root := newShell(label, 0, p.Siblings)
+	tr = &Tree{root: root}
 	if p.IsOtherLeaf {
 		tr.Put(p.LeafLabel, p.LeafVal)
 	}
 	return
 }
 
-func getNodeHash(n *node, c *context) []byte {
+func getNodeHash(n *node) []byte {
 	if n == nil {
-		return c.emptyHash
+		return emptyHash
 	}
 	return n.hash
 }
@@ -317,9 +315,9 @@ func compLeafHash(label, val []byte) []byte {
 	return hr.Sum(nil)
 }
 
-func setInnerHash(n *node, c *context) {
-	child0 := getNodeHash(n.child0, c)
-	child1 := getNodeHash(n.child1, c)
+func setInnerHash(n *node) {
+	child0 := getNodeHash(n.child0)
+	child1 := getNodeHash(n.child1)
 	n.hash = compInnerHash(child0, child1, nil)
 }
 
