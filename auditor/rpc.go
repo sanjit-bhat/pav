@@ -18,8 +18,8 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 		*reply = UpdateReplyEncode(*reply, replyObj)
 	}
 	h[GetRpc] = func(arg []byte, reply *[]byte) {
-		a, _, err0 := GetArgDecode(arg)
-		if err0 {
+		a, _, err := GetArgDecode(arg)
+		if err {
 			r := &GetReply{Err: ktcore.BlameUnknown}
 			*reply = GetReplyEncode(*reply, r)
 			return
@@ -30,34 +30,31 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func CallUpdate(c *advrpc.Client) ktcore.Blame {
+func CallUpdate(c *advrpc.Client) (err ktcore.Blame) {
 	rb := new([]byte)
 	if c.Call(UpdateRpc, nil, rb) {
 		return ktcore.BlameUnknown
 	}
-	r, _, err0 := UpdateReplyDecode(*rb)
-	if err0 {
+	r, _, errb := UpdateReplyDecode(*rb)
+	if errb {
 		return ktcore.BlameAdtrFull
 	}
 	// since Update calls and checks serv, might have these errs.
-	var allowed []ktcore.Blame
-	allowed = append(allowed, ktcore.BlameServFull)
-	allowed = append(allowed, ktcore.BlameUnknown)
-	if ktcore.CheckBlame(r.Err, allowed) {
+	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameServFull, ktcore.BlameUnknown}) {
 		return ktcore.BlameAdtrFull
 	}
-	return ktcore.BlameNone
+	return
 }
 
 func CallGet(c *advrpc.Client, epoch uint64) *GetReply {
 	a := &GetArg{Epoch: epoch}
-	ab := GetArgEncode(make([]byte, 0), a)
+	ab := GetArgEncode(nil, a)
 	rb := new([]byte)
 	if c.Call(GetRpc, ab, rb) {
 		return &GetReply{Err: ktcore.BlameUnknown}
 	}
-	r, _, err0 := GetReplyDecode(*rb)
-	if err0 {
+	r, _, errb := GetReplyDecode(*rb)
+	if errb {
 		return &GetReply{Err: ktcore.BlameAdtrFull}
 	}
 	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameUnknown}) {

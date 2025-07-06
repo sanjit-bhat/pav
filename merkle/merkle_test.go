@@ -69,7 +69,7 @@ func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal
 	if inTree != expInTree {
 		t.Fatal()
 	}
-	if !bytes.Equal(val, expVal) {
+	if inTree && !bytes.Equal(val, expVal) {
 		t.Fatal()
 	}
 	dig := tr.Digest()

@@ -44,11 +44,11 @@ type history struct {
 // Start bootstraps a party with knowledge of the hashchain and vrf.
 func (s *Server) Start() *StartReply {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	predLen := uint64(len(s.hist.audits)) - 1
 	predLink, proof := s.hist.chain.Bootstrap()
 	lastSig := s.hist.audits[predLen].LinkSig
 	pk := s.secs.vrf.PublicKey()
-	s.mu.RUnlock()
 	return &StartReply{StartEpochLen: predLen, StartLink: predLink, ChainProof: proof, LinkSig: lastSig, VrfPk: pk, VrfSig: s.hist.vrfPkSig}
 }
 
@@ -60,49 +60,47 @@ func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
 
 // History gives key history for uid, excluding first prevVerLen versions.
 // the caller already saw prevEpoch.
-func (s *Server) History(uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktcore.Memb, *ktcore.NonMemb, ktcore.Blame) {
+func (s *Server) History(uid, prevEpoch, prevVerLen uint64) (chainProof, linkSig []byte, hist []*ktcore.Memb, bound *ktcore.NonMemb, err ktcore.Blame) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	numEps := uint64(len(s.hist.audits))
 	if prevEpoch >= numEps {
-		s.mu.RUnlock()
-		return nil, nil, nil, nil, ktcore.BlameUnknown
+		err = ktcore.BlameUnknown
+		return
 	}
 	numVers := uint64(len(s.keys.plain[uid]))
 	if prevVerLen > numVers {
-		s.mu.RUnlock()
-		return nil, nil, nil, nil, ktcore.BlameUnknown
+		err = ktcore.BlameUnknown
+		return
 	}
 
-	epochProof := s.hist.chain.Prove(prevEpoch + 1)
-	sig := s.hist.audits[len(s.hist.audits)-1].LinkSig
-	hist := s.getHist(uid, prevVerLen)
-	bound := s.getBound(uid, numVers)
-	s.mu.RUnlock()
+	chainProof = s.hist.chain.Prove(prevEpoch + 1)
+	linkSig = s.hist.audits[len(s.hist.audits)-1].LinkSig
+	hist = s.getHist(uid, prevVerLen)
+	bound = s.getBound(uid, numVers)
 
 	if prevEpoch+1 == numEps {
 		// client already saw sig. don't send.
-		return epochProof, nil, hist, bound, ktcore.BlameNone
+		linkSig = nil
+		return
 	}
-	return epochProof, sig, hist, bound, ktcore.BlameNone
+	return
 }
 
-// Audit returns an err on fail.
-func (s *Server) Audit(prevEpochLen uint64) ([]*ktcore.AuditProof, ktcore.Blame) {
+// Audit errors if args out of bounds.
+func (s *Server) Audit(prevEpochLen uint64) (proof []*ktcore.AuditProof, err ktcore.Blame) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	numEps := uint64(len(s.hist.audits))
 	if prevEpochLen > numEps {
-		s.mu.RUnlock()
-		return nil, ktcore.BlameUnknown
+		err = ktcore.BlameUnknown
+		return
 	}
 
-	var proof []*ktcore.AuditProof
-	var ep = prevEpochLen
-	for ep < numEps {
+	for ep := prevEpochLen; ep < numEps; ep++ {
 		proof = append(proof, s.hist.audits[ep])
-		ep++
 	}
-	s.mu.RUnlock()
-	return proof, ktcore.BlameNone
+	return
 }
 
 type WQReq struct {
@@ -171,35 +169,29 @@ func (s *Server) checkRequests(work []*Work) {
 	for _, w := range work {
 		w.Resp = &WQResp{}
 		uid := w.Req.Uid
-		ver := w.Req.Ver
-
 		// error out wrong versions.
 		nextVer := uint64(len(s.keys.plain[uid]))
-		if ver != nextVer {
+		if w.Req.Ver != nextVer {
 			w.Resp.Err = true
+			continue
 		}
 		// error out duplicate uid's. arbitrarily picks one to succeed.
 		_, ok := uidSet[uid]
 		if ok {
 			w.Resp.Err = true
+			continue
 		}
-
-		if !w.Resp.Err {
-			uidSet[uid] = false
-		}
+		uidSet[uid] = false
 	}
 }
 
 func (s *Server) makeEntries(work []*Work) []*mapEntry {
 	ents := make([]*mapEntry, len(work))
-	var i uint64
-	for i < uint64(len(work)) {
+	for i := uint64(0); i < uint64(len(work)); i++ {
 		ents[i] = &mapEntry{}
-		i++
 	}
 	wg := new(sync.WaitGroup)
-	i = 0
-	for i < uint64(len(work)) {
+	for i := uint64(0); i < uint64(len(work)); i++ {
 		resp := work[i].Resp
 		if !resp.Err {
 			req := work[i].Req
@@ -210,7 +202,6 @@ func (s *Server) makeEntries(work []*Work) []*mapEntry {
 				wg.Done()
 			}()
 		}
-		i++
 	}
 	wg.Wait()
 	return ents
@@ -228,9 +219,8 @@ func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 }
 
 func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
-	var upd = make([]*ktcore.UpdateProof, 0, len(work))
-	var i = uint64(0)
-	for i < uint64(len(work)) {
+	upd := make([]*ktcore.UpdateProof, 0, len(work))
+	for i := uint64(0); i < uint64(len(work)); i++ {
 		resp := work[i].Resp
 		if !resp.Err {
 			req := work[i].Req
@@ -242,11 +232,10 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 			info := &ktcore.UpdateProof{MapLabel: label, MapVal: out0.val, NonMembProof: proof}
 			upd = append(upd, info)
 
-			err0 := s.keys.hidden.Put(label, out0.val)
-			std.Assert(!err0)
+			err := s.keys.hidden.Put(label, out0.val)
+			std.Assert(!err)
 			s.keys.plain[req.Uid] = append(s.keys.plain[req.Uid], req.Pk)
 		}
-		i++
 	}
 
 	dig := s.keys.hidden.Digest()
@@ -257,12 +246,10 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 }
 
 // getHist returns a history of membership proofs for all post-prefix versions.
-func (s *Server) getHist(uid, prefixLen uint64) []*ktcore.Memb {
+func (s *Server) getHist(uid, prefixLen uint64) (hist []*ktcore.Memb) {
 	pks := s.keys.plain[uid]
 	numVers := uint64(len(pks))
-	var hist []*ktcore.Memb
-	var ver = prefixLen
-	for ver < numVers {
+	for ver := prefixLen; ver < numVers; ver++ {
 		label, labelProof := ktcore.ProveMapLabel(uid, ver, s.secs.vrf)
 		inMap, _, mapProof := s.keys.hidden.Prove(label)
 		std.Assert(inMap)
@@ -270,15 +257,15 @@ func (s *Server) getHist(uid, prefixLen uint64) []*ktcore.Memb {
 		open := &ktcore.CommitOpen{Val: pks[ver], Rand: rand}
 		memb := &ktcore.Memb{LabelProof: labelProof, PkOpen: open, MerkleProof: mapProof}
 		hist = append(hist, memb)
-		ver++
 	}
-	return hist
+	return
 }
 
 // getBound returns a non-membership proof for the boundary version.
-func (s *Server) getBound(uid, numVers uint64) *ktcore.NonMemb {
+func (s *Server) getBound(uid, numVers uint64) (bound *ktcore.NonMemb) {
 	label, labelProof := ktcore.ProveMapLabel(uid, numVers, s.secs.vrf)
 	inMap, _, mapProof := s.keys.hidden.Prove(label)
 	std.Assert(!inMap)
-	return &ktcore.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
+	bound = &ktcore.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
+	return
 }

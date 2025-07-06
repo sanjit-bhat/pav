@@ -19,8 +19,8 @@ func NewRpcServer(s *Server) *advrpc.Server {
 		*reply = StartReplyEncode(*reply, r)
 	}
 	h[PutRpc] = func(arg []byte, reply *[]byte) {
-		a, _, err0 := PutArgDecode(arg)
-		if err0 {
+		a, _, err := PutArgDecode(arg)
+		if err {
 			// would blame client, except that Put client doesn't care.
 			return
 		}
@@ -28,8 +28,8 @@ func NewRpcServer(s *Server) *advrpc.Server {
 		*reply = nil
 	}
 	h[HistoryRpc] = func(arg []byte, reply *[]byte) {
-		a, _, err0 := HistoryArgDecode(arg)
-		if err0 {
+		a, _, err := HistoryArgDecode(arg)
+		if err {
 			r := &HistoryReply{Err: ktcore.BlameUnknown}
 			*reply = HistoryReplyEncode(*reply, r)
 			return
@@ -39,8 +39,8 @@ func NewRpcServer(s *Server) *advrpc.Server {
 		*reply = HistoryReplyEncode(*reply, r)
 	}
 	h[AuditRpc] = func(arg []byte, reply *[]byte) {
-		a, _, err0 := AuditArgDecode(arg)
-		if err0 {
+		a, _, err := AuditArgDecode(arg)
+		if err {
 			r := &AuditReply{Err: ktcore.BlameUnknown}
 			*reply = AuditReplyEncode(*reply, r)
 			return
@@ -52,56 +52,64 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func CallStart(c *advrpc.Client) (*StartReply, ktcore.Blame) {
+func CallStart(c *advrpc.Client) (r *StartReply, err ktcore.Blame) {
 	rb := new([]byte)
 	if c.Call(StartRpc, nil, rb) {
-		return nil, ktcore.BlameUnknown
+		err = ktcore.BlameUnknown
+		return
 	}
-	r, _, err0 := StartReplyDecode(*rb)
-	if err0 {
-		return nil, ktcore.BlameServFull
+	r, _, errb := StartReplyDecode(*rb)
+	if errb {
+		err = ktcore.BlameServFull
+		return
 	}
-	return r, ktcore.BlameNone
+	return
 }
 
 func CallPut(c *advrpc.Client, uid uint64, pk []byte, ver uint64) {
 	a := &PutArg{Uid: uid, Pk: pk, Ver: ver}
-	ab := PutArgEncode(make([]byte, 0), a)
+	ab := PutArgEncode(nil, a)
 	rb := new([]byte)
 	// don't bubble up Put errs bc caller doesn't care to know.
 	c.Call(PutRpc, ab, rb)
 }
 
-func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) ([]byte, []byte, []*ktcore.Memb, *ktcore.NonMemb, ktcore.Blame) {
+func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) (chainProof []byte, linkSig []byte, hist []*ktcore.Memb, bound *ktcore.NonMemb, err ktcore.Blame) {
 	a := &HistoryArg{Uid: uid, PrevEpoch: prevEpoch, PrevVerLen: prevVerLen}
-	ab := HistoryArgEncode(make([]byte, 0), a)
+	ab := HistoryArgEncode(nil, a)
 	rb := new([]byte)
 	if c.Call(HistoryRpc, ab, rb) {
-		return nil, nil, nil, nil, ktcore.BlameUnknown
+		err = ktcore.BlameUnknown
+		return
 	}
-	r, _, err0 := HistoryReplyDecode(*rb)
-	if err0 {
-		return nil, nil, nil, nil, ktcore.BlameServFull
+	r, _, errb := HistoryReplyDecode(*rb)
+	if errb {
+		err = ktcore.BlameServFull
+		return
 	}
 	if ktcore.CheckBlame(r.Err, []ktcore.Blame{}) {
-		return nil, nil, nil, nil, ktcore.BlameServFull
+		err = ktcore.BlameServFull
+		return
 	}
 	return r.ChainProof, r.LinkSig, r.Hist, r.Bound, ktcore.BlameNone
 }
 
-func CallAudit(c *advrpc.Client, prevEpochLen uint64) ([]*ktcore.AuditProof, ktcore.Blame) {
+func CallAudit(c *advrpc.Client, prevEpochLen uint64) (p []*ktcore.AuditProof, err ktcore.Blame) {
 	a := &AuditArg{PrevEpochLen: prevEpochLen}
-	ab := AuditArgEncode(make([]byte, 0), a)
+	ab := AuditArgEncode(nil, a)
 	rb := new([]byte)
 	if c.Call(AuditRpc, ab, rb) {
-		return nil, ktcore.BlameUnknown
+		err = ktcore.BlameUnknown
+		return
 	}
-	r, _, err0 := AuditReplyDecode(*rb)
-	if err0 {
-		return nil, ktcore.BlameServFull
+	r, _, errb := AuditReplyDecode(*rb)
+	if errb {
+		err = ktcore.BlameServFull
+		return
 	}
 	if ktcore.CheckBlame(r.Err, []ktcore.Blame{}) {
-		return nil, ktcore.BlameServFull
+		err = ktcore.BlameServFull
+		return
 	}
 	return r.P, ktcore.BlameNone
 }

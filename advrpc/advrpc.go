@@ -74,8 +74,8 @@ func Dial(addr uint64) *Client {
 	return &Client{conn: c}
 }
 
-// Call does an rpc, and returns error on fail.
-func (c *Client) Call(rpcId uint64, args []byte, reply *[]byte) bool {
+// Call does an rpc.
+func (c *Client) Call(rpcId uint64, args []byte, reply *[]byte) (err bool) {
 	req0 := make([]byte, 0, 8+len(args))
 	req1 := marshal.WriteInt(req0, rpcId)
 	req2 := marshal.WriteBytes(req1, args)

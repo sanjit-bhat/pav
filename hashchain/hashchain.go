@@ -14,9 +14,9 @@ type HashChain struct {
 	vals []byte
 }
 
-// Append adds a val and returns the new link.
+// Append adds a val.
 // it expects val to be of constant len, which lets us encode smaller proofs.
-func (c *HashChain) Append(val []byte) []byte {
+func (c *HashChain) Append(val []byte) (newLink []byte) {
 	std.Assert(uint64(len(val)) == cryptoffi.HashLen)
 	c.predLastLink = c.lastLink
 	c.lastLink = GetNextLink(c.lastLink, val)
@@ -26,42 +26,40 @@ func (c *HashChain) Append(val []byte) []byte {
 
 // Prove transitions from knowing a prevLen prefix to knowing the latest list.
 // it expects prevLen <= curr len.
-func (c *HashChain) Prove(prevLen uint64) []byte {
+func (c *HashChain) Prove(prevLen uint64) (proof []byte) {
 	start := prevLen * cryptoffi.HashLen
 	return std.BytesClone(c.vals[start:])
 }
 
-// Bootstrap hashchain verifiers with a commit to the
-// second-to-last list and a proof of the last value.
+// Bootstrap hashchain verifiers with the last value.
 // it expects non-empty values.
-func (c *HashChain) Bootstrap() ([]byte, []byte) {
+func (c *HashChain) Bootstrap() (lastVal []byte, proof []byte) {
 	start := uint64(len(c.vals)) - cryptoffi.HashLen
 	return c.predLastLink, std.BytesClone(c.vals[start:])
 }
 
-// Verify updates prevLink with proof, returning the extended length,
-// new val, and new link.
-// if length extension is 0, new val is nil.
-// it errors on failure.
-func Verify(prevLink, proof []byte) (uint64, []byte, []byte, bool) {
+// Verify updates prevLink with proof.
+// if the extended length is 0, new val is nil.
+func Verify(prevLink, proof []byte) (extLen uint64, newVal []byte, newLink []byte, err bool) {
 	if uint64(len(prevLink)) != cryptoffi.HashLen {
-		return 0, nil, nil, true
+		err = true
+		return
 	}
 	proofLen := uint64(len(proof))
 	if proofLen%cryptoffi.HashLen != 0 {
-		return 0, nil, nil, true
+		err = true
+		return
 	}
-	lenVals := proofLen / cryptoffi.HashLen
+	extLen = proofLen / cryptoffi.HashLen
 
-	var newVal []byte
-	var newLink = prevLink
-	for i := uint64(0); i < lenVals; i++ {
+	newLink = prevLink
+	for i := uint64(0); i < extLen; i++ {
 		start := i * cryptoffi.HashLen
 		end := (i + 1) * cryptoffi.HashLen
 		newVal = proof[start:end]
 		newLink = GetNextLink(newLink, newVal)
 	}
-	return lenVals, newVal, newLink, false
+	return
 }
 
 func New() *HashChain {

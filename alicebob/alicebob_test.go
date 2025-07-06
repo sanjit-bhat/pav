@@ -8,8 +8,7 @@ import (
 )
 
 func TestAliceBob(t *testing.T) {
-	err := testAliceBob(makeUniqueAddr(), makeUniqueAddr())
-	if err.Err != ktcore.BlameNone {
+	if _, err := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
 		t.Fatal()
 	}
 }

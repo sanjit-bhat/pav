@@ -37,7 +37,7 @@ type Conn struct {
 	recvMu *sync.Mutex
 }
 
-// Dial returns new connection and errors on fail.
+// Dial returns new connection.
 func Dial(addr uint64) *Conn {
 	conn, err := net.Dial("tcp", addrToStr(addr))
 	if err != nil {
@@ -69,31 +69,30 @@ func newConn(conn net.Conn) *Conn {
 	return &Conn{c: conn, sendMu: new(sync.Mutex), recvMu: new(sync.Mutex)}
 }
 
-// Receive returns data and errors on fail.
-func (c *Conn) Receive() ([]byte, bool) {
+func (c *Conn) Receive() (data []byte, err bool) {
 	c.recvMu.Lock()
 	defer c.recvMu.Unlock()
 
 	// encoding: len(data) ++ data.
 	header := make([]byte, 8)
-	_, err0 := io.ReadFull(c.c, header)
-	if err0 != nil {
+	if _, errg := io.ReadFull(c.c, header); errg != nil {
 		// Looks like this connection is dead.
 		// This can legitimately happen when the other side "hung up", so do not panic.
 		// But also, we clearly lost track here of where in the protocol we are,
 		// so close it.
 		c.c.Close()
-		return nil, true
+		err = true
+		return
 	}
 	d := marshal.NewDec(header)
 	dataLen := d.GetInt()
 
-	data := make([]byte, dataLen)
-	_, err1 := io.ReadFull(c.c, data)
-	if err1 != nil {
+	data = make([]byte, dataLen)
+	if _, errg := io.ReadFull(c.c, data); errg != nil {
 		// prevent sending on this conn again.
 		c.c.Close()
-		return nil, true
+		err = true
+		return
 	}
 	return data, false
 }

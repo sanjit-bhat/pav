@@ -18,29 +18,29 @@ const (
 	bobUid   uint64 = 1
 )
 
-func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
+func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktcore.Blame) {
 	// setup server and auditor.
 	serv, servSigPk := server.New()
 	servRpc := server.NewRpcServer(serv)
 	servRpc.Serve(servAddr)
 	primitive.Sleep(1_000_000)
 
-	adtr, adtrPk, err0 := auditor.New(servAddr, servSigPk)
-	if err0 != ktcore.BlameNone {
-		return &client.ClientErr{Err: err0}
+	adtr, adtrPk, err := auditor.New(servAddr, servSigPk)
+	if err != ktcore.BlameNone {
+		return
 	}
 	adtrRpc := auditor.NewRpcAuditor(adtr)
 	adtrRpc.Serve(adtrAddr)
 	primitive.Sleep(1_000_000)
 
 	// start alice and bob.
-	alice, err1 := client.New(aliceUid, servAddr, servSigPk)
-	if err1 != ktcore.BlameNone {
-		return &client.ClientErr{Err: err1}
+	alice, err := client.New(aliceUid, servAddr, servSigPk)
+	if err != ktcore.BlameNone {
+		return
 	}
-	bob, err2 := client.New(bobUid, servAddr, servSigPk)
-	if err2 != ktcore.BlameNone {
-		return &client.ClientErr{Err: err2}
+	bob, err := client.New(bobUid, servAddr, servSigPk)
+	if err != ktcore.BlameNone {
+		return
 	}
 	var aliceHist []*histEntry
 	var aliceErr ktcore.Blame
@@ -67,25 +67,24 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 	wg.Wait()
 
 	if aliceErr != ktcore.BlameNone {
-		return &client.ClientErr{Err: aliceErr}
+		err = aliceErr
+		return
 	}
 	if bobErr != ktcore.BlameNone {
-		return &client.ClientErr{Err: bobErr}
+		err = bobErr
+		return
 	}
 
 	// sync auditors and audit. in real world, this'll happen periodically.
 	adtrCli := advrpc.Dial(adtrAddr)
-	err3 := auditor.CallUpdate(adtrCli)
-	if err3 != ktcore.BlameNone {
-		return &client.ClientErr{Err: err3}
+	if err = auditor.CallUpdate(adtrCli); err != ktcore.BlameNone {
+		return
 	}
-	err4 := alice.Audit(adtrAddr, adtrPk)
-	if err4.Err != ktcore.BlameNone {
-		return err4
+	if evid, err = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+		return
 	}
-	err5 := bob.Audit(adtrAddr, adtrPk)
-	if err5.Err != ktcore.BlameNone {
-		return err5
+	if evid, err = bob.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+		return
 	}
 
 	// final check. bob got the right key.
@@ -95,9 +94,10 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) *client.ClientErr {
 	if !equal(alicePk, bobAlicePk) {
 		// [ktcore.BlameServSig] works equally well.
 		// both assumptions specify correct auditing.
-		return &client.ClientErr{Err: ktcore.BlameAdtrSig}
+		err = ktcore.BlameAdtrSig
+		return
 	}
-	return &client.ClientErr{}
+	return
 }
 
 type histEntry struct {
@@ -116,55 +116,56 @@ func equal(o0, o1 *histEntry) bool {
 }
 
 // runAlice does a bunch of puts.
-func runAlice(cli *client.Client) ([]*histEntry, ktcore.Blame) {
+func runAlice(cli *client.Client) (hist []*histEntry, err ktcore.Blame) {
 	// in this simple example, alice is the only putter.
 	// she can Assume that epochs update iff her Put executes,
 	// which leads to a simple history structure.
-	var hist []*histEntry
-	ep, isInsert, err0 := cli.SelfMon()
-	if err0 != ktcore.BlameNone {
-		return nil, err0
+	{
+		var ep uint64
+		var isInsert bool
+		ep, isInsert, err = cli.SelfMon()
+		if err != ktcore.BlameNone {
+			return
+		}
+		std.Assert(!isInsert)
+		primitive.Assume(ep == 0)
+		hist = append(hist, &histEntry{})
 	}
-	std.Assert(!isInsert)
-	primitive.Assume(ep == 0)
-	hist = append(hist, &histEntry{})
 
-	var err1 ktcore.Blame
-	var i uint64
-	for err1 != ktcore.BlameNone && i < uint64(20) {
+	for i := 0; i < 20; i++ {
 		primitive.Sleep(5_000_000)
 		pk := cryptoffi.RandBytes(32)
 		// no pending puts at this pt. we waited until prior put was inserted.
 		cli.Put(pk)
 
-		err2 := loopPending(cli, uint64(len(hist)))
-		if err2 != ktcore.BlameNone {
-			err1 = err2
+		if err = loopPending(cli, uint64(len(hist))); err != ktcore.BlameNone {
+			return
 		}
 		hist = append(hist, &histEntry{isReg: true, pk: pk})
-		i++
 	}
-	return hist, err1
+	return
 }
 
-func loopPending(cli *client.Client, epoch uint64) ktcore.Blame {
-	var err ktcore.Blame
-	var isPending = true
-	for err != ktcore.BlameNone && isPending {
-		ep, done, err0 := cli.SelfMon()
-		if err0 != ktcore.BlameNone {
-			err = err0
-		} else if done {
-			primitive.Assume(ep == epoch)
-			isPending = false
+func loopPending(cli *client.Client, ep uint64) (err ktcore.Blame) {
+	for {
+		var ep0 uint64
+		var done bool
+		ep0, done, err = cli.SelfMon()
+		if err != ktcore.BlameNone {
+			return
+		}
+		if done {
+			primitive.Assume(ep0 == ep)
+			break
 		}
 	}
-	return err
+	return
 }
 
 // runBob does a get at some time in the middle of alice's puts.
-func runBob(cli *client.Client) (uint64, *histEntry, ktcore.Blame) {
+func runBob(cli *client.Client) (ep uint64, ent *histEntry, err ktcore.Blame) {
 	primitive.Sleep(120_000_000)
-	ep, isReg, pk, err0 := cli.Get(aliceUid)
-	return ep, &histEntry{isReg: isReg, pk: pk}, err0
+	ep, isReg, pk, err := cli.Get(aliceUid)
+	ent = &histEntry{isReg: isReg, pk: pk}
+	return
 }
