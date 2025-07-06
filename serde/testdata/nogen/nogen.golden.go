@@ -3,6 +3,6 @@
 package serde
 
 import (
-	"github.com/sanjit-bhat/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )

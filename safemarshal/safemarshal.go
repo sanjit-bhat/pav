@@ -1,4 +1,4 @@
-package marshalutil
+package safemarshal
 
 import (
 	"github.com/tchajed/marshal"

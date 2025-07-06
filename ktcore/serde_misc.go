@@ -1,7 +1,7 @@
 package ktcore
 
 import (
-	"github.com/sanjit-bhat/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
@@ -15,7 +15,7 @@ func UpdateProofSlice1DEncode(b0 []byte, o []*UpdateProof) []byte {
 }
 
 func UpdateProofSlice1DDecode(b0 []byte) ([]*UpdateProof, []byte, bool) {
-	length, b1, err1 := marshalutil.ReadInt(b0)
+	length, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -47,7 +47,7 @@ func MembSlice1DEncode(b0 []byte, o []*Memb) []byte {
 }
 
 func MembSlice1DDecode(b0 []byte) ([]*Memb, []byte, bool) {
-	length, b1, err1 := marshalutil.ReadInt(b0)
+	length, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -79,7 +79,7 @@ func AuditProofSlice1DEncode(b0 []byte, o []*AuditProof) []byte {
 }
 
 func AuditProofSlice1DDecode(b0 []byte) ([]*AuditProof, []byte, bool) {
-	length, b1, err1 := marshalutil.ReadInt(b0)
+	length, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}

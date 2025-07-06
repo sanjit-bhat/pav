@@ -3,22 +3,22 @@
 package ktcore
 
 import (
-	"github.com/sanjit-bhat/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
 func VrfSigEncode(b0 []byte, o *VrfSig) []byte {
 	var b = b0
-	b = marshalutil.WriteByte(b, o.SigTag)
-	b = marshalutil.WriteSlice1D(b, o.VrfPk)
+	b = safemarshal.WriteByte(b, o.SigTag)
+	b = safemarshal.WriteSlice1D(b, o.VrfPk)
 	return b
 }
 func VrfSigDecode(b0 []byte) (*VrfSig, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadByte(b0)
+	a1, b1, err1 := safemarshal.ReadByte(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -26,21 +26,21 @@ func VrfSigDecode(b0 []byte) (*VrfSig, []byte, bool) {
 }
 func LinkSigEncode(b0 []byte, o *LinkSig) []byte {
 	var b = b0
-	b = marshalutil.WriteByte(b, o.SigTag)
+	b = safemarshal.WriteByte(b, o.SigTag)
 	b = marshal.WriteInt(b, o.Epoch)
-	b = marshalutil.WriteSlice1D(b, o.Link)
+	b = safemarshal.WriteSlice1D(b, o.Link)
 	return b
 }
 func LinkSigDecode(b0 []byte) (*LinkSig, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadByte(b0)
+	a1, b1, err1 := safemarshal.ReadByte(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadInt(b1)
+	a2, b2, err2 := safemarshal.ReadInt(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	a3, b3, err3 := safemarshal.ReadSlice1D(b2)
 	if err3 {
 		return nil, nil, true
 	}
@@ -53,11 +53,11 @@ func MapLabelEncode(b0 []byte, o *MapLabel) []byte {
 	return b
 }
 func MapLabelDecode(b0 []byte) (*MapLabel, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadInt(b1)
+	a2, b2, err2 := safemarshal.ReadInt(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -65,16 +65,16 @@ func MapLabelDecode(b0 []byte) (*MapLabel, []byte, bool) {
 }
 func CommitOpenEncode(b0 []byte, o *CommitOpen) []byte {
 	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.Val)
-	b = marshalutil.WriteSlice1D(b, o.Rand)
+	b = safemarshal.WriteSlice1D(b, o.Val)
+	b = safemarshal.WriteSlice1D(b, o.Rand)
 	return b
 }
 func CommitOpenDecode(b0 []byte) (*CommitOpen, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
+	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -82,13 +82,13 @@ func CommitOpenDecode(b0 []byte) (*CommitOpen, []byte, bool) {
 }
 func MembEncode(b0 []byte, o *Memb) []byte {
 	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.LabelProof)
+	b = safemarshal.WriteSlice1D(b, o.LabelProof)
 	b = CommitOpenEncode(b, o.PkOpen)
-	b = marshalutil.WriteSlice1D(b, o.MerkleProof)
+	b = safemarshal.WriteSlice1D(b, o.MerkleProof)
 	return b
 }
 func MembDecode(b0 []byte) (*Memb, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
+	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -96,7 +96,7 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	a3, b3, err3 := safemarshal.ReadSlice1D(b2)
 	if err3 {
 		return nil, nil, true
 	}
@@ -104,16 +104,16 @@ func MembDecode(b0 []byte) (*Memb, []byte, bool) {
 }
 func NonMembEncode(b0 []byte, o *NonMemb) []byte {
 	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.LabelProof)
-	b = marshalutil.WriteSlice1D(b, o.MerkleProof)
+	b = safemarshal.WriteSlice1D(b, o.LabelProof)
+	b = safemarshal.WriteSlice1D(b, o.MerkleProof)
 	return b
 }
 func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
+	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -122,7 +122,7 @@ func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
 func AuditProofEncode(b0 []byte, o *AuditProof) []byte {
 	var b = b0
 	b = UpdateProofSlice1DEncode(b, o.Updates)
-	b = marshalutil.WriteSlice1D(b, o.LinkSig)
+	b = safemarshal.WriteSlice1D(b, o.LinkSig)
 	return b
 }
 func AuditProofDecode(b0 []byte) (*AuditProof, []byte, bool) {
@@ -130,7 +130,7 @@ func AuditProofDecode(b0 []byte) (*AuditProof, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -138,21 +138,21 @@ func AuditProofDecode(b0 []byte) (*AuditProof, []byte, bool) {
 }
 func UpdateProofEncode(b0 []byte, o *UpdateProof) []byte {
 	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.MapLabel)
-	b = marshalutil.WriteSlice1D(b, o.MapVal)
-	b = marshalutil.WriteSlice1D(b, o.NonMembProof)
+	b = safemarshal.WriteSlice1D(b, o.MapLabel)
+	b = safemarshal.WriteSlice1D(b, o.MapVal)
+	b = safemarshal.WriteSlice1D(b, o.NonMembProof)
 	return b
 }
 func UpdateProofDecode(b0 []byte) (*UpdateProof, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
+	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	a3, b3, err3 := safemarshal.ReadSlice1D(b2)
 	if err3 {
 		return nil, nil, true
 	}

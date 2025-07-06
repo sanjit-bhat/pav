@@ -4,42 +4,42 @@ package server
 
 import (
 	"github.com/sanjit-bhat/pav/ktcore"
-	"github.com/sanjit-bhat/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
 func StartReplyEncode(b0 []byte, o *StartReply) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.StartEpochLen)
-	b = marshalutil.WriteSlice1D(b, o.StartLink)
-	b = marshalutil.WriteSlice1D(b, o.ChainProof)
-	b = marshalutil.WriteSlice1D(b, o.LinkSig)
-	b = marshalutil.WriteSlice1D(b, o.VrfPk)
-	b = marshalutil.WriteSlice1D(b, o.VrfSig)
+	b = safemarshal.WriteSlice1D(b, o.StartLink)
+	b = safemarshal.WriteSlice1D(b, o.ChainProof)
+	b = safemarshal.WriteSlice1D(b, o.LinkSig)
+	b = safemarshal.WriteSlice1D(b, o.VrfPk)
+	b = safemarshal.WriteSlice1D(b, o.VrfSig)
 	return b
 }
 func StartReplyDecode(b0 []byte) (*StartReply, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	a3, b3, err3 := safemarshal.ReadSlice1D(b2)
 	if err3 {
 		return nil, nil, true
 	}
-	a4, b4, err4 := marshalutil.ReadSlice1D(b3)
+	a4, b4, err4 := safemarshal.ReadSlice1D(b3)
 	if err4 {
 		return nil, nil, true
 	}
-	a5, b5, err5 := marshalutil.ReadSlice1D(b4)
+	a5, b5, err5 := safemarshal.ReadSlice1D(b4)
 	if err5 {
 		return nil, nil, true
 	}
-	a6, b6, err6 := marshalutil.ReadSlice1D(b5)
+	a6, b6, err6 := safemarshal.ReadSlice1D(b5)
 	if err6 {
 		return nil, nil, true
 	}
@@ -48,20 +48,20 @@ func StartReplyDecode(b0 []byte) (*StartReply, []byte, bool) {
 func PutArgEncode(b0 []byte, o *PutArg) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.Uid)
-	b = marshalutil.WriteSlice1D(b, o.Pk)
+	b = safemarshal.WriteSlice1D(b, o.Pk)
 	b = marshal.WriteInt(b, o.Ver)
 	return b
 }
 func PutArgDecode(b0 []byte) (*PutArg, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadInt(b2)
+	a3, b3, err3 := safemarshal.ReadInt(b2)
 	if err3 {
 		return nil, nil, true
 	}
@@ -75,15 +75,15 @@ func HistoryArgEncode(b0 []byte, o *HistoryArg) []byte {
 	return b
 }
 func HistoryArgDecode(b0 []byte) (*HistoryArg, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadInt(b1)
+	a2, b2, err2 := safemarshal.ReadInt(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadInt(b2)
+	a3, b3, err3 := safemarshal.ReadInt(b2)
 	if err3 {
 		return nil, nil, true
 	}
@@ -91,19 +91,19 @@ func HistoryArgDecode(b0 []byte) (*HistoryArg, []byte, bool) {
 }
 func HistoryReplyEncode(b0 []byte, o *HistoryReply) []byte {
 	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.ChainProof)
-	b = marshalutil.WriteSlice1D(b, o.LinkSig)
+	b = safemarshal.WriteSlice1D(b, o.ChainProof)
+	b = safemarshal.WriteSlice1D(b, o.LinkSig)
 	b = ktcore.MembSlice1DEncode(b, o.Hist)
 	b = ktcore.NonMembEncode(b, o.Bound)
 	b = marshal.WriteInt(b, uint64(o.Err))
 	return b
 }
 func HistoryReplyDecode(b0 []byte) (*HistoryReply, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
+	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -115,7 +115,7 @@ func HistoryReplyDecode(b0 []byte) (*HistoryReply, []byte, bool) {
 	if err4 {
 		return nil, nil, true
 	}
-	a5, b5, err5 := marshalutil.ReadInt(b4)
+	a5, b5, err5 := safemarshal.ReadInt(b4)
 	if err5 {
 		return nil, nil, true
 	}
@@ -127,7 +127,7 @@ func AuditArgEncode(b0 []byte, o *AuditArg) []byte {
 	return b
 }
 func AuditArgDecode(b0 []byte) (*AuditArg, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -144,7 +144,7 @@ func AuditReplyDecode(b0 []byte) (*AuditReply, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadInt(b1)
+	a2, b2, err2 := safemarshal.ReadInt(b1)
 	if err2 {
 		return nil, nil, true
 	}

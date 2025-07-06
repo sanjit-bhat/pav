@@ -3,7 +3,7 @@
 package serde
 
 import (
-	"github.com/sanjit-bhat/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
@@ -13,7 +13,7 @@ func innerEncode(b0 []byte, o *inner) []byte {
 	return b
 }
 func innerDecode(b0 []byte) (*inner, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}

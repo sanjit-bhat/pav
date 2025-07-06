@@ -4,7 +4,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/sanjit-bhat/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
@@ -24,11 +24,11 @@ func encArgs(args *Args) []byte {
 }
 
 func decArgs(args []byte) (*Args, bool) {
-	a, args0, err0 := marshalutil.ReadInt(args)
+	a, args0, err0 := safemarshal.ReadInt(args)
 	if err0 {
 		return nil, true
 	}
-	b, args1, err1 := marshalutil.ReadInt(args0)
+	b, args1, err1 := safemarshal.ReadInt(args0)
 	if err1 || len(args1) != 0 {
 		return nil, true
 	}
@@ -44,7 +44,7 @@ func decReply(reply *[]byte) (uint64, bool) {
 	if reply == nil {
 		return 0, true
 	}
-	out, reply0, err0 := marshalutil.ReadInt(*reply)
+	out, reply0, err0 := safemarshal.ReadInt(*reply)
 	if err0 || len(reply0) != 0 {
 		return 0, true
 	}

@@ -5,7 +5,7 @@ package advrpc
 // however, its formal model says that rpc calls return arbitrary bytes.
 
 import (
-	"github.com/sanjit-bhat/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/sanjit-bhat/pav/netffi"
 	"github.com/tchajed/marshal"
 )
@@ -35,7 +35,7 @@ func (s *Server) read(conn *netffi.Conn) {
 			// connection done. quit thread.
 			break
 		}
-		rpcId, data, err1 := marshalutil.ReadInt(req)
+		rpcId, data, err1 := safemarshal.ReadInt(req)
 		if err1 {
 			// adv didn't even give rpcId.
 			continue

@@ -4,7 +4,7 @@ package auditor
 
 import (
 	"github.com/sanjit-bhat/pav/ktcore"
-	"github.com/sanjit-bhat/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
@@ -14,7 +14,7 @@ func UpdateReplyEncode(b0 []byte, o *UpdateReply) []byte {
 	return b
 }
 func UpdateReplyDecode(b0 []byte) (*UpdateReply, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -26,7 +26,7 @@ func GetArgEncode(b0 []byte, o *GetArg) []byte {
 	return b
 }
 func GetArgDecode(b0 []byte) (*GetArg, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -34,41 +34,41 @@ func GetArgDecode(b0 []byte) (*GetArg, []byte, bool) {
 }
 func GetReplyEncode(b0 []byte, o *GetReply) []byte {
 	var b = b0
-	b = marshalutil.WriteSlice1D(b, o.Link)
-	b = marshalutil.WriteSlice1D(b, o.ServLinkSig)
-	b = marshalutil.WriteSlice1D(b, o.AdtrLinkSig)
-	b = marshalutil.WriteSlice1D(b, o.VrfPk)
-	b = marshalutil.WriteSlice1D(b, o.ServVrfSig)
-	b = marshalutil.WriteSlice1D(b, o.AdtrVrfSig)
+	b = safemarshal.WriteSlice1D(b, o.Link)
+	b = safemarshal.WriteSlice1D(b, o.ServLinkSig)
+	b = safemarshal.WriteSlice1D(b, o.AdtrLinkSig)
+	b = safemarshal.WriteSlice1D(b, o.VrfPk)
+	b = safemarshal.WriteSlice1D(b, o.ServVrfSig)
+	b = safemarshal.WriteSlice1D(b, o.AdtrVrfSig)
 	b = marshal.WriteInt(b, uint64(o.Err))
 	return b
 }
 func GetReplyDecode(b0 []byte) (*GetReply, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadSlice1D(b0)
+	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := marshalutil.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := marshalutil.ReadSlice1D(b2)
+	a3, b3, err3 := safemarshal.ReadSlice1D(b2)
 	if err3 {
 		return nil, nil, true
 	}
-	a4, b4, err4 := marshalutil.ReadSlice1D(b3)
+	a4, b4, err4 := safemarshal.ReadSlice1D(b3)
 	if err4 {
 		return nil, nil, true
 	}
-	a5, b5, err5 := marshalutil.ReadSlice1D(b4)
+	a5, b5, err5 := safemarshal.ReadSlice1D(b4)
 	if err5 {
 		return nil, nil, true
 	}
-	a6, b6, err6 := marshalutil.ReadSlice1D(b5)
+	a6, b6, err6 := safemarshal.ReadSlice1D(b5)
 	if err6 {
 		return nil, nil, true
 	}
-	a7, b7, err7 := marshalutil.ReadInt(b6)
+	a7, b7, err7 := safemarshal.ReadInt(b6)
 	if err7 {
 		return nil, nil, true
 	}
