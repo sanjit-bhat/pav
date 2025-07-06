@@ -142,7 +142,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	vrfSig := ktcore.SignVrf(sigSk, vrfSk.PublicKey())
 	commitSec := cryptoffi.RandBytes(cryptoffi.HashLen)
 	secs := &secrets{sig: sigSk, vrf: vrfSk, commit: commitSec}
-	hidden := merkle.New()
+	hidden := &merkle.Tree{}
 	plain := make(map[uint64][][]byte)
 	keys := &keyStore{hidden: hidden, plain: plain}
 	chain := hashchain.New()

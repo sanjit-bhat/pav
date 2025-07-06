@@ -114,7 +114,7 @@ func TestBenchMerkSize(t *testing.T) {
 }
 
 func seedTree(t *testing.T, sz uint64) (tr *Tree, labels [][]byte) {
-	tr = New()
+	tr = &Tree{}
 	labels = make([][]byte, 0, sz)
 	for i := uint64(0); i < sz; i++ {
 		l := mkRandLabel()

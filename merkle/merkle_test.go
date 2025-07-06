@@ -9,7 +9,7 @@ import (
 )
 
 func TestGetRecent(t *testing.T) {
-	tr := New()
+	tr := &Tree{}
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	label := make([]byte, cryptoffi.HashLen)
@@ -35,7 +35,7 @@ func TestGetRecent(t *testing.T) {
 }
 
 func TestMap(t *testing.T) {
-	tr := New()
+	tr := &Tree{}
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	label := make([]byte, cryptoffi.HashLen)
@@ -89,7 +89,7 @@ func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal
 }
 
 func TestUpdate(t *testing.T) {
-	tr := New()
+	tr := &Tree{}
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 

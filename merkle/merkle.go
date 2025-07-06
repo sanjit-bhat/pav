@@ -251,10 +251,6 @@ func (t *Tree) Digest() []byte {
 	return getNodeHash(t.root)
 }
 
-func New() *Tree {
-	return &Tree{}
-}
-
 // newShell makes a tree shell from sibs, guaranteeing that down label is empty.
 func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
 	sibsLen := uint64(len(sibs))
