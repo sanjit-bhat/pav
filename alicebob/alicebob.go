@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	aliceUid uint64 = 0
-	bobUid   uint64 = 1
+	aliceUid uint64 = iota
+	bobUid
 )
 
 func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktcore.Blame) {

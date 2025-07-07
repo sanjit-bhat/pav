@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	UpdateRpc uint64 = 1
-	GetRpc    uint64 = 2
+	UpdateRpc uint64 = iota
+	GetRpc
 )
 
 func NewRpcAuditor(adtr *Auditor) *advrpc.Server {

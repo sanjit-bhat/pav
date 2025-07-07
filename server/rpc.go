@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	StartRpc   uint64 = 1
-	PutRpc     uint64 = 2
-	HistoryRpc uint64 = 3
-	AuditRpc   uint64 = 4
+	StartRpc uint64 = iota
+	PutRpc
+	HistoryRpc
+	AuditRpc
 )
 
 func NewRpcServer(s *Server) *advrpc.Server {

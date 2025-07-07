@@ -1,8 +1,8 @@
 package ktcore
 
 const (
-	VrfSigTag  byte = 1
-	LinkSigTag byte = 2
+	VrfSigTag byte = iota
+	LinkSigTag
 )
 
 type VrfSig struct {

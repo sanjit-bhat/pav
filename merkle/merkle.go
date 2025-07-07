@@ -12,13 +12,15 @@ const (
 	// tags used as hash domain separation prefixes.
 	// cut nodes don't have a tag.
 	// their hashes could represent anything, even invalid sub-trees.
-	emptyNodeTag byte = 1
-	leafNodeTag  byte = 2
-	innerNodeTag byte = 3
+	emptyNodeTag byte = iota
+	leafNodeTag
+	innerNodeTag
+)
 
-	cutNodeTy   byte = 1
-	leafNodeTy  byte = 2
-	innerNodeTy byte = 3
+const (
+	cutNodeTy byte = iota
+	leafNodeTy
+	innerNodeTy
 )
 
 var (

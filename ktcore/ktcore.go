@@ -13,18 +13,19 @@ import (
 // if a party is good, we should not see its [Blame] code.
 type Blame uint64
 
+const BlameNone Blame = 0
+
 const (
-	BlameNone Blame = 0
 	// BlameServSig only faults a signing predicate, whereas
 	// [BlameServFull] additionally faults the full server RPC spec.
-	BlameServSig  Blame = 1 << 1
-	BlameServFull Blame = 1 << 2
-	BlameAdtrSig  Blame = 1 << 3
-	BlameAdtrFull Blame = 1 << 4
-	BlameClients  Blame = 1 << 5
+	BlameServSig Blame = 1 << iota
+	BlameServFull
+	BlameAdtrSig
+	BlameAdtrFull
+	BlameClients
 	// BlameUnknown should only be used sparingly.
 	// it's the equivalent of throwing up your hands in despair.
-	BlameUnknown Blame = 1 << 6
+	BlameUnknown
 )
 
 // CheckBlame prevents bad parties from giving bad [Blame] codes.
