@@ -1,6 +1,6 @@
 // This started from https://pkg.go.dev/github.com/ProtonMail/go-ecvrf/ecvrf,
 // with modifications to check for adversarial pks, improve pk.Verify performance,
-// and reduce duplicate computation.
+// reduce duplicate computation, add Evaluate.
 //
 // Package ecvrf implements ECVRF-EDWARDS25519-SHA512-TAI, a verifiable random
 // function described in draft-irtf-cfrg-vrf-10.
@@ -88,6 +88,10 @@ func (sk *PrivateKey) Public() (*PublicKey, error) {
 	return NewPublicKey(sk.pk)
 }
 
+func (sk *PrivateKey) PublicKey() []byte {
+	return sk.pk
+}
+
 // Bytes serialises the private VRF key in a bytearray.
 func (sk *PrivateKey) Bytes() []byte {
 	buf := make([]byte, PrivateKeySize)
@@ -161,6 +165,16 @@ func (sk *PrivateKey) Prove(message []byte) (vrf, proof []byte, err error) {
 	copy(proof[pointSize+intermediateSize:], s.Bytes())
 
 	return proofToHash(gamma), proof, nil
+}
+
+// Evaluate computes a VRF output, without the overhead of generating a proof.
+func (sk *PrivateKey) Evaluate(message []byte) (vrf []byte, err error) {
+	h, err := hashToCurveTAI(sk.pk, message)
+	if err != nil {
+		return nil, err
+	}
+	gamma := (&edwards25519.Point{}).ScalarMult(sk.x, h)
+	return proofToHash(gamma), nil
 }
 
 // Verify verifies that the given proof matches the message and the public

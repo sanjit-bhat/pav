@@ -4,8 +4,9 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
-	"github.com/mit-pdos/pav/cryptoffi/vrf"
 	"hash"
+
+	"github.com/sanjit-bhat/pav/cryptoffi/vrf"
 )
 
 const (
@@ -29,7 +30,7 @@ func (hr *Hasher) Write(b []byte) {
 	}
 }
 
-func (hr *Hasher) Sum(b []byte) []byte {
+func (hr *Hasher) Sum(b []byte) (hash []byte) {
 	return hr.h.Sum(b)
 }
 
@@ -52,14 +53,14 @@ func SigGenerateKey() (SigPublicKey, *SigPrivateKey) {
 }
 
 // Sign assumes a valid sk and returns a signature for msg.
-func (sk *SigPrivateKey) Sign(message []byte) []byte {
-	return ed25519.Sign(ed25519.PrivateKey(sk.sk), message)
+func (sk *SigPrivateKey) Sign(data []byte) (sig []byte) {
+	return ed25519.Sign(ed25519.PrivateKey(sk.sk), data)
 }
 
-// Verify verifies the sig and rets any errs.
+// Verify verifies the sig.
 // it checks for pk, msg, and sig validity.
-func (pk SigPublicKey) Verify(message []byte, sig []byte) bool {
-	return !ed25519.Verify(ed25519.PublicKey(pk), message, sig)
+func (pk SigPublicKey) Verify(data []byte, sig []byte) (err bool) {
+	return !ed25519.Verify(ed25519.PublicKey(pk), data, sig)
 }
 
 // # VRF
@@ -79,41 +80,54 @@ type VrfPublicKey struct {
 	pk *vrf.PublicKey
 }
 
-func VrfGenerateKey() (*VrfPublicKey, *VrfPrivateKey) {
+func VrfGenerateKey() *VrfPrivateKey {
 	sk, err := vrf.GenerateKey(nil)
 	if err != nil {
 		panic("cryptoffi: VrfGenerateKey")
 	}
-	pk, err := sk.Public()
-	if err != nil {
-		panic("cryptoffi: VrfGenerateKey")
-	}
-	return &VrfPublicKey{pk: pk}, &VrfPrivateKey{sk: sk}
+	return &VrfPrivateKey{sk: sk}
 }
 
-// Prove evaluates the VRF on data, returning the output and a proof.
-func (sk *VrfPrivateKey) Prove(data []byte) ([]byte, []byte) {
+// Prove evaluates the VRF on data.
+func (sk *VrfPrivateKey) Prove(data []byte) (out, proof []byte) {
 	out, proof, err := sk.sk.Prove(data)
 	if err != nil {
 		panic("cryptoffi: VrfPrivateKey.Prove")
 	}
 	// since we only require vrf determinism, it seems safe to truncate out.
-	return out[:HashLen], proof
+	out = out[:HashLen]
+	return
 }
 
-// Verify verifies data against the proof and returns the output and an err.
+// Evaluate computes the VRF on data, without the overhead of fetching a proof.
+func (sk *VrfPrivateKey) Evaluate(data []byte) (out []byte) {
+	out, err := sk.sk.Evaluate(data)
+	if err != nil {
+		panic("cryptoffi: VrfPrivateKey.Evaluate")
+	}
+	out = out[:HashLen]
+	return
+}
+
+// Verify verifies data against the proof.
 // it requires a valid pk.
 // it performs the ECVRF_verify checks to run even on adversarial proofs.
-func (pk *VrfPublicKey) Verify(data, proof []byte) ([]byte, bool) {
-	ok, out, err := pk.pk.Verify(data, proof)
-	if err != nil {
-		return nil, true
+func (pk *VrfPublicKey) Verify(data, proof []byte) (out []byte, err bool) {
+	ok, out, errg := pk.pk.Verify(data, proof)
+	if errg != nil {
+		err = true
+		return
 	}
 	if !ok {
-		return nil, true
+		err = true
+		return
 	}
-	// since we only require vrf determinism, it seems safe to truncate out.
-	return out[:HashLen], false
+	out = out[:HashLen]
+	return
+}
+
+func (sk *VrfPrivateKey) PublicKey() []byte {
+	return sk.sk.PublicKey()
 }
 
 // VrfPublicKeyEncodes encodes a valid pk as bytes.
@@ -121,24 +135,23 @@ func VrfPublicKeyEncode(pk *VrfPublicKey) []byte {
 	return pk.pk.Bytes()
 }
 
-// VrfPublicKeyDecode decodes [b].
+// VrfPublicKeyDecode decodes b.
 // it performs the ECVRF_validate_key checks to run even on adversarial pks.
-func VrfPublicKeyDecode(b []byte) *VrfPublicKey {
-	pk, err := vrf.NewPublicKey(b)
-	if err != nil {
-		panic("cryptoffi: VrfPublicKeyDecode")
+func VrfPublicKeyDecode(b []byte) (pk *VrfPublicKey, err bool) {
+	pk0, errg := vrf.NewPublicKey(b)
+	if errg != nil {
+		err = true
+		return
 	}
-	return &VrfPublicKey{pk: pk}
+	pk = &VrfPublicKey{pk: pk0}
+	return
 }
 
 // # Random
 
-// RandBytes returns [n] random bytes.
+// RandBytes returns n random bytes.
 func RandBytes(n uint64) []byte {
 	b := make([]byte, n)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic("cryptoffi: crypto/rand err")
-	}
+	rand.Read(b)
 	return b
 }

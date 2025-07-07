@@ -2,12 +2,14 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/aclements/go-moremath/stats"
-	"github.com/mit-pdos/pav/benchutil"
 	"math"
 	"math/rand/v2"
 	"testing"
 	"time"
+
+	"github.com/aclements/go-moremath/stats"
+	"github.com/goose-lang/std"
+	"github.com/sanjit-bhat/pav/benchutil"
 )
 
 const (
@@ -73,9 +75,11 @@ func TestBenchMerkGenVer(t *testing.T) {
 		if !isReg {
 			t.Fatal()
 		}
+		d := tr.Digest()
 
 		t1 := time.Now()
-		Verify(true, l, v, p, tr.Digest())
+		d0, _ := VerifyMemb(l, v, p)
+		std.BytesEqual(d, d0)
 		t2 := time.Now()
 
 		totalGen += t1.Sub(t0)
@@ -110,7 +114,7 @@ func TestBenchMerkSize(t *testing.T) {
 }
 
 func seedTree(t *testing.T, sz uint64) (tr *Tree, labels [][]byte) {
-	tr = NewTree()
+	tr = &Tree{}
 	labels = make([][]byte, 0, sz)
 	for i := uint64(0); i < sz; i++ {
 		l := mkRandLabel()

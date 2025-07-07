@@ -1,9 +1,9 @@
-// Auto-generated from spec "github.com/mit-pdos/pav/serde/testdata/mult/mult.go"
-// using compiler "github.com/mit-pdos/pav/serde".
+// Auto-generated from spec "github.com/sanjit-bhat/pav/serde/testdata/mult/mult.go"
+// using compiler "github.com/sanjit-bhat/pav/serde".
 package serde
 
 import (
-	"github.com/mit-pdos/pav/marshalutil"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
@@ -13,7 +13,7 @@ func arg1Encode(b0 []byte, o *arg1) []byte {
 	return b
 }
 func arg1Decode(b0 []byte) (*arg1, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
@@ -25,7 +25,7 @@ func arg2Encode(b0 []byte, o *arg2) []byte {
 	return b
 }
 func arg2Decode(b0 []byte) (*arg2, []byte, bool) {
-	a1, b1, err1 := marshalutil.ReadInt(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}

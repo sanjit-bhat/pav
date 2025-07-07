@@ -7,12 +7,13 @@ import (
 	"go/format"
 	"go/token"
 	"go/types"
-	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/packages"
 	"log"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/tools/go/ast/astutil"
+	"golang.org/x/tools/go/packages"
 )
 
 func compile(src string) []byte {
@@ -112,7 +113,7 @@ func genFileHeader(pkgName, fileId string) *ast.File {
 			&ast.ImportSpec{
 				Path: &ast.BasicLit{
 					Kind:  token.STRING,
-					Value: "\"github.com/mit-pdos/pav/marshalutil\"",
+					Value: "\"github.com/sanjit-bhat/pav/safemarshal\"",
 				},
 			},
 			&ast.ImportSpec{
@@ -131,7 +132,7 @@ func genFileHeader(pkgName, fileId string) *ast.File {
 	}
 	comm2 := &ast.Comment{
 		Slash: commPos,
-		Text:  "// using compiler \"github.com/mit-pdos/pav/serde\".",
+		Text:  "// using compiler \"github.com/sanjit-bhat/pav/serde\".",
 	}
 	file := &ast.File{
 		Doc:     &ast.CommentGroup{List: []*ast.Comment{comm1, comm2}},
@@ -244,7 +245,7 @@ func (c *compiler) genBasicEnc(field *types.Var) *ast.CallExpr {
 		}
 	case types.Byte:
 		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
+			X:   &ast.Ident{Name: "safemarshal"},
 			Sel: &ast.Ident{Name: "WriteByte"},
 		}
 	case types.Uint64:
@@ -284,7 +285,7 @@ func (c *compiler) genSliceEnc(ty1 *types.Slice, depth int) ast.Expr {
 			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
 		}
 		return &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
+			X:   &ast.Ident{Name: "safemarshal"},
 			Sel: &ast.Ident{Name: fmt.Sprintf("WriteSlice%vD", depth)},
 		}
 	case *types.Pointer:
@@ -491,17 +492,17 @@ func (c *compiler) genBasicDec(field *types.Var, inBytsId string) *ast.CallExpr 
 	switch basic.Kind() {
 	case types.Bool:
 		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
+			X:   &ast.Ident{Name: "safemarshal"},
 			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sBool", cstFuncMod)},
 		}
 	case types.Byte:
 		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
+			X:   &ast.Ident{Name: "safemarshal"},
 			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sByte", cstFuncMod)},
 		}
 	case types.Uint64:
 		fun = &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
+			X:   &ast.Ident{Name: "safemarshal"},
 			Sel: &ast.Ident{Name: fmt.Sprintf("Read%sInt", cstFuncMod)},
 		}
 	default:
@@ -526,7 +527,7 @@ func (c *compiler) genSliceDec(ty1 *types.Slice, depth int) ast.Expr {
 			log.Panicf("unsupported slice depth %v ty: %s", depth, ty2)
 		}
 		return &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "marshalutil"},
+			X:   &ast.Ident{Name: "safemarshal"},
 			Sel: &ast.Ident{Name: fmt.Sprintf("ReadSlice%vD", depth)},
 		}
 	case *types.Pointer:
