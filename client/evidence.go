@@ -49,7 +49,7 @@ func (e *evidLink) Check(pk cryptoffi.SigPublicKey) (err bool) {
 
 // Check returns an error if the evidence does not check out.
 // otherwise, it proves that the server was dishonest.
-func (e *Evid) Check(pk cryptoffi.SigPublicKey) (bool) {
+func (e *Evid) Check(pk cryptoffi.SigPublicKey) bool {
 	if e.vrf != nil {
 		return e.vrf.Check(pk)
 	}

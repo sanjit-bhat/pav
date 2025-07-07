@@ -5,8 +5,8 @@ package advrpc
 // however, its formal model says that rpc calls return arbitrary bytes.
 
 import (
-	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/sanjit-bhat/pav/netffi"
+	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
