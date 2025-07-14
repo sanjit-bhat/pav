@@ -194,6 +194,10 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 	if err != ktcore.BlameNone {
 		return
 	}
+	if uint64(len(reply.StartLink)) != cryptoffi.HashLen {
+		err = ktcore.BlameServFull
+		return
+	}
 	extLen, newDig, newLink, errb := hashchain.Verify(reply.StartLink, reply.ChainProof)
 	if errb {
 		err = ktcore.BlameServFull
