@@ -39,6 +39,7 @@ func (c *HashChain) Bootstrap() (lastVal []byte, proof []byte) {
 }
 
 // Verify updates prevLink with proof.
+// if extended length is 0, new val is nil.
 // it errors for a badly-encoded proof.
 func Verify(prevLink, proof []byte) (extLen uint64, newVal []byte, newLink []byte, err bool) {
 	proofLen := uint64(len(proof))
