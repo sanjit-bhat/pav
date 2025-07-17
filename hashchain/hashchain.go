@@ -35,7 +35,7 @@ func (c *HashChain) Prove(prevLen uint64) (proof []byte) {
 
 // Bootstrap hashchain verifiers with the last value.
 // it expects non-empty values.
-func (c *HashChain) Bootstrap() (lastVal []byte, proof []byte) {
+func (c *HashChain) Bootstrap() (bootLink []byte, proof []byte) {
 	start := uint64(len(c.vals)) - cryptoffi.HashLen
 	return c.predLastLink, bytes.Clone(c.vals[start:])
 }
