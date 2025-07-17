@@ -2,6 +2,8 @@
 package hashchain
 
 import (
+	"bytes"
+
 	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/cryptoffi"
 	"github.com/sanjit-bhat/pav/cryptoutil"
@@ -28,14 +30,14 @@ func (c *HashChain) Append(val []byte) (newLink []byte) {
 // it expects prevLen <= curr len.
 func (c *HashChain) Prove(prevLen uint64) (proof []byte) {
 	start := prevLen * cryptoffi.HashLen
-	return std.BytesClone(c.vals[start:])
+	return bytes.Clone(c.vals[start:])
 }
 
 // Bootstrap hashchain verifiers with the last value.
 // it expects non-empty values.
 func (c *HashChain) Bootstrap() (lastVal []byte, proof []byte) {
 	start := uint64(len(c.vals)) - cryptoffi.HashLen
-	return c.predLastLink, std.BytesClone(c.vals[start:])
+	return c.predLastLink, bytes.Clone(c.vals[start:])
 }
 
 // Verify updates prevLink with proof.
