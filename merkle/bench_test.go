@@ -39,28 +39,6 @@ func TestBenchMerkPut(t *testing.T) {
 	})
 }
 
-func TestBenchMerkGet(t *testing.T) {
-	tr, labels := seedTree(t, defNSeed)
-	nOps := 5_000_000
-
-	start := time.Now()
-	for i := 0; i < nOps; i++ {
-		l := labels[rand.Uint64N(defNSeed)]
-		isReg, _ := tr.Get(l)
-		if !isReg {
-			t.Fatal()
-		}
-	}
-	total := time.Since(start)
-
-	m0 := float64(total.Microseconds()) / float64(nOps)
-	m1 := float64(total.Milliseconds())
-	benchutil.Report(nOps, []*benchutil.Metric{
-		{N: m0, Unit: "us/op"},
-		{N: m1, Unit: "total(ms)"},
-	})
-}
-
 func TestBenchMerkGenVer(t *testing.T) {
 	tr, labels := seedTree(t, defNSeed)
 	nOps := 5_000_000

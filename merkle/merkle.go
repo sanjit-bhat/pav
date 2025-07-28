@@ -98,13 +98,6 @@ func put(n0 **node, depth uint64, label, val []byte) {
 	setInnerHash(n)
 }
 
-// Get should only be called on complete trees (no cuts).
-func (t *Tree) Get(label []byte) (inTree bool, val []byte) {
-	inTree, val, _, errb := t.prove(label, false)
-	std.Assert(!errb)
-	return
-}
-
 // Prove should only be called on complete trees (no cuts).
 func (t *Tree) Prove(label []byte) (inTree bool, val, proof []byte) {
 	inTree, val, proof, errb := t.prove(label, true)
