@@ -24,10 +24,7 @@ func TestGetRecent(t *testing.T) {
 
 		l := bytes.Clone(label)
 		v := bytes.Clone(val)
-		errb := tr.Put(l, v)
-		if errb {
-			t.Fatal()
-		}
+		tr.Put(l, v)
 
 		// after put, (label, val) should be there.
 		proveAndVerify(t, tr, label, true, val)
@@ -49,10 +46,7 @@ func TestMap(t *testing.T) {
 
 		l0 := bytes.Clone(label)
 		v0 := bytes.Clone(val)
-		errb := tr.Put(l0, v0)
-		if errb {
-			t.Fatal()
-		}
+		tr.Put(l0, v0)
 
 		v1 := bytes.Clone(val)
 		m[string(label)] = v1
@@ -104,9 +98,7 @@ func TestUpdate(t *testing.T) {
 		}
 
 		dOld := tr.Digest()
-		if tr.Put(l, v) {
-			t.Fatal()
-		}
+		tr.Put(l, v)
 		dNew := tr.Digest()
 
 		dOld0, dNew0, err := VerifyUpdate(l, v, p)

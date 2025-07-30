@@ -24,10 +24,7 @@ func TestBenchMerkPut(t *testing.T) {
 	for i := 0; i < nOps; i++ {
 		l := mkRandLabel()
 		v := mkRandVal()
-		errb := tr.Put(l, v)
-		if errb {
-			t.Fatal()
-		}
+		tr.Put(l, v)
 	}
 	total := time.Since(start)
 
@@ -98,10 +95,7 @@ func seedTree(t *testing.T, sz uint64) (tr *Tree, labels [][]byte) {
 		l := mkRandLabel()
 		labels = append(labels, bytes.Clone(l))
 		v := mkRandVal()
-		errb := tr.Put(l, v)
-		if errb {
-			t.Fatal()
-		}
+		tr.Put(l, v)
 	}
 	return
 }

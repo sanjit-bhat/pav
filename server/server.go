@@ -232,8 +232,7 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 			info := &ktcore.UpdateProof{MapLabel: label, MapVal: out0.val, NonMembProof: proof}
 			upd = append(upd, info)
 
-			err := s.keys.hidden.Put(label, out0.val)
-			std.Assert(!err)
+			s.keys.hidden.Put(label, out0.val)
 			s.keys.plain[req.Uid] = append(s.keys.plain[req.Uid], req.Pk)
 		}
 	}

@@ -48,14 +48,10 @@ type node struct {
 }
 
 // Put adds the leaf (label, val), storing immutable references to both.
-// for liveness (not safety) reasons, it returns an error
-// if the label does not have a fixed length.
-func (t *Tree) Put(label []byte, val []byte) (err bool) {
-	if uint64(len(label)) != cryptoffi.HashLen {
-		return true
-	}
+// for liveness and safety reasons, it expects the label to have fixed length.
+func (t *Tree) Put(label []byte, val []byte) {
+	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
 	put(&t.root, 0, label, val)
-	return
 }
 
 // put inserts leaf node (label, val) into the n0 sub-tree.
@@ -215,9 +211,7 @@ func VerifyUpdate(label, val, proof []byte) (oldDig, newDig []byte, err bool) {
 	}
 	oldDig = tr.Digest()
 	// insert (label, val).
-	if err = tr.Put(label, val); err {
-		return
-	}
+	tr.Put(label, val)
 	newDig = tr.Digest()
 	return
 }
@@ -226,8 +220,12 @@ func (t *Tree) Digest() []byte {
 	return getNodeHash(t.root)
 }
 
-// proofToTree guarantees that label not in tree.
+// proofToTree guarantees that label not in tree and that label has fixed len.
 func proofToTree(label, proof []byte) (tr *Tree, err bool) {
+	if uint64(len(label)) != cryptoffi.HashLen {
+		err = true
+		return
+	}
 	p, _, err := MerkleProofDecode(proof)
 	if err {
 		return
@@ -239,6 +237,14 @@ func proofToTree(label, proof []byte) (tr *Tree, err bool) {
 	root := newShell(label, 0, p.Siblings)
 	tr = &Tree{root: root}
 	if p.IsOtherLeaf {
+		if uint64(len(p.LeafLabel)) != cryptoffi.HashLen {
+			err = true
+			return
+		}
+		if std.BytesEqual(label, p.LeafLabel) {
+			err = true
+			return
+		}
 		tr.Put(p.LeafLabel, p.LeafVal)
 	}
 	return
