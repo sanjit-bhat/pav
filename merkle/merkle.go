@@ -1,6 +1,8 @@
 package merkle
 
 import (
+	"bytes"
+
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/cryptoffi"
@@ -73,7 +75,7 @@ func put(n0 **node, depth uint64, label, val []byte) {
 
 	if n.nodeTy == leafNodeTy {
 		// on exact label match, replace val.
-		if std.BytesEqual(n.label, label) {
+		if bytes.Equal(n.label, label) {
 			n.val = val
 			setLeafHash(n)
 			return
@@ -120,7 +122,7 @@ func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byt
 		}
 		return
 	}
-	if !std.BytesEqual(foundLabel, label) {
+	if !bytes.Equal(foundLabel, label) {
 		if getProof {
 			proof = marshal.WriteBool(proof, true) // IsOtherLeaf
 			proof = marshal.WriteInt(proof, uint64(len(foundLabel)))
@@ -241,7 +243,7 @@ func proofToTree(label, proof []byte) (tr *Tree, err bool) {
 			err = true
 			return
 		}
-		if std.BytesEqual(label, p.LeafLabel) {
+		if bytes.Equal(label, p.LeafLabel) {
 			err = true
 			return
 		}

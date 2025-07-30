@@ -1,6 +1,8 @@
 package client
 
 import (
+	"bytes"
+
 	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/advrpc"
 	"github.com/sanjit-bhat/pav/auditor"
@@ -42,7 +44,7 @@ type serv struct {
 // if we have a pending Put, it requires the pk to be the same.
 func (c *Client) Put(pk []byte) {
 	if c.pend.isPending {
-		std.Assert(std.BytesEqual(c.pend.pk, pk))
+		std.Assert(bytes.Equal(c.pend.pk, pk))
 	} else {
 		c.pend.isPending = true
 		c.pend.pk = pk
@@ -129,7 +131,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	}
 	newKey := hist[0]
 	// equals pending put.
-	if !std.BytesEqual(newKey.PkOpen.Val, c.pend.pk) {
+	if !bytes.Equal(newKey.PkOpen.Val, c.pend.pk) {
 		err = ktcore.BlameServFull | ktcore.BlameClients
 		return
 	}
@@ -165,7 +167,7 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Ev
 		return
 	}
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.serv.vrfPk)
-	if !std.BytesEqual(vrfPkB, audit.VrfPk) {
+	if !bytes.Equal(vrfPkB, audit.VrfPk) {
 		evid = &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.serv.vrfSig, vrfPk1: audit.VrfPk, sig1: audit.ServVrfSig}}
 		err = ktcore.BlameServSig
 		return
@@ -180,7 +182,7 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Ev
 		err = ktcore.BlameAdtrFull
 		return
 	}
-	if !std.BytesEqual(last.link, audit.Link) {
+	if !bytes.Equal(last.link, audit.Link) {
 		evid = &Evid{link: &evidLink{epoch: last.epoch, link0: last.link, sig0: last.sig, link1: audit.Link, sig1: audit.ServLinkSig}}
 		err = ktcore.BlameServSig
 		return
@@ -266,7 +268,7 @@ func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb 
 	if err {
 		return
 	}
-	if !std.BytesEqual(dig, dig0) {
+	if !bytes.Equal(dig, dig0) {
 		err = true
 		return
 	}
@@ -291,7 +293,7 @@ func CheckNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, no
 	if err {
 		return
 	}
-	if !std.BytesEqual(dig, dig0) {
+	if !bytes.Equal(dig, dig0) {
 		err = true
 		return
 	}

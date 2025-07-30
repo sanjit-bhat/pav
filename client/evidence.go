@@ -1,7 +1,8 @@
 package client
 
 import (
-	"github.com/goose-lang/std"
+	"bytes"
+
 	"github.com/sanjit-bhat/pav/cryptoffi"
 	"github.com/sanjit-bhat/pav/ktcore"
 )
@@ -34,7 +35,7 @@ func (e *evidVrf) Check(pk cryptoffi.SigPublicKey) (err bool) {
 	if ktcore.VerifyVrfSig(pk, e.vrfPk1, e.sig1) {
 		return true
 	}
-	return std.BytesEqual(e.vrfPk0, e.vrfPk1)
+	return bytes.Equal(e.vrfPk0, e.vrfPk1)
 }
 
 func (e *evidLink) Check(pk cryptoffi.SigPublicKey) (err bool) {
@@ -44,7 +45,7 @@ func (e *evidLink) Check(pk cryptoffi.SigPublicKey) (err bool) {
 	if ktcore.VerifyLinkSig(pk, e.epoch, e.link1, e.sig1) {
 		return true
 	}
-	return std.BytesEqual(e.link0, e.link1)
+	return bytes.Equal(e.link0, e.link1)
 }
 
 // Check returns an error if the evidence does not check out.

@@ -1,9 +1,9 @@
 package auditor
 
 import (
+	"bytes"
 	"sync"
 
-	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/advrpc"
 	"github.com/sanjit-bhat/pav/cryptoffi"
 	"github.com/sanjit-bhat/pav/hashchain"
@@ -126,7 +126,7 @@ func getNextDig(lastDig []byte, updates []*ktcore.UpdateProof) (dig []byte, err 
 		if err {
 			return
 		}
-		if !std.BytesEqual(dig, prev) {
+		if !bytes.Equal(dig, prev) {
 			err = true
 			return
 		}

@@ -1,6 +1,7 @@
 package alicebob
 
 import (
+	"bytes"
 	"sync"
 
 	"github.com/goose-lang/primitive"
@@ -110,7 +111,7 @@ func equal(o0, o1 *histEntry) bool {
 		return false
 	}
 	if o0.isReg {
-		return std.BytesEqual(o0.pk, o1.pk)
+		return bytes.Equal(o0.pk, o1.pk)
 	}
 	return true
 }

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/aclements/go-moremath/stats"
-	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/benchutil"
 )
 
@@ -54,7 +53,7 @@ func TestBenchMerkGenVer(t *testing.T) {
 
 		t1 := time.Now()
 		d0, _ := VerifyMemb(l, v, p)
-		std.BytesEqual(d, d0)
+		bytes.Equal(d, d0)
 		t2 := time.Now()
 
 		totalGen += t1.Sub(t0)
