@@ -59,17 +59,21 @@ func (t *Tree) Put(label []byte, val []byte) (err bool) {
 }
 
 // put inserts leaf node (label, val) into the n0 sub-tree.
-// it never drops the update.
+// it expects to never insert into a cut node, since that almost always
+// leaves the tree in an unintended state.
 func put(n0 **node, depth uint64, label, val []byte) {
 	n := *n0
-	// empty or cut node.
-	if n == nil || n.nodeTy == cutNodeTy {
+	// empty.
+	if n == nil {
 		// replace with leaf.
 		leaf := &node{nodeTy: leafNodeTy, label: label, val: val}
 		*n0 = leaf
 		setLeafHash(leaf)
 		return
 	}
+
+	// never put into cut node.
+	std.Assert(n.nodeTy != cutNodeTy)
 
 	if n.nodeTy == leafNodeTy {
 		// on exact label match, replace val.
@@ -98,19 +102,16 @@ func put(n0 **node, depth uint64, label, val []byte) {
 	setInnerHash(n)
 }
 
-// Prove should only be called on complete trees (no cuts).
+// Prove the membership of label.
 func (t *Tree) Prove(label []byte) (inTree bool, val, proof []byte) {
-	inTree, val, proof, errb := t.prove(label, true)
-	std.Assert(!errb)
-	return
+	// Prove is part of the external API, which does not expose cut trees.
+	// therefore, we meet the precond.
+	return t.prove(label, true)
 }
 
-// prove errors if search lands on a cut node.
-func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byte, err bool) {
-	found, foundLabel, val, proof, err := find(label, getProof, t.root, 0)
-	if err {
-		return
-	}
+// prove expects no cut nodes along label.
+func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byte) {
+	found, foundLabel, val, proof := find(label, getProof, t.root, 0)
 	if getProof {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
@@ -143,8 +144,8 @@ func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byt
 }
 
 // find searches the tree for a leaf node down path label.
-// it errors if search lands on a cut node.
-func find(label []byte, getProof bool, n *node, depth uint64) (found bool, foundLabel, foundVal, proof []byte, err bool) {
+// it expects no cut nodes along label.
+func find(label []byte, getProof bool, n *node, depth uint64) (found bool, foundLabel, foundVal, proof []byte) {
 	// if empty, not found.
 	if n == nil {
 		if getProof {
@@ -152,11 +153,10 @@ func find(label []byte, getProof bool, n *node, depth uint64) (found bool, found
 		}
 		return
 	}
-	// cut hides the sub-tree, so don't know if there. error.
-	if n.nodeTy == cutNodeTy {
-		err = true
-		return
-	}
+
+	// cut hides the sub-tree, so don't know if there.
+	std.Assert(n.nodeTy != cutNodeTy)
+
 	// if leaf, found!
 	if n.nodeTy == leafNodeTy {
 		if getProof {
@@ -171,10 +171,7 @@ func find(label []byte, getProof bool, n *node, depth uint64) (found bool, found
 	// recurse down inner.
 	std.Assert(n.nodeTy == innerNodeTy)
 	child, sib := getChild(n, label, depth)
-	found, foundLabel, foundVal, proof, err = find(label, getProof, *child, depth+1)
-	if err {
-		return
-	}
+	found, foundLabel, foundVal, proof = find(label, getProof, *child, depth+1)
 	if getProof {
 		// proof will have sibling hash for each inner node.
 		proof = append(proof, getNodeHash(*sib)...)
@@ -205,7 +202,7 @@ func VerifyNonMemb(label, proof []byte) (dig []byte, err bool) {
 	if err {
 		return
 	}
-	found, _, _, err := tr.prove(label, false)
+	found, _, _ := tr.prove(label, false)
 	if err {
 		return
 	}
@@ -226,7 +223,7 @@ func VerifyUpdate(label, val, proof []byte) (oldDig, newDig []byte, err bool) {
 	}
 	oldDig = tr.Digest()
 	// label doesn't exist.
-	found, _, _, err := tr.prove(label, false)
+	found, _, _ := tr.prove(label, false)
 	if err {
 		return
 	}
