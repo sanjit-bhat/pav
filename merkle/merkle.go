@@ -202,14 +202,6 @@ func VerifyNonMemb(label, proof []byte) (dig []byte, err bool) {
 	if err {
 		return
 	}
-	found, _, _ := tr.prove(label, false)
-	if err {
-		return
-	}
-	if found {
-		err = true
-		return
-	}
 	dig = tr.Digest()
 	return
 }
@@ -222,15 +214,6 @@ func VerifyUpdate(label, val, proof []byte) (oldDig, newDig []byte, err bool) {
 		return
 	}
 	oldDig = tr.Digest()
-	// label doesn't exist.
-	found, _, _ := tr.prove(label, false)
-	if err {
-		return
-	}
-	if found {
-		err = true
-		return
-	}
 	// insert (label, val).
 	if err = tr.Put(label, val); err {
 		return
@@ -243,24 +226,7 @@ func (t *Tree) Digest() []byte {
 	return getNodeHash(t.root)
 }
 
-// newShell makes a tree shell from sibs, guaranteeing that down label is empty.
-func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
-	sibsLen := uint64(len(sibs))
-	if sibsLen == 0 {
-		return
-	}
-	split := sibsLen - cryptoffi.HashLen
-	sibs0 := sibs[:split]
-	hash := sibs[split:]
-	cut := &node{nodeTy: cutNodeTy, hash: hash}
-	inner := &node{nodeTy: innerNodeTy}
-	child, sib := getChild(inner, label, depth)
-	*sib = cut
-	*child = newShell(label, depth+1, sibs0)
-	setInnerHash(inner)
-	return inner
-}
-
+// proofToTree guarantees that label not in tree.
 func proofToTree(label, proof []byte) (tr *Tree, err bool) {
 	p, _, err := MerkleProofDecode(proof)
 	if err {
@@ -276,6 +242,23 @@ func proofToTree(label, proof []byte) (tr *Tree, err bool) {
 		tr.Put(p.LeafLabel, p.LeafVal)
 	}
 	return
+}
+
+func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
+	sibsLen := uint64(len(sibs))
+	if sibsLen == 0 {
+		return
+	}
+	split := sibsLen - cryptoffi.HashLen
+	sibs0 := sibs[:split]
+	hash := sibs[split:]
+	cut := &node{nodeTy: cutNodeTy, hash: hash}
+	inner := &node{nodeTy: innerNodeTy}
+	child, sib := getChild(inner, label, depth)
+	*sib = cut
+	*child = newShell(label, depth+1, sibs0)
+	setInnerHash(inner)
+	return inner
 }
 
 func getNodeHash(n *node) []byte {
