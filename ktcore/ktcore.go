@@ -32,7 +32,7 @@ const (
 func CheckBlame(b Blame, allowed []Blame) (err bool) {
 	var all Blame
 	for _, x := range allowed {
-		all = all | x
+		all |= x
 	}
 	return b & ^all != 0
 }
