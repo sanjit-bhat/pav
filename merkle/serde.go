@@ -1,9 +1,11 @@
 package merkle
 
-// MerkleProof defines a tree shell around an external label.
-// the shell might have another leaf.
+// MerkleProof helps Verify learn an entry in the map.
 type MerkleProof struct {
-	Siblings    []byte
+	// Siblings provide a tree shell around an external label.
+	Siblings []byte
+	// IsOtherLeaf provides a different leaf down label,
+	// for verifying non-membership.
 	IsOtherLeaf bool
 	LeafLabel   []byte
 	LeafVal     []byte
