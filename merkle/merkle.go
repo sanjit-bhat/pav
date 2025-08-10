@@ -109,7 +109,7 @@ func (t *Tree) Prove(label []byte) (inTree bool, val, proof []byte) {
 
 // prove expects no cut nodes along label.
 func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byte) {
-	found, foundLabel, val, proof := find(label, getProof, t.root, 0)
+	found, foundLabel, val, proof := find(t.root, getProof, 0, label)
 	if getProof {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
@@ -143,7 +143,7 @@ func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byt
 
 // find searches the tree for a leaf node down path label.
 // it expects no cut nodes along label.
-func find(label []byte, getProof bool, n *node, depth uint64) (found bool, foundLabel, foundVal, proof []byte) {
+func find(n *node, getProof bool, depth uint64, label []byte) (found bool, foundLabel, foundVal, proof []byte) {
 	// if empty, not found.
 	if n == nil {
 		if getProof {
@@ -169,7 +169,7 @@ func find(label []byte, getProof bool, n *node, depth uint64) (found bool, found
 	// recurse down inner.
 	std.Assert(n.nodeTy == innerNodeTy)
 	child, sib := getChild(n, label, depth)
-	found, foundLabel, foundVal, proof = find(label, getProof, *child, depth+1)
+	found, foundLabel, foundVal, proof = find(*child, getProof, depth+1, label)
 	if getProof {
 		// proof will have sibling hash for each inner node.
 		proof = append(proof, getNodeHash(*sib)...)
@@ -212,7 +212,6 @@ func VerifyUpdate(label, val, proof []byte) (oldDig, newDig []byte, err bool) {
 		return
 	}
 	oldDig = tr.Digest()
-	// insert (label, val).
 	tr.Put(label, val)
 	newDig = tr.Digest()
 	return
