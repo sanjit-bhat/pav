@@ -30,7 +30,7 @@ var (
 	emptyHash = compEmptyHash()
 )
 
-type Tree struct {
+type Map struct {
 	root *node
 }
 
@@ -51,9 +51,9 @@ type node struct {
 
 // Put adds the leaf (label, val), storing immutable references to both.
 // for liveness and safety reasons, it expects the label to have fixed length.
-func (t *Tree) Put(label []byte, val []byte) {
+func (m *Map) Put(label []byte, val []byte) {
 	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
-	put(&t.root, 0, label, val)
+	put(&m.root, 0, label, val)
 }
 
 // put inserts leaf node (label, val) into the n0 sub-tree.
@@ -66,7 +66,7 @@ func put(n0 **node, depth uint64, label, val []byte) {
 		// replace with leaf.
 		leaf := &node{nodeTy: leafNodeTy, label: label, val: val}
 		*n0 = leaf
-		setLeafHash(leaf)
+		leaf.setLeafHash()
 		return
 	}
 
@@ -77,7 +77,7 @@ func put(n0 **node, depth uint64, label, val []byte) {
 		// on exact label match, replace val.
 		if bytes.Equal(n.label, label) {
 			n.val = val
-			setLeafHash(n)
+			n.setLeafHash()
 			return
 		}
 
@@ -89,7 +89,7 @@ func put(n0 **node, depth uint64, label, val []byte) {
 		*leafChild = n
 		recurChild, _ := getChild(inner, label, depth)
 		put(recurChild, depth+1, label, val)
-		setInnerHash(inner)
+		inner.setInnerHash()
 		return
 	}
 
@@ -97,19 +97,19 @@ func put(n0 **node, depth uint64, label, val []byte) {
 	c, _ := getChild(n, label, depth)
 	put(c, depth+1, label, val)
 	// recurse.
-	setInnerHash(n)
+	n.setInnerHash()
 }
 
 // Prove the membership of label.
-func (t *Tree) Prove(label []byte) (inTree bool, val, proof []byte) {
+func (m *Map) Prove(label []byte) (inMap bool, val, proof []byte) {
 	// Prove is part of the external API, which does not expose cut trees.
 	// therefore, we meet the precond.
-	return t.prove(label, true)
+	return m.root.prove(label, true)
 }
 
 // prove expects no cut nodes along label.
-func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byte) {
-	found, foundLabel, val, proof := find(t.root, getProof, 0, label)
+func (n *node) prove(label []byte, getProof bool) (inTree bool, val, proof []byte) {
+	found, foundLabel, val, proof := n.find(getProof, 0, label)
 	if getProof {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
@@ -143,7 +143,7 @@ func (t *Tree) prove(label []byte, getProof bool) (inTree bool, val, proof []byt
 
 // find searches the tree for a leaf node down path label.
 // it expects no cut nodes along label.
-func find(n *node, getProof bool, depth uint64, label []byte) (found bool, foundLabel, foundVal, proof []byte) {
+func (n *node) find(getProof bool, depth uint64, label []byte) (found bool, foundLabel, foundVal, proof []byte) {
 	// if empty, not found.
 	if n == nil {
 		if getProof {
@@ -169,10 +169,10 @@ func find(n *node, getProof bool, depth uint64, label []byte) (found bool, found
 	// recurse down inner.
 	std.Assert(n.nodeTy == innerNodeTy)
 	child, sib := getChild(n, label, depth)
-	found, foundLabel, foundVal, proof = find(*child, getProof, depth+1, label)
+	found, foundLabel, foundVal, proof = (*child).find(getProof, depth+1, label)
 	if getProof {
 		// proof will have sibling hash for each inner node.
-		proof = append(proof, getNodeHash(*sib)...)
+		proof = append(proof, (*sib).getHash()...)
 	}
 	return
 }
@@ -189,8 +189,8 @@ func VerifyMemb(label, val, proof []byte) (dig []byte, err bool) {
 	if err {
 		return
 	}
-	tr.Put(label, val)
-	dig = tr.Digest()
+	put(&tr, 0, label, val)
+	dig = tr.getHash()
 	return
 }
 
@@ -200,7 +200,7 @@ func VerifyNonMemb(label, proof []byte) (dig []byte, err bool) {
 	if err {
 		return
 	}
-	dig = tr.Digest()
+	dig = tr.getHash()
 	return
 }
 
@@ -211,18 +211,18 @@ func VerifyUpdate(label, val, proof []byte) (oldDig, newDig []byte, err bool) {
 	if err {
 		return
 	}
-	oldDig = tr.Digest()
-	tr.Put(label, val)
-	newDig = tr.Digest()
+	oldDig = tr.getHash()
+	put(&tr, 0, label, val)
+	newDig = tr.getHash()
 	return
 }
 
-func (t *Tree) Digest() []byte {
-	return getNodeHash(t.root)
+func (m *Map) Digest() []byte {
+	return m.root.getHash()
 }
 
 // proofToTree guarantees that label not in tree and that label has fixed len.
-func proofToTree(label, proof []byte) (tr *Tree, err bool) {
+func proofToTree(label, proof []byte) (tr *node, err bool) {
 	if uint64(len(label)) != cryptoffi.HashLen {
 		err = true
 		return
@@ -235,8 +235,7 @@ func proofToTree(label, proof []byte) (tr *Tree, err bool) {
 		err = true
 		return
 	}
-	root := newShell(label, 0, p.Siblings)
-	tr = &Tree{root: root}
+	tr = newShell(label, 0, p.Siblings)
 	if p.IsOtherLeaf {
 		if uint64(len(p.LeafLabel)) != cryptoffi.HashLen {
 			err = true
@@ -246,7 +245,7 @@ func proofToTree(label, proof []byte) (tr *Tree, err bool) {
 			err = true
 			return
 		}
-		tr.Put(p.LeafLabel, p.LeafVal)
+		put(&tr, 0, p.LeafLabel, p.LeafVal)
 	}
 	return
 }
@@ -264,11 +263,11 @@ func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
 	child, sib := getChild(inner, label, depth)
 	*sib = cut
 	*child = newShell(label, depth+1, sibs0)
-	setInnerHash(inner)
+	inner.setInnerHash()
 	return inner
 }
 
-func getNodeHash(n *node) []byte {
+func (n *node) getHash() []byte {
 	if n == nil {
 		return emptyHash
 	}
@@ -279,7 +278,7 @@ func compEmptyHash() []byte {
 	return cryptoutil.Hash([]byte{emptyNodeTag})
 }
 
-func setLeafHash(n *node) {
+func (n *node) setLeafHash() {
 	n.hash = compLeafHash(n.label, n.val)
 }
 
@@ -293,9 +292,9 @@ func compLeafHash(label, val []byte) []byte {
 	return hr.Sum(nil)
 }
 
-func setInnerHash(n *node) {
-	child0 := getNodeHash(n.child0)
-	child1 := getNodeHash(n.child1)
+func (n *node) setInnerHash() {
+	child0 := n.child0.getHash()
+	child1 := n.child1.getHash()
 	n.hash = compInnerHash(child0, child1, nil)
 }
 

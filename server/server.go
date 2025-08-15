@@ -28,7 +28,7 @@ type secrets struct {
 
 type keyStore struct {
 	// hidden stores (mapLabel, mapVal) entries, see [ktcore].
-	hidden *merkle.Tree
+	hidden *merkle.Map
 	// plain stores plaintext mappings from uid to pks.
 	plain map[uint64][][]byte
 }
@@ -142,7 +142,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	vrfSig := ktcore.SignVrf(sigSk, vrfSk.PublicKey())
 	commitSec := cryptoffi.RandBytes(cryptoffi.HashLen)
 	secs := &secrets{sig: sigSk, vrf: vrfSk, commit: commitSec}
-	hidden := &merkle.Tree{}
+	hidden := &merkle.Map{}
 	plain := make(map[uint64][][]byte)
 	keys := &keyStore{hidden: hidden, plain: plain}
 	chain := hashchain.New()
@@ -150,7 +150,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	wq := NewWorkQ()
 	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, workQ: wq}
 
-	// commit empty tree as epoch 0.
+	// commit empty map as epoch 0.
 	dig := keys.hidden.Digest()
 	link := chain.Append(dig)
 	linkSig := ktcore.SignLink(s.secs.sig, 0, link)
@@ -227,8 +227,8 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 			out0 := ents[i]
 			label := out0.label
 
-			inTree, _, proof := s.keys.hidden.Prove(label)
-			std.Assert(!inTree)
+			inMap, _, proof := s.keys.hidden.Prove(label)
+			std.Assert(!inMap)
 			info := &ktcore.UpdateProof{MapLabel: label, MapVal: out0.val, NonMembProof: proof}
 			upd = append(upd, info)
 

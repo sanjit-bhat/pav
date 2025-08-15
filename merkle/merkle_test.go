@@ -9,7 +9,7 @@ import (
 )
 
 func TestGetRecent(t *testing.T) {
-	tr := &Tree{}
+	m := &Map{}
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	label := make([]byte, cryptoffi.HashLen)
@@ -20,56 +20,56 @@ func TestGetRecent(t *testing.T) {
 		rnd.Read(val)
 
 		// initially, label shouldn't be there.
-		proveAndVerify(t, tr, label, false, nil)
+		proveAndVerify(t, m, label, false, nil)
 
 		l := bytes.Clone(label)
 		v := bytes.Clone(val)
-		tr.Put(l, v)
+		m.Put(l, v)
 
 		// after put, (label, val) should be there.
-		proveAndVerify(t, tr, label, true, val)
+		proveAndVerify(t, m, label, true, val)
 	}
 }
 
 func TestMap(t *testing.T) {
-	tr := &Tree{}
+	m := &Map{}
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 	label := make([]byte, cryptoffi.HashLen)
 	val := make([]byte, 4)
-	m := make(map[string][]byte, 100_000)
+	truth := make(map[string][]byte, 100_000)
 
-	// init map and tree.
+	// init map and truth.
 	for i := 0; i < 100_000; i++ {
 		rnd.Read(label)
 		rnd.Read(val)
 
 		l0 := bytes.Clone(label)
 		v0 := bytes.Clone(val)
-		tr.Put(l0, v0)
+		m.Put(l0, v0)
 
 		v1 := bytes.Clone(val)
-		m[string(label)] = v1
+		truth[string(label)] = v1
 	}
 
 	// test everything in map.
-	for l0, v0 := range m {
-		proveAndVerify(t, tr, []byte(l0), true, v0)
+	for l0, v0 := range truth {
+		proveAndVerify(t, m, []byte(l0), true, v0)
 	}
 }
 
-func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal []byte) {
-	inTree, val, proof := tr.Prove(label)
-	if inTree != expInTree {
+func proveAndVerify(t *testing.T, m *Map, label []byte, expInMap bool, expVal []byte) {
+	inMap, val, proof := m.Prove(label)
+	if inMap != expInMap {
 		t.Fatal()
 	}
-	if inTree && !bytes.Equal(val, expVal) {
+	if inMap && !bytes.Equal(val, expVal) {
 		t.Fatal()
 	}
-	dig := tr.Digest()
+	dig := m.Digest()
 	var dig0 []byte
 	var err bool
-	if inTree {
+	if inMap {
 		dig0, err = VerifyMemb(label, val, proof)
 	} else {
 		dig0, err = VerifyNonMemb(label, proof)
@@ -83,7 +83,7 @@ func proveAndVerify(t *testing.T, tr *Tree, label []byte, expInTree bool, expVal
 }
 
 func TestUpdate(t *testing.T) {
-	tr := &Tree{}
+	m := &Map{}
 	var seed [32]byte
 	rnd := rand.NewChaCha8(seed)
 
@@ -92,14 +92,14 @@ func TestUpdate(t *testing.T) {
 		v := make([]byte, 4)
 		rnd.Read(l)
 		rnd.Read(v)
-		inTree, _, p := tr.Prove(l)
-		if inTree {
+		inMap, _, p := m.Prove(l)
+		if inMap {
 			t.Fatal()
 		}
 
-		dOld := tr.Digest()
-		tr.Put(l, v)
-		dNew := tr.Digest()
+		dOld := m.Digest()
+		m.Put(l, v)
+		dNew := m.Digest()
 
 		dOld0, dNew0, err := VerifyUpdate(l, v, p)
 		if err {

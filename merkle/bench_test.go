@@ -16,14 +16,14 @@ const (
 )
 
 func TestBenchMerkPut(t *testing.T) {
-	tr, _ := seedTree(t, defNSeed)
+	m, _ := seedMap(defNSeed)
 	nOps := 500_000
 
 	start := time.Now()
 	for i := 0; i < nOps; i++ {
 		l := mkRandLabel()
 		v := mkRandVal()
-		tr.Put(l, v)
+		m.Put(l, v)
 	}
 	total := time.Since(start)
 
@@ -36,7 +36,7 @@ func TestBenchMerkPut(t *testing.T) {
 }
 
 func TestBenchMerkGenVer(t *testing.T) {
-	tr, labels := seedTree(t, defNSeed)
+	m, labels := seedMap(defNSeed)
 	nOps := 5_000_000
 
 	var totalGen time.Duration
@@ -45,11 +45,11 @@ func TestBenchMerkGenVer(t *testing.T) {
 		l := labels[rand.Uint64N(defNSeed)]
 
 		t0 := time.Now()
-		isReg, v, p := tr.Prove(l)
+		isReg, v, p := m.Prove(l)
 		if !isReg {
 			t.Fatal()
 		}
-		d := tr.Digest()
+		d := m.Digest()
 
 		t1 := time.Now()
 		d0, _ := VerifyMemb(l, v, p)
@@ -73,10 +73,10 @@ func TestBenchMerkGenVer(t *testing.T) {
 }
 
 func TestBenchMerkSize(t *testing.T) {
-	tr, labels := seedTree(t, defNSeed)
+	m, labels := seedMap(defNSeed)
 	samp := &stats.Sample{Xs: make([]float64, 0, defNSeed)}
 	for _, label := range labels {
-		isReg, _, p := tr.Prove(label)
+		isReg, _, p := m.Prove(label)
 		if !isReg {
 			t.Fatal()
 		}
@@ -87,14 +87,14 @@ func TestBenchMerkSize(t *testing.T) {
 	})
 }
 
-func seedTree(t *testing.T, sz uint64) (tr *Tree, labels [][]byte) {
-	tr = &Tree{}
+func seedMap(sz uint64) (m *Map, labels [][]byte) {
+	m = &Map{}
 	labels = make([][]byte, 0, sz)
 	for i := uint64(0); i < sz; i++ {
 		l := mkRandLabel()
 		labels = append(labels, bytes.Clone(l))
 		v := mkRandVal()
-		tr.Put(l, v)
+		m.Put(l, v)
 	}
 	return
 }
