@@ -320,9 +320,7 @@ func (n *node) getChild(label []byte, depth uint64) (**node, **node) {
 }
 
 // getBit returns false if the nth bit of b is 0.
-// if n exceeds b, it returns false.
-// this is fine as long as the code consistently treats labels as
-// having variable length.
+// if n exceeds b, it returns true.
 func getBit(b []byte, n uint64) bool {
 	slot := n / 8
 	if slot < uint64(len(b)) {
@@ -330,6 +328,6 @@ func getBit(b []byte, n uint64) bool {
 		x := b[slot]
 		return x&(1<<off) != 0
 	} else {
-		return false
+		return true
 	}
 }
