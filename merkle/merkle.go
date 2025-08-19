@@ -28,6 +28,8 @@ const (
 	innerNodeTy
 )
 
+const maxDepth = cryptoffi.HashLen * 8
+
 var (
 	// emptyHash pre-computed. frequently used.
 	emptyHash = compEmptyHash()
@@ -235,6 +237,11 @@ func proofToTree(label, proof []byte) (tr *node, err bool) {
 		return
 	}
 	if uint64(len(p.Siblings))%cryptoffi.HashLen != 0 {
+		err = true
+		return
+	}
+	sibsDepth := uint64(len(p.Siblings)) / cryptoffi.HashLen
+	if sibsDepth > maxDepth {
 		err = true
 		return
 	}
