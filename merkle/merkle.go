@@ -19,6 +19,9 @@ const (
 	innerNodeTag
 )
 
+// NOTE: it may be cleaner to use diff structs for the diff node types.
+// their interface includes setHash and getHash.
+// setHash has a unique impl, but getHash is the same.
 const (
 	cutNodeTy byte = iota
 	leafNodeTy
@@ -85,16 +88,16 @@ func put(n0 **node, depth uint64, label, val []byte) {
 		// to existing leaf, and recurse.
 		inner := &node{nodeTy: innerNodeTy}
 		*n0 = inner
-		leafChild, _ := getChild(inner, n.label, depth)
+		leafChild, _ := inner.getChild(n.label, depth)
 		*leafChild = n
-		recurChild, _ := getChild(inner, label, depth)
+		recurChild, _ := inner.getChild(label, depth)
 		put(recurChild, depth+1, label, val)
 		inner.setInnerHash()
 		return
 	}
 
 	std.Assert(n.nodeTy == innerNodeTy)
-	c, _ := getChild(n, label, depth)
+	c, _ := n.getChild(label, depth)
 	put(c, depth+1, label, val)
 	// recurse.
 	n.setInnerHash()
@@ -168,7 +171,7 @@ func (n *node) find(getProof bool, depth uint64, label []byte) (found bool, foun
 
 	// recurse down inner.
 	std.Assert(n.nodeTy == innerNodeTy)
-	child, sib := getChild(n, label, depth)
+	child, sib := n.getChild(label, depth)
 	found, foundLabel, foundVal, proof = (*child).find(getProof, depth+1, label)
 	if getProof {
 		// proof will have sibling hash for each inner node.
@@ -260,7 +263,7 @@ func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
 	hash := sibs[split:]
 	cut := &node{nodeTy: cutNodeTy, hash: hash}
 	inner := &node{nodeTy: innerNodeTy}
-	child, sib := getChild(inner, label, depth)
+	child, sib := inner.getChild(label, depth)
 	*sib = cut
 	*child = newShell(label, depth+1, sibs0)
 	inner.setInnerHash()
@@ -295,20 +298,20 @@ func compLeafHash(label, val []byte) []byte {
 func (n *node) setInnerHash() {
 	child0 := n.child0.getHash()
 	child1 := n.child1.getHash()
-	n.hash = compInnerHash(child0, child1, nil)
+	n.hash = compInnerHash(child0, child1)
 }
 
-func compInnerHash(child0, child1, h []byte) []byte {
+func compInnerHash(child0, child1 []byte) []byte {
 	hr := cryptoffi.NewHasher()
 	hr.Write([]byte{innerNodeTag})
 	hr.Write(child0)
 	hr.Write(child1)
-	return hr.Sum(h)
+	return hr.Sum(nil)
 }
 
 // getChild returns a child and its sibling child,
 // relative to the bit referenced by label and depth.
-func getChild(n *node, label []byte, depth uint64) (**node, **node) {
+func (n *node) getChild(label []byte, depth uint64) (**node, **node) {
 	if !getBit(label, depth) {
 		return &n.child0, &n.child1
 	} else {
