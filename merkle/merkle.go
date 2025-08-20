@@ -100,8 +100,8 @@ func put(n0 **node, depth uint64, label, val []byte) {
 
 	std.Assert(n.nodeTy == innerNodeTy)
 	c, _ := n.getChild(label, depth)
-	put(c, depth+1, label, val)
 	// recurse.
+	put(c, depth+1, label, val)
 	n.setInnerHash()
 }
 
@@ -319,10 +319,10 @@ func compInnerHash(child0, child1 []byte) []byte {
 // getChild returns a child and its sibling child,
 // relative to the bit referenced by label and depth.
 func (n *node) getChild(label []byte, depth uint64) (**node, **node) {
-	if !getBit(label, depth) {
-		return &n.child0, &n.child1
-	} else {
+	if getBit(label, depth) {
 		return &n.child1, &n.child0
+	} else {
+		return &n.child0, &n.child1
 	}
 }
 
