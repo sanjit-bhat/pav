@@ -10,18 +10,17 @@ import (
 	"github.com/tchajed/marshal"
 )
 
+// tags used as hash domain separation prefixes.
+// cut nodes don't have a tag.
+// their hashes could represent anything, even invalid sub-trees.
 const (
-	// tags used as hash domain separation prefixes.
-	// cut nodes don't have a tag.
-	// their hashes could represent anything, even invalid sub-trees.
 	emptyNodeTag byte = iota
 	leafNodeTag
 	innerNodeTag
 )
 
-// NOTE: it may be cleaner to use diff structs for the diff node types.
-// their interface includes setHash and getHash.
-// setHash has a unique impl, but getHash is the same.
+// nodeTy used to distinguish in-memory nodes.
+// empty node is nil node ptr.
 const (
 	cutNodeTy byte = iota
 	leafNodeTy
@@ -40,7 +39,9 @@ type Map struct {
 }
 
 // node contains union of different nodeTy's.
-// empty node is nil node ptr.
+// NOTE: it may be cleaner to use diff structs for the diff node types.
+// their interface includes setHash and getHash.
+// setHash has a unique impl, but getHash is the same.
 type node struct {
 	nodeTy byte
 	hash   []byte
