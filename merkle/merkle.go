@@ -66,7 +66,9 @@ func (m *Map) Put(label []byte, val []byte) {
 // it expects to never insert into a cut node, since that almost always
 // leaves the tree in an unintended state.
 func put(n0 **node, depth uint64, label, val []byte) {
+	std.Assert(depth <= maxDepth)
 	n := *n0
+
 	// empty.
 	if n == nil {
 		// replace with leaf.
