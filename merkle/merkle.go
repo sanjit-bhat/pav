@@ -40,8 +40,8 @@ type Map struct {
 
 // node contains union of different nodeTy's.
 // NOTE: it may be cleaner to use diff structs for the diff node types.
-// their interface includes setHash and getHash.
-// setHash has a unique impl, but getHash is the same.
+// their interface includes compHash and getHash.
+// compHash has a unique impl, but getHash is the same.
 type node struct {
 	nodeTy byte
 	hash   []byte
@@ -74,18 +74,15 @@ func put(n0 **node, depth uint64, label, val []byte) {
 		// replace with leaf.
 		leaf := &node{nodeTy: leafNodeTy, label: label, val: val}
 		*n0 = leaf
-		leaf.setLeafHash()
+		leaf.hash = compLeafHash(label, val)
 		return
 	}
-
-	// never put into cut node.
-	std.Assert(n.nodeTy != cutNodeTy)
 
 	if n.nodeTy == leafNodeTy {
 		// on exact label match, replace val.
 		if bytes.Equal(n.label, label) {
 			n.val = val
-			n.setLeafHash()
+			n.hash = compLeafHash(label, val)
 			return
 		}
 
@@ -93,19 +90,22 @@ func put(n0 **node, depth uint64, label, val []byte) {
 		// to existing leaf, and recurse.
 		inner := &node{nodeTy: innerNodeTy}
 		*n0 = inner
-		leafChild, _ := inner.getChild(n.label, depth)
-		*leafChild = n
-		recurChild, _ := inner.getChild(label, depth)
-		put(recurChild, depth+1, label, val)
-		inner.setInnerHash()
+		oldChild, _ := inner.getChild(n.label, depth)
+		*oldChild = n
+		newChild, _ := inner.getChild(label, depth)
+		put(newChild, depth+1, label, val)
+		inner.hash = compInnerHash(inner.child0.getHash(), inner.child1.getHash())
 		return
 	}
 
-	std.Assert(n.nodeTy == innerNodeTy)
-	c, _ := n.getChild(label, depth)
-	// recurse.
-	put(c, depth+1, label, val)
-	n.setInnerHash()
+	if n.nodeTy == innerNodeTy {
+		c, _ := n.getChild(label, depth)
+		// recurse.
+		put(c, depth+1, label, val)
+		n.hash = compInnerHash(n.child0.getHash(), n.child1.getHash())
+		return
+	}
+	panic("merkle: put into cut node")
 }
 
 // Prove the membership of label.
@@ -276,7 +276,7 @@ func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
 	child, sib := inner.getChild(label, depth)
 	*sib = cut
 	*child = newShell(label, depth+1, sibs0)
-	inner.setInnerHash()
+	inner.hash = compInnerHash(inner.child0.getHash(), inner.child1.getHash())
 	return inner
 }
 
@@ -291,10 +291,6 @@ func compEmptyHash() []byte {
 	return cryptoutil.Hash([]byte{emptyNodeTag})
 }
 
-func (n *node) setLeafHash() {
-	n.hash = compLeafHash(n.label, n.val)
-}
-
 func compLeafHash(label, val []byte) []byte {
 	hr := cryptoffi.NewHasher()
 	hr.Write([]byte{leafNodeTag})
@@ -303,12 +299,6 @@ func compLeafHash(label, val []byte) []byte {
 	hr.Write(marshal.WriteInt(nil, uint64(len(val))))
 	hr.Write(val)
 	return hr.Sum(nil)
-}
-
-func (n *node) setInnerHash() {
-	child0 := n.child0.getHash()
-	child1 := n.child1.getHash()
-	n.hash = compInnerHash(child0, child1)
 }
 
 func compInnerHash(child0, child1 []byte) []byte {
