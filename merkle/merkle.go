@@ -118,7 +118,7 @@ func (m *Map) Prove(label []byte) (inMap bool, val, proof []byte) {
 
 // prove expects no cut nodes along label.
 func (n *node) prove(label []byte, getProof bool) (inTree bool, val, proof []byte) {
-	found, foundLabel, val, proof := n.find(getProof, 0, label)
+	found, foundLabel, val, proof := n.find(0, label, getProof)
 	if getProof {
 		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
 	}
@@ -152,11 +152,11 @@ func (n *node) prove(label []byte, getProof bool) (inTree bool, val, proof []byt
 
 // find searches the tree for a leaf node down path label.
 // it expects no cut nodes along label.
-func (n *node) find(getProof bool, depth uint64, label []byte) (found bool, foundLabel, foundVal, proof []byte) {
+func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foundLabel, foundVal, sibs []byte) {
 	// if empty, not found.
 	if n == nil {
 		if getProof {
-			proof = make([]byte, 8, getProofLen(depth))
+			sibs = make([]byte, 8, getProofLen(depth))
 		}
 		return
 	}
@@ -164,7 +164,7 @@ func (n *node) find(getProof bool, depth uint64, label []byte) (found bool, foun
 	// if leaf, found!
 	if n.nodeTy == leafNodeTy {
 		if getProof {
-			proof = make([]byte, 8, getProofLen(depth))
+			sibs = make([]byte, 8, getProofLen(depth))
 		}
 		found = true
 		foundLabel = n.label
@@ -175,10 +175,10 @@ func (n *node) find(getProof bool, depth uint64, label []byte) (found bool, foun
 	// recurse down inner.
 	if n.nodeTy == innerNodeTy {
 		child, sib := n.getChild(label, depth)
-		found, foundLabel, foundVal, proof = (*child).find(getProof, depth+1, label)
+		found, foundLabel, foundVal, sibs = (*child).find(depth+1, label, getProof)
 		if getProof {
 			// proof will have sibling hash for each inner node.
-			proof = append(proof, (*sib).getHash()...)
+			sibs = append(sibs, (*sib).getHash()...)
 		}
 		return
 	}
@@ -253,7 +253,7 @@ func proofToTree(label, proof []byte) (tr *node, err bool) {
 		err = true
 		return
 	}
-	tr = newShell(label, 0, p.Siblings)
+	tr = newShell(0, label, p.Siblings)
 	if p.IsOtherLeaf {
 		if uint64(len(p.LeafLabel)) != cryptoffi.HashLen {
 			err = true
@@ -268,7 +268,7 @@ func proofToTree(label, proof []byte) (tr *node, err bool) {
 	return
 }
 
-func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
+func newShell(depth uint64, label []byte, sibs []byte) (n *node) {
 	sibsLen := uint64(len(sibs))
 	if sibsLen == 0 {
 		return
@@ -280,7 +280,7 @@ func newShell(label []byte, depth uint64, sibs []byte) (n *node) {
 	inner := &node{nodeTy: innerNodeTy}
 	child, sib := inner.getChild(label, depth)
 	*sib = cut
-	*child = newShell(label, depth+1, sibs0)
+	*child = newShell(depth+1, label, sibs0)
 	inner.hash = compInnerHash(inner.child0.getHash(), inner.child1.getHash())
 	return inner
 }
