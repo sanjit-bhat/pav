@@ -156,6 +156,7 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 	// if empty, not found.
 	if n == nil {
 		if getProof {
+			// leave space for SibsLen (8).
 			sibs = make([]byte, 8, getProofLen(depth))
 		}
 		return
@@ -163,12 +164,12 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 
 	// if leaf, found!
 	if n.nodeTy == leafNodeTy {
-		if getProof {
-			sibs = make([]byte, 8, getProofLen(depth))
-		}
 		found = true
 		foundLabel = n.label
 		foundVal = n.val
+		if getProof {
+			sibs = make([]byte, 8, getProofLen(depth))
+		}
 		return
 	}
 
@@ -187,8 +188,9 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 }
 
 func getProofLen(depth uint64) uint64 {
-	// proof = SibsLen ++ Sibs ++ IsOtherLeaf ++
-	// LeafLabelLen ++ LeafLabel ++ LeafValLen ++ LeafVal (ed25519 pk).
+	// proof = SibsLen ++ Sibs ++
+	//         IsOtherLeaf ++ LeafLabelLen ++ LeafLabel ++
+	//         LeafValLen ++ LeafVal (ed25519 pk).
 	return 8 + depth*cryptoffi.HashLen + 1 + 8 + cryptoffi.HashLen + 8 + 32
 }
 
