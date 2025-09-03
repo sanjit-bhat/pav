@@ -57,6 +57,7 @@ type node struct {
 
 // Put adds the leaf (label, val), storing immutable references to both.
 // for liveness and safety reasons, it expects the label to have fixed length.
+// TODO: should Put return an update proof?
 func (m *Map) Put(label []byte, val []byte) {
 	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
 	put(&m.root, 0, label, val)
@@ -192,6 +193,10 @@ func getProofLen(depth uint64) uint64 {
 }
 
 // VerifyMemb checks that (label, val) in tree described by proof.
+// TODO: rename dig to hash. more commonly used.
+// TODO: is it ever the case that a dig is never known a-priori?
+// if so, it's a more secure API to add that as an arg.
+// XXX: i think in VerifyUpdate, the caller might not know the new dig.
 func VerifyMemb(label, val, proof []byte) (dig []byte, err bool) {
 	tr, err := proofToTree(label, proof)
 	if err {
