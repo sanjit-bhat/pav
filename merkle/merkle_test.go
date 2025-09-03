@@ -66,18 +66,18 @@ func proveAndVerify(t *testing.T, m *Map, label []byte, expInMap bool, expVal []
 	if inMap && !bytes.Equal(val, expVal) {
 		t.Fatal()
 	}
-	dig := m.Digest()
-	var dig0 []byte
+	hash := m.Hash()
+	var hash0 []byte
 	var err bool
 	if inMap {
-		dig0, err = VerifyMemb(label, val, proof)
+		hash0, err = VerifyMemb(label, val, proof)
 	} else {
-		dig0, err = VerifyNonMemb(label, proof)
+		hash0, err = VerifyNonMemb(label, proof)
 	}
 	if err {
 		t.Fatal()
 	}
-	if !bytes.Equal(dig, dig0) {
+	if !bytes.Equal(hash, hash0) {
 		t.Fatal()
 	}
 }
@@ -97,9 +97,9 @@ func TestUpdate(t *testing.T) {
 			t.Fatal()
 		}
 
-		dOld := m.Digest()
+		dOld := m.Hash()
 		m.Put(l, v)
-		dNew := m.Digest()
+		dNew := m.Hash()
 
 		dOld0, dNew0, err := VerifyUpdate(l, v, p)
 		if err {

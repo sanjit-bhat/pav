@@ -111,7 +111,7 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryp
 	sigPk, sk := cryptoffi.SigGenerateKey()
 	// start off with dig of empty map.
 	m := &merkle.Map{}
-	dig := m.Digest()
+	dig := m.Hash()
 	sig := ktcore.SignVrf(sk, reply.VrfPk)
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: reply.VrfPk, servVrfSig: reply.VrfSig, adtrVrfSig: sig}
 	a = &Auditor{mu: mu, sk: sk, lastDig: dig, serv: serv}

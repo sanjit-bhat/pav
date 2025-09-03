@@ -49,7 +49,7 @@ func TestBenchMerkGenVer(t *testing.T) {
 		if !isReg {
 			t.Fatal()
 		}
-		d := m.Digest()
+		d := m.Hash()
 
 		t1 := time.Now()
 		d0, _ := VerifyMemb(l, v, p)

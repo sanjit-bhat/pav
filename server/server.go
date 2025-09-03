@@ -151,7 +151,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, workQ: wq}
 
 	// commit empty map as epoch 0.
-	dig := keys.hidden.Digest()
+	dig := keys.hidden.Hash()
 	link := chain.Append(dig)
 	linkSig := ktcore.SignLink(s.secs.sig, 0, link)
 	s.hist.audits = append(s.hist.audits, &ktcore.AuditProof{LinkSig: linkSig})
@@ -237,7 +237,7 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 		}
 	}
 
-	dig := s.keys.hidden.Digest()
+	dig := s.keys.hidden.Hash()
 	link := s.hist.chain.Append(dig)
 	epoch := uint64(len(s.hist.audits))
 	sig := ktcore.SignLink(s.secs.sig, epoch, link)

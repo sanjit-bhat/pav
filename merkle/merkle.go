@@ -193,44 +193,43 @@ func getProofLen(depth uint64) uint64 {
 }
 
 // VerifyMemb checks that (label, val) in tree described by proof.
-// TODO: rename dig to hash. more commonly used.
-// TODO: is it ever the case that a dig is never known a-priori?
+// TODO: is it ever the case that a hash is never known a-priori?
 // if so, it's a more secure API to add that as an arg.
-// XXX: i think in VerifyUpdate, the caller might not know the new dig.
-func VerifyMemb(label, val, proof []byte) (dig []byte, err bool) {
+// XXX: i think in VerifyUpdate, the caller might not know the new hash.
+func VerifyMemb(label, val, proof []byte) (hash []byte, err bool) {
 	tr, err := proofToTree(label, proof)
 	if err {
 		return
 	}
 	put(&tr, 0, label, val)
-	dig = tr.getHash()
+	hash = tr.getHash()
 	return
 }
 
 // VerifyNonMemb checks that label not in tree described by proof.
-func VerifyNonMemb(label, proof []byte) (dig []byte, err bool) {
+func VerifyNonMemb(label, proof []byte) (hash []byte, err bool) {
 	tr, err := proofToTree(label, proof)
 	if err {
 		return
 	}
-	dig = tr.getHash()
+	hash = tr.getHash()
 	return
 }
 
-// VerifyUpdate returns the dig for an old tree without label and
-// the dig after inserting (label, val).
-func VerifyUpdate(label, val, proof []byte) (oldDig, newDig []byte, err bool) {
+// VerifyUpdate returns the hash for an old tree without label and
+// the hash after inserting (label, val).
+func VerifyUpdate(label, val, proof []byte) (oldHash, newHash []byte, err bool) {
 	tr, err := proofToTree(label, proof)
 	if err {
 		return
 	}
-	oldDig = tr.getHash()
+	oldHash = tr.getHash()
 	put(&tr, 0, label, val)
-	newDig = tr.getHash()
+	newHash = tr.getHash()
 	return
 }
 
-func (m *Map) Digest() []byte {
+func (m *Map) Hash() []byte {
 	return m.root.getHash()
 }
 
