@@ -160,9 +160,6 @@ func (n *node) find(getProof bool, depth uint64, label []byte) (found bool, foun
 		return
 	}
 
-	// cut hides the sub-tree, so don't know if there.
-	std.Assert(n.nodeTy != cutNodeTy)
-
 	// if leaf, found!
 	if n.nodeTy == leafNodeTy {
 		if getProof {
@@ -175,14 +172,17 @@ func (n *node) find(getProof bool, depth uint64, label []byte) (found bool, foun
 	}
 
 	// recurse down inner.
-	std.Assert(n.nodeTy == innerNodeTy)
-	child, sib := n.getChild(label, depth)
-	found, foundLabel, foundVal, proof = (*child).find(getProof, depth+1, label)
-	if getProof {
-		// proof will have sibling hash for each inner node.
-		proof = append(proof, (*sib).getHash()...)
+	if n.nodeTy == innerNodeTy {
+		child, sib := n.getChild(label, depth)
+		found, foundLabel, foundVal, proof = (*child).find(getProof, depth+1, label)
+		if getProof {
+			// proof will have sibling hash for each inner node.
+			proof = append(proof, (*sib).getHash()...)
+		}
+		return
 	}
-	return
+	// cut hides the sub-tree, so don't know if there.
+	panic("merkle: find into cut node")
 }
 
 func getProofLen(depth uint64) uint64 {
