@@ -157,7 +157,7 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 	if n == nil {
 		if getProof {
 			// leave space for SibsLen (8).
-			sibs = make([]byte, 8, getProofLen(depth))
+			sibs = make([]byte, 8, getProofCap(depth))
 		}
 		return
 	}
@@ -168,7 +168,7 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 		foundLabel = n.label
 		foundVal = n.val
 		if getProof {
-			sibs = make([]byte, 8, getProofLen(depth))
+			sibs = make([]byte, 8, getProofCap(depth))
 		}
 		return
 	}
@@ -176,9 +176,7 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 	// recurse down inner.
 	if n.nodeTy == innerNodeTy {
 		child, sib := n.getChild(label, depth)
-		// will run out of stack space before running out of depth.
-		newDepth := std.SumAssumeNoOverflow(depth, 1)
-		found, foundLabel, foundVal, sibs = (*child).find(newDepth, label, getProof)
+		found, foundLabel, foundVal, sibs = (*child).find(depth+1, label, getProof)
 		if getProof {
 			// proof will have sibling hash for each inner node.
 			sibs = append(sibs, (*sib).getHash()...)
@@ -189,7 +187,7 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 	panic("merkle: find into cut node")
 }
 
-func getProofLen(depth uint64) uint64 {
+func getProofCap(depth uint64) uint64 {
 	// proof = SibsLen ++ Sibs ++
 	//         IsOtherLeaf ++ LeafLabelLen ++ LeafLabel ++
 	//         LeafValLen ++ LeafVal (ed25519 pk).
