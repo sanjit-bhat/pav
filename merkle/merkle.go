@@ -60,13 +60,13 @@ type node struct {
 // TODO: should Put return an update proof?
 func (m *Map) Put(label []byte, val []byte) {
 	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
-	put(&m.root, 0, label, val)
+	std.Assert(!put(&m.root, 0, label, val))
 }
 
 // put inserts leaf node (label, val) into the n0 sub-tree.
-// it expects to never insert into a cut node, since that almost always
+// it errors iff there's an insert into a cut node, since that almost always
 // leaves the tree in an unintended state.
-func put(n0 **node, depth uint64, label, val []byte) {
+func put(n0 **node, depth uint64, label, val []byte) (err bool) {
 	std.Assert(depth <= maxDepth)
 	n := *n0
 
@@ -106,7 +106,8 @@ func put(n0 **node, depth uint64, label, val []byte) {
 		n.hash = compInnerHash(n.child0.getHash(), n.child1.getHash())
 		return
 	}
-	panic("merkle: put into cut node")
+	std.Assert(n.nodeTy == cutNodeTy)
+	return true
 }
 
 // Prove the membership of label.
@@ -203,7 +204,7 @@ func VerifyMemb(label, val, proof []byte) (hash []byte, err bool) {
 	if err {
 		return
 	}
-	put(&tr, 0, label, val)
+	std.Assert(!put(&tr, 0, label, val))
 	hash = tr.getHash()
 	return
 }
@@ -226,7 +227,7 @@ func VerifyUpdate(label, val, proof []byte) (oldHash, newHash []byte, err bool) 
 		return
 	}
 	oldHash = tr.getHash()
-	put(&tr, 0, label, val)
+	std.Assert(!put(&tr, 0, label, val))
 	newHash = tr.getHash()
 	return
 }
@@ -264,7 +265,9 @@ func proofToTree(label, proof []byte) (tr *node, err bool) {
 			err = true
 			return
 		}
-		put(&tr, 0, p.LeafLabel, p.LeafVal)
+		if err = put(&tr, 0, p.LeafLabel, p.LeafVal); err {
+			return
+		}
 	}
 	return
 }
