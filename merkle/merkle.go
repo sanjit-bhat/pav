@@ -94,9 +94,7 @@ func put(n0 **node, depth uint64, label, val []byte) (err bool) {
 		oldChild, _ := inner.getChild(n.label, depth)
 		*oldChild = n
 		newChild, _ := inner.getChild(label, depth)
-		if err = put(newChild, depth+1, label, val); err {
-			return
-		}
+		std.Assert(!put(newChild, depth+1, label, val))
 		inner.hash = compInnerHash(inner.child0.getHash(), inner.child1.getHash())
 		return
 	}
