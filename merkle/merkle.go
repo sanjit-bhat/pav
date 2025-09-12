@@ -94,7 +94,9 @@ func put(n0 **node, depth uint64, label, val []byte) (err bool) {
 		oldChild, _ := inner.getChild(n.label, depth)
 		*oldChild = n
 		newChild, _ := inner.getChild(label, depth)
-		put(newChild, depth+1, label, val)
+		if err = put(newChild, depth+1, label, val); err {
+			return
+		}
 		inner.hash = compInnerHash(inner.child0.getHash(), inner.child1.getHash())
 		return
 	}
@@ -102,7 +104,9 @@ func put(n0 **node, depth uint64, label, val []byte) (err bool) {
 	if n.nodeTy == innerNodeTy {
 		c, _ := n.getChild(label, depth)
 		// recurse.
-		put(c, depth+1, label, val)
+		if err = put(c, depth+1, label, val); err {
+			return
+		}
 		n.hash = compInnerHash(n.child0.getHash(), n.child1.getHash())
 		return
 	}
