@@ -198,9 +198,8 @@ func getProofCap(depth uint64) uint64 {
 }
 
 // VerifyMemb checks that (label, val) in tree described by proof.
-// TODO: is it ever the case that a hash is never known a-priori?
-// if so, it's a more secure API to add that as an arg.
-// XXX: i think in VerifyUpdate, the caller might not know the new hash.
+// to save on bandwidth, some callers get hash from Verify.
+// callers that expect some hash should check that they got the right one.
 func VerifyMemb(label, val, proof []byte) (hash []byte, err bool) {
 	tr, err := proofToTree(label, proof)
 	if err {
