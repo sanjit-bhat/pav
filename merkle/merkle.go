@@ -222,14 +222,14 @@ func VerifyNonMemb(label, proof []byte) (hash []byte, err bool) {
 
 // VerifyUpdate returns the hash for an old tree without label and
 // the hash after inserting (label, val).
-func VerifyUpdate(label, val, proof []byte) (oldHash, newHash []byte, err bool) {
+func VerifyUpdate(label, val, proof []byte) (hashOld, hashNew []byte, err bool) {
 	tr, err := proofToTree(label, proof)
 	if err {
 		return
 	}
-	oldHash = tr.getHash()
+	hashOld = tr.getHash()
 	std.Assert(!put(&tr, 0, label, val))
-	newHash = tr.getHash()
+	hashNew = tr.getHash()
 	return
 }
 
