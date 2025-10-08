@@ -227,13 +227,11 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 			out0 := ents[i]
 			label := out0.label
 
-			inMap, _, proof := s.keys.hidden.Prove(label)
-			std.Assert(!inMap)
+			proof := s.keys.hidden.Put(label, out0.val)
+			s.keys.plain[req.Uid] = append(s.keys.plain[req.Uid], req.Pk)
+
 			info := &ktcore.UpdateProof{MapLabel: label, MapVal: out0.val, NonMembProof: proof}
 			upd = append(upd, info)
-
-			s.keys.hidden.Put(label, out0.val)
-			s.keys.plain[req.Uid] = append(s.keys.plain[req.Uid], req.Pk)
 		}
 	}
 

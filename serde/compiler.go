@@ -1,5 +1,9 @@
 package main
 
+// TODO: add "auto-generated" comment below `package foo` so it doesn't
+// show up in pkg docs.
+// TODO: allow for compilation even on private struct fields.
+
 import (
 	"bytes"
 	"fmt"
