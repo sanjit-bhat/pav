@@ -57,10 +57,13 @@ type node struct {
 
 // Put adds the leaf (label, val), storing immutable references to both.
 // for liveness and safety reasons, it expects the label to have fixed length.
-// TODO: should Put return an update proof?
-func (m *Map) Put(label []byte, val []byte) {
+func (m *Map) Put(label []byte, val []byte) (updProof []byte) {
 	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
+	inMap, _, updProof := m.Prove(label)
+	// for now, [VerifyUpdate] only works for monotonic update.
+	std.Assert(!inMap)
 	std.Assert(!put(&m.root, 0, label, val))
+	return
 }
 
 // put inserts leaf node (label, val) into the n0 sub-tree.
@@ -113,7 +116,7 @@ func put(n0 **node, depth uint64, label, val []byte) (err bool) {
 }
 
 // Prove the membership of label.
-func (m *Map) Prove(label []byte) (inMap bool, val, proof []byte) {
+func (m *Map) Prove(label []byte) (inMap bool, val, entryProof []byte) {
 	// Prove is part of the external API, which does not expose cut trees.
 	// therefore, we meet the precond.
 	return m.root.prove(label, true)
@@ -200,8 +203,8 @@ func getProofCap(depth uint64) uint64 {
 // VerifyMemb checks that (label, val) in tree described by proof.
 // to save on bandwidth, some callers get hash from Verify.
 // callers that expect some hash should check that they got the right one.
-func VerifyMemb(label, val, proof []byte) (hash []byte, err bool) {
-	tr, err := proofToTree(label, proof)
+func VerifyMemb(label, val, entryProof []byte) (hash []byte, err bool) {
+	tr, err := proofToTree(label, entryProof)
 	if err {
 		return
 	}
@@ -211,8 +214,8 @@ func VerifyMemb(label, val, proof []byte) (hash []byte, err bool) {
 }
 
 // VerifyNonMemb checks that label not in tree described by proof.
-func VerifyNonMemb(label, proof []byte) (hash []byte, err bool) {
-	tr, err := proofToTree(label, proof)
+func VerifyNonMemb(label, entryProof []byte) (hash []byte, err bool) {
+	tr, err := proofToTree(label, entryProof)
 	if err {
 		return
 	}
@@ -222,8 +225,8 @@ func VerifyNonMemb(label, proof []byte) (hash []byte, err bool) {
 
 // VerifyUpdate returns the hash for an old tree without label and
 // the hash after inserting (label, val).
-func VerifyUpdate(label, val, proof []byte) (hashOld, hashNew []byte, err bool) {
-	tr, err := proofToTree(label, proof)
+func VerifyUpdate(label, val, updProof []byte) (hashOld, hashNew []byte, err bool) {
+	tr, err := proofToTree(label, updProof)
 	if err {
 		return
 	}
