@@ -7,7 +7,7 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func MerkleProofEncode(b0 []byte, o *MerkleProof) []byte {
+func ProofEncode(b0 []byte, o *Proof) []byte {
 	var b = b0
 	b = safemarshal.WriteSlice1D(b, o.Siblings)
 	b = marshal.WriteBool(b, o.IsOtherLeaf)
@@ -15,7 +15,7 @@ func MerkleProofEncode(b0 []byte, o *MerkleProof) []byte {
 	b = safemarshal.WriteSlice1D(b, o.LeafVal)
 	return b
 }
-func MerkleProofDecode(b0 []byte) (*MerkleProof, []byte, bool) {
+func ProofDecode(b0 []byte) (*Proof, []byte, bool) {
 	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
@@ -32,5 +32,5 @@ func MerkleProofDecode(b0 []byte) (*MerkleProof, []byte, bool) {
 	if err4 {
 		return nil, nil, true
 	}
-	return &MerkleProof{Siblings: a1, IsOtherLeaf: a2, LeafLabel: a3, LeafVal: a4}, b4, false
+	return &Proof{Siblings: a1, IsOtherLeaf: a2, LeafLabel: a3, LeafVal: a4}, b4, false
 }

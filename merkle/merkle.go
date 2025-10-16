@@ -246,7 +246,7 @@ func proofToTree(label, proof []byte) (tr *node, err bool) {
 		err = true
 		return
 	}
-	p, _, err := MerkleProofDecode(proof)
+	p, _, err := ProofDecode(proof)
 	if err {
 		return
 	}
