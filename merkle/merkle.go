@@ -58,7 +58,10 @@ type node struct {
 // Put adds the leaf (label, val), storing immutable references to both.
 // for liveness and safety reasons, it expects the label to have fixed length.
 func (m *Map) Put(label []byte, val []byte) (updProof []byte) {
-	inMap, _, updProof := m.Prove(label)
+	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
+	// Put is part of external API, which does not expose cut trees.
+	// therefore, we meet the precond for node.prove and put.
+	inMap, _, updProof := m.root.prove(label, true)
 	// for now, [VerifyUpdate] only works for monotonic update.
 	std.Assert(!inMap)
 	std.Assert(!put(&m.root, 0, label, val))
