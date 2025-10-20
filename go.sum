@@ -6,8 +6,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/goose-lang/primitive v0.2.0 h1:EmQ/hz1q8XyjZmcEHXHPCbCJ46Ye4HCrl0O33DLBxKg=
-github.com/goose-lang/primitive v0.2.0/go.mod h1:sDE72zVH81ASwPXc1m9OgSfaaY0aZHu4Ty19FgONpOc=
+github.com/goose-lang/primitive v0.2.1 h1:wBUFy4Mh06Sqk2UPC6zqCpVTVz0tXr2fcSpFyl7clSM=
+github.com/goose-lang/primitive v0.2.1/go.mod h1:sDE72zVH81ASwPXc1m9OgSfaaY0aZHu4Ty19FgONpOc=
 github.com/goose-lang/std v0.7.0 h1:kJ3LRXtSm9I/T6QH0pB7P+sfUNpsYCZEBGTSsruuv2c=
 github.com/goose-lang/std v0.7.0/go.mod h1:bnKHDHwU0lHf99eMI5PVM77UweRyu6qgM/h43qGBRto=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=

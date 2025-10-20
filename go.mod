@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	filippo.io/edwards25519 v1.1.0
 	github.com/aclements/go-moremath v0.0.0-20241023150245-c8bbc672ef66
-	github.com/goose-lang/primitive v0.2.0
+	github.com/goose-lang/primitive v0.2.1
 	github.com/goose-lang/std v0.7.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tchajed/marshal v0.6.5
