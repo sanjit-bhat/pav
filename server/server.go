@@ -118,7 +118,7 @@ type mapEntry struct {
 	val   []byte
 }
 
-func (s *Server) Worker() {
+func (s *Server) worker() {
 	work := s.workQ.Get()
 	s.checkRequests(work)
 
@@ -158,7 +158,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 
 	go func() {
 		for {
-			s.Worker()
+			s.worker()
 		}
 	}()
 	return s, sigPk
