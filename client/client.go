@@ -64,12 +64,12 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 		err = ktcore.BlameServFull
 		return
 	}
-	if CheckHist(c.serv.vrfPk, uid, 0, last.dig, hist) {
+	if checkHist(c.serv.vrfPk, uid, 0, last.dig, hist) {
 		err = ktcore.BlameServFull
 		return
 	}
 	boundVer := uint64(len(hist))
-	if CheckNonMemb(c.serv.vrfPk, uid, boundVer, last.dig, bound) {
+	if checkNonMemb(c.serv.vrfPk, uid, boundVer, last.dig, bound) {
 		err = ktcore.BlameServFull
 		return
 	}
@@ -97,13 +97,13 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		err = ktcore.BlameServFull
 		return
 	}
-	if CheckHist(c.serv.vrfPk, c.uid, c.pend.nextVer, last.dig, hist) {
+	if checkHist(c.serv.vrfPk, c.uid, c.pend.nextVer, last.dig, hist) {
 		err = ktcore.BlameServFull
 		return
 	}
 	histLen := uint64(len(hist))
 	boundVer := c.pend.nextVer + histLen
-	if CheckNonMemb(c.serv.vrfPk, c.uid, boundVer, last.dig, bound) {
+	if checkNonMemb(c.serv.vrfPk, c.uid, boundVer, last.dig, bound) {
 		err = ktcore.BlameServFull
 		return
 	}
@@ -258,7 +258,7 @@ func (c *Client) getChainExt(chainProof, sig []byte) (ep *epoch, err bool) {
 	return
 }
 
-func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *ktcore.Memb) (err bool) {
+func checkMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *ktcore.Memb) (err bool) {
 	label, err := ktcore.CheckMapLabel(vrfPk, uid, ver, memb.LabelProof)
 	if err {
 		return
@@ -275,16 +275,16 @@ func CheckMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb 
 	return
 }
 
-func CheckHist(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte, hist []*ktcore.Memb) (err bool) {
+func checkHist(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte, hist []*ktcore.Memb) (err bool) {
 	for ver, memb := range hist {
-		if err = CheckMemb(vrfPk, uid, prefixLen+uint64(ver), dig, memb); err {
+		if err = checkMemb(vrfPk, uid, prefixLen+uint64(ver), dig, memb); err {
 			return
 		}
 	}
 	return
 }
 
-func CheckNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *ktcore.NonMemb) (err bool) {
+func checkNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, nonMemb *ktcore.NonMemb) (err bool) {
 	label, err := ktcore.CheckMapLabel(vrfPk, uid, ver, nonMemb.LabelProof)
 	if err {
 		return
