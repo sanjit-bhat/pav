@@ -65,13 +65,13 @@ func VerifyLinkSig(pk cryptoffi.SigPublicKey, epoch uint64, link, sig []byte) (e
 	return pk.Verify(b, sig)
 }
 
-func ProveMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) (label []byte, proof []byte) {
+func ProveMapLabel(sk *cryptoffi.VrfPrivateKey, uid uint64, ver uint64) (label []byte, proof []byte) {
 	b := make([]byte, 0, 16)
 	b = MapLabelEncode(b, &MapLabel{Uid: uid, Ver: ver})
 	return sk.Prove(b)
 }
 
-func EvalMapLabel(uid uint64, ver uint64, sk *cryptoffi.VrfPrivateKey) (label []byte) {
+func EvalMapLabel(sk *cryptoffi.VrfPrivateKey, uid uint64, ver uint64) (label []byte) {
 	b := make([]byte, 0, 16)
 	b = MapLabelEncode(b, &MapLabel{Uid: uid, Ver: ver})
 	return sk.Evaluate(b)
