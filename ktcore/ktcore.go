@@ -84,8 +84,7 @@ func CheckMapLabel(pk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) (l
 }
 
 func GetMapVal(pkOpen *CommitOpen) (val []byte) {
-	b := make([]byte, 0, 8+uint64(len(pkOpen.Val))+8+cryptoffi.HashLen)
-	b = CommitOpenEncode(b, pkOpen)
+	b := CommitOpenEncode(nil, pkOpen)
 	return cryptoutil.Hash(b)
 }
 
