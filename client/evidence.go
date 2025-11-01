@@ -52,10 +52,14 @@ func (e *evidLink) check(pk cryptoffi.SigPublicKey) (err bool) {
 // otherwise, it proves that the server was dishonest.
 func (e *Evid) Check(pk cryptoffi.SigPublicKey) bool {
 	if e.vrf != nil {
+		if e.link != nil {
+			return true
+		}
 		return e.vrf.check(pk)
-	}
-	if e.link != nil {
+	} else {
+		if e.link == nil {
+			return true
+		}
 		return e.link.check(pk)
 	}
-	return true
 }
