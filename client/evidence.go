@@ -28,7 +28,7 @@ type evidLink struct {
 	sig1  []byte
 }
 
-func (e *evidVrf) Check(pk cryptoffi.SigPublicKey) (err bool) {
+func (e *evidVrf) check(pk cryptoffi.SigPublicKey) (err bool) {
 	if ktcore.VerifyVrfSig(pk, e.vrfPk0, e.sig0) {
 		return true
 	}
@@ -38,7 +38,7 @@ func (e *evidVrf) Check(pk cryptoffi.SigPublicKey) (err bool) {
 	return bytes.Equal(e.vrfPk0, e.vrfPk1)
 }
 
-func (e *evidLink) Check(pk cryptoffi.SigPublicKey) (err bool) {
+func (e *evidLink) check(pk cryptoffi.SigPublicKey) (err bool) {
 	if ktcore.VerifyLinkSig(pk, e.epoch, e.link0, e.sig0) {
 		return true
 	}
@@ -52,10 +52,10 @@ func (e *evidLink) Check(pk cryptoffi.SigPublicKey) (err bool) {
 // otherwise, it proves that the server was dishonest.
 func (e *Evid) Check(pk cryptoffi.SigPublicKey) bool {
 	if e.vrf != nil {
-		return e.vrf.Check(pk)
+		return e.vrf.check(pk)
 	}
 	if e.link != nil {
-		return e.link.Check(pk)
+		return e.link.check(pk)
 	}
 	return true
 }
