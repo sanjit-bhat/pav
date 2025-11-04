@@ -8,6 +8,18 @@ import (
 	"github.com/tchajed/marshal"
 )
 
+func StartCliArgEncode(b0 []byte, o *StartCliArg) []byte {
+	var b = b0
+	b = marshal.WriteInt(b, o.Uid)
+	return b
+}
+func StartCliArgDecode(b0 []byte) (*StartCliArg, []byte, bool) {
+	a1, b1, err1 := safemarshal.ReadInt(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	return &StartCliArg{Uid: a1}, b1, false
+}
 func StartCliReplyEncode(b0 []byte, o *StartCliReply) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.PrevEpochLen)
@@ -16,6 +28,8 @@ func StartCliReplyEncode(b0 []byte, o *StartCliReply) []byte {
 	b = safemarshal.WriteSlice1D(b, o.LinkSig)
 	b = safemarshal.WriteSlice1D(b, o.VrfPk)
 	b = safemarshal.WriteSlice1D(b, o.VrfSig)
+	b = ktcore.MembSlice1DEncode(b, o.Hist)
+	b = ktcore.NonMembEncode(b, o.Bound)
 	return b
 }
 func StartCliReplyDecode(b0 []byte) (*StartCliReply, []byte, bool) {
@@ -43,7 +57,42 @@ func StartCliReplyDecode(b0 []byte) (*StartCliReply, []byte, bool) {
 	if err6 {
 		return nil, nil, true
 	}
-	return &StartCliReply{PrevEpochLen: a1, PrevLink: a2, ChainProof: a3, LinkSig: a4, VrfPk: a5, VrfSig: a6}, b6, false
+	a7, b7, err7 := ktcore.MembSlice1DDecode(b6)
+	if err7 {
+		return nil, nil, true
+	}
+	a8, b8, err8 := ktcore.NonMembDecode(b7)
+	if err8 {
+		return nil, nil, true
+	}
+	return &StartCliReply{PrevEpochLen: a1, PrevLink: a2, ChainProof: a3, LinkSig: a4, VrfPk: a5, VrfSig: a6, Hist: a7, Bound: a8}, b8, false
+}
+func StartAdtrReplyEncode(b0 []byte, o *StartAdtrReply) []byte {
+	var b = b0
+	b = safemarshal.WriteSlice1D(b, o.ChainProof)
+	b = safemarshal.WriteSlice1D(b, o.LinkSig)
+	b = safemarshal.WriteSlice1D(b, o.VrfPk)
+	b = safemarshal.WriteSlice1D(b, o.VrfSig)
+	return b
+}
+func StartAdtrReplyDecode(b0 []byte) (*StartAdtrReply, []byte, bool) {
+	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	a3, b3, err3 := safemarshal.ReadSlice1D(b2)
+	if err3 {
+		return nil, nil, true
+	}
+	a4, b4, err4 := safemarshal.ReadSlice1D(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	return &StartAdtrReply{ChainProof: a1, LinkSig: a2, VrfPk: a3, VrfSig: a4}, b4, false
 }
 func PutArgEncode(b0 []byte, o *PutArg) []byte {
 	var b = b0
