@@ -8,17 +8,17 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func StartReplyEncode(b0 []byte, o *StartReply) []byte {
+func StartCliReplyEncode(b0 []byte, o *StartCliReply) []byte {
 	var b = b0
-	b = marshal.WriteInt(b, o.StartEpochLen)
-	b = safemarshal.WriteSlice1D(b, o.StartLink)
+	b = marshal.WriteInt(b, o.PrevEpochLen)
+	b = safemarshal.WriteSlice1D(b, o.PrevLink)
 	b = safemarshal.WriteSlice1D(b, o.ChainProof)
 	b = safemarshal.WriteSlice1D(b, o.LinkSig)
 	b = safemarshal.WriteSlice1D(b, o.VrfPk)
 	b = safemarshal.WriteSlice1D(b, o.VrfSig)
 	return b
 }
-func StartReplyDecode(b0 []byte) (*StartReply, []byte, bool) {
+func StartCliReplyDecode(b0 []byte) (*StartCliReply, []byte, bool) {
 	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
@@ -43,7 +43,7 @@ func StartReplyDecode(b0 []byte) (*StartReply, []byte, bool) {
 	if err6 {
 		return nil, nil, true
 	}
-	return &StartReply{StartEpochLen: a1, StartLink: a2, ChainProof: a3, LinkSig: a4, VrfPk: a5, VrfSig: a6}, b6, false
+	return &StartCliReply{PrevEpochLen: a1, PrevLink: a2, ChainProof: a3, LinkSig: a4, VrfPk: a5, VrfSig: a6}, b6, false
 }
 func PutArgEncode(b0 []byte, o *PutArg) []byte {
 	var b = b0

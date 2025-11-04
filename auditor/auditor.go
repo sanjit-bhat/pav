@@ -98,7 +98,7 @@ func (a *Auditor) Get(epoch uint64) *GetReply {
 
 func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryptoffi.SigPublicKey, err ktcore.Blame) {
 	cli := advrpc.Dial(servAddr)
-	reply, err := server.CallStart(cli)
+	reply, err := server.CallStartCli(cli)
 	if err != ktcore.BlameNone {
 		return
 	}

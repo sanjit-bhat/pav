@@ -192,15 +192,15 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Ev
 
 func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err ktcore.Blame) {
 	cli := advrpc.Dial(servAddr)
-	reply, err := server.CallStart(cli)
+	reply, err := server.CallStartCli(cli)
 	if err != ktcore.BlameNone {
 		return
 	}
-	if uint64(len(reply.StartLink)) != cryptoffi.HashLen {
+	if uint64(len(reply.PrevLink)) != cryptoffi.HashLen {
 		err = ktcore.BlameServFull
 		return
 	}
-	extLen, newDig, newLink, errb := hashchain.Verify(reply.StartLink, reply.ChainProof)
+	extLen, newDig, newLink, errb := hashchain.Verify(reply.PrevLink, reply.ChainProof)
 	if errb {
 		err = ktcore.BlameServFull
 		return
@@ -210,11 +210,11 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 		err = ktcore.BlameServFull
 		return
 	}
-	if !std.SumNoOverflow(reply.StartEpochLen, extLen-1) {
+	if !std.SumNoOverflow(reply.PrevEpochLen, extLen-1) {
 		err = ktcore.BlameServFull
 		return
 	}
-	lastEp := reply.StartEpochLen + extLen - 1
+	lastEp := reply.PrevEpochLen + extLen - 1
 	if ktcore.VerifyLinkSig(servPk, lastEp, newLink, reply.LinkSig) {
 		err = ktcore.BlameServFull
 		return

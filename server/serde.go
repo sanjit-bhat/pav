@@ -4,13 +4,14 @@ import (
 	"github.com/sanjit-bhat/pav/ktcore"
 )
 
-type StartReply struct {
-	StartEpochLen uint64
-	StartLink     []byte
-	ChainProof    []byte
-	LinkSig       []byte
-	VrfPk         []byte
-	VrfSig        []byte
+type StartCliReply struct {
+	// give prev link to prove that latest hash in hashchain.
+	PrevEpochLen uint64
+	PrevLink     []byte
+	ChainProof   []byte
+	LinkSig      []byte
+	VrfPk        []byte
+	VrfSig       []byte
 }
 
 type PutArg struct {

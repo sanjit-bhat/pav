@@ -42,14 +42,14 @@ type history struct {
 }
 
 // Start bootstraps a party with knowledge of the hashchain and vrf.
-func (s *Server) Start() *StartReply {
+func (s *Server) Start() *StartCliReply {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	predLen := uint64(len(s.hist.audits)) - 1
 	predLink, proof := s.hist.chain.Bootstrap()
 	lastSig := s.hist.audits[predLen].LinkSig
 	pk := s.secs.vrf.PublicKey()
-	return &StartReply{StartEpochLen: predLen, StartLink: predLink, ChainProof: proof, LinkSig: lastSig, VrfPk: pk, VrfSig: s.hist.vrfPkSig}
+	return &StartCliReply{PrevEpochLen: predLen, PrevLink: predLink, ChainProof: proof, LinkSig: lastSig, VrfPk: pk, VrfSig: s.hist.vrfPkSig}
 }
 
 // Put queues pk (at the specified version) for insertion.
