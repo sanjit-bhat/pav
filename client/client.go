@@ -15,15 +15,15 @@ import (
 
 type Client struct {
 	uid  uint64
-	pend *pending
+	pend *nextVer
 	last *epoch
 	serv *serv
 }
 
-type pending struct {
-	nextVer   uint64
+type nextVer struct {
+	ver       uint64
 	isPending bool
-	pk        []byte
+	pendingPk []byte
 }
 
 type epoch struct {
@@ -44,12 +44,12 @@ type serv struct {
 // if we have a pending Put, it requires the pk to be the same.
 func (c *Client) Put(pk []byte) {
 	if c.pend.isPending {
-		std.Assert(bytes.Equal(c.pend.pk, pk))
+		std.Assert(bytes.Equal(c.pend.pendingPk, pk))
 	} else {
 		c.pend.isPending = true
-		c.pend.pk = pk
+		c.pend.pendingPk = pk
 	}
-	server.CallPut(c.serv.cli, c.uid, pk, c.pend.nextVer)
+	server.CallPut(c.serv.cli, c.uid, pk, c.pend.ver)
 }
 
 // Get a uid's pk.
@@ -87,7 +87,7 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 // SelfMon a client's own uid.
 // if isChanged, the key was added sometime from the last SelfMon.
 func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
-	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, c.uid, c.last.epoch, c.pend.nextVer)
+	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, c.uid, c.last.epoch, c.pend.ver)
 	if err != ktcore.BlameNone {
 		return
 	}
@@ -97,12 +97,12 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		err = ktcore.BlameServFull
 		return
 	}
-	if checkHist(c.serv.vrfPk, c.uid, c.pend.nextVer, last.dig, hist) {
+	if checkHist(c.serv.vrfPk, c.uid, c.pend.ver, last.dig, hist) {
 		err = ktcore.BlameServFull
 		return
 	}
 	histLen := uint64(len(hist))
-	boundVer := c.pend.nextVer + histLen
+	boundVer := c.pend.ver + histLen
 	if checkNonMemb(c.serv.vrfPk, c.uid, boundVer, last.dig, bound) {
 		err = ktcore.BlameServFull
 		return
@@ -131,7 +131,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	}
 	newKey := hist[0]
 	// equals pending put.
-	if !bytes.Equal(newKey.PkOpen.Val, c.pend.pk) {
+	if !bytes.Equal(newKey.PkOpen.Val, c.pend.pendingPk) {
 		err = ktcore.BlameServFull | ktcore.BlameClients
 		return
 	}
@@ -139,9 +139,9 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	// update.
 	c.last = last
 	c.pend.isPending = false
-	c.pend.pk = nil
+	c.pend.pendingPk = nil
 	// this client controls nextVer, so no need to check for overflow.
-	c.pend.nextVer = std.SumAssumeNoOverflow(c.pend.nextVer, 1)
+	c.pend.ver = std.SumAssumeNoOverflow(c.pend.ver, 1)
 	return last.epoch, true, ktcore.BlameNone
 }
 
@@ -229,7 +229,7 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 		return
 	}
 
-	pendingPut := &pending{}
+	pendingPut := &nextVer{}
 	last := &epoch{epoch: lastEp, dig: newDig, link: newLink, sig: reply.LinkSig}
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: reply.VrfSig}
 	c = &Client{uid: uid, pend: pendingPut, last: last, serv: serv}
