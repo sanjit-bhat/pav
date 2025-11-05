@@ -41,8 +41,9 @@ type history struct {
 	vrfPkSig []byte
 }
 
-// Start bootstraps a party with knowledge of the hashchain and vrf.
-func (s *Server) Start() *StartCliReply {
+// StartCli bootstraps a client with knowledge of the last hash
+// in the hashchain and vrf.
+func (s *Server) StartCli() *StartCliReply {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	predLen := uint64(len(s.hist.audits)) - 1
@@ -50,6 +51,17 @@ func (s *Server) Start() *StartCliReply {
 	lastSig := s.hist.audits[predLen].LinkSig
 	pk := s.secs.vrf.PublicKey()
 	return &StartCliReply{PrevEpochLen: predLen, PrevLink: predLink, ChainProof: proof, LinkSig: lastSig, VrfPk: pk, VrfSig: s.hist.vrfPkSig}
+}
+
+// StartAdtr bootstraps an auditor with knowledge of the full hashchain and vrf.
+func (s *Server) StartAdtr() *StartAdtrReply {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	proof := s.hist.chain.Prove(0)
+	predLen := uint64(len(s.hist.audits)) - 1
+	lastSig := s.hist.audits[predLen].LinkSig
+	pk := s.secs.vrf.PublicKey()
+	return &StartAdtrReply{ChainProof: proof, LinkSig: lastSig, VrfPk: pk, VrfSig: s.hist.vrfPkSig}
 }
 
 // Put queues pk (at the specified version) for insertion.
