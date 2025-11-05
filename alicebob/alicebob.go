@@ -27,6 +27,8 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
 
+	// TODO: a more complete example has multiple auditors that each
+	// check a segment of the full epoch hist.
 	adtr, adtrPk, err := auditor.New(servAddr, servSigPk)
 	if err != ktcore.BlameNone {
 		return
@@ -35,7 +37,7 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	adtrRpc.Serve(adtrAddr)
 	time.Sleep(time.Millisecond)
 
-	// start alice and bob.
+	// setup alice and bob.
 	alice, err := client.New(aliceUid, servAddr, servSigPk)
 	if err != ktcore.BlameNone {
 		return
@@ -44,12 +46,21 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	if err != ktcore.BlameNone {
 		return
 	}
+
+	// run first audit to learn auditor has init epoch in its hist.
+	if evid, err = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+		return
+	}
+	if evid, err = bob.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+		return
+	}
+
+	// run alice and bob.
 	var aliceHist []*histEntry
 	var aliceErr ktcore.Blame
 	var bobEp uint64
 	var bobAlicePk *histEntry
 	var bobErr ktcore.Blame
-
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	wg.Add(1)
@@ -77,7 +88,8 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 		return
 	}
 
-	// sync auditors and audit. in real world, this'll happen periodically.
+	// sync auditor and do second audit.
+	// in real world, this'll happen periodically.
 	adtrCli := advrpc.Dial(adtrAddr)
 	if err = auditor.CallUpdate(adtrCli); err != ktcore.BlameNone {
 		return
