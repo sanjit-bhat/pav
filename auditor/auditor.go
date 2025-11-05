@@ -111,10 +111,10 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryp
 	mu := new(sync.RWMutex)
 	sigPk, sk := cryptoffi.SigGenerateKey()
 	linkSig := ktcore.SignLink(sk, bootEp, newLink)
-	hist := []*history{{link: newLink, servSig: reply.LinkSig, adtrSig: linkSig}}
+	h := &history{link: newLink, servSig: reply.LinkSig, adtrSig: linkSig}
 	vrfSig := ktcore.SignVrf(sk, reply.VrfPk)
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: reply.VrfPk, servVrfSig: reply.VrfSig, adtrVrfSig: vrfSig}
-	a = &Auditor{mu: mu, sk: sk, lastDig: newDig, bootEp: bootEp, hist: hist, serv: serv}
+	a = &Auditor{mu: mu, sk: sk, lastDig: newDig, bootEp: bootEp, hist: []*history{h}, serv: serv}
 	return
 }
 
