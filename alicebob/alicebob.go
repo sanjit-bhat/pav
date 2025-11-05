@@ -3,6 +3,7 @@ package alicebob
 import (
 	"bytes"
 	"sync"
+	"time"
 
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
@@ -24,7 +25,7 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	serv, servSigPk := server.New()
 	servRpc := server.NewRpcServer(serv)
 	servRpc.Serve(servAddr)
-	primitive.Sleep(1_000_000)
+	time.Sleep(time.Millisecond)
 
 	adtr, adtrPk, err := auditor.New(servAddr, servSigPk)
 	if err != ktcore.BlameNone {
@@ -32,7 +33,7 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	}
 	adtrRpc := auditor.NewRpcAuditor(adtr)
 	adtrRpc.Serve(adtrAddr)
-	primitive.Sleep(1_000_000)
+	time.Sleep(time.Millisecond)
 
 	// start alice and bob.
 	alice, err := client.New(aliceUid, servAddr, servSigPk)
@@ -134,7 +135,7 @@ func runAlice(cli *client.Client) (hist []*histEntry, err ktcore.Blame) {
 	}
 
 	for i := 0; i < 20; i++ {
-		primitive.Sleep(5_000_000)
+		time.Sleep(5 * time.Millisecond)
 		pk := cryptoffi.RandBytes(32)
 		// no pending puts at this pt. we waited until prior put was inserted.
 		cli.Put(pk)
@@ -165,7 +166,7 @@ func loopPending(cli *client.Client, ep uint64) (err ktcore.Blame) {
 
 // runBob does a get at some time in the middle of alice's puts.
 func runBob(cli *client.Client) (ep uint64, ent *histEntry, err ktcore.Blame) {
-	primitive.Sleep(120_000_000)
+	time.Sleep(120 * time.Millisecond)
 	ep, isReg, pk, err := cli.Get(aliceUid)
 	ent = &histEntry{isReg: isReg, pk: pk}
 	return
