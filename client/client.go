@@ -148,42 +148,26 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Evid, err ktcore.Blame) {
 	cli := advrpc.Dial(adtrAddr)
 	last := c.last
-	audit := auditor.CallGet(cli, last.epoch)
-	if audit.Err != ktcore.BlameNone {
-		err = audit.Err
+	reply := auditor.CallGet(cli, last.epoch)
+	if reply.Err != ktcore.BlameNone {
+		err = reply.Err
 		return
 	}
-
-	// check adtr sig for consistency under untrusted server and trusted auditor.
-	// check serv sig to catch serv misbehavior.
+	if errb := checkAudit(c.serv.sigPk, adtrPk, last.epoch, reply); errb {
+		err = ktcore.BlameAdtrFull
+		return
+	}
 
 	// vrf evidence.
-	if ktcore.VerifyVrfSig(adtrPk, audit.VrfPk, audit.AdtrVrfSig) {
-		err = ktcore.BlameAdtrFull
-		return
-	}
-	if ktcore.VerifyVrfSig(c.serv.sigPk, audit.VrfPk, audit.ServVrfSig) {
-		err = ktcore.BlameAdtrFull
-		return
-	}
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.serv.vrfPk)
-	if !bytes.Equal(vrfPkB, audit.VrfPk) {
-		evid = &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.serv.vrfSig, vrfPk1: audit.VrfPk, sig1: audit.ServVrfSig}}
+	if !bytes.Equal(vrfPkB, reply.VrfPk) {
+		evid = &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.serv.vrfSig, vrfPk1: reply.VrfPk, sig1: reply.ServVrfSig}}
 		err = ktcore.BlameServSig
 		return
 	}
-
 	// link evidence.
-	if ktcore.VerifyLinkSig(adtrPk, last.epoch, audit.Link, audit.AdtrLinkSig) {
-		err = ktcore.BlameAdtrFull
-		return
-	}
-	if ktcore.VerifyLinkSig(c.serv.sigPk, last.epoch, audit.Link, audit.ServLinkSig) {
-		err = ktcore.BlameAdtrFull
-		return
-	}
-	if !bytes.Equal(last.link, audit.Link) {
-		evid = &Evid{link: &evidLink{epoch: last.epoch, link0: last.link, sig0: last.sig, link1: audit.Link, sig1: audit.ServLinkSig}}
+	if !bytes.Equal(last.link, reply.Link) {
+		evid = &Evid{link: &evidLink{epoch: last.epoch, link0: last.link, sig0: last.sig, link1: reply.Link, sig1: reply.ServLinkSig}}
 		err = ktcore.BlameServSig
 		return
 	}
@@ -196,35 +180,8 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 	if err != ktcore.BlameNone {
 		return
 	}
-	if uint64(len(reply.PrevLink)) != cryptoffi.HashLen {
-		err = ktcore.BlameServFull
-		return
-	}
-	extLen, newDig, newLink, errb := hashchain.Verify(reply.PrevLink, reply.ChainProof)
+	lastEp, newDig, newLink, vrfPk, errb := checkStart(servPk, reply)
 	if errb {
-		err = ktcore.BlameServFull
-		return
-	}
-	// want a starting dig.
-	if extLen == 0 {
-		err = ktcore.BlameServFull
-		return
-	}
-	if !std.SumNoOverflow(reply.PrevEpochLen, extLen-1) {
-		err = ktcore.BlameServFull
-		return
-	}
-	lastEp := reply.PrevEpochLen + extLen - 1
-	if ktcore.VerifyLinkSig(servPk, lastEp, newLink, reply.LinkSig) {
-		err = ktcore.BlameServFull
-		return
-	}
-	vrfPk, errb := cryptoffi.VrfPublicKeyDecode(reply.VrfPk)
-	if errb {
-		err = ktcore.BlameServFull
-		return
-	}
-	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
 		err = ktcore.BlameServFull
 		return
 	}
@@ -294,6 +251,61 @@ func checkNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, no
 		return
 	}
 	if !bytes.Equal(dig, dig0) {
+		err = true
+		return
+	}
+	return
+}
+
+func checkAudit(servPk, adtrPk cryptoffi.SigPublicKey, ep uint64, reply *auditor.GetReply) (err bool) {
+	// check adtr sig for consistency under untrusted server and trusted auditor.
+	// check serv sig to catch serv misbehavior.
+	if ktcore.VerifyVrfSig(adtrPk, reply.VrfPk, reply.AdtrVrfSig) {
+		return true
+	}
+	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.ServVrfSig) {
+		return true
+	}
+
+	if ktcore.VerifyLinkSig(adtrPk, ep, reply.Link, reply.AdtrLinkSig) {
+		return true
+	}
+	if ktcore.VerifyLinkSig(servPk, ep, reply.Link, reply.ServLinkSig) {
+		return true
+	}
+	return
+}
+
+func checkStart(servPk cryptoffi.SigPublicKey, reply *server.StartCliReply) (lastEp uint64, newDig, newLink []byte, vrfPk *cryptoffi.VrfPublicKey, err bool) {
+	if uint64(len(reply.PrevLink)) != cryptoffi.HashLen {
+		err = true
+		return
+	}
+	extLen, newDig, newLink, errb := hashchain.Verify(reply.PrevLink, reply.ChainProof)
+	if errb {
+		err = true
+		return
+	}
+	// want a starting dig.
+	if extLen == 0 {
+		err = true
+		return
+	}
+	if !std.SumNoOverflow(reply.PrevEpochLen, extLen-1) {
+		err = true
+		return
+	}
+	lastEp = reply.PrevEpochLen + extLen - 1
+	if ktcore.VerifyLinkSig(servPk, lastEp, newLink, reply.LinkSig) {
+		err = true
+		return
+	}
+	vrfPk, errb = cryptoffi.VrfPublicKeyDecode(reply.VrfPk)
+	if errb {
+		err = true
+		return
+	}
+	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
 		err = true
 		return
 	}
