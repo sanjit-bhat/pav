@@ -53,9 +53,8 @@ func Verify(prevLink, proof []byte) (extLen uint64, newVal []byte, newLink []byt
 
 	newLink = prevLink
 	for i := uint64(0); i < extLen; i++ {
-		start := i * cryptoffi.HashLen
-		end := (i + 1) * cryptoffi.HashLen
-		newVal = proof[start:end]
+		newVal = proof[:cryptoffi.HashLen]
+		proof = proof[cryptoffi.HashLen:]
 		newLink = GetNextLink(newLink, newVal)
 	}
 	return
