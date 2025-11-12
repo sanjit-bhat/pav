@@ -180,14 +180,14 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 	if err != ktcore.BlameNone {
 		return
 	}
-	lastEp, newDig, newLink, vrfPk, errb := auditor.CheckStart(servPk, reply)
+	startEp, startDig, startLink, vrfPk, errb := auditor.CheckStart(servPk, reply)
 	if errb {
 		err = ktcore.BlameServFull
 		return
 	}
 
 	pendingPut := &nextVer{}
-	last := &epoch{epoch: lastEp, dig: newDig, link: newLink, sig: reply.LinkSig}
+	last := &epoch{epoch: startEp, dig: startDig, link: startLink, sig: reply.LinkSig}
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: reply.VrfSig}
 	c = &Client{uid: uid, pend: pendingPut, last: last, serv: serv}
 	return
