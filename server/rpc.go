@@ -6,8 +6,7 @@ import (
 )
 
 const (
-	StartCliRpc uint64 = iota
-	StartAdtrRpc
+	StartRpc uint64 = iota
 	PutRpc
 	HistoryRpc
 	AuditRpc
@@ -15,13 +14,9 @@ const (
 
 func NewRpcServer(s *Server) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
-	h[StartCliRpc] = func(arg []byte, reply *[]byte) {
-		r := s.StartCli()
-		*reply = StartCliReplyEncode(*reply, r)
-	}
-	h[StartAdtrRpc] = func(arg []byte, reply *[]byte) {
-		r := s.StartAdtr()
-		*reply = StartAdtrReplyEncode(*reply, r)
+	h[StartRpc] = func(arg []byte, reply *[]byte) {
+		r := s.Start()
+		*reply = StartReplyEncode(*reply, r)
 	}
 	h[PutRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err := PutArgDecode(arg)
@@ -57,27 +52,13 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func CallStartCli(c *advrpc.Client) (r *StartCliReply, err ktcore.Blame) {
+func CallStart(c *advrpc.Client) (r *StartReply, err ktcore.Blame) {
 	rb := new([]byte)
-	if c.Call(StartCliRpc, nil, rb) {
+	if c.Call(StartRpc, nil, rb) {
 		err = ktcore.BlameUnknown
 		return
 	}
-	r, _, errb := StartCliReplyDecode(*rb)
-	if errb {
-		err = ktcore.BlameServFull
-		return
-	}
-	return
-}
-
-func CallStartAdtr(c *advrpc.Client) (r *StartAdtrReply, err ktcore.Blame) {
-	rb := new([]byte)
-	if c.Call(StartAdtrRpc, nil, rb) {
-		err = ktcore.BlameUnknown
-		return
-	}
-	r, _, errb := StartAdtrReplyDecode(*rb)
+	r, _, errb := StartReplyDecode(*rb)
 	if errb {
 		err = ktcore.BlameServFull
 		return

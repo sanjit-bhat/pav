@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"sync"
 
+	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/advrpc"
 	"github.com/sanjit-bhat/pav/cryptoffi"
 	"github.com/sanjit-bhat/pav/hashchain"
@@ -17,7 +18,7 @@ type Auditor struct {
 	sk      *cryptoffi.SigPrivateKey
 	lastDig []byte
 	// the epoch of the first elem in hist.
-	bootEp uint64
+	startEp uint64
 	// hist epochs that the server checked Update proofs for.
 	hist []*history
 	serv *serv
@@ -41,7 +42,7 @@ type serv struct {
 func (a *Auditor) Update() (err ktcore.Blame) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	numEps := a.bootEp + uint64(len(a.hist))
+	numEps := a.startEp + uint64(len(a.hist))
 	upd, err := server.CallAudit(a.serv.cli, numEps)
 	if err != ktcore.BlameNone {
 		return
@@ -57,7 +58,7 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 }
 
 func (a *Auditor) updOnce(p *ktcore.AuditProof) (err ktcore.Blame) {
-	nextEp := a.bootEp + uint64(len(a.hist))
+	nextEp := a.startEp + uint64(len(a.hist))
 	lastLink := a.hist[len(a.hist)-1].link
 
 	// check update.
@@ -83,8 +84,8 @@ func (a *Auditor) updOnce(p *ktcore.AuditProof) (err ktcore.Blame) {
 func (a *Auditor) Get(epoch uint64) *GetReply {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	numEpochs := a.bootEp + uint64(len(a.hist))
-	if epoch < a.bootEp {
+	numEpochs := a.startEp + uint64(len(a.hist))
+	if epoch < a.startEp {
 		// could legitimately get small epoch if we started late.
 		return &GetReply{Err: ktcore.BlameUnknown}
 	}
@@ -93,28 +94,29 @@ func (a *Auditor) Get(epoch uint64) *GetReply {
 		return &GetReply{Err: ktcore.BlameUnknown}
 	}
 
-	x := a.hist[epoch-a.bootEp]
+	x := a.hist[epoch-a.startEp]
 	return &GetReply{Link: x.link, ServLinkSig: x.servSig, AdtrLinkSig: x.adtrSig, VrfPk: a.serv.vrfPk, ServVrfSig: a.serv.servVrfSig, AdtrVrfSig: a.serv.adtrVrfSig}
 }
 
 func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryptoffi.SigPublicKey, err ktcore.Blame) {
 	cli := advrpc.Dial(servAddr)
-	reply, err := server.CallStartAdtr(cli)
+	reply, err := server.CallStart(cli)
 	if err != ktcore.BlameNone {
 		return
 	}
-	bootEp, newDig, newLink, err := checkStart(servPk, reply)
-	if err != ktcore.BlameNone {
+	startEp, startDig, startLink, _, errb := CheckStart(servPk, reply)
+	if errb {
+		err = ktcore.BlameServFull
 		return
 	}
 
 	mu := new(sync.RWMutex)
 	sigPk, sk := cryptoffi.SigGenerateKey()
-	linkSig := ktcore.SignLink(sk, bootEp, newLink)
-	h := &history{link: newLink, servSig: reply.LinkSig, adtrSig: linkSig}
+	linkSig := ktcore.SignLink(sk, startEp, startLink)
+	h := &history{link: startLink, servSig: reply.LinkSig, adtrSig: linkSig}
 	vrfSig := ktcore.SignVrf(sk, reply.VrfPk)
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: reply.VrfPk, servVrfSig: reply.VrfSig, adtrVrfSig: vrfSig}
-	a = &Auditor{mu: mu, sk: sk, lastDig: newDig, bootEp: bootEp, hist: []*history{h}, serv: serv}
+	a = &Auditor{mu: mu, sk: sk, lastDig: startDig, startEp: startEp, hist: []*history{h}, serv: serv}
 	return
 }
 
@@ -135,24 +137,37 @@ func getNextDig(lastDig []byte, updates []*ktcore.UpdateProof) (dig []byte, err 
 	return
 }
 
-func checkStart(servPk cryptoffi.SigPublicKey, reply *server.StartAdtrReply) (bootEp uint64, newDig, newLink []byte, err ktcore.Blame) {
-	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
-		err = ktcore.BlameServFull
+func CheckStart(servPk cryptoffi.SigPublicKey, reply *server.StartReply) (ep uint64, dig, link []byte, vrfPk *cryptoffi.VrfPublicKey, err bool) {
+	if uint64(len(reply.PrevLink)) != cryptoffi.HashLen {
+		err = true
 		return
 	}
-	extLen, newDig, newLink, errb := hashchain.Verify(hashchain.GetEmptyLink(), reply.ChainProof)
+	extLen, dig, link, errb := hashchain.Verify(reply.PrevLink, reply.ChainProof)
 	if errb {
-		err = ktcore.BlameServFull
+		err = true
 		return
 	}
-	// want starting dig.
+	// want a starting dig.
 	if extLen == 0 {
-		err = ktcore.BlameServFull
+		err = true
 		return
 	}
-	bootEp = extLen - 1
-	if ktcore.VerifyLinkSig(servPk, bootEp, newLink, reply.LinkSig) {
-		err = ktcore.BlameServFull
+	if !std.SumNoOverflow(reply.PrevEpochLen, extLen-1) {
+		err = true
+		return
+	}
+	ep = reply.PrevEpochLen + extLen - 1
+	if ktcore.VerifyLinkSig(servPk, ep, link, reply.LinkSig) {
+		err = true
+		return
+	}
+	vrfPk, errb = cryptoffi.VrfPublicKeyDecode(reply.VrfPk)
+	if errb {
+		err = true
+		return
+	}
+	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
+		err = true
 		return
 	}
 	return
