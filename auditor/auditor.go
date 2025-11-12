@@ -20,6 +20,7 @@ type Auditor struct {
 	// the epoch of the first elem in hist.
 	startEp uint64
 	// hist epochs that the server checked Update proofs for.
+	// invariant: epochs within bounds.
 	hist []*history
 	serv *serv
 }
@@ -58,6 +59,10 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 }
 
 func (a *Auditor) updOnce(p *ktcore.AuditProof) (err ktcore.Blame) {
+	if !std.SumNoOverflow(a.startEp, uint64(len(a.hist))) {
+		err = ktcore.BlameServFull
+		return
+	}
 	nextEp := a.startEp + uint64(len(a.hist))
 	lastLink := a.hist[len(a.hist)-1].link
 
