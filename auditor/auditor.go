@@ -109,7 +109,7 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryp
 	return
 }
 
-func getNextLink(sigPk cryptoffi.SigPublicKey, prevEp uint64, prevDig, prevLink []byte, p *ktcore.AuditProof) (ep uint64, dig, nextLink []byte, err bool) {
+func getNextLink(sigPk cryptoffi.SigPublicKey, prevEp uint64, prevDig, prevLink []byte, p *ktcore.AuditProof) (ep uint64, dig, link []byte, err bool) {
 	if !std.SumNoOverflow(prevEp, 1) {
 		err = true
 		return
@@ -118,27 +118,27 @@ func getNextLink(sigPk cryptoffi.SigPublicKey, prevEp uint64, prevDig, prevLink 
 	if dig, err = getNextDig(prevDig, p.Updates); err {
 		return
 	}
-	nextLink = hashchain.GetNextLink(prevLink, dig)
-	if ktcore.VerifyLinkSig(sigPk, ep, nextLink, p.LinkSig) {
+	link = hashchain.GetNextLink(prevLink, dig)
+	if ktcore.VerifyLinkSig(sigPk, ep, link, p.LinkSig) {
 		err = true
 		return
 	}
 	return
 }
 
-func getNextDig(prevDig []byte, updates []*ktcore.UpdateProof) (nextDig []byte, err bool) {
-	nextDig = prevDig
+func getNextDig(prevDig []byte, updates []*ktcore.UpdateProof) (dig []byte, err bool) {
+	dig = prevDig
 	for _, u := range updates {
 		var prev, next []byte
 		prev, next, err = merkle.VerifyUpdate(u.MapLabel, u.MapVal, u.NonMembProof)
 		if err {
 			return
 		}
-		if !bytes.Equal(nextDig, prev) {
+		if !bytes.Equal(dig, prev) {
 			err = true
 			return
 		}
-		nextDig = next
+		dig = next
 	}
 	return
 }

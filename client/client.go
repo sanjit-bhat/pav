@@ -59,28 +59,28 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 		return
 	}
 	// check.
-	last, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
+	next, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
 	if errb {
 		err = ktcore.BlameServFull
 		return
 	}
-	if checkHist(c.serv.vrfPk, uid, 0, last.dig, hist) {
+	if checkHist(c.serv.vrfPk, uid, 0, next.dig, hist) {
 		err = ktcore.BlameServFull
 		return
 	}
 	boundVer := uint64(len(hist))
-	if checkNonMemb(c.serv.vrfPk, uid, boundVer, last.dig, bound) {
+	if checkNonMemb(c.serv.vrfPk, uid, boundVer, next.dig, bound) {
 		err = ktcore.BlameServFull
 		return
 	}
 
 	// update.
-	c.last = last
+	c.last = next
 	if boundVer == 0 {
-		return last.epoch, false, nil, ktcore.BlameNone
+		return next.epoch, false, nil, ktcore.BlameNone
 	} else {
 		lastKey := hist[boundVer-1]
-		return last.epoch, true, lastKey.PkOpen.Val, ktcore.BlameNone
+		return next.epoch, true, lastKey.PkOpen.Val, ktcore.BlameNone
 	}
 }
 
@@ -92,18 +92,18 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		return
 	}
 	// check.
-	last, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
+	next, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
 	if errb {
 		err = ktcore.BlameServFull
 		return
 	}
-	if checkHist(c.serv.vrfPk, c.uid, c.pend.ver, last.dig, hist) {
+	if checkHist(c.serv.vrfPk, c.uid, c.pend.ver, next.dig, hist) {
 		err = ktcore.BlameServFull
 		return
 	}
 	histLen := uint64(len(hist))
 	boundVer := c.pend.ver + histLen
-	if checkNonMemb(c.serv.vrfPk, c.uid, boundVer, last.dig, bound) {
+	if checkNonMemb(c.serv.vrfPk, c.uid, boundVer, next.dig, bound) {
 		err = ktcore.BlameServFull
 		return
 	}
@@ -116,8 +116,8 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 			err = ktcore.BlameServFull | ktcore.BlameClients
 			return
 		}
-		c.last = last
-		return last.epoch, false, ktcore.BlameNone
+		c.last = next
+		return next.epoch, false, ktcore.BlameNone
 	}
 	// good client only has one version update at a time.
 	if histLen > 1 {
@@ -126,8 +126,8 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	}
 	// update hasn't yet fired.
 	if histLen == 0 {
-		c.last = last
-		return last.epoch, false, ktcore.BlameNone
+		c.last = next
+		return next.epoch, false, ktcore.BlameNone
 	}
 	newKey := hist[0]
 	// equals pending put.
@@ -137,12 +137,12 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	}
 
 	// update.
-	c.last = last
+	c.last = next
 	c.pend.isPending = false
 	c.pend.pendingPk = nil
 	// this client controls nextVer, so no need to check for overflow.
 	c.pend.ver = std.SumAssumeNoOverflow(c.pend.ver, 1)
-	return last.epoch, true, ktcore.BlameNone
+	return next.epoch, true, ktcore.BlameNone
 }
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Evid, err ktcore.Blame) {
@@ -193,20 +193,20 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 	return
 }
 
-func getNextEp(last *epoch, sigPk cryptoffi.SigPublicKey, chainProof, sig []byte) (next *epoch, err bool) {
-	extLen, newDig, newLink, err := hashchain.Verify(last.link, chainProof)
+func getNextEp(prev *epoch, sigPk cryptoffi.SigPublicKey, chainProof, sig []byte) (next *epoch, err bool) {
+	extLen, newDig, newLink, err := hashchain.Verify(prev.link, chainProof)
 	if err {
 		return
 	}
 	if extLen == 0 {
-		next = last
+		next = prev
 		return
 	}
-	if !std.SumNoOverflow(last.epoch, extLen) {
+	if !std.SumNoOverflow(prev.epoch, extLen) {
 		err = true
 		return
 	}
-	newEp := last.epoch + extLen
+	newEp := prev.epoch + extLen
 	if ktcore.VerifyLinkSig(sigPk, newEp, newLink, sig) {
 		err = true
 		return
