@@ -59,7 +59,7 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 		return
 	}
 	// check.
-	last, errb := c.getChainExt(chainProof, sig)
+	last, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
 	if errb {
 		err = ktcore.BlameServFull
 		return
@@ -92,7 +92,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		return
 	}
 	// check.
-	last, errb := c.getChainExt(chainProof, sig)
+	last, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
 	if errb {
 		err = ktcore.BlameServFull
 		return
@@ -193,25 +193,25 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 	return
 }
 
-func (c *Client) getChainExt(chainProof, sig []byte) (ep *epoch, err bool) {
-	extLen, newDig, newLink, err := hashchain.Verify(c.last.link, chainProof)
+func getNextEp(last *epoch, sigPk cryptoffi.SigPublicKey, chainProof, sig []byte) (next *epoch, err bool) {
+	extLen, newDig, newLink, err := hashchain.Verify(last.link, chainProof)
 	if err {
 		return
 	}
 	if extLen == 0 {
-		ep = c.last
+		next = last
 		return
 	}
-	if !std.SumNoOverflow(c.last.epoch, extLen) {
+	if !std.SumNoOverflow(last.epoch, extLen) {
 		err = true
 		return
 	}
-	newEp := c.last.epoch + extLen
-	if ktcore.VerifyLinkSig(c.serv.sigPk, newEp, newLink, sig) {
+	newEp := last.epoch + extLen
+	if ktcore.VerifyLinkSig(sigPk, newEp, newLink, sig) {
 		err = true
 		return
 	}
-	ep = &epoch{epoch: newEp, dig: newDig, link: newLink, sig: sig}
+	next = &epoch{epoch: newEp, dig: newDig, link: newLink, sig: sig}
 	return
 }
 
