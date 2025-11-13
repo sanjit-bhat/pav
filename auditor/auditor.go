@@ -50,38 +50,22 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 	}
 
 	for _, p := range upd {
-		err = a.updOnce(p)
-		if err != ktcore.BlameNone {
+		sigPk := a.serv.sigPk
+		prevEp := a.startEp + uint64(len(a.hist)) - 1
+		prevLink := a.hist[len(a.hist)-1].link
+		ep, dig, link, errb := getNextLink(sigPk, prevEp, a.lastDig, prevLink, p)
+		if errb {
+			err = ktcore.BlameServFull
 			return
 		}
+
+		// counter-sign and apply update.
+		sig := ktcore.SignLink(a.sk, ep, link)
+		a.lastDig = dig
+		info := &history{link: link, servSig: p.LinkSig, adtrSig: sig}
+		a.hist = append(a.hist, info)
 	}
 	return
-}
-
-func (a *Auditor) updOnce(p *ktcore.AuditProof) (err ktcore.Blame) {
-	if !std.SumNoOverflow(a.startEp, uint64(len(a.hist))) {
-		err = ktcore.BlameServFull
-		return
-	}
-	nextEp := a.startEp + uint64(len(a.hist))
-	lastLink := a.hist[len(a.hist)-1].link
-
-	// check update.
-	nextDig, errb := getNextDig(a.lastDig, p.Updates)
-	if errb {
-		return ktcore.BlameServFull
-	}
-	nextLink := hashchain.GetNextLink(lastLink, nextDig)
-	if ktcore.VerifyLinkSig(a.serv.sigPk, nextEp, nextLink, p.LinkSig) {
-		return ktcore.BlameServFull
-	}
-
-	// sign and apply update.
-	sig := ktcore.SignLink(a.sk, nextEp, nextLink)
-	a.lastDig = nextDig
-	info := &history{link: nextLink, servSig: p.LinkSig, adtrSig: sig}
-	a.hist = append(a.hist, info)
-	return ktcore.BlameNone
 }
 
 // Get returns the auditor's info for a particular epoch.
@@ -125,19 +109,36 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryp
 	return
 }
 
-func getNextDig(lastDig []byte, updates []*ktcore.UpdateProof) (dig []byte, err bool) {
-	dig = lastDig
+func getNextLink(sigPk cryptoffi.SigPublicKey, prevEp uint64, prevDig, prevLink []byte, p *ktcore.AuditProof) (ep uint64, dig, nextLink []byte, err bool) {
+	if !std.SumNoOverflow(prevEp, 1) {
+		err = true
+		return
+	}
+	ep = prevEp + 1
+	if dig, err = getNextDig(prevDig, p.Updates); err {
+		return
+	}
+	nextLink = hashchain.GetNextLink(prevLink, dig)
+	if ktcore.VerifyLinkSig(sigPk, ep, nextLink, p.LinkSig) {
+		err = true
+		return
+	}
+	return
+}
+
+func getNextDig(prevDig []byte, updates []*ktcore.UpdateProof) (nextDig []byte, err bool) {
+	nextDig = prevDig
 	for _, u := range updates {
 		var prev, next []byte
 		prev, next, err = merkle.VerifyUpdate(u.MapLabel, u.MapVal, u.NonMembProof)
 		if err {
 			return
 		}
-		if !bytes.Equal(dig, prev) {
+		if !bytes.Equal(nextDig, prev) {
 			err = true
 			return
 		}
-		dig = next
+		nextDig = next
 	}
 	return
 }
