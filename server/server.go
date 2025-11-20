@@ -2,6 +2,7 @@ package server
 
 import (
 	"sync"
+	"time"
 
 	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/cryptoffi"
@@ -10,13 +11,19 @@ import (
 	"github.com/sanjit-bhat/pav/merkle"
 )
 
+var (
+	WorkQSize    int = 1024
+	BatchSize    int = 128
+	BatchTimeout     = time.Second
+)
+
 type Server struct {
 	mu   *sync.RWMutex
 	secs *secrets
 	keys *keyStore
 	hist *history
-	// workQ batch processes Put requests.
-	workQ *WorkQ
+	// workQ for batch processing Put requests.
+	workQ chan *Work
 }
 
 type secrets struct {
@@ -55,8 +62,7 @@ func (s *Server) Start() *StartReply {
 
 // Put queues pk (at the specified version) for insertion.
 func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
-	// NOTE: this doesn't need to block.
-	s.workQ.Do(&WQReq{Uid: uid, Pk: pk, Ver: ver})
+	s.workQ <- &Work{Uid: uid, Pk: pk, Ver: ver}
 }
 
 // History gives key history for uid, excluding first prevVerLen versions.
@@ -104,13 +110,10 @@ func (s *Server) Audit(prevEpochLen uint64) (proof []*ktcore.AuditProof, err ktc
 	return
 }
 
-type WQReq struct {
+type Work struct {
 	Uid uint64
 	Pk  []byte
 	Ver uint64
-}
-
-type WQResp struct {
 	Err bool
 }
 
@@ -119,9 +122,26 @@ type mapEntry struct {
 	val   []byte
 }
 
-func (s *Server) worker() {
-	work := s.workQ.Get()
-	s.checkRequests(work)
+// batch-aggregator with timeout.
+func getWork(workQ <-chan *Work) (work []*Work) {
+	work = make([]*Work, 0, BatchSize)
+	timer := time.NewTimer(BatchTimeout)
+
+	for i := 0; i < BatchSize; i++ {
+		select {
+		case job, ok := <-workQ:
+			// never close channel.
+			std.Assert(ok)
+			work = append(work, job)
+		case <-timer.C:
+			return
+		}
+	}
+	return
+}
+
+func (s *Server) doWork(work []*Work) {
+	s.checkWork(work)
 
 	// NOTE: for correctness, addEntries (write) must start with the same
 	// state as makeEntries (read). we ensure this by not having any write
@@ -130,10 +150,6 @@ func (s *Server) worker() {
 	s.mu.Lock()
 	s.addEntries(work, ents)
 	s.mu.Unlock()
-
-	for _, w := range work {
-		w.Finish()
-	}
 }
 
 func New() (*Server, cryptoffi.SigPublicKey) {
@@ -148,7 +164,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	keys := &keyStore{hidden: hidden, plain: plain}
 	chain := hashchain.New()
 	hist := &history{chain: chain, vrfPkSig: vrfSig}
-	wq := NewWorkQ()
+	wq := make(chan *Work, WorkQSize)
 	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, workQ: wq}
 
 	// commit empty map as epoch 0.
@@ -159,56 +175,54 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 
 	go func() {
 		for {
-			s.worker()
+			work := getWork(s.workQ)
+			s.doWork(work)
 		}
 	}()
 	return s, sigPk
 }
 
-func (s *Server) checkRequests(work []*Work) {
+func (s *Server) checkWork(work []*Work) {
 	uidSet := make(map[uint64]bool, len(work))
 	for _, w := range work {
-		w.Resp = &WQResp{}
-		uid := w.Req.Uid
+		uid := w.Uid
 		// error out wrong versions.
 		nextVer := uint64(len(s.keys.plain[uid]))
-		if w.Req.Ver != nextVer {
-			w.Resp.Err = true
+		if w.Ver != nextVer {
+			w.Err = true
 			continue
 		}
 		// error out duplicate uid's. arbitrarily picks one to succeed.
 		_, ok := uidSet[uid]
 		if ok {
-			w.Resp.Err = true
+			w.Err = true
 			continue
 		}
 		uidSet[uid] = false
 	}
 }
 
-func (s *Server) makeEntries(work []*Work) []*mapEntry {
-	ents := make([]*mapEntry, len(work))
-	for i := uint64(0); i < uint64(len(work)); i++ {
-		ents[i] = &mapEntry{}
-	}
+func (s *Server) makeEntries(work []*Work) (ents []*mapEntry) {
+	ents = make([]*mapEntry, len(work))
 	wg := new(sync.WaitGroup)
-	for i := uint64(0); i < uint64(len(work)); i++ {
-		resp := work[i].Resp
-		if !resp.Err {
-			req := work[i].Req
-			out := ents[i]
-			wg.Add(1)
-			go func() {
-				s.makeEntry(req, out)
-				wg.Done()
-			}()
+	for i := 0; i < len(work); i++ {
+		job := work[i]
+		if job.Err {
+			continue
 		}
+		out := &mapEntry{}
+		ents[i] = out
+		wg.Add(1)
+		go func() {
+			s.makeEntry(job, out)
+			wg.Done()
+		}()
 	}
 	wg.Wait()
-	return ents
+	return
 }
 
-func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
+func (s *Server) makeEntry(in *Work, out *mapEntry) {
 	numVers := uint64(len(s.keys.plain[in.Uid]))
 	mapLabel := ktcore.EvalMapLabel(s.secs.vrf, in.Uid, numVers)
 	rand := ktcore.GetCommitRand(s.secs.commit, mapLabel)
@@ -222,18 +236,19 @@ func (s *Server) makeEntry(in *WQReq, out *mapEntry) {
 func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 	upd := make([]*ktcore.UpdateProof, 0, len(work))
 	for i := uint64(0); i < uint64(len(work)); i++ {
-		resp := work[i].Resp
-		if !resp.Err {
-			req := work[i].Req
-			out0 := ents[i]
-			label := out0.label
-
-			proof := s.keys.hidden.Put(label, out0.val)
-			s.keys.plain[req.Uid] = append(s.keys.plain[req.Uid], req.Pk)
-
-			info := &ktcore.UpdateProof{MapLabel: label, MapVal: out0.val, NonMembProof: proof}
-			upd = append(upd, info)
+		job := work[i]
+		if job.Err {
+			continue
 		}
+
+		out := ents[i]
+		label := out.label
+
+		proof := s.keys.hidden.Put(label, out.val)
+		s.keys.plain[job.Uid] = append(s.keys.plain[job.Uid], job.Pk)
+
+		info := &ktcore.UpdateProof{MapLabel: label, MapVal: out.val, NonMembProof: proof}
+		upd = append(upd, info)
 	}
 
 	dig := s.keys.hidden.Hash()
