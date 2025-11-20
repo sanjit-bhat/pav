@@ -8,7 +8,7 @@ import (
 
 func ReadBool(b []byte) (data bool, rem []byte, err bool) {
 	rem = b
-	if uint64(len(rem)) < 1 {
+	if len(rem) < 1 {
 		err = true
 		return
 	}
@@ -31,7 +31,7 @@ func ReadConstBool(b []byte, cst bool) (rem []byte, err bool) {
 
 func ReadInt(b []byte) (data uint64, rem []byte, err bool) {
 	rem = b
-	if uint64(len(rem)) < 8 {
+	if len(rem) < 8 {
 		err = true
 		return
 	}
@@ -54,7 +54,7 @@ func ReadConstInt(b []byte, cst uint64) (rem []byte, err bool) {
 
 func ReadByte(b []byte) (data byte, rem []byte, err bool) {
 	rem = b
-	if uint64(len(rem)) < 1 {
+	if len(rem) < 1 {
 		err = true
 		return
 	}

@@ -235,7 +235,7 @@ func (s *Server) makeEntry(in *Work, out *mapEntry) {
 
 func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 	upd := make([]*ktcore.UpdateProof, 0, len(work))
-	for i := uint64(0); i < uint64(len(work)); i++ {
+	for i := 0; i < len(work); i++ {
 		job := work[i]
 		if job.Err {
 			continue
