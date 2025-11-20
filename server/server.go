@@ -129,11 +129,11 @@ func (s *Server) worker() {
 	}
 }
 
-// batch-aggregator with timeout.
 func getWork(workQ <-chan *Work) (work []*Work) {
 	work = make([]*Work, 0, BatchSize)
 	timer := time.NewTimer(BatchTimeout)
 
+	// batch-aggregator with timeout.
 	for i := 0; i < BatchSize; i++ {
 		select {
 		case job, ok := <-workQ:
