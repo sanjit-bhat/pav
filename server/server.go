@@ -122,6 +122,13 @@ type mapEntry struct {
 	val   []byte
 }
 
+func (s *Server) worker() {
+	for {
+		work := getWork(s.workQ)
+		s.doWork(work)
+	}
+}
+
 // batch-aggregator with timeout.
 func getWork(workQ <-chan *Work) (work []*Work) {
 	work = make([]*Work, 0, BatchSize)
@@ -173,12 +180,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	linkSig := ktcore.SignLink(s.secs.sig, 0, link)
 	s.hist.audits = append(s.hist.audits, &ktcore.AuditProof{LinkSig: linkSig})
 
-	go func() {
-		for {
-			work := getWork(s.workQ)
-			s.doWork(work)
-		}
-	}()
+	go s.worker()
 	return s, sigPk
 }
 
