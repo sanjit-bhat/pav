@@ -122,6 +122,9 @@ type mapEntry struct {
 func (s *Server) worker() {
 	for {
 		work := getWork(s.workQ)
+		if len(work) == 0 {
+			continue
+		}
 		s.doWork(work)
 	}
 }
