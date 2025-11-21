@@ -103,10 +103,7 @@ func (s *Server) Audit(prevEpochLen uint64) (proof []*ktcore.AuditProof, err ktc
 		err = ktcore.BlameUnknown
 		return
 	}
-
-	for ep := prevEpochLen; ep < numEps; ep++ {
-		proof = append(proof, s.hist.audits[ep])
-	}
+	proof = append(proof, s.hist.audits[prevEpochLen:]...)
 	return
 }
 
