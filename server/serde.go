@@ -5,7 +5,7 @@ import (
 )
 
 type StartReply struct {
-	// give prev link to prove that latest hash in hashchain.
+	// give [PrevLink] to prove that latest dig in hashchain.
 	PrevEpochLen uint64
 	PrevLink     []byte
 	ChainProof   []byte
