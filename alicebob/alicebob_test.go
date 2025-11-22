@@ -3,9 +3,15 @@ package alicebob
 import (
 	"net"
 	"testing"
+	"time"
 
 	"github.com/sanjit-bhat/pav/ktcore"
+	"github.com/sanjit-bhat/pav/server"
 )
+
+func init() {
+	server.BatchTimeout = time.Millisecond
+}
 
 func TestAliceBob(t *testing.T) {
 	if _, err := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
