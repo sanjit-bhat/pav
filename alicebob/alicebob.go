@@ -20,6 +20,10 @@ const (
 	bobUid
 )
 
+func init() {
+	server.BatchTimeout = time.Millisecond
+}
+
 func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktcore.Blame) {
 	// setup server and auditor.
 	serv, servSigPk := server.New()
