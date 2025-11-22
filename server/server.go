@@ -12,9 +12,12 @@ import (
 )
 
 var (
-	WorkQSize    int = 1024
-	BatchSize    int = 128
-	BatchTimeout     = time.Second
+	// WorkQSize should be max keys expected per epoch.
+	WorkQSize int = 1024
+	// TODO: should this be eq to [WorkQSize]? or average # keys?
+	BatchSize int = 128
+	// BatchTimeout should be time between epochs.
+	BatchTimeout = time.Second
 )
 
 type Server struct {
