@@ -17,10 +17,11 @@ type Auditor struct {
 	mu      *sync.RWMutex
 	sk      *cryptoffi.SigPrivateKey
 	lastDig []byte
-	// the epoch of the first elem in hist.
+	// the epoch of our first hist entry.
 	startEp uint64
 	// hist epochs that the server checked Update proofs for.
 	// invariant: epochs within bounds.
+	// invariant: at least one entry.
 	hist []*history
 	serv *serv
 }
@@ -43,8 +44,8 @@ type serv struct {
 func (a *Auditor) Update() (err ktcore.Blame) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	numEps := a.startEp + uint64(len(a.hist))
-	upd, err := server.CallAudit(a.serv.cli, numEps)
+	prevEp := a.startEp + uint64(len(a.hist)) - 1
+	upd, err := server.CallAudit(a.serv.cli, prevEp)
 	if err != ktcore.BlameNone {
 		return
 	}
@@ -73,6 +74,8 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 func (a *Auditor) Get(epoch uint64) *GetReply {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
+	// TODO: just know that last ep hasn't overflowed.
+	// are we allowed to compute this and use freely?
 	numEpochs := a.startEp + uint64(len(a.hist))
 	if epoch < a.startEp {
 		// could legitimately get small epoch if we started late.

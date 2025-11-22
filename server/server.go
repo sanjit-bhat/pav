@@ -95,15 +95,15 @@ func (s *Server) History(uid, prevEpoch, prevVerLen uint64) (chainProof, linkSig
 }
 
 // Audit errors if args out of bounds.
-func (s *Server) Audit(prevEpochLen uint64) (proof []*ktcore.AuditProof, err ktcore.Blame) {
+func (s *Server) Audit(prevEpoch uint64) (proof []*ktcore.AuditProof, err ktcore.Blame) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	numEps := uint64(len(s.hist.audits))
-	if prevEpochLen > numEps {
+	if prevEpoch >= numEps {
 		err = ktcore.BlameUnknown
 		return
 	}
-	proof = append(proof, s.hist.audits[prevEpochLen:]...)
+	proof = append(proof, s.hist.audits[prevEpoch+1:]...)
 	return
 }
 

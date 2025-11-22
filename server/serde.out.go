@@ -123,7 +123,7 @@ func HistoryReplyDecode(b0 []byte) (*HistoryReply, []byte, bool) {
 }
 func AuditArgEncode(b0 []byte, o *AuditArg) []byte {
 	var b = b0
-	b = marshal.WriteInt(b, o.PrevEpochLen)
+	b = marshal.WriteInt(b, o.PrevEpoch)
 	return b
 }
 func AuditArgDecode(b0 []byte) (*AuditArg, []byte, bool) {
@@ -131,7 +131,7 @@ func AuditArgDecode(b0 []byte) (*AuditArg, []byte, bool) {
 	if err1 {
 		return nil, nil, true
 	}
-	return &AuditArg{PrevEpochLen: a1}, b1, false
+	return &AuditArg{PrevEpoch: a1}, b1, false
 }
 func AuditReplyEncode(b0 []byte, o *AuditReply) []byte {
 	var b = b0

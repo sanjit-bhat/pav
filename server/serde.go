@@ -35,7 +35,7 @@ type HistoryReply struct {
 }
 
 type AuditArg struct {
-	PrevEpochLen uint64
+	PrevEpoch uint64
 }
 
 type AuditReply struct {
