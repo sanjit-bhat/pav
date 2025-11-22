@@ -74,14 +74,12 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 func (a *Auditor) Get(epoch uint64) *GetReply {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	// TODO: just know that last ep hasn't overflowed.
-	// are we allowed to compute this and use freely?
-	numEpochs := a.startEp + uint64(len(a.hist))
 	if epoch < a.startEp {
 		// could legitimately get small epoch if we started late.
 		return &GetReply{Err: ktcore.BlameUnknown}
 	}
-	if epoch >= numEpochs {
+	lastEp := a.startEp + uint64(len(a.hist)) - 1
+	if epoch > lastEp {
 		// could legitimately get big epoch if we're lagging behind.
 		return &GetReply{Err: ktcore.BlameUnknown}
 	}
