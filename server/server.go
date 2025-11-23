@@ -70,17 +70,17 @@ func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
 
 // History gives key history for uid, excluding first prevVerLen versions.
 // the caller already saw prevEpoch.
-func (s *Server) History(uid, prevEpoch, prevVerLen uint64) (chainProof, linkSig []byte, hist []*ktcore.Memb, bound *ktcore.NonMemb, err ktcore.Blame) {
+func (s *Server) History(uid, prevEpoch, prevVerLen uint64) (chainProof, linkSig []byte, hist []*ktcore.Memb, bound *ktcore.NonMemb, err bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	numEps := uint64(len(s.hist.audits))
 	if prevEpoch >= numEps {
-		err = ktcore.BlameUnknown
+		err = true
 		return
 	}
 	numVers := uint64(len(s.keys.plain[uid]))
 	if prevVerLen > numVers {
-		err = ktcore.BlameUnknown
+		err = true
 		return
 	}
 
@@ -98,12 +98,12 @@ func (s *Server) History(uid, prevEpoch, prevVerLen uint64) (chainProof, linkSig
 }
 
 // Audit errors if args out of bounds.
-func (s *Server) Audit(prevEpoch uint64) (proof []*ktcore.AuditProof, err ktcore.Blame) {
+func (s *Server) Audit(prevEpoch uint64) (proof []*ktcore.AuditProof, err bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	numEps := uint64(len(s.hist.audits))
 	if prevEpoch >= numEps {
-		err = ktcore.BlameUnknown
+		err = true
 		return
 	}
 	proof = append(proof, s.hist.audits[prevEpoch+1:]...)
