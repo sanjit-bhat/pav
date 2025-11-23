@@ -30,7 +30,7 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	h[HistoryRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err := HistoryArgDecode(arg)
 		if err {
-			r := &HistoryReply{Err: ktcore.BlameUnknown}
+			r := &HistoryReply{Err: true}
 			*reply = HistoryReplyEncode(*reply, r)
 			return
 		}
@@ -41,7 +41,7 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	h[AuditRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err := AuditArgDecode(arg)
 		if err {
-			r := &AuditReply{Err: ktcore.BlameUnknown}
+			r := &AuditReply{Err: true}
 			*reply = AuditReplyEncode(*reply, r)
 			return
 		}
@@ -87,7 +87,7 @@ func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) (chainProo
 		err = ktcore.BlameServFull
 		return
 	}
-	if ktcore.CheckBlame(r.Err, []ktcore.Blame{}) {
+	if r.Err {
 		err = ktcore.BlameServFull
 		return
 	}
@@ -107,7 +107,7 @@ func CallAudit(c *advrpc.Client, prevEpoch uint64) (p []*ktcore.AuditProof, err 
 		err = ktcore.BlameServFull
 		return
 	}
-	if ktcore.CheckBlame(r.Err, []ktcore.Blame{}) {
+	if r.Err {
 		err = ktcore.BlameServFull
 		return
 	}

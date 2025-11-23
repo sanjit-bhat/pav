@@ -31,7 +31,7 @@ type HistoryReply struct {
 	LinkSig    []byte
 	Hist       []*ktcore.Memb
 	Bound      *ktcore.NonMemb
-	Err        ktcore.Blame
+	Err        bool
 }
 
 type AuditArg struct {
@@ -40,5 +40,5 @@ type AuditArg struct {
 
 type AuditReply struct {
 	P   []*ktcore.AuditProof
-	Err ktcore.Blame
+	Err bool
 }
