@@ -94,11 +94,16 @@ func (a *Auditor) Get(epoch uint64) (link *SignedLink, vrf *SignedVrfPk, err boo
 
 func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryptoffi.SigPublicKey, err ktcore.Blame) {
 	cli := advrpc.Dial(servAddr)
-	reply, err := server.CallStart(cli)
+	chain, vrf, err := server.CallStart(cli)
 	if err != ktcore.BlameNone {
 		return
 	}
-	startEp, startDig, startLink, _, errb := CheckStart(servPk, reply)
+	startEp, startDig, startLink, errb := CheckStartChain(servPk, chain)
+	if errb {
+		err = ktcore.BlameServFull
+		return
+	}
+	_, errb = CheckStartVrf(servPk, vrf)
 	if errb {
 		err = ktcore.BlameServFull
 		return
@@ -107,9 +112,9 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryp
 	mu := new(sync.RWMutex)
 	sigPk, sk := cryptoffi.SigGenerateKey()
 	linkSig := ktcore.SignLink(sk, startEp, startLink)
-	h := &history{link: startLink, servSig: reply.LinkSig, adtrSig: linkSig}
-	vrfSig := ktcore.SignVrf(sk, reply.VrfPk)
-	serv := &serv{cli: cli, sigPk: servPk, vrfPk: reply.VrfPk, servVrfSig: reply.VrfSig, adtrVrfSig: vrfSig}
+	h := &history{link: startLink, servSig: chain.LinkSig, adtrSig: linkSig}
+	vrfSig := ktcore.SignVrf(sk, vrf.VrfPk)
+	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrf.VrfPk, servVrfSig: vrf.VrfSig, adtrVrfSig: vrfSig}
 	a = &Auditor{mu: mu, sk: sk, lastDig: startDig, startEp: startEp, hist: []*history{h}, serv: serv}
 	return
 }
@@ -148,12 +153,12 @@ func getNextDig(prevDig []byte, updates []*ktcore.UpdateProof) (dig []byte, err 
 	return
 }
 
-func CheckStart(servPk cryptoffi.SigPublicKey, reply *server.StartReply) (ep uint64, dig, link []byte, vrfPk *cryptoffi.VrfPublicKey, err bool) {
-	if uint64(len(reply.PrevLink)) != cryptoffi.HashLen {
+func CheckStartChain(servPk cryptoffi.SigPublicKey, chain *server.StartChain) (ep uint64, dig, link []byte, err bool) {
+	if uint64(len(chain.PrevLink)) != cryptoffi.HashLen {
 		err = true
 		return
 	}
-	extLen, dig, link, errb := hashchain.Verify(reply.PrevLink, reply.ChainProof)
+	extLen, dig, link, errb := hashchain.Verify(chain.PrevLink, chain.ChainProof)
 	if errb {
 		err = true
 		return
@@ -163,21 +168,25 @@ func CheckStart(servPk cryptoffi.SigPublicKey, reply *server.StartReply) (ep uin
 		err = true
 		return
 	}
-	if !std.SumNoOverflow(reply.PrevEpochLen, extLen-1) {
+	if !std.SumNoOverflow(chain.PrevEpochLen, extLen-1) {
 		err = true
 		return
 	}
-	ep = reply.PrevEpochLen + extLen - 1
-	if ktcore.VerifyLinkSig(servPk, ep, link, reply.LinkSig) {
+	ep = chain.PrevEpochLen + extLen - 1
+	if ktcore.VerifyLinkSig(servPk, ep, link, chain.LinkSig) {
 		err = true
 		return
 	}
-	vrfPk, errb = cryptoffi.VrfPublicKeyDecode(reply.VrfPk)
+	return
+}
+
+func CheckStartVrf(servPk cryptoffi.SigPublicKey, vrf *server.StartVrf) (vrfPk *cryptoffi.VrfPublicKey, err bool) {
+	vrfPk, errb := cryptoffi.VrfPublicKeyDecode(vrf.VrfPk)
 	if errb {
 		err = true
 		return
 	}
-	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.VrfSig) {
+	if ktcore.VerifyVrfSig(servPk, vrf.VrfPk, vrf.VrfSig) {
 		err = true
 		return
 	}

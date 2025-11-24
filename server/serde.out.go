@@ -6,17 +6,15 @@ import (
 	"github.com/tchajed/marshal"
 )
 
-func StartReplyEncode(b0 []byte, o *StartReply) []byte {
+func StartChainEncode(b0 []byte, o *StartChain) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.PrevEpochLen)
 	b = safemarshal.WriteSlice1D(b, o.PrevLink)
 	b = safemarshal.WriteSlice1D(b, o.ChainProof)
 	b = safemarshal.WriteSlice1D(b, o.LinkSig)
-	b = safemarshal.WriteSlice1D(b, o.VrfPk)
-	b = safemarshal.WriteSlice1D(b, o.VrfSig)
 	return b
 }
-func StartReplyDecode(b0 []byte) (*StartReply, []byte, bool) {
+func StartChainDecode(b0 []byte) (*StartChain, []byte, bool) {
 	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
@@ -33,15 +31,41 @@ func StartReplyDecode(b0 []byte) (*StartReply, []byte, bool) {
 	if err4 {
 		return nil, nil, true
 	}
-	a5, b5, err5 := safemarshal.ReadSlice1D(b4)
-	if err5 {
+	return &StartChain{PrevEpochLen: a1, PrevLink: a2, ChainProof: a3, LinkSig: a4}, b4, false
+}
+func StartVrfEncode(b0 []byte, o *StartVrf) []byte {
+	var b = b0
+	b = safemarshal.WriteSlice1D(b, o.VrfPk)
+	b = safemarshal.WriteSlice1D(b, o.VrfSig)
+	return b
+}
+func StartVrfDecode(b0 []byte) (*StartVrf, []byte, bool) {
+	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
+	if err1 {
 		return nil, nil, true
 	}
-	a6, b6, err6 := safemarshal.ReadSlice1D(b5)
-	if err6 {
+	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
+	if err2 {
 		return nil, nil, true
 	}
-	return &StartReply{PrevEpochLen: a1, PrevLink: a2, ChainProof: a3, LinkSig: a4, VrfPk: a5, VrfSig: a6}, b6, false
+	return &StartVrf{VrfPk: a1, VrfSig: a2}, b2, false
+}
+func StartReplyEncode(b0 []byte, o *StartReply) []byte {
+	var b = b0
+	b = StartChainEncode(b, o.Chain)
+	b = StartVrfEncode(b, o.Vrf)
+	return b
+}
+func StartReplyDecode(b0 []byte) (*StartReply, []byte, bool) {
+	a1, b1, err1 := StartChainDecode(b0)
+	if err1 {
+		return nil, nil, true
+	}
+	a2, b2, err2 := StartVrfDecode(b1)
+	if err2 {
+		return nil, nil, true
+	}
+	return &StartReply{Chain: a1, Vrf: a2}, b2, false
 }
 func PutArgEncode(b0 []byte, o *PutArg) []byte {
 	var b = b0

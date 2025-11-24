@@ -181,19 +181,24 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Ev
 
 func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err ktcore.Blame) {
 	cli := advrpc.Dial(servAddr)
-	reply, err := server.CallStart(cli)
+	chain, vrf, err := server.CallStart(cli)
 	if err != ktcore.BlameNone {
 		return
 	}
-	startEp, startDig, startLink, vrfPk, errb := auditor.CheckStart(servPk, reply)
+	startEp, startDig, startLink, errb := auditor.CheckStartChain(servPk, chain)
+	if errb {
+		err = ktcore.BlameServFull
+		return
+	}
+	vrfPk, errb := auditor.CheckStartVrf(servPk, vrf)
 	if errb {
 		err = ktcore.BlameServFull
 		return
 	}
 
 	pendingPut := &nextVer{}
-	last := &epoch{epoch: startEp, dig: startDig, link: startLink, sig: reply.LinkSig}
-	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: reply.VrfSig}
+	last := &epoch{epoch: startEp, dig: startDig, link: startLink, sig: chain.LinkSig}
+	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: vrf.VrfSig}
 	c = &Client{uid: uid, pend: pendingPut, last: last, serv: serv}
 	return
 }

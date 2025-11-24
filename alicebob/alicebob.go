@@ -7,7 +7,6 @@ import (
 
 	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
-	"github.com/sanjit-bhat/pav/advrpc"
 	"github.com/sanjit-bhat/pav/auditor"
 	"github.com/sanjit-bhat/pav/client"
 	"github.com/sanjit-bhat/pav/cryptoffi"

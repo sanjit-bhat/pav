@@ -15,7 +15,8 @@ const (
 func NewRpcServer(s *Server) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
 	h[StartRpc] = func(arg []byte, reply *[]byte) {
-		r := s.Start()
+		r0, r1 := s.Start()
+		r := &StartReply{Chain: r0, Vrf: r1}
 		*reply = StartReplyEncode(*reply, r)
 	}
 	h[PutRpc] = func(arg []byte, reply *[]byte) {
@@ -52,13 +53,15 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func CallStart(c *advrpc.Client) (r *StartReply, err ktcore.Blame) {
+func CallStart(c *advrpc.Client) (chain *StartChain, vrf *StartVrf, err ktcore.Blame) {
 	rb := new([]byte)
 	if c.Call(StartRpc, nil, rb) {
 		err = ktcore.BlameUnknown
 		return
 	}
 	r, _, errb := StartReplyDecode(*rb)
+	chain = r.Chain
+	vrf = r.Vrf
 	if errb {
 		err = ktcore.BlameServFull
 		return

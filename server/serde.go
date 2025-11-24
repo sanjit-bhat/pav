@@ -4,14 +4,22 @@ import (
 	"github.com/sanjit-bhat/pav/ktcore"
 )
 
-type StartReply struct {
+type StartChain struct {
 	// give [PrevLink] to prove that latest dig in hashchain.
 	PrevEpochLen uint64
 	PrevLink     []byte
 	ChainProof   []byte
 	LinkSig      []byte
-	VrfPk        []byte
-	VrfSig       []byte
+}
+
+type StartVrf struct {
+	VrfPk  []byte
+	VrfSig []byte
+}
+
+type StartReply struct {
+	Chain *StartChain
+	Vrf   *StartVrf
 }
 
 type PutArg struct {
