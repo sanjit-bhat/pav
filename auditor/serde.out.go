@@ -1,23 +1,12 @@
+// Auto-generated from spec "github.com/sanjit-bhat/pav/auditor/serde.go"
+// using compiler "github.com/sanjit-bhat/pav/serde".
 package auditor
 
 import (
-	"github.com/sanjit-bhat/pav/ktcore"
 	"github.com/sanjit-bhat/pav/safemarshal"
 	"github.com/tchajed/marshal"
 )
 
-func UpdateReplyEncode(b0 []byte, o *UpdateReply) []byte {
-	var b = b0
-	b = marshal.WriteInt(b, uint64(o.Err))
-	return b
-}
-func UpdateReplyDecode(b0 []byte) (*UpdateReply, []byte, bool) {
-	a1, b1, err1 := safemarshal.ReadInt(b0)
-	if err1 {
-		return nil, nil, true
-	}
-	return &UpdateReply{Err: ktcore.Blame(a1)}, b1, false
-}
 func GetArgEncode(b0 []byte, o *GetArg) []byte {
 	var b = b0
 	b = marshal.WriteInt(b, o.Epoch)

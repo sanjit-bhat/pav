@@ -6,7 +6,7 @@ proj_root = Path(__file__).parents[1]
 
 
 # TODO: once compiler supports objects from diff pkgs, test:
-# {server,auditor}/serde.go.
+# {server}/serde.go.
 
 
 class Tests(unittest.TestCase):
@@ -23,6 +23,17 @@ class Tests(unittest.TestCase):
 
     def test_merkle_serde(self):
         cmd = "go run ./serde --in merkle/serde.go && git diff --exit-code merkle/serde.out.go"
+        res = subprocess.run(
+            cmd, cwd=proj_root, shell=True, capture_output=True, text=True
+        )
+        self.assertEqual(
+            res.returncode,
+            0,
+            f"Command failed with error message: {res.stderr} and output: {res.stdout}",
+        )
+
+    def test_auditor_serde(self):
+        cmd = "go run ./serde --in auditor/serde.go && git diff --exit-code auditor/serde.out.go"
         res = subprocess.run(
             cmd, cwd=proj_root, shell=True, capture_output=True, text=True
         )
