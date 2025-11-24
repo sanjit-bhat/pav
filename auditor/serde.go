@@ -10,7 +10,7 @@ type SignedLink struct {
 	AdtrSig []byte
 }
 
-type SignedVrfPk struct {
+type SignedVrf struct {
 	VrfPk   []byte
 	ServSig []byte
 	AdtrSig []byte
@@ -18,6 +18,6 @@ type SignedVrfPk struct {
 
 type GetReply struct {
 	Link *SignedLink
-	Vrf  *SignedVrfPk
+	Vrf  *SignedVrf
 	Err  bool
 }

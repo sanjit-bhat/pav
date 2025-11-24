@@ -41,14 +41,14 @@ func SignedLinkDecode(b0 []byte) (*SignedLink, []byte, bool) {
 	}
 	return &SignedLink{Link: a1, ServSig: a2, AdtrSig: a3}, b3, false
 }
-func SignedVrfPkEncode(b0 []byte, o *SignedVrfPk) []byte {
+func SignedVrfPkEncode(b0 []byte, o *SignedVrf) []byte {
 	var b = b0
 	b = safemarshal.WriteSlice1D(b, o.VrfPk)
 	b = safemarshal.WriteSlice1D(b, o.ServSig)
 	b = safemarshal.WriteSlice1D(b, o.AdtrSig)
 	return b
 }
-func SignedVrfPkDecode(b0 []byte) (*SignedVrfPk, []byte, bool) {
+func SignedVrfPkDecode(b0 []byte) (*SignedVrf, []byte, bool) {
 	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
 	if err1 {
 		return nil, nil, true
@@ -61,7 +61,7 @@ func SignedVrfPkDecode(b0 []byte) (*SignedVrfPk, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &SignedVrfPk{VrfPk: a1, ServSig: a2, AdtrSig: a3}, b3, false
+	return &SignedVrf{VrfPk: a1, ServSig: a2, AdtrSig: a3}, b3, false
 }
 func GetReplyEncode(b0 []byte, o *GetReply) []byte {
 	var b = b0

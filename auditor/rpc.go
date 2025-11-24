@@ -25,7 +25,7 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 	return advrpc.NewServer(h)
 }
 
-func CallGet(c *advrpc.Client, epoch uint64) (link *SignedLink, vrf *SignedVrfPk, err ktcore.Blame) {
+func CallGet(c *advrpc.Client, epoch uint64) (link *SignedLink, vrf *SignedVrf, err ktcore.Blame) {
 	a := &GetArg{Epoch: epoch}
 	ab := GetArgEncode(nil, a)
 	rb := new([]byte)
