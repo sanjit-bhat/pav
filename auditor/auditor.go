@@ -71,7 +71,7 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 
 // Get returns the auditor's info for a particular epoch.
 // it errors if the epoch is out of bounds.
-func (a *Auditor) Get(epoch uint64) (link *SignedLink, vrf *SignedVrfPk, err bool) {
+func (a *Auditor) Get(epoch uint64) (link *SignedLink, vrf *SignedVrf, err bool) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if epoch < a.startEp {
@@ -88,7 +88,7 @@ func (a *Auditor) Get(epoch uint64) (link *SignedLink, vrf *SignedVrfPk, err boo
 
 	x := a.hist[epoch-a.startEp]
 	link = &SignedLink{Link: x.link, ServSig: x.servSig, AdtrSig: x.adtrSig}
-	vrf = &SignedVrfPk{VrfPk: a.serv.vrfPk, ServSig: a.serv.servVrfSig, AdtrSig: a.serv.adtrVrfSig}
+	vrf = &SignedVrf{VrfPk: a.serv.vrfPk, ServSig: a.serv.servVrfSig, AdtrSig: a.serv.adtrVrfSig}
 	return
 }
 

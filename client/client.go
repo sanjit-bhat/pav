@@ -277,7 +277,7 @@ func checkAuditLink(servPk, adtrPk cryptoffi.SigPublicKey, ep uint64, link *audi
 	return
 }
 
-func checkAuditVrf(servPk, adtrPk cryptoffi.SigPublicKey, vrf *auditor.SignedVrfPk) (err bool) {
+func checkAuditVrf(servPk, adtrPk cryptoffi.SigPublicKey, vrf *auditor.SignedVrf) (err bool) {
 	if ktcore.VerifyVrfSig(adtrPk, vrf.VrfPk, vrf.AdtrSig) {
 		return true
 	}
