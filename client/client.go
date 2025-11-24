@@ -148,26 +148,31 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Evid, err ktcore.Blame) {
 	cli := advrpc.Dial(adtrAddr)
 	last := c.last
-	reply := auditor.CallGet(cli, last.epoch)
-	if reply.Err != ktcore.BlameNone {
-		err = reply.Err
+	link, vrf, err := auditor.CallGet(cli, last.epoch)
+	if err != ktcore.BlameNone {
 		return
 	}
-	if errb := checkAudit(c.serv.sigPk, adtrPk, last.epoch, reply); errb {
+	// check adtr sig for consistency under untrusted server and trusted auditor.
+	// check serv sig to catch serv misbehavior.
+	if checkAuditLink(c.serv.sigPk, adtrPk, last.epoch, link) {
+		err = ktcore.BlameAdtrFull
+		return
+	}
+	if checkAuditVrf(c.serv.sigPk, adtrPk, vrf) {
 		err = ktcore.BlameAdtrFull
 		return
 	}
 
 	// vrf evidence.
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.serv.vrfPk)
-	if !bytes.Equal(vrfPkB, reply.VrfPk) {
-		evid = &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.serv.vrfSig, vrfPk1: reply.VrfPk, sig1: reply.ServVrfSig}}
+	if !bytes.Equal(vrfPkB, vrf.VrfPk) {
+		evid = &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.serv.vrfSig, vrfPk1: vrf.VrfPk, sig1: vrf.ServSig}}
 		err = ktcore.BlameServSig
 		return
 	}
 	// link evidence.
-	if !bytes.Equal(last.link, reply.Link) {
-		evid = &Evid{link: &evidLink{epoch: last.epoch, link0: last.link, sig0: last.sig, link1: reply.Link, sig1: reply.ServLinkSig}}
+	if !bytes.Equal(last.link, link.Link) {
+		evid = &Evid{link: &evidLink{epoch: last.epoch, link0: last.link, sig0: last.sig, link1: link.Link, sig1: link.ServSig}}
 		err = ktcore.BlameServSig
 		return
 	}
@@ -257,20 +262,21 @@ func checkNonMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, no
 	return
 }
 
-func checkAudit(servPk, adtrPk cryptoffi.SigPublicKey, ep uint64, reply *auditor.GetReply) (err bool) {
-	// check adtr sig for consistency under untrusted server and trusted auditor.
-	// check serv sig to catch serv misbehavior.
-	if ktcore.VerifyVrfSig(adtrPk, reply.VrfPk, reply.AdtrVrfSig) {
+func checkAuditLink(servPk, adtrPk cryptoffi.SigPublicKey, ep uint64, link *auditor.SignedLink) (err bool) {
+	if ktcore.VerifyLinkSig(adtrPk, ep, link.Link, link.AdtrSig) {
 		return true
 	}
-	if ktcore.VerifyVrfSig(servPk, reply.VrfPk, reply.ServVrfSig) {
+	if ktcore.VerifyLinkSig(servPk, ep, link.Link, link.ServSig) {
 		return true
 	}
+	return
+}
 
-	if ktcore.VerifyLinkSig(adtrPk, ep, reply.Link, reply.AdtrLinkSig) {
+func checkAuditVrf(servPk, adtrPk cryptoffi.SigPublicKey, vrf *auditor.SignedVrfPk) (err bool) {
+	if ktcore.VerifyVrfSig(adtrPk, vrf.VrfPk, vrf.AdtrSig) {
 		return true
 	}
-	if ktcore.VerifyLinkSig(servPk, ep, reply.Link, reply.ServLinkSig) {
+	if ktcore.VerifyVrfSig(servPk, vrf.VrfPk, vrf.ServSig) {
 		return true
 	}
 	return

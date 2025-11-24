@@ -20,16 +20,19 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 	h[GetRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err := GetArgDecode(arg)
 		if err {
-			r := &GetReply{Err: ktcore.BlameUnknown}
+			r := &GetReply{Err: true}
 			*reply = GetReplyEncode(*reply, r)
 			return
 		}
-		r := adtr.Get(a.Epoch)
+		r0, r1, r2 := adtr.Get(a.Epoch)
+		r := &GetReply{Link: r0, Vrf: r1, Err: r2}
 		*reply = GetReplyEncode(*reply, r)
 	}
 	return advrpc.NewServer(h)
 }
 
+// TODO: unclear if Update needs RPC interface.
+// this could be an "internal" method call run in background.
 func CallUpdate(c *advrpc.Client) (err ktcore.Blame) {
 	rb := new([]byte)
 	if c.Call(UpdateRpc, nil, rb) {
@@ -46,19 +49,25 @@ func CallUpdate(c *advrpc.Client) (err ktcore.Blame) {
 	return
 }
 
-func CallGet(c *advrpc.Client, epoch uint64) *GetReply {
+func CallGet(c *advrpc.Client, epoch uint64) (link *SignedLink, vrf *SignedVrfPk, err ktcore.Blame) {
 	a := &GetArg{Epoch: epoch}
 	ab := GetArgEncode(nil, a)
 	rb := new([]byte)
 	if c.Call(GetRpc, ab, rb) {
-		return &GetReply{Err: ktcore.BlameUnknown}
+		err = ktcore.BlameUnknown
+		return
 	}
 	r, _, errb := GetReplyDecode(*rb)
+	link = r.Link
+	vrf = r.Vrf
 	if errb {
-		return &GetReply{Err: ktcore.BlameAdtrFull}
+		err = ktcore.BlameAdtrFull
+		return
 	}
-	if ktcore.CheckBlame(r.Err, []ktcore.Blame{ktcore.BlameUnknown}) {
-		return &GetReply{Err: ktcore.BlameAdtrFull}
+	if r.Err {
+		// [Get] legitimately returns errs.
+		err = ktcore.BlameUnknown
+		return
 	}
-	return r
+	return
 }

@@ -71,21 +71,25 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 
 // Get returns the auditor's info for a particular epoch.
 // it errors if the epoch is out of bounds.
-func (a *Auditor) Get(epoch uint64) *GetReply {
+func (a *Auditor) Get(epoch uint64) (link *SignedLink, vrf *SignedVrfPk, err bool) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if epoch < a.startEp {
 		// could legitimately get small epoch if we started late.
-		return &GetReply{Err: ktcore.BlameUnknown}
+		err = true
+		return
 	}
 	lastEp := a.startEp + uint64(len(a.hist)) - 1
 	if epoch > lastEp {
 		// could legitimately get big epoch if we're lagging behind.
-		return &GetReply{Err: ktcore.BlameUnknown}
+		err = true
+		return
 	}
 
 	x := a.hist[epoch-a.startEp]
-	return &GetReply{Link: x.link, ServLinkSig: x.servSig, AdtrLinkSig: x.adtrSig, VrfPk: a.serv.vrfPk, ServVrfSig: a.serv.servVrfSig, AdtrVrfSig: a.serv.adtrVrfSig}
+	link = &SignedLink{Link: x.link, ServSig: x.servSig, AdtrSig: x.adtrSig}
+	vrf = &SignedVrfPk{VrfPk: a.serv.vrfPk, ServSig: a.serv.servVrfSig, AdtrSig: a.serv.adtrVrfSig}
+	return
 }
 
 func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryptoffi.SigPublicKey, err ktcore.Blame) {

@@ -1,5 +1,3 @@
-// Auto-generated from spec "github.com/sanjit-bhat/pav/server/serde.go"
-// using compiler "github.com/sanjit-bhat/pav/serde".
 package server
 
 import (
