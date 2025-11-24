@@ -53,14 +53,16 @@ type history struct {
 
 // Start bootstraps a party with knowledge of the last hash
 // in the hashchain and vrf.
-func (s *Server) Start() *StartReply {
+func (s *Server) Start() (chain *StartChain, vrf *StartVrf) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	predLen := uint64(len(s.hist.audits)) - 1
 	predLink, proof := s.hist.chain.Bootstrap()
 	lastSig := s.hist.audits[predLen].LinkSig
 	pk := s.secs.vrf.PublicKey()
-	return &StartReply{PrevEpochLen: predLen, PrevLink: predLink, ChainProof: proof, LinkSig: lastSig, VrfPk: pk, VrfSig: s.hist.vrfPkSig}
+	chain = &StartChain{PrevEpochLen: predLen, PrevLink: predLink, ChainProof: proof, LinkSig: lastSig}
+	vrf = &StartVrf{VrfPk: pk, VrfSig: s.hist.vrfPkSig}
+	return
 }
 
 // Put queues pk (at the specified version) for insertion.
