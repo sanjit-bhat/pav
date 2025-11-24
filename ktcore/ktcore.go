@@ -26,19 +26,10 @@ const (
 	// BlameUnknown should only be used sparingly.
 	// it's the equivalent of throwing up your hands in despair.
 	// in this system, these are the only [BlameUnknown]s:
-	//  * miscellaneous network errors.
+	//  * misc network errors.
 	//  * Auditor.Get errors.
 	BlameUnknown
 )
-
-// CheckBlame prevents bad parties from giving bad [Blame] codes.
-func CheckBlame(b Blame, allowed []Blame) (err bool) {
-	var all Blame
-	for _, x := range allowed {
-		all |= x
-	}
-	return b & ^all != 0
-}
 
 func SignVrf(sk *cryptoffi.SigPrivateKey, vrfPk []byte) (sig []byte) {
 	b := make([]byte, 0, 1+8+cryptoffi.HashLen)

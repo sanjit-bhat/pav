@@ -93,9 +93,8 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	}
 
 	// sync auditor and do second audit.
-	// in real world, this'll happen periodically.
-	adtrCli := advrpc.Dial(adtrAddr)
-	if err = auditor.CallUpdate(adtrCli); err != ktcore.BlameNone {
+	// in real world, sync will happen periodically.
+	if err = adtr.Update(); err != ktcore.BlameNone {
 		return
 	}
 	if evid, err = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
