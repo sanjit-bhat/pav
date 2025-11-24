@@ -12,12 +12,20 @@ type GetArg struct {
 	Epoch uint64
 }
 
+type SignedLink struct {
+	Link    []byte
+	ServSig []byte
+	AdtrSig []byte
+}
+
+type SignedVrfPk struct {
+	VrfPk   []byte
+	ServSig []byte
+	AdtrSig []byte
+}
+
 type GetReply struct {
-	Link        []byte
-	ServLinkSig []byte
-	AdtrLinkSig []byte
-	VrfPk       []byte
-	ServVrfSig  []byte
-	AdtrVrfSig  []byte
-	Err         ktcore.Blame
+	Link *SignedLink
+	Vrf  *SignedVrfPk
+	Err  bool
 }

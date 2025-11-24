@@ -25,8 +25,9 @@ const (
 	BlameClients
 	// BlameUnknown should only be used sparingly.
 	// it's the equivalent of throwing up your hands in despair.
-	// in this system, only miscellaneous network errors are allowed
-	// to be [BlameUnknown] at the client-correctness level.
+	// in this system, these are the only [BlameUnknown]s:
+	//  * miscellaneous network errors.
+	//  * Auditor.Get errors.
 	BlameUnknown
 )
 
