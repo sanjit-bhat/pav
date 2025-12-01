@@ -16,8 +16,10 @@ type Blame uint64
 const BlameNone Blame = 0
 
 const (
-	// BlameServSig only faults a signing predicate, whereas
-	// [BlameServFull] additionally faults the full server RPC spec.
+	// BlameServSig faults a signing predicate,
+	// whereas [BlameServFull] faults the full server RPC protocol,
+	// which is generally a superset of trust assumptions.
+	// KT irrefutable evidence (i.e., whistleblowing) only relies on [BlameServSig].
 	BlameServSig Blame = 1 << iota
 	BlameServFull
 	BlameAdtrSig

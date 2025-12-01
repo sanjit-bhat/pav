@@ -103,13 +103,13 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 		return
 	}
 
-	// final check. bob got the right key.
 	// Assume alice monitored bob's Get epoch.
 	primitive.Assume(bobEp < uint64(len(aliceHist)))
 	alicePk := aliceHist[bobEp]
+	// "KT consistency". in this test case, it means bob got the right key.
 	if !equal(alicePk, bobAlicePk) {
-		// [ktcore.BlameServSig] works equally well.
-		// both assumptions specify correct auditing.
+		// at min, this property relies on auditor maintaining its sigpred.
+		// or with no auditor, server maintaining its sigpred.
 		err = ktcore.BlameAdtrSig
 		return
 	}

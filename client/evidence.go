@@ -7,7 +7,8 @@ import (
 	"github.com/sanjit-bhat/pav/ktcore"
 )
 
-// Evid is evidence that the server misbehaved.
+// Evid is irrefutable evidence that a party signed contradicting statements.
+// a user can whistleblow by providing this to other users.
 type Evid struct {
 	vrf  *evidVrf
 	link *evidLink
