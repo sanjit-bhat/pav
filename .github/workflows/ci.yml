@@ -16,7 +16,7 @@ jobs:
         go: ["1.24"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup
         uses: actions/setup-go@v6
@@ -45,7 +45,7 @@ jobs:
   python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Format
         uses: chartboost/ruff-action@v1
@@ -58,7 +58,7 @@ jobs:
   other:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup Python
         uses: actions/setup-python@v6
