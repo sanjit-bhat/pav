@@ -61,16 +61,16 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 	// check.
 	next, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
 	if errb {
-		err = ktcore.BlameServ
+		err = ktcore.BlameServFull
 		return
 	}
 	if checkHist(c.serv.vrfPk, uid, 0, next.dig, hist) {
-		err = ktcore.BlameServ
+		err = ktcore.BlameServFull
 		return
 	}
 	boundVer := uint64(len(hist))
 	if checkNonMemb(c.serv.vrfPk, uid, boundVer, next.dig, bound) {
-		err = ktcore.BlameServ
+		err = ktcore.BlameServFull
 		return
 	}
 
@@ -94,17 +94,17 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	// check.
 	next, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
 	if errb {
-		err = ktcore.BlameServ
+		err = ktcore.BlameServFull
 		return
 	}
 	if checkHist(c.serv.vrfPk, c.uid, c.pend.ver, next.dig, hist) {
-		err = ktcore.BlameServ
+		err = ktcore.BlameServFull
 		return
 	}
 	histLen := uint64(len(hist))
 	boundVer := c.pend.ver + histLen
 	if checkNonMemb(c.serv.vrfPk, c.uid, boundVer, next.dig, bound) {
-		err = ktcore.BlameServ
+		err = ktcore.BlameServFull
 		return
 	}
 
@@ -113,7 +113,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		// if no pending, shouldn't have any updates.
 		if histLen != 0 {
 			// conflicting updates could also come from other bad clients.
-			err = ktcore.BlameServ | ktcore.BlameClients
+			err = ktcore.BlameServFull | ktcore.BlameClients
 			return
 		}
 		c.last = next
@@ -121,7 +121,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	}
 	// good client only has one version update at a time.
 	if histLen > 1 {
-		err = ktcore.BlameServ | ktcore.BlameClients
+		err = ktcore.BlameServFull | ktcore.BlameClients
 		return
 	}
 	// update hasn't yet fired.
@@ -132,7 +132,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	newKey := hist[0]
 	// equals pending put.
 	if !bytes.Equal(newKey.PkOpen.Val, c.pend.pendingPk) {
-		err = ktcore.BlameServ | ktcore.BlameClients
+		err = ktcore.BlameServFull | ktcore.BlameClients
 		return
 	}
 
@@ -155,11 +155,11 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Ev
 	// check adtr sig for consistency under untrusted server and trusted auditor.
 	// check serv sig to catch serv misbehavior.
 	if checkAuditLink(c.serv.sigPk, adtrPk, last.epoch, link) {
-		err = ktcore.BlameAdtr
+		err = ktcore.BlameAdtrFull
 		return
 	}
 	if checkAuditVrf(c.serv.sigPk, adtrPk, vrf) {
-		err = ktcore.BlameAdtr
+		err = ktcore.BlameAdtrFull
 		return
 	}
 
@@ -167,13 +167,13 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Ev
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.serv.vrfPk)
 	if !bytes.Equal(vrfPkB, vrf.VrfPk) {
 		evid = &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.serv.vrfSig, vrfPk1: vrf.VrfPk, sig1: vrf.ServSig}}
-		err = ktcore.BlameServ
+		err = ktcore.BlameServSig
 		return
 	}
 	// link evidence.
 	if !bytes.Equal(last.link, link.Link) {
 		evid = &Evid{link: &evidLink{epoch: last.epoch, link0: last.link, sig0: last.sig, link1: link.Link, sig1: link.ServSig}}
-		err = ktcore.BlameServ
+		err = ktcore.BlameServSig
 		return
 	}
 	return
@@ -187,12 +187,12 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 	}
 	startEp, startDig, startLink, errb := auditor.CheckStartChain(servPk, chain)
 	if errb {
-		err = ktcore.BlameServ
+		err = ktcore.BlameServFull
 		return
 	}
 	vrfPk, errb := auditor.CheckStartVrf(servPk, vrf)
 	if errb {
-		err = ktcore.BlameServ
+		err = ktcore.BlameServFull
 		return
 	}
 
