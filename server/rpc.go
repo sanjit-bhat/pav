@@ -63,7 +63,7 @@ func CallStart(c *advrpc.Client) (chain *StartChain, vrf *StartVrf, err ktcore.B
 	chain = r.Chain
 	vrf = r.Vrf
 	if errb {
-		err = ktcore.BlameServFull
+		err = ktcore.BlameServ
 		return
 	}
 	return
@@ -87,11 +87,11 @@ func CallHistory(c *advrpc.Client, uid, prevEpoch, prevVerLen uint64) (chainProo
 	}
 	r, _, errb := HistoryReplyDecode(*rb)
 	if errb {
-		err = ktcore.BlameServFull
+		err = ktcore.BlameServ
 		return
 	}
 	if r.Err {
-		err = ktcore.BlameServFull
+		err = ktcore.BlameServ
 		return
 	}
 	return r.ChainProof, r.LinkSig, r.Hist, r.Bound, ktcore.BlameNone
@@ -107,11 +107,11 @@ func CallAudit(c *advrpc.Client, prevEpoch uint64) (p []*ktcore.AuditProof, err 
 	}
 	r, _, errb := AuditReplyDecode(*rb)
 	if errb {
-		err = ktcore.BlameServFull
+		err = ktcore.BlameServ
 		return
 	}
 	if r.Err {
-		err = ktcore.BlameServFull
+		err = ktcore.BlameServ
 		return
 	}
 	return r.P, ktcore.BlameNone

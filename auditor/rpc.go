@@ -37,7 +37,7 @@ func CallGet(c *advrpc.Client, epoch uint64) (link *SignedLink, vrf *SignedVrf, 
 	link = r.Link
 	vrf = r.Vrf
 	if errb {
-		err = ktcore.BlameAdtrFull
+		err = ktcore.BlameAdtr
 		return
 	}
 	if r.Err {

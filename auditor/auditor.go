@@ -56,7 +56,7 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 		prevLink := a.hist[len(a.hist)-1].link
 		ep, dig, link, errb := getNextLink(sigPk, prevEp, a.lastDig, prevLink, p)
 		if errb {
-			err = ktcore.BlameServFull
+			err = ktcore.BlameServ
 			return
 		}
 
@@ -100,12 +100,12 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryp
 	}
 	startEp, startDig, startLink, errb := CheckStartChain(servPk, chain)
 	if errb {
-		err = ktcore.BlameServFull
+		err = ktcore.BlameServ
 		return
 	}
 	_, errb = CheckStartVrf(servPk, vrf)
 	if errb {
-		err = ktcore.BlameServFull
+		err = ktcore.BlameServ
 		return
 	}
 

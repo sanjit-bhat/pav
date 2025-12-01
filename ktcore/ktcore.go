@@ -16,12 +16,8 @@ type Blame uint64
 const BlameNone Blame = 0
 
 const (
-	// BlameServSig only faults a signing predicate, whereas
-	// [BlameServFull] additionally faults the full server RPC spec.
-	BlameServSig Blame = 1 << iota
-	BlameServFull
-	BlameAdtrSig
-	BlameAdtrFull
+	BlameServ Blame = 1 << iota
+	BlameAdtr
 	BlameClients
 	// BlameUnknown should only be used sparingly.
 	// it's the equivalent of throwing up your hands in despair.

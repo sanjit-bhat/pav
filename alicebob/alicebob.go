@@ -107,12 +107,9 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	// Assume alice monitored bob's Get epoch.
 	primitive.Assume(bobEp < uint64(len(aliceHist)))
 	alicePk := aliceHist[bobEp]
-	if !equal(alicePk, bobAlicePk) {
-		// [ktcore.BlameServSig] works equally well.
-		// both assumptions specify correct auditing.
-		err = ktcore.BlameAdtrSig
-		return
-	}
+	// KT consistency.
+	// with min assumption of serv or adtr following sigpred, this holds.
+	std.Assert(equal(alicePk, bobAlicePk))
 	return
 }
 
