@@ -90,12 +90,6 @@ func (s *Server) History(uid, prevEpoch, prevVerLen uint64) (chainProof, linkSig
 	linkSig = s.hist.audits[len(s.hist.audits)-1].LinkSig
 	hist = s.getHist(uid, prevVerLen)
 	bound = s.getBound(uid, numVers)
-
-	if prevEpoch+1 == numEps {
-		// client already saw sig. don't send.
-		linkSig = nil
-		return
-	}
 	return
 }
 
