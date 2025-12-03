@@ -97,12 +97,16 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		err = ktcore.BlameServFull
 		return
 	}
+	histLen := uint64(len(hist))
+	boundVer := c.pend.ver + histLen
+	if !std.SumNoOverflow(c.pend.ver, histLen) {
+		err = ktcore.BlameServFull
+		return
+	}
 	if checkHist(c.serv.vrfPk, c.uid, c.pend.ver, next.dig, hist) {
 		err = ktcore.BlameServFull
 		return
 	}
-	histLen := uint64(len(hist))
-	boundVer := c.pend.ver + histLen
 	if checkNonMemb(c.serv.vrfPk, c.uid, boundVer, next.dig, bound) {
 		err = ktcore.BlameServFull
 		return
@@ -140,8 +144,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	c.last = next
 	c.pend.isPending = false
 	c.pend.pendingPk = nil
-	// this client controls nextVer, so no need to check for overflow.
-	c.pend.ver = std.SumAssumeNoOverflow(c.pend.ver, 1)
+	c.pend.ver = boundVer
 	return next.epoch, true, ktcore.BlameNone
 }
 
@@ -212,11 +215,11 @@ func getNextEp(prev *epoch, sigPk cryptoffi.SigPublicKey, chainProof, sig []byte
 		next = prev
 		return
 	}
+	newEp := prev.epoch + extLen
 	if !std.SumNoOverflow(prev.epoch, extLen) {
 		err = true
 		return
 	}
-	newEp := prev.epoch + extLen
 	if ktcore.VerifyLinkSig(sigPk, newEp, newLink, sig) {
 		err = true
 		return
