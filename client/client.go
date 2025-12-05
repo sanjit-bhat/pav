@@ -76,12 +76,12 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 
 	// update.
 	c.last = next
-	if boundVer == 0 {
-		return next.epoch, false, nil, ktcore.BlameNone
-	} else {
-		lastKey := hist[boundVer-1]
-		return next.epoch, true, lastKey.PkOpen.Val, ktcore.BlameNone
+	ep = next.epoch
+	if boundVer != 0 {
+		isReg = true
+		pk = hist[boundVer-1].PkOpen.Val
 	}
+	return
 }
 
 // SelfMon a client's own uid.
@@ -207,24 +207,23 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 }
 
 func getNextEp(prev *epoch, sigPk cryptoffi.SigPublicKey, chainProof, sig []byte) (next *epoch, err bool) {
-	extLen, newDig, newLink, err := hashchain.Verify(prev.link, chainProof)
+	extLen, nextDig, nextLink, err := hashchain.Verify(prev.link, chainProof)
 	if err {
 		return
 	}
-	if extLen == 0 {
-		next = prev
-		return
-	}
-	newEp := prev.epoch + extLen
+	nextEp := prev.epoch + extLen
 	if !std.SumNoOverflow(prev.epoch, extLen) {
 		err = true
 		return
 	}
-	if ktcore.VerifyLinkSig(sigPk, newEp, newLink, sig) {
+	if ktcore.VerifyLinkSig(sigPk, nextEp, nextLink, sig) {
 		err = true
 		return
 	}
-	next = &epoch{epoch: newEp, dig: newDig, link: newLink, sig: sig}
+	if extLen == 0 {
+		nextDig = prev.dig
+	}
+	next = &epoch{epoch: nextEp, dig: nextDig, link: nextLink, sig: sig}
 	return
 }
 
