@@ -40,6 +40,8 @@ func (s *Server) read(conn *netffi.Conn) {
 			// adv didn't even give rpcId.
 			continue
 		}
+		// TODO: each goroutine spawned here acquires RLock ≤ 1 time.
+		// if we bound # goroutines, we bound # RLock's.
 		go func() {
 			s.handle(conn, rpcId, data)
 		}()
