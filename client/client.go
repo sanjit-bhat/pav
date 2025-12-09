@@ -97,6 +97,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		err = ktcore.BlameServFull
 		return
 	}
+	ep = next.epoch
 	histLen := uint64(len(hist))
 	boundVer := c.pend.ver + histLen
 	if !std.SumNoOverflow(c.pend.ver, histLen) {
@@ -113,6 +114,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	}
 
 	// check consistency with pending.
+	// TODO: may be easier to factor these pending <-> hist checks into func.
 	if !c.pend.isPending {
 		// if no pending, shouldn't have any updates.
 		if histLen != 0 {
@@ -121,7 +123,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 			return
 		}
 		c.last = next
-		return next.epoch, false, ktcore.BlameNone
+		return
 	}
 	// good client only has one version update at a time.
 	if histLen > 1 {
@@ -131,7 +133,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	// update hasn't yet fired.
 	if histLen == 0 {
 		c.last = next
-		return next.epoch, false, ktcore.BlameNone
+		return
 	}
 	newKey := hist[0]
 	// equals pending put.
@@ -145,7 +147,8 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	c.pend.isPending = false
 	c.pend.pendingPk = nil
 	c.pend.ver = boundVer
-	return next.epoch, true, ktcore.BlameNone
+	isChanged = true
+	return
 }
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Evid, err ktcore.Blame) {
