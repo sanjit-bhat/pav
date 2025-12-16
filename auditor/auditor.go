@@ -51,21 +51,28 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 	}
 
 	for _, p := range upd {
-		sigPk := a.serv.sigPk
-		prevEp := a.startEp + uint64(len(a.hist)) - 1
-		prevLink := a.hist[len(a.hist)-1].link
-		ep, dig, link, errb := getNextLink(sigPk, prevEp, a.lastDig, prevLink, p)
-		if errb {
+		if a.updOnce(p) {
 			err = ktcore.BlameServFull
 			return
 		}
-
-		// counter-sign and apply update.
-		sig := ktcore.SignLink(a.sk, ep, link)
-		a.lastDig = dig
-		info := &history{link: link, servSig: p.LinkSig, adtrSig: sig}
-		a.hist = append(a.hist, info)
 	}
+	return
+}
+
+func (a *Auditor) updOnce(p *ktcore.AuditProof) (err bool) {
+	sigPk := a.serv.sigPk
+	prevEp := a.startEp + uint64(len(a.hist)) - 1
+	prevLink := a.hist[len(a.hist)-1].link
+	ep, dig, link, err := getNextLink(sigPk, prevEp, a.lastDig, prevLink, p)
+	if err {
+		return
+	}
+
+	// counter-sign and apply update.
+	sig := ktcore.SignLink(a.sk, ep, link)
+	a.lastDig = dig
+	info := &history{link: link, servSig: p.LinkSig, adtrSig: sig}
+	a.hist = append(a.hist, info)
 	return
 }
 
