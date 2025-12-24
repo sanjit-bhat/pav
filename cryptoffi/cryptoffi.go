@@ -69,6 +69,7 @@ func (pk SigPublicKey) Verify(data []byte, sig []byte) (err bool) {
 // the package, without reflection or unsafe.
 // we use a fork of ProtonMail's vrf, which implements
 // ECVRF-EDWARDS25519-SHA512-TAI from [RFC 9381].
+// TODO: maybe switch to https://pkg.go.dev/filippo.io/mostly-harmless/vrf-r255.
 // ecvrf satisfies full uniqueness, i.e., determinism under adversarial pks.
 // this is the only property that pav requires.
 // [RFC 9381]: https://datatracker.ietf.org/doc/rfc9381/
