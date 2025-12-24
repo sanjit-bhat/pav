@@ -15,14 +15,6 @@ type blameInterp struct {
 	interp string
 }
 
-var blameInterps = []blameInterp{
-	{ktcore.BlameServSig, "ServSig"},
-	{ktcore.BlameServFull, "ServFull"},
-	{ktcore.BlameAdtrSig, "AdtrSig"},
-	{ktcore.BlameAdtrFull, "AdtrFull"},
-	{ktcore.BlameClients, "Clients"},
-}
-
 // alertUser goes to end-user in real system.
 func alertUser(t *testing.T, err ktcore.Blame, evid *client.Evid) {
 	t.Log(interpBlame(err))
@@ -40,8 +32,16 @@ func interpBlame(err ktcore.Blame) string {
 }
 
 func blameToString(err ktcore.Blame) string {
+	allInterps := []blameInterp{
+		{ktcore.BlameServSig, "ServSig"},
+		{ktcore.BlameServFull, "ServFull"},
+		{ktcore.BlameAdtrSig, "AdtrSig"},
+		{ktcore.BlameAdtrFull, "AdtrFull"},
+		{ktcore.BlameClients, "Clients"},
+	}
+
 	var interps []string
-	for _, x := range blameInterps {
+	for _, x := range allInterps {
 		if err&x.code != 0 {
 			interps = append(interps, x.interp)
 		}
