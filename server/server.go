@@ -11,6 +11,7 @@ import (
 	"github.com/sanjit-bhat/pav/merkle"
 )
 
+// performance params.
 var (
 	// WorkQSize should be max keys expected per epoch.
 	WorkQSize int = 1024
