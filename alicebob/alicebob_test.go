@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sanjit-bhat/pav/client"
 	"github.com/sanjit-bhat/pav/ktcore"
 )
 
@@ -16,7 +15,7 @@ type blameInterp struct {
 }
 
 // alertUser goes to end-user in real system.
-func alertUser(t *testing.T, err ktcore.Blame, evid *client.Evid) {
+func alertUser(t *testing.T, err ktcore.Blame, evid *ktcore.Evid) {
 	t.Log(interpBlame(err))
 	if evid != nil {
 		t.Log("cryptographic evidence of mis-behavior. whisteblow by posting this publicly:", evid)
@@ -50,7 +49,7 @@ func blameToString(err ktcore.Blame) string {
 }
 
 func TestAliceBob(t *testing.T) {
-	if evid, err := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
+	if err, evid := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
 		t.Error()
 		alertUser(t, err, evid)
 	}
