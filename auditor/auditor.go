@@ -55,21 +55,21 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 	}
 
 	for _, p := range upd {
-		if a.updOnce(p) {
-			err = ktcore.BlameServFull
+		if err = a.updOnce(p); err != ktcore.BlameNone {
 			return
 		}
 	}
 	return
 }
 
-func (a *Auditor) updOnce(p *ktcore.AuditProof) (err bool) {
+func (a *Auditor) updOnce(p *ktcore.AuditProof) (err ktcore.Blame) {
 	sigPk := a.serv.sigPk
 	hist := a.hist
 	prevEp := hist.startEp + uint64(len(hist.epochs)) - 1
 	prevLink := hist.epochs[len(hist.epochs)-1].link
-	ep, dig, link, err := getNextLink(sigPk, prevEp, hist.lastDig, prevLink, p)
-	if err {
+	ep, dig, link, errb := getNextLink(sigPk, prevEp, hist.lastDig, prevLink, p)
+	if errb {
+		err = ktcore.BlameServFull
 		return
 	}
 
