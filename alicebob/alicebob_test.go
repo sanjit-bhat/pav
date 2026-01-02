@@ -14,6 +14,13 @@ type blameInterp struct {
 	interp string
 }
 
+func TestAliceBob(t *testing.T) {
+	if err, evid := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
+		t.Error()
+		alertUser(t, err, evid)
+	}
+}
+
 // alertUser goes to end-user in real system.
 func alertUser(t *testing.T, err ktcore.Blame, evid *ktcore.Evid) {
 	t.Log(interpBlame(err))
@@ -46,13 +53,6 @@ func blameToString(err ktcore.Blame) string {
 		}
 	}
 	return strings.Join(interps, " and ")
-}
-
-func TestAliceBob(t *testing.T) {
-	if err, evid := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
-		t.Error()
-		alertUser(t, err, evid)
-	}
 }
 
 func getFreePort() (port uint64, err error) {
