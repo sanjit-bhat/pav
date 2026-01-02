@@ -39,11 +39,11 @@ func interpBlame(err ktcore.Blame) string {
 
 func blameToString(err ktcore.Blame) string {
 	allInterps := []blameInterp{
-		{ktcore.BlameServSig, "ServSig"},
-		{ktcore.BlameServFull, "ServFull"},
-		{ktcore.BlameAdtrSig, "AdtrSig"},
-		{ktcore.BlameAdtrFull, "AdtrFull"},
-		{ktcore.BlameClients, "Clients"},
+		{ktcore.BlameServSig, "Server Signing Key"},
+		{ktcore.BlameServFull, "Full Server"},
+		{ktcore.BlameAdtrSig, "Auditor Signing Key"},
+		{ktcore.BlameAdtrFull, "Full Auditor"},
+		{ktcore.BlameClients, "Other Clients"},
 	}
 
 	var interps []string
