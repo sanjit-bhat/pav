@@ -151,7 +151,7 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	return
 }
 
-func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Evid, err ktcore.Blame) {
+func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (err ktcore.Blame, evid *ktcore.Evid) {
 	cli := advrpc.Dial(adtrAddr)
 	last := c.last
 	link, vrf, err := auditor.CallGet(cli, last.epoch)
@@ -172,13 +172,13 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (evid *Ev
 	// vrf evidence.
 	vrfPkB := cryptoffi.VrfPublicKeyEncode(c.serv.vrfPk)
 	if !bytes.Equal(vrfPkB, vrf.VrfPk) {
-		evid = &Evid{vrf: &evidVrf{vrfPk0: vrfPkB, sig0: c.serv.vrfSig, vrfPk1: vrf.VrfPk, sig1: vrf.ServSig}}
+		evid = &ktcore.Evid{Vrf: &ktcore.EvidVrf{VrfPk0: vrfPkB, Sig0: c.serv.vrfSig, VrfPk1: vrf.VrfPk, Sig1: vrf.ServSig}}
 		err = ktcore.BlameServSig
 		return
 	}
 	// link evidence.
 	if !bytes.Equal(last.link, link.Link) {
-		evid = &Evid{link: &evidLink{epoch: last.epoch, link0: last.link, sig0: last.sig, link1: link.Link, sig1: link.ServSig}}
+		evid = &ktcore.Evid{Link: &ktcore.EvidLink{Epoch: last.epoch, Link0: last.link, Sig0: last.sig, Link1: link.Link, Sig1: link.ServSig}}
 		err = ktcore.BlameServSig
 		return
 	}

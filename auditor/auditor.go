@@ -14,19 +14,23 @@ import (
 )
 
 type Auditor struct {
-	mu      *sync.RWMutex
-	sk      *cryptoffi.SigPrivateKey
-	lastDig []byte
-	// the epoch of our first hist entry.
-	startEp uint64
-	// hist epochs that the server checked Update proofs for.
-	// invariant: epochs within bounds.
-	// invariant: at least one entry.
-	hist []*history
+	mu   *sync.RWMutex
+	sk   *cryptoffi.SigPrivateKey
+	hist *history
 	serv *serv
 }
 
 type history struct {
+	lastDig []byte
+	// the epoch of our first hist entry.
+	startEp uint64
+	// epochs that the server checked Update proofs for.
+	// invariant: epochs within bounds.
+	// invariant: at least one entry.
+	epochs []*epoch
+}
+
+type epoch struct {
 	link    []byte
 	servSig []byte
 	adtrSig []byte
@@ -44,28 +48,37 @@ type serv struct {
 func (a *Auditor) Update() (err ktcore.Blame) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	prevEp := a.startEp + uint64(len(a.hist)) - 1
+	prevEp := a.hist.startEp + uint64(len(a.hist.epochs)) - 1
 	upd, err := server.CallAudit(a.serv.cli, prevEp)
 	if err != ktcore.BlameNone {
 		return
 	}
 
 	for _, p := range upd {
-		sigPk := a.serv.sigPk
-		prevEp := a.startEp + uint64(len(a.hist)) - 1
-		prevLink := a.hist[len(a.hist)-1].link
-		ep, dig, link, errb := getNextLink(sigPk, prevEp, a.lastDig, prevLink, p)
-		if errb {
-			err = ktcore.BlameServFull
+		if err = a.updOnce(p); err != ktcore.BlameNone {
 			return
 		}
-
-		// counter-sign and apply update.
-		sig := ktcore.SignLink(a.sk, ep, link)
-		a.lastDig = dig
-		info := &history{link: link, servSig: p.LinkSig, adtrSig: sig}
-		a.hist = append(a.hist, info)
 	}
+	return
+}
+
+func (a *Auditor) updOnce(p *ktcore.AuditProof) (err ktcore.Blame) {
+	sigPk := a.serv.sigPk
+	hist := a.hist
+	prevEp := hist.startEp + uint64(len(hist.epochs)) - 1
+	prevLink := hist.epochs[len(hist.epochs)-1].link
+	ep, dig, link, errb := getNextLink(sigPk, prevEp, hist.lastDig, prevLink, p)
+	if errb {
+		err = ktcore.BlameServFull
+		return
+	}
+
+	// counter-sign and apply update.
+	sig := ktcore.SignLink(a.sk, ep, link)
+	hist.lastDig = dig
+	info := &epoch{link: link, servSig: p.LinkSig, adtrSig: sig}
+	hist.epochs = append(hist.epochs, info)
+	a.hist = hist
 	return
 }
 
@@ -74,19 +87,20 @@ func (a *Auditor) Update() (err ktcore.Blame) {
 func (a *Auditor) Get(epoch uint64) (link *SignedLink, vrf *SignedVrf, err bool) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	if epoch < a.startEp {
+	hist := a.hist
+	if epoch < hist.startEp {
 		// could legitimately get small epoch if we started late.
 		err = true
 		return
 	}
-	lastEp := a.startEp + uint64(len(a.hist)) - 1
+	lastEp := hist.startEp + uint64(len(hist.epochs)) - 1
 	if epoch > lastEp {
 		// could legitimately get big epoch if we're lagging behind.
 		err = true
 		return
 	}
 
-	x := a.hist[epoch-a.startEp]
+	x := hist.epochs[epoch-hist.startEp]
 	link = &SignedLink{Link: x.link, ServSig: x.servSig, AdtrSig: x.adtrSig}
 	vrf = &SignedVrf{VrfPk: a.serv.vrfPk, ServSig: a.serv.servVrfSig, AdtrSig: a.serv.adtrVrfSig}
 	return
@@ -112,10 +126,11 @@ func New(servAddr uint64, servPk cryptoffi.SigPublicKey) (a *Auditor, sigPk cryp
 	mu := new(sync.RWMutex)
 	sigPk, sk := cryptoffi.SigGenerateKey()
 	linkSig := ktcore.SignLink(sk, startEp, startLink)
-	h := &history{link: startLink, servSig: chain.LinkSig, adtrSig: linkSig}
+	info := &epoch{link: startLink, servSig: chain.LinkSig, adtrSig: linkSig}
+	hist := &history{lastDig: startDig, startEp: startEp, epochs: []*epoch{info}}
 	vrfSig := ktcore.SignVrf(sk, vrf.VrfPk)
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrf.VrfPk, servVrfSig: vrf.VrfSig, adtrVrfSig: vrfSig}
-	a = &Auditor{mu: mu, sk: sk, lastDig: startDig, startEp: startEp, hist: []*history{h}, serv: serv}
+	a = &Auditor{mu: mu, sk: sk, hist: hist, serv: serv}
 	return
 }
 

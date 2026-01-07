@@ -1,16 +1,58 @@
 package alicebob
 
 import (
+	"fmt"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/sanjit-bhat/pav/ktcore"
 )
 
+type blameInterp struct {
+	code   ktcore.Blame
+	interp string
+}
+
 func TestAliceBob(t *testing.T) {
-	if _, err := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
-		t.Fatal()
+	if err, evid := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
+		t.Error()
+		alertUser(t, err, evid)
 	}
+}
+
+// alertUser goes to end-user in real system.
+func alertUser(t *testing.T, err ktcore.Blame, evid *ktcore.Evid) {
+	t.Log(interpBlame(err))
+	if evid != nil {
+		t.Log("cryptographic evidence of mis-behavior. whisteblow by posting this publicly:", evid)
+	}
+}
+
+func interpBlame(err ktcore.Blame) string {
+	if err&ktcore.BlameUnknown != 0 {
+		return "[ERROR]: unknown source"
+	}
+	parties := blameToString(err)
+	return fmt.Sprintf("[ERROR]: %s suspect; if good, would not observe error", parties)
+}
+
+func blameToString(err ktcore.Blame) string {
+	allInterps := []blameInterp{
+		{ktcore.BlameServSig, "Server Signing Key"},
+		{ktcore.BlameServFull, "Full Server"},
+		{ktcore.BlameAdtrSig, "Auditor Signing Key"},
+		{ktcore.BlameAdtrFull, "Full Auditor"},
+		{ktcore.BlameClients, "Other Clients"},
+	}
+
+	var interps []string
+	for _, x := range allInterps {
+		if err&x.code != 0 {
+			interps = append(interps, x.interp)
+		}
+	}
+	return strings.Join(interps, " and ")
 }
 
 func getFreePort() (port uint64, err error) {

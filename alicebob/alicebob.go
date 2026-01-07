@@ -23,7 +23,7 @@ func init() {
 	server.BatchTimeout = time.Millisecond
 }
 
-func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktcore.Blame) {
+func testAliceBob(servAddr uint64, adtrAddr uint64) (err ktcore.Blame, evid *ktcore.Evid) {
 	// setup server and auditor.
 	serv, servSigPk := server.New()
 	servRpc := server.NewRpcServer(serv)
@@ -51,10 +51,10 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	}
 
 	// run first audit to learn auditor has init epoch in its hist.
-	if evid, err = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+	if err, evid = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
 		return
 	}
-	if evid, err = bob.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+	if err, evid = bob.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
 		return
 	}
 
@@ -96,10 +96,10 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (evid *client.Evid, err ktco
 	if err = adtr.Update(); err != ktcore.BlameNone {
 		return
 	}
-	if evid, err = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+	if err, evid = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
 		return
 	}
-	if evid, err = bob.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+	if err, evid = bob.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
 		return
 	}
 
