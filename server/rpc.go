@@ -25,7 +25,7 @@ func NewRpcServer(s *Server) *advrpc.Server {
 			// would blame client, except that Put client doesn't care.
 			return
 		}
-		s.Put(a.Uid, a.Pk, a.Ver)
+		s.Put(a.Uid, a.Ver, a.Pk)
 		*reply = nil
 	}
 	h[HistoryRpc] = func(arg []byte, reply *[]byte) {

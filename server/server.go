@@ -67,8 +67,8 @@ func (s *Server) Start() (chain *StartChain, vrf *StartVrf) {
 }
 
 // Put queues pk (at the specified version) for insertion.
-func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
-	s.workQ <- &Work{Uid: uid, Pk: pk, Ver: ver}
+func (s *Server) Put(uid uint64, ver uint64, pk []byte) {
+	s.workQ <- &Work{Uid: uid, Ver: ver, Pk: pk}
 }
 
 // History gives key history for uid, excluding first prevVerLen versions.
@@ -109,8 +109,8 @@ func (s *Server) Audit(prevEpoch uint64) (proof []*ktcore.AuditProof, err bool) 
 
 type Work struct {
 	Uid uint64
-	Pk  []byte
 	Ver uint64
+	Pk  []byte
 	Err bool
 }
 
@@ -121,11 +121,13 @@ type mapEntry struct {
 
 func (s *Server) worker() {
 	for {
-		work := getWork(s.workQ)
-		if len(work) == 0 {
+		w := getWork(s.workQ)
+		// we could safely have an empty batch,
+		// but for now, skip epoch update and improve performance.
+		if len(w) == 0 {
 			continue
 		}
-		s.doWork(work)
+		s.doWork(w)
 	}
 }
 
@@ -150,8 +152,8 @@ func getWork(workQ <-chan *Work) (work []*Work) {
 func (s *Server) doWork(work []*Work) {
 	s.checkWork(work)
 
-	// NOTE: for correctness, addEntries (write) must start with the same
-	// state as makeEntries (read). we ensure this by not having any write
+	// for correctness, addEntries (write) must start with the same
+	// state as makeEntries (read). this is upheld by not having any write
 	// lockers outside this fn.
 	ents := s.makeEntries(work)
 	s.mu.Lock()
@@ -174,7 +176,8 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	wq := make(chan *Work, WorkQSize)
 	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, workQ: wq}
 
-	// commit empty map as epoch 0.
+	// commit empty map as epoch 0 to always have some epoch
+	// against which we can respond to requests.
 	dig := keys.hidden.Hash()
 	link := chain.Append(dig)
 	linkSig := ktcore.SignLink(s.secs.sig, 0, link)
@@ -185,7 +188,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 }
 
 func (s *Server) checkWork(work []*Work) {
-	uidSet := make(map[uint64]bool, len(work))
+	uids := make(map[uint64]bool, len(work))
 	for _, w := range work {
 		uid := w.Uid
 		// error out wrong versions.
@@ -195,12 +198,12 @@ func (s *Server) checkWork(work []*Work) {
 			continue
 		}
 		// error out duplicate uid's. arbitrarily picks one to succeed.
-		_, ok := uidSet[uid]
+		_, ok := uids[uid]
 		if ok {
 			w.Err = true
 			continue
 		}
-		uidSet[uid] = false
+		uids[uid] = false
 	}
 }
 
@@ -245,7 +248,6 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 
 		out := ents[i]
 		label := out.label
-
 		proof := s.keys.hidden.Put(label, out.val)
 		s.keys.plain[job.Uid] = append(s.keys.plain[job.Uid], job.Pk)
 
