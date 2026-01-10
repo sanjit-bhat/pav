@@ -235,7 +235,7 @@ func checkMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb 
 	if err {
 		return
 	}
-	mapVal := ktcore.GetMapVal(memb.PkOpen)
+	mapVal := ktcore.GetMapVal(memb.PkOpen.Val, memb.PkOpen.Rand)
 	dig0, err := merkle.VerifyMemb(label, mapVal, memb.MerkleProof)
 	if err {
 		return

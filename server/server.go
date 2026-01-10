@@ -231,8 +231,7 @@ func (s *Server) makeEntry(in *Work, out *mapEntry) {
 	numVers := uint64(len(s.keys.plain[in.Uid]))
 	mapLabel := ktcore.EvalMapLabel(s.secs.vrf, in.Uid, numVers)
 	rand := ktcore.GetCommitRand(s.secs.commit, mapLabel)
-	open := &ktcore.CommitOpen{Val: in.Pk, Rand: rand}
-	mapVal := ktcore.GetMapVal(open)
+	mapVal := ktcore.GetMapVal(in.Pk, rand)
 
 	out.label = mapLabel
 	out.val = mapVal

@@ -199,8 +199,8 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 func getProofCap(depth uint64) uint64 {
 	// proof = SibsLen ++ Sibs ++
 	//         IsOtherLeaf ++ LeafLabelLen ++ LeafLabel ++
-	//         LeafValLen ++ LeafVal (ed25519 pk).
-	return 8 + depth*cryptoffi.HashLen + 1 + 8 + cryptoffi.HashLen + 8 + 32
+	//         LeafValLen ++ LeafVal.
+	return 8 + depth*cryptoffi.HashLen + 1 + 8 + cryptoffi.HashLen + 8 + cryptoffi.HashLen
 }
 
 // VerifyMemb checks that (label, val) in tree described by proof.
