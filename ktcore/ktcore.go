@@ -10,7 +10,7 @@ import (
 )
 
 func SignVrf(sk *cryptoffi.SigPrivateKey, vrfPk []byte) (sig []byte) {
-	b := make([]byte, 0, 1+8+len(vrfPk))
+	b := make([]byte, 0, 1+8+32)
 	b = VrfSigEncode(b, &VrfSig{SigTag: VrfSigTag, VrfPk: vrfPk})
 	// benchmark: turn off sigs for akd compat.
 	sig = sk.Sign(b)
@@ -18,13 +18,13 @@ func SignVrf(sk *cryptoffi.SigPrivateKey, vrfPk []byte) (sig []byte) {
 }
 
 func VerifyVrfSig(pk cryptoffi.SigPublicKey, vrfPk, sig []byte) (err bool) {
-	b := make([]byte, 0, 1+8+len(vrfPk))
+	b := make([]byte, 0, 1+8+32)
 	b = VrfSigEncode(b, &VrfSig{SigTag: VrfSigTag, VrfPk: vrfPk})
 	return pk.Verify(b, sig)
 }
 
 func SignLink(sk *cryptoffi.SigPrivateKey, epoch uint64, link []byte) (sig []byte) {
-	b := make([]byte, 0, 1+8+8+len(link))
+	b := make([]byte, 0, 1+8+8+cryptoffi.HashLen)
 	b = LinkSigEncode(b, &LinkSig{SigTag: LinkSigTag, Epoch: epoch, Link: link})
 	// benchmark: turn off sigs for akd compat.
 	sig = sk.Sign(b)
@@ -32,7 +32,7 @@ func SignLink(sk *cryptoffi.SigPrivateKey, epoch uint64, link []byte) (sig []byt
 }
 
 func VerifyLinkSig(pk cryptoffi.SigPublicKey, epoch uint64, link, sig []byte) (err bool) {
-	b := make([]byte, 0, 1+8+8+len(link))
+	b := make([]byte, 0, 1+8+8+cryptoffi.HashLen)
 	b = LinkSigEncode(b, &LinkSig{SigTag: LinkSigTag, Epoch: epoch, Link: link})
 	return pk.Verify(b, sig)
 }
@@ -56,7 +56,7 @@ func CheckMapLabel(pk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) (l
 }
 
 func GetMapVal(pk []byte, rand []byte) (val []byte) {
-	b := make([]byte, 0, 8+len(pk)+8+len(rand))
+	b := make([]byte, 0, 8+32+8+cryptoffi.HashLen)
 	b = CommitOpenEncode(b, &CommitOpen{Val: pk, Rand: rand})
 	return cryptoutil.Hash(b)
 }
