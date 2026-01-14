@@ -78,7 +78,6 @@ func (a *Auditor) updOnce(p *ktcore.AuditProof) (err ktcore.Blame) {
 	hist.lastDig = dig
 	info := &epoch{link: link, servSig: p.LinkSig, adtrSig: sig}
 	hist.epochs = append(hist.epochs, info)
-	a.hist = hist
 	return
 }
 
