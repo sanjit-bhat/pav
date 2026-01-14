@@ -60,12 +60,12 @@ func CallStart(c *advrpc.Client) (chain *StartChain, vrf *StartVrf, err ktcore.B
 		return
 	}
 	r, _, errb := StartReplyDecode(*rb)
-	chain = r.Chain
-	vrf = r.Vrf
 	if errb {
 		err = ktcore.BlameServFull
 		return
 	}
+	chain = r.Chain
+	vrf = r.Vrf
 	return
 }
 
