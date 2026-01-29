@@ -13,12 +13,7 @@ import (
 
 // performance params.
 var (
-	// WorkQSize should be max keys expected per epoch.
-	WorkQSize int = 1024
-	// TODO: should this be eq to [WorkQSize]? or average # keys?
-	BatchSize int = 128
-	// BatchTimeout should be time between epochs.
-	BatchTimeout = time.Second
+	EpochTime = time.Second
 )
 
 type Server struct {
@@ -132,11 +127,10 @@ func (s *Server) worker() {
 }
 
 func getWork(workQ <-chan *Work) (work []*Work) {
-	work = make([]*Work, 0, BatchSize)
-	timer := time.NewTimer(BatchTimeout)
-
-	// batch-aggregator with timeout.
-	for i := 0; i < BatchSize; i++ {
+	timer := time.NewTimer(EpochTime)
+	// don't care about upper-bounding batch size.
+	// so aggregate as much work as we can within [EpochTime].
+	for {
 		select {
 		case job, ok := <-workQ:
 			// never close channel.
@@ -146,7 +140,6 @@ func getWork(workQ <-chan *Work) (work []*Work) {
 			return
 		}
 	}
-	return
 }
 
 func (s *Server) doWork(work []*Work) {
@@ -173,7 +166,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	keys := &keyStore{hidden: hidden, plain: plain}
 	chain := hashchain.New()
 	hist := &history{chain: chain, vrfPkSig: vrfSig}
-	wq := make(chan *Work, WorkQSize)
+	wq := make(chan *Work)
 	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, workQ: wq}
 
 	// commit empty map as epoch 0 to always have some epoch
