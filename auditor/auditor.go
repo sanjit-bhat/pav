@@ -14,10 +14,12 @@ import (
 )
 
 type Auditor struct {
-	mu   *sync.RWMutex
 	sk   *cryptoffi.SigPrivateKey
-	hist *history
 	serv *serv
+
+	// mu protects the following fields.
+	mu   *sync.RWMutex
+	hist *history
 }
 
 type history struct {
