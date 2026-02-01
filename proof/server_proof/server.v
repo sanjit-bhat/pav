@@ -1,7 +1,7 @@
 From New.generatedproof.github_com.sanjit_bhat.pav Require Import server.
 
 From New.proof Require Import sync time.
-From New.proof.github_com.goose_lang.goose.model.channel.protocol Require Import simple.
+From New.proof.github_com.goose_lang.goose.model.channel.idiom Require Import handoff.
 From New.proof.github_com.goose_lang Require Import std.
 From New.proof.github_com.sanjit_bhat.pav Require Import
   cryptoffi hashchain ktcore merkle.
@@ -468,7 +468,7 @@ Definition own γ ptr obj q : iProp Σ :=
   "#Hown_secs" ∷ secrets.own γ ptr_secs secs ∗
   "Hown_keys" ∷ keyStore.own γ ptr_keys keys secs lastDig q ∗
   "Hown_hist" ∷ history.own γ ptr_hist hist q ∗
-  "#His_workQ" ∷ simple.is_simple workQγ ptr_workQ (work.own_aux γ) ∗
+  "#His_workQ" ∷ handoff.is_chan_handoff workQγ ptr_workQ (work.own_aux γ) ∗
 
   (* other 1/2 in server inv. *)
   "Hown_gs" ∷ own_aux γ obj (q/2) ∗
