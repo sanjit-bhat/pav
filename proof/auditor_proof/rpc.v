@@ -107,6 +107,24 @@ Instance own_as_frac ptr obj γ σ q :
   fractional.AsFractional (own ptr obj γ σ q) (λ q, own ptr obj γ σ q) q.
 Proof. auto. Qed.
 
+#[global]
+Instance own_aux_combine_sep_as ptr obj0 obj1 γ σ0 σ1 q0 q1 :
+  CombineSepAs (own ptr obj0 γ σ0 q0) (own ptr obj1 γ σ1 q1) (own ptr obj0 γ σ0 (q0 + q1)) | 60.
+Proof.
+  rewrite /CombineSepAs.
+  iIntros "[H0 H1]".
+  iNamedSuffix "H0" "0".
+  iNamedSuffix "H1" "1".
+  iCombine "Hstr_history0 Hstr_history1" as "?" gives %[? ?].
+  simplify_eq/=.
+  iCombine "Hsl_epochs0 Hsl_epochs1" as "?" gives %?.
+  iCombine "Hcap_epochs0 Hcap_epochs1" as "?".
+  iCombine "Hsl_lastDig0 Hsl_lastDig1" gives %?.
+  simplify_eq/=.
+  (* TODO: DfracOwn q0 ⋅ DfracOwn q1. not getting combined properly. *)
+  iFrame "∗#%".
+Qed.
+
 End proof.
 End history.
 

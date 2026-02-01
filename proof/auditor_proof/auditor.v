@@ -139,11 +139,14 @@ Definition own ptr obj γ σ q : iProp Σ :=
   "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
     serv.align_serv γ servγ end.
 
+Definition own_aux ptr γ q : iProp Σ := ∃ obj σ, own ptr obj γ σ q.
+
 Definition lock_perm ptr γ : iProp Σ :=
   ∃ ptr_mu,
   "#Hfld_mu" ∷ ptr ↦s[auditor.Auditor::"mu"]□ ptr_mu ∗
-  "Hperm" ∷ own_RWMutex ptr_mu (λ q, ∃ adtr σ, own ptr adtr γ σ q).
+  "Hperm" ∷ own_RWMutex ptr_mu (own_aux ptr γ).
 
+(* TODO: not sure if i'm using this. *)
 #[global]
 Instance own_frac ptr obj γ σ :
   fractional.Fractional (λ q, own ptr obj γ σ q).
@@ -152,7 +155,7 @@ Proof.
   - iIntros "@".
     iDestruct "Hown_hist" as "[? ?]".
     (* TODO: why needed? *)
-    Typeclasses Opaque own_aux.
+    Typeclasses Opaque auditor.own_aux.
     iDestruct "Hown_gs_hist" as "[? ?]".
     iFrame "#∗".
   - iIntros "[H0 H1]".
@@ -171,6 +174,39 @@ Qed.
 Instance own_as_frac ptr obj γ σ q :
   fractional.AsFractional (own ptr obj γ σ q) (λ q, own ptr obj γ σ q) q.
 Proof. auto. Qed.
+
+(* TODO: maybe could prove obj's equal from sigpred_links_inv. *)
+(*
+#[global]
+Instance own_combine_gives ptr γ obj0 obj1 σ0 σ1 q0 q1 :
+  CombineSepGives (own ptr obj0 γ σ0 q0) (own ptr obj1 γ σ1 q1)
+    ⌜obj0 = obj1 ∧ σ0 = σ1⌝.
+Proof.
+  rewrite /CombineSepGives.
+  iIntros "[H0 H1]".
+  iNamedSuffix "H0" "0".
+  iNamedSuffix "H1" "1".
+  iCombine "Hown_gs_hist0 Hown_gs_hist1" gives %?.
+Admitted.
+*)
+
+#[global]
+Instance own_aux_frac ptr γ :
+  fractional.Fractional (λ q, own_aux ptr γ q).
+Proof.
+  rewrite /own_aux. intros ??. iSplit.
+  - iIntros "(%&%&H)".
+    iDestruct "H" as "[$ $]".
+  - iIntros "[(%&%&H0)(%&%&H1)]".
+    iNamedSuffix "H0" "0".
+    iNamedSuffix "H1" "1".
+    iCombine "Hfld_sk0 Hfld_sk1" gives %[? ?].
+    iCombine "Hfld_hist0 Hfld_hist1" gives %[? ?].
+    iCombine "Hfld_serv0 Hfld_serv1" gives %[? ?].
+    simplify_eq/=.
+    iCombine "Hown_hist0 Hown_hist1" as "?".
+    iCombine "Hown_gs_hist0 Hown_gs_hist1" as "?".
+Admitted.
 
 End proof.
 End Auditor.
@@ -804,11 +840,26 @@ Proof.
   simpl. len.
 Qed.
 
+(* TODO: upstream. *)
 Lemma init_RWMutex P {E} (rw : loc) `{!fractional.Fractional P} :
   ▷ P 1%Qp -∗
   rw ↦ (default_val sync.RWMutex.t) ={E}=∗
   [∗] replicate (Z.to_nat rwmutex.actualMaxReaders) (own_RWMutex rw P).
 Proof. Admitted.
+
+Lemma big_sepL_replicate_impl (Φ Ψ : iProp Σ) (n : nat) :
+  ([∗] replicate n Φ) -∗
+  □ (Φ -∗ Ψ) -∗
+  ([∗] replicate n Ψ).
+Proof.
+  iIntros "HP #Himpl".
+  assert (n = length (replicate n 0)) as ->.
+  { by rewrite length_replicate. }
+  rewrite !big_sepL_replicate.
+  iApply (big_sepL_impl with "HP").
+  iIntros "!> **".
+  by iApply "Himpl".
+Qed.
 
 Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
   {{{
@@ -827,7 +878,8 @@ Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ γ,
       "#His_inv" ∷ is_inv γ ∗
-      "Hlocks" ∷ ([∗] replicate (Z.to_nat rwmutex.actualMaxReaders) (Auditor.lock_perm ptr_a γ)) ∗
+      "Hlocks" ∷ ([∗] replicate (Z.to_nat rwmutex.actualMaxReaders)
+        (Auditor.lock_perm ptr_a γ)) ∗
       "%Heq_servGood" ∷ ⌜γ.(cfg.serv_good) = servGood⌝ ∗
 
       "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.adtr_sig_pk) ∗
@@ -861,6 +913,7 @@ Proof.
     iNamed "Hgood".
     iFrame "#". }
   iNamed "Hgenie".
+  iDestruct (server.wish_CheckStartChain_extract with "Hwish_CheckStartChain") as "@".
   wp_apply wp_CheckStartVrf as "* @".
   { iFrame "#". }
   wp_if_destruct.
@@ -903,18 +956,18 @@ Proof.
       by rewrite -last_lookup last_app Heq_dig. }
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". by replace (_ - _)%nat with 0%nat by word. }
-  wp_apply wp_alloc as "* Hptr_info".
-  iPersist "Hptr_info".
+  wp_apply wp_alloc as "* Hstr_epoch".
+  iPersist "Hstr_epoch".
   unshelve (wp_apply wp_slice_literal as "* [Hsl_epochs Hcap_epochs]"); [apply _|].
   iNamed "Hptr_vrf".
-  wp_apply wp_alloc as "* Hptr_hist".
+  wp_apply wp_alloc as "* Hstr_hist".
   wp_apply ktcore.wp_SignVrf as "* @".
   { iFrame "#". }
-  wp_apply wp_alloc as "* Hptr_serv".
+  wp_apply wp_alloc as "* Hstr_serv".
   rewrite -wp_fupd.
-  wp_apply wp_alloc as "%ptr_a Hptr_adtr".
-  iPersist "Hptr_serv Hptr_adtr".
-  iDestruct (struct_fields_split with "Hptr_adtr") as "{Hptr_adtr} H".
+  wp_apply wp_alloc as "%ptr_a Hstr_adtr".
+  iPersist "Hstr_serv Hstr_adtr".
+  iDestruct (struct_fields_split with "Hstr_adtr") as "{Hstr_adtr} H".
   iNamedSuffix "H" "_fld".
   simpl in *.
 
@@ -926,14 +979,59 @@ Proof.
   { iExists σ. subst. iFrame "∗#". }
   iAssert (is_inv γ)%I with "Ht" as "{Ht} #His_inv".
 
+  iMod (init_RWMutex (λ q, ∃ obj σ, Auditor.own ptr_a obj γ σ q)%I
+    with "[-HΦ Hmu] Hmu") as "Hlocks".
+  { admit. }
+  { admit. }
+
+  (*
   iMod (init_RWMutex (Auditor.own ptr_a (Auditor.mk' (history.mk' digs cut)) γ σ)
-    with "[-HΦ Hmu] Hmu") as "H".
+    with "[-HΦ Hmu] Hmu") as "Hlocks".
   { subst. iModIntro.
-    iFrame "Hptr_hist #∗".
+    iNamed "Hwish_CheckStartVrf".
+    iFrame "Hstr_hist #∗".
     simpl in *.
-    iClear "∗#".
-    repeat iSplit; try done.
-    -
+    repeat iSplit; try done; try iPureIntro.
+    - replace (W64 (_ + _)) with ep by word.
+      iNamed "Hwish_CheckStartChain".
+      iFrame "Hstr_epoch #".
+    - word.
+    - case_match; try done.
+      iNamedSuffix "Hgood" "0".
+      subst.
+      iDestruct (server.wish_CheckStartChain_det with
+        "Hwish_StartChain0 Hwish_CheckStartChain") as %?.
+      destruct_and!. subst.
+      iFrame "#". iPureIntro. simpl. repeat split.
+      rewrite last_lookup in Hlast_digs.
+      apply lookup_lt_Some in Hlast_digs.
+      autorewrite with len in *. word.
+    - case_match; try done.
+      iFrame "#". simpl in *.
+      by iNamed "Hgood". }
+  *)
+
+  Transparent rwmutex.actualMaxReaders.
+  (* TODO: fix in peren. otherwise, TC search spins. *)
+  Typeclasses Opaque rwmutex.actualMaxReaders.
+  Opaque rwmutex.actualMaxReaders.
+
+  subst. iModIntro.
+  iApply "HΦ".
+  iSplit. { iPureIntro. apply ktcore.blame_none. }
+  case_decide; try done.
+  iFrame "#".
+  simpl in *.
+  (* don't [try done] on replicate goal. it'll spin forever. *)
+  iSplit; [|done].
+  iApply (big_sepL_replicate_impl with "Hlocks").
+  iIntros "!> Hlock".
+  iFrame "#".
+  iClear "#".
+  clear.
+  iFrame.
+  (* prev, using Auditor.own with specific params inside lock inv.
+  that's not Equiv to existential params, so need to establish that on its own. *)
 Admitted.
 
 End proof.

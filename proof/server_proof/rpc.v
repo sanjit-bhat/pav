@@ -285,8 +285,12 @@ Lemma wp_CallStart c good :
       "Hgood" ∷ match good with None => True | Some γ =>
         ∃ servHist ep dig link,
         "#Hlb_servHist" ∷ mono_list_lb_own γ.(cfg.histγ) servHist ∗
-        "#wish_StartChain" ∷ wish_CheckStartChain γ.(cfg.sig_pk) chain
+        (* epoch returned by CheckStartChain is only upper bound on (len digs).
+        need exact equality so clients can certify their last ep. *)
+        "%Heq_ep" ∷ ⌜uint.nat ep = (length servHist - 1)%nat⌝ ∗
+        "#Hwish_StartChain" ∷ wish_CheckStartChain γ.(cfg.sig_pk) chain
           servHist.*1 None ep dig link ∗
+        "%Heq_VrfPk" ∷ ⌜γ.(cfg.vrf_pk) = vrf.(StartVrf.VrfPk)⌝ ∗
         "#Hwish_StartVrf" ∷ wish_CheckStartVrf γ.(cfg.sig_pk) vrf end)
     }}}.
 Proof.
