@@ -345,7 +345,8 @@ Proof.
   rewrite -last_lookup in Hdig_lookup.
   iFrame "#%".
 
-  repeat iSplit.
+  repeat iSplit; try done.
+  - word.
   - iExactEq "His_last_link". rewrite /named. f_equal. len.
   - by rewrite take_drop.
   - len.
