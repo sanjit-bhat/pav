@@ -30,12 +30,10 @@ Definition own γ σ : iProp Σ := own_aux γ σ 1.
 
 Definition is_inv γ := inv nroot (∃ σ, own γ σ).
 
-#[global]
-Instance own_timeless γ σ : Timeless (own γ σ).
+#[global] Instance own_timeless γ σ : Timeless (own γ σ).
 Proof. apply _. Qed.
 
-#[global]
-Instance own_aux_frac γ σ :
+#[global] Instance own_aux_frac γ σ :
   fractional.Fractional (λ q, own_aux γ σ q).
 Proof.
   intros ??. iSplit.
@@ -51,13 +49,11 @@ Proof.
     iFrame "∗#".
 Qed.
 
-#[global]
-Instance own_aux_as_frac γ σ q :
+#[global] Instance own_aux_as_frac γ σ q :
   fractional.AsFractional (own_aux γ σ q) (λ q, own_aux γ σ q) q.
 Proof. auto. Qed.
 
-#[global]
-Instance own_aux_combine_sep_gives γ σ0 σ1 q0 q1 :
+#[global] Instance own_aux_combine_sep_gives γ σ0 σ1 q0 q1 :
   CombineSepGives (own_aux γ σ0 q0) (own_aux γ σ1 q1) (⌜σ0 = σ1⌝).
 Proof.
   rewrite /CombineSepGives.
@@ -70,8 +66,7 @@ Proof.
   destruct σ0, σ1. by simplify_eq/=.
 Qed.
 
-#[global]
-Instance own_aux_combine_sep_as γ σ0 σ1 q0 q1 :
+#[global] Instance own_aux_combine_sep_as γ σ0 σ1 q0 q1 :
   CombineSepAs (own_aux γ σ0 q0) (own_aux γ σ1 q1) (own_aux γ σ0 (q0 + q1)) | 60.
 Proof.
   rewrite /CombineSepAs.
@@ -146,57 +141,16 @@ Definition lock_perm ptr γ : iProp Σ :=
   "#Hfld_mu" ∷ ptr ↦s[auditor.Auditor::"mu"]□ ptr_mu ∗
   "Hperm" ∷ own_RWMutex ptr_mu (own_aux ptr γ).
 
-(* TODO: not sure if i'm using this. *)
-#[global]
-Instance own_frac ptr obj γ σ :
-  fractional.Fractional (λ q, own ptr obj γ σ q).
+#[global] Instance own_aux_frac ptr γ :
+  fractional.Fractional (λ q, own_aux ptr γ q).
 Proof.
-  rewrite /own. intros ??. iSplit.
-  - iIntros "@".
+  rewrite /own_aux. intros ??. iSplit.
+  - iIntros "(%&%&@)".
     iDestruct "Hown_hist" as "[? ?]".
     (* TODO: why needed? *)
     Typeclasses Opaque auditor.own_aux.
     iDestruct "Hown_gs_hist" as "[? ?]".
     iFrame "#∗".
-  - iIntros "[H0 H1]".
-    iNamedSuffix "H0" "0".
-    iNamedSuffix "H1" "1".
-    iCombine "Hfld_sk0 Hfld_sk1" gives %[? ?].
-    iCombine "Hfld_hist0 Hfld_hist1" gives %[? ?].
-    iCombine "Hfld_serv0 Hfld_serv1" gives %[? ?].
-    simplify_eq/=.
-    iCombine "Hown_hist0 Hown_hist1" as "?".
-    iCombine "Hown_gs_hist0 Hown_gs_hist1" as "?".
-    iFrame "#∗".
-Qed.
-
-#[global]
-Instance own_as_frac ptr obj γ σ q :
-  fractional.AsFractional (own ptr obj γ σ q) (λ q, own ptr obj γ σ q) q.
-Proof. auto. Qed.
-
-(* TODO: maybe could prove obj's equal from sigpred_links_inv. *)
-(*
-#[global]
-Instance own_combine_gives ptr γ obj0 obj1 σ0 σ1 q0 q1 :
-  CombineSepGives (own ptr obj0 γ σ0 q0) (own ptr obj1 γ σ1 q1)
-    ⌜obj0 = obj1 ∧ σ0 = σ1⌝.
-Proof.
-  rewrite /CombineSepGives.
-  iIntros "[H0 H1]".
-  iNamedSuffix "H0" "0".
-  iNamedSuffix "H1" "1".
-  iCombine "Hown_gs_hist0 Hown_gs_hist1" gives %?.
-Admitted.
-*)
-
-#[global]
-Instance own_aux_frac ptr γ :
-  fractional.Fractional (λ q, own_aux ptr γ q).
-Proof.
-  rewrite /own_aux. intros ??. iSplit.
-  - iIntros "(%&%&H)".
-    iDestruct "H" as "[$ $]".
   - iIntros "[(%&%&H0)(%&%&H1)]".
     iNamedSuffix "H0" "0".
     iNamedSuffix "H1" "1".
@@ -206,7 +160,12 @@ Proof.
     simplify_eq/=.
     iCombine "Hown_hist0 Hown_hist1" as "?".
     iCombine "Hown_gs_hist0 Hown_gs_hist1" as "?".
-Admitted.
+    iFrame "∗#%".
+Qed.
+
+#[global] Instance own_aux_as_frac ptr γ q :
+  fractional.AsFractional (own_aux ptr γ q) (λ q, own_aux ptr γ q) q.
+Proof. auto. Qed.
 
 End proof.
 End Auditor.
@@ -785,10 +744,7 @@ Proof.
              ∷ ⌜ktcore.BlameSpec err
                   {[ktcore.BlameServFull := option_bool γ.(cfg.serv_good)]}⌝ ∗
              "HQ" ∷ Q σ0 -∗ Φ (# (ktcore.blame_to_u64 err))) ∗
-    "Hlocked" ∷ own_RWMutex_Locked ptr_mu
-                  (λ q : Qp,
-                     ∃ (adtr0 : Auditor.t) (σ0 : state.t),
-                       Auditor.own ptr_a adtr0 γ σ0 q) ∗
+    "Hlocked" ∷ own_RWMutex_Locked ptr_mu (Auditor.own_aux ptr_a γ) ∗
 
     "Hadtr" ∷ Auditor.own ptr_a a γ σ 1 ∗
     "%Heq_ep" ∷ ⌜(uint.Z start_ep + length links + sint.nat i =
@@ -971,6 +927,7 @@ Proof.
   iNamedSuffix "H" "_fld".
   simpl in *.
 
+  remember (Auditor.mk' (history.mk' digs cut)) as obj.
   remember (ktcore.sigpred_cfg.mk _ _ _) as sigpredγ.
   remember (cfg.mk servPk sigPk sigpredγ vrf.(server.StartVrf.VrfPk) servGood) as γ.
   remember (state.mk ep [link]) as σ.
@@ -979,15 +936,9 @@ Proof.
   { iExists σ. subst. iFrame "∗#". }
   iAssert (is_inv γ)%I with "Ht" as "{Ht} #His_inv".
 
-  iMod (init_RWMutex (λ q, ∃ obj σ, Auditor.own ptr_a obj γ σ q)%I
-    with "[-HΦ Hmu] Hmu") as "Hlocks".
-  { admit. }
-  { admit. }
-
-  (*
-  iMod (init_RWMutex (Auditor.own ptr_a (Auditor.mk' (history.mk' digs cut)) γ σ)
-    with "[-HΦ Hmu] Hmu") as "Hlocks".
-  { subst. iModIntro.
+  iMod (init_RWMutex (Auditor.own_aux ptr_a γ) with "[-HΦ Hmu] Hmu") as "Hlocks".
+  { iExists obj, σ.
+    subst. iModIntro.
     iNamed "Hwish_CheckStartVrf".
     iFrame "Hstr_hist #∗".
     simpl in *.
@@ -1009,7 +960,6 @@ Proof.
     - case_match; try done.
       iFrame "#". simpl in *.
       by iNamed "Hgood". }
-  *)
 
   Transparent rwmutex.actualMaxReaders.
   (* TODO: fix in peren. otherwise, TC search spins. *)
@@ -1026,13 +976,8 @@ Proof.
   iSplit; [|done].
   iApply (big_sepL_replicate_impl with "Hlocks").
   iIntros "!> Hlock".
-  iFrame "#".
-  iClear "#".
-  clear.
-  iFrame.
-  (* prev, using Auditor.own with specific params inside lock inv.
-  that's not Equiv to existential params, so need to establish that on its own. *)
-Admitted.
+  iFrame "#∗".
+Qed.
 
 End proof.
 End auditor.
