@@ -75,7 +75,7 @@ Proof.
   rewrite bool_decide_eq_true. iIntros (<-).
   iDestruct "addr" as "HemptyHash". wp_auto.
   wp_func_call. wp_call.
-  wp_apply wp_slice_literal as "* Hsl".
+  wp_apply wp_slice_literal as "* [Hsl _]".
   wp_apply (cryptoutil.wp_Hash with "[$Hsl]") as "* @".
   wp_apply wp_globals_get --no-auto.
   wp_store.
