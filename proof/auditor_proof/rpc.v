@@ -82,33 +82,7 @@ Definition align_serv obj σ servγ : iProp Σ :=
   "%Heq_digs" ∷ ⌜obj.(digs) = hist.*1⌝ ∗
   "%Heq_cut" ∷ ⌜obj.(cut) = None⌝.
 
-#[global]
-Instance own_frac ptr obj γ σ :
-  fractional.Fractional (λ q, own ptr obj γ σ q).
-Proof.
-  rewrite /own. intros ??. iSplit.
-  - iIntros "@".
-    iDestruct "Hstr_history" as "[? ?]".
-    iDestruct "Hsl_epochs" as "[? ?]".
-    iDestruct "Hcap_epochs" as "[? ?]".
-    iFrame "∗#%".
-  - iIntros "[H0 H1]".
-    iNamedSuffix "H0" "0".
-    iNamedSuffix "H1" "1".
-    iCombine "Hstr_history0 Hstr_history1" as "?" gives %[? ?].
-    simplify_eq/=.
-    iCombine "Hsl_epochs0 Hsl_epochs1" as "?" gives %?.
-    iCombine "Hcap_epochs0 Hcap_epochs1" as "?".
-    iFrame "∗#%".
-Qed.
-
-#[global]
-Instance own_as_frac ptr obj γ σ q :
-  fractional.AsFractional (own ptr obj γ σ q) (λ q, own ptr obj γ σ q) q.
-Proof. auto. Qed.
-
-#[global]
-Instance own_aux_combine_sep_as ptr obj0 obj1 γ σ0 σ1 q0 q1 :
+#[global] Instance own_aux_combine_sep_as ptr obj0 obj1 γ σ0 σ1 q0 q1 :
   CombineSepAs (own ptr obj0 γ σ0 q0) (own ptr obj1 γ σ1 q1) (own ptr obj0 γ σ0 (q0 + q1)) | 60.
 Proof.
   rewrite /CombineSepAs.
@@ -124,6 +98,23 @@ Proof.
   (* TODO: DfracOwn q0 ⋅ DfracOwn q1. not getting combined properly. *)
   iFrame "∗#%".
 Qed.
+
+#[global] Instance own_frac ptr obj γ σ :
+  fractional.Fractional (λ q, own ptr obj γ σ q).
+Proof.
+  intros ??. iSplit.
+  - iIntros "@".
+    iDestruct "Hstr_history" as "[? ?]".
+    iDestruct "Hsl_epochs" as "[? ?]".
+    iDestruct "Hcap_epochs" as "[? ?]".
+    iFrame "∗#%".
+  - iIntros "[H0 H1]".
+    by iCombine "H0 H1" as "H".
+Qed.
+
+#[global] Instance own_as_frac ptr obj γ σ q :
+  fractional.AsFractional (own ptr obj γ σ q) (λ q, own ptr obj γ σ q) q.
+Proof. auto. Qed.
 
 End proof.
 End history.
