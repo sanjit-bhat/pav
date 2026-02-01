@@ -5,9 +5,6 @@ From New.proof Require Import bytes sync.
 From New.proof.github_com.sanjit_bhat.pav Require Import
   advrpc cryptoffi hashchain ktcore merkle safemarshal server.
 
-(* TODO: upstream. *)
-#[global] Opaque rwmutex.actualMaxReaders.
-
 Module auditor.
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.

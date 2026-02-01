@@ -796,27 +796,6 @@ Proof.
   simpl. len.
 Qed.
 
-(* TODO: upstream. *)
-Lemma init_RWMutex P {E} (rw : loc) `{!fractional.Fractional P} :
-  ▷ P 1%Qp -∗
-  rw ↦ (default_val sync.RWMutex.t) ={E}=∗
-  [∗] replicate (Z.to_nat rwmutex.actualMaxReaders) (own_RWMutex rw P).
-Proof. Admitted.
-
-Lemma big_sepL_replicate_impl (Φ Ψ : iProp Σ) (n : nat) :
-  ([∗] replicate n Φ) -∗
-  □ (Φ -∗ Ψ) -∗
-  ([∗] replicate n Ψ).
-Proof.
-  iIntros "HP #Himpl".
-  assert (n = length (replicate n 0)) as ->.
-  { by rewrite length_replicate. }
-  rewrite !big_sepL_replicate.
-  iApply (big_sepL_impl with "HP").
-  iIntros "!> **".
-  by iApply "Himpl".
-Qed.
-
 Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
   {{{
     is_pkg_init auditor ∗
@@ -961,19 +940,13 @@ Proof.
       iFrame "#". simpl in *.
       by iNamed "Hgood". }
 
-  Transparent rwmutex.actualMaxReaders.
-  (* TODO: fix in peren. otherwise, TC search spins. *)
-  Typeclasses Opaque rwmutex.actualMaxReaders.
-  Opaque rwmutex.actualMaxReaders.
-
   subst. iModIntro.
   iApply "HΦ".
   iSplit. { iPureIntro. apply ktcore.blame_none. }
   case_decide; try done.
   iFrame "#".
   simpl in *.
-  (* don't [try done] on replicate goal. it'll spin forever. *)
-  iSplit; [|done].
+  iSplit; try done.
   iApply (big_sepL_replicate_impl with "Hlocks").
   iIntros "!> Hlock".
   iFrame "#∗".
