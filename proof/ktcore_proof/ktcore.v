@@ -292,6 +292,8 @@ Proof.
   - iNamed "Hgenie0". iFrame "#".
 Qed.
 
+(* externalize [rand] bc some clients want to determ
+derive [map_val] from [kt_pk]. *)
 Definition is_MapVal kt_pk rand map_val : iProp Σ :=
   let enc := CommitOpen.pure_enc (CommitOpen.mk' kt_pk rand) in
   cryptoffi.is_hash (Some enc) map_val.

@@ -431,24 +431,30 @@ End history.
 
 Module work.
 Record t := mk' {
-  Uid : w64;
-  Ver : w64;
-  Pk : list w8;
-  Err : bool;
+  uid : w64;
+  ver : w64;
+  pk : list w8;
 }.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 Context `{!pavG Σ}.
 
-Definition own γ ptr obj : iProp Σ :=
-  ∃ sl_pk uidγ i,
-  "Hstr_Work" ∷ ptr ↦ (server.Work.mk obj.(Uid) obj.(Ver) sl_pk obj.(Err)) ∗
-  "#Hsl_pk" ∷ sl_pk ↦*□ obj.(Pk) ∗
-  "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! obj.(Uid) = Some uidγ⌝ ∗
-  "#Hput_perm" ∷ mono_list_idx_own uidγ i (obj.(Ver), obj.(Pk)).
+Definition own γ secs ptr obj : iProp Σ :=
+  ∃ sl_pk sl_mapLabel mapLabel sl_mapVal mapVal rand uidγ i,
+  "Hstr_Work" ∷ ptr ↦ (server.work.mk obj.(uid) obj.(ver) sl_pk sl_mapLabel sl_mapVal) ∗
+  "#Hsl_pk" ∷ sl_pk ↦*□ obj.(pk) ∗
+  "#Hsl_mapLabel" ∷ sl_mapLabel ↦*□ mapLabel ∗
+  "#Hsl_mapVal" ∷ sl_mapVal ↦*□ mapVal ∗
 
-Definition own_aux γ (ptr : loc) : iProp Σ := ∃ obj, own γ ptr obj.
+  "#His_mapLabel" ∷ ktcore.is_MapLabel γ.(cfg.vrf_pk) obj.(uid) obj.(ver) mapLabel ∗
+  "#His_rand" ∷ ktcore.is_CommitRand secs.(secrets.commit) mapLabel rand ∗
+  "#His_mapVal" ∷ ktcore.is_MapVal obj.(pk) rand mapVal ∗
+
+  "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! obj.(uid) = Some uidγ⌝ ∗
+  "#Hput_perm" ∷ mono_list_idx_own uidγ i (obj.(ver), obj.(pk)).
+
+Definition own_aux γ secs (ptr : loc) : iProp Σ := ∃ obj, own γ secs ptr obj.
 
 End proof.
 End work.
