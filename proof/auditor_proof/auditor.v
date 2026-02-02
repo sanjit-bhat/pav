@@ -309,7 +309,6 @@ Lemma wp_getNextDig sl_prevDig prevDig prevMap sl_updates updates :
   }}}.
 Proof.
   wp_start as "@". wp_auto.
-  iPersist "updates".
   iDestruct "Hown_updates" as "(%sl0_updates&Hsl_updates&Hown_updates)".
   iDestruct (own_slice_len with "Hsl_updates") as %[? ?].
   iDestruct (big_sepL2_length with "Hown_updates") as %?.
@@ -664,7 +663,7 @@ Proof.
   iSplit.
   { iPureIntro.
     autorewrite with len.
-    exists ep. repeat split; try done; [|word..].
+    repeat split; try done; [|word..].
     by rewrite last_snoc. }
   case_match; try done.
   iNamed "Hgood".

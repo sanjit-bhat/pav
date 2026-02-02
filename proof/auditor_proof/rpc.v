@@ -187,12 +187,12 @@ Proof.
     iDestruct own_slice_cap_nil as "$". }
   simpl in *.
   wp_apply wp_alloc as "* Hreply".
-  wp_apply (wp_Audit_cli_call (Q_read (uint.nat prevEpoch))
+  wp_apply (wp_Audit_cli_call (Q_read_idx (uint.nat prevEpoch))
     with "[$Hsl_b $Hreply]") as "* @".
   { iFrame "#". case_match; try done.
     iModIntro.
     iNamed "His_args".
-    by iApply op_read. }
+    by iApply op_read_idx. }
   wp_if_destruct.
   { rewrite ktcore.rw_BlameUnknown.
     iApply "HΦ".
