@@ -39,29 +39,31 @@ Qed.
 
 (* is_hash says that [data] will hash to [hash].
 relative to the crypto model, it says the inputs are in the set of hashes. *)
-Definition is_hash (data : option (list w8)) (hash : list w8) : iProp Σ.
+Definition is_hash (odata : option (list w8)) (hash : list w8) : iProp Σ.
 Proof. Admitted.
 
-#[global] Instance is_hash_pers data hash : Persistent (is_hash data hash).
+#[global] Instance is_hash_pers odata hash : Persistent (is_hash odata hash).
 Proof. Admitted.
 
 Lemma is_hash_det data hash0 hash1 :
   is_hash (Some data) hash0 -∗ is_hash (Some data) hash1 -∗ ⌜hash0 = hash1⌝.
 Proof. Admitted.
 
-Lemma is_hash_inj data0 data1 hash :
-  is_hash data0 hash -∗ is_hash data1 hash -∗ ⌜data0 = data1⌝.
+Lemma is_hash_inj odata0 odata1 hash :
+  is_hash odata0 hash -∗ is_hash odata1 hash -∗ ⌜odata0 = odata1⌝.
 Proof. Admitted.
 
-Lemma is_hash_len data hash :
-  is_hash data hash -∗ ⌜Z.of_nat $ length hash = hash_len⌝.
+Lemma is_hash_len odata hash :
+  is_hash odata hash -∗ ⌜Z.of_nat $ length hash = hash_len⌝.
 Proof. Admitted.
 
 (* key feature of prophecy hash model.
-TODO: this is missing some gnames to pin everything down. *)
+TODO: this is missing some gnames to pin everything down.
+TODO: could prob get rid of hash_len requirement.
+inverting incorrect len just goes to None. *)
 Lemma is_hash_invert hash :
   Z.of_nat $ length hash = hash_len → ⊢
-  ∃ data, is_hash data hash.
+  ∃ odata, is_hash odata hash.
 Proof. Admitted.
 
 Definition own_Hasher (ptr : loc) (data : list w8) : iProp Σ.
@@ -213,7 +215,8 @@ Definition own_vrf_sk (ptr_sk : loc) (pk : list w8) : iProp Σ.
 Admitted.
 
 (* think of this as DfracDiscarded. *)
-#[global] Instance own_vrf_sk_pers ptr_sk pk : Persistent (own_vrf_sk ptr_sk pk).
+#[global] Instance own_vrf_sk_pers ptr_sk pk :
+  Persistent (own_vrf_sk ptr_sk pk).
 Proof. Admitted.
 
 (* is_vrf_pk says that pk satisfies certain mathematical crypto checks.
@@ -231,7 +234,8 @@ Definition own_vrf_pk (ptr_pk : loc) (pk : list w8) : iProp Σ.
 Admitted.
 
 (* think of this as DfracDiscarded. *)
-#[global] Instance own_vrf_pk_pers ptr_pk pk : Persistent (own_vrf_pk ptr_pk pk).
+#[global] Instance own_vrf_pk_pers ptr_pk pk :
+  Persistent (own_vrf_pk ptr_pk pk).
 Proof. Admitted.
 
 Lemma own_vrf_pk_valid ptr_pk pk : own_vrf_pk ptr_pk pk -∗ is_vrf_pk pk.
@@ -251,17 +255,17 @@ Proof. Admitted.
 the specific proof associated with a VRF computation.
 this is convenient because the spec does not rule out multiple proofs
 between the same pk, data, and output. *)
-Definition is_vrf_out (pk data out : list w8) : iProp Σ.
+Definition is_vrf_out (pk : list w8) (odata : option $ list w8) (out : list w8) : iProp Σ.
 Admitted.
 
-#[global] Instance is_vrf_out_pers pk data out :
-  Persistent (is_vrf_out pk data out).
+#[global] Instance is_vrf_out_pers pk odata out :
+  Persistent (is_vrf_out pk odata out).
 Proof. Admitted.
 
 (* is_vrf_out_det models "Full Uniqueness".
 this always holds for ECVRF. *)
 Lemma is_vrf_out_det pk data out0 out1 :
-  is_vrf_out pk data out0 -∗ is_vrf_out pk data out1 -∗ ⌜ out0 = out1⌝.
+  is_vrf_out pk (Some data) out0 -∗ is_vrf_out pk (Some data) out1 -∗ ⌜out0 = out1⌝.
 Proof. Admitted.
 
 (* is_vrf_out_inj models "Full Collision Resistance".
@@ -269,12 +273,18 @@ Proof. Admitted.
 as the `validate_key` parameter to `ECVRF_verify` is true.
 key validation is done when running `VrfPublicKeyDecode`
 on an adversarially-provided pk. *)
-Lemma is_vrf_out_inj pk data0 data1 out :
-  is_vrf_out pk data0 out -∗ is_vrf_out pk data1 out -∗ ⌜ data0 = data1 ⌝.
+Lemma is_vrf_out_inj pk odata0 odata1 out :
+  is_vrf_out pk odata0 out -∗ is_vrf_out pk odata1 out -∗ ⌜odata0 = odata1⌝.
 Proof. Admitted.
 
+(* is_vrf_out_invert holds bc of is_vrf_out_inj. *)
+Lemma is_vrf_out_invert pk out : ⊢ ∃ odata, is_vrf_out pk odata out.
+Proof. Admitted.
+
+(* differs from is_hash_len in [Some data] vs [None].
+once adjust is_hash_invert to not have len req, is_hash_len will look similar. *)
 Lemma is_vrf_out_len pk data out :
-  is_vrf_out pk data out -∗ ⌜ Z.of_nat (length out) = hash_len ⌝.
+  is_vrf_out pk (Some data) out -∗ ⌜Z.of_nat (length out) = hash_len⌝.
 Proof. Admitted.
 
 Lemma wp_VrfGenerateKey :
@@ -301,7 +311,7 @@ Lemma wp_VrfPrivateKey_Prove ptr_sk pk sl_data (data : list w8) d0 :
     "Hsl_out" ∷ sl_out ↦* out ∗
     "Hsl_proof" ∷ sl_proof ↦* proof ∗
     "#His_vrf_proof" ∷ is_vrf_proof pk data proof ∗
-    "#His_vrf_out" ∷ is_vrf_out pk data out
+    "#His_vrf_out" ∷ is_vrf_out pk (Some data) out
   }}}.
 Proof. Admitted.
 
@@ -316,7 +326,7 @@ Lemma wp_VrfPrivateKey_Evaluate ptr_sk pk sl_data (data : list w8) d0 :
     sl_out (out : list w8), RET #sl_out;
     "Hsl_data" ∷ sl_data ↦*{d0} data ∗
     "Hsl_out" ∷ sl_out ↦* out ∗
-    "#His_vrf_out" ∷ is_vrf_out pk data out
+    "#His_vrf_out" ∷ is_vrf_out pk (Some data) out
   }}}.
 Proof. Admitted.
 
@@ -338,7 +348,7 @@ Lemma wp_VrfPublicKey_Verify ptr_pk pk sl_data sl_proof (data proof : list w8) d
       | true => ¬ is_vrf_proof pk data proof
       | false =>
         "#His_proof" ∷ is_vrf_proof pk data proof ∗
-        "#His_out" ∷ is_vrf_out pk data out
+        "#His_out" ∷ is_vrf_out pk (Some data) out
       end
   }}}.
 Proof. Admitted.
