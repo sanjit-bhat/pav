@@ -34,9 +34,10 @@ Record t :=
     (* map from uid to gname. *)
     uidγ : gmap w64 gname;
     histγ : gname;
-    (* for now, have sigpred GS be diff from serv.hist GS.
+    (* TODO: for now, have sigpred GS be diff from serv.hist GS.
     serv.hist GS talks about keys, whereas auditor (sharing same sigpred),
-    doesn't have the plaintext keys. *)
+    doesn't have the plaintext keys.
+    could bridge this gap by inverting the VRF. *)
     sigpredγ : ktcore.sigpred_cfg.t;
   }.
 End cfg.
@@ -389,7 +390,7 @@ End keyStore.
 
 Module history.
 Record t := mk' {
-  digs: list (list w8);
+  digs : list (list w8);
 }.
 
 Section proof.
@@ -460,35 +461,55 @@ End proof.
 End work.
 
 Module Server.
+Record t :=
+  mk' {
+    secs : secrets.t;
+  }.
+
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 Context `{!pavG Σ}.
 
-Definition own γ ptr obj q : iProp Σ :=
-  ∃ ptr_secs secs ptr_keys keys ptr_hist hist ptr_workQ workQγ lastDig,
+(* experimenting with diff abstractions to fit the diff use cases. *)
+
+Definition own_ro_aux γ ptr obj : iProp Σ :=
+  ∃ ptr_secs ptr_workQ workQγ,
   "#Hfld_secs" ∷ ptr ↦s[server.Server::"secs"]□ ptr_secs ∗
-  "#Hfld_keys" ∷ ptr ↦s[server.Server::"keys"]□ ptr_keys ∗
-  "#Hfld_hist" ∷ ptr ↦s[server.Server::"hist"]□ ptr_hist ∗
   "#Hfld_workQ" ∷ ptr ↦s[server.Server::"workQ"]□ ptr_workQ ∗
 
-  "#Hown_secs" ∷ secrets.own γ ptr_secs secs ∗
-  "Hown_keys" ∷ keyStore.own γ ptr_keys keys secs lastDig q ∗
+  "#Hown_secs" ∷ secrets.own γ ptr_secs obj.(secs) ∗
+  "#His_workQ" ∷ handoff.is_chan_handoff workQγ ptr_workQ (work.own_aux γ obj.(secs)).
+
+Definition own_ro γ ptr : iProp Σ := ∃ obj, own_ro_aux γ ptr obj.
+
+Definition own_locked γ ptr σ obj q : iProp Σ :=
+  ∃ ptr_keys keys ptr_hist hist lastDig,
+  "#Hfld_keys" ∷ ptr ↦s[server.Server::"keys"]□ ptr_keys ∗
+  "#Hfld_hist" ∷ ptr ↦s[server.Server::"hist"]□ ptr_hist ∗
+
+  "Hown_keys" ∷ keyStore.own γ ptr_keys keys obj.(secs) lastDig q ∗
   "Hown_hist" ∷ history.own γ ptr_hist hist q ∗
-  "#His_workQ" ∷ handoff.is_chan_handoff workQγ ptr_workQ (work.own_aux γ) ∗
 
   (* other 1/2 in server inv. *)
-  "Hown_gs" ∷ own_aux γ obj (q/2) ∗
-  "%Heq_hist" ∷ ⌜obj.(state.hist).*1 = hist.(history.digs)⌝ ∗
-  "%Heq_last_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, keys.(keyStore.plain))⌝ ∗
-  "#Hop_add_hist" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
+  "Hown_gs" ∷ own_aux γ σ (q/2) ∗
+  "%Heq_hist" ∷ ⌜σ.(state.hist).*1 = hist.(history.digs)⌝ ∗
+  "%Heq_last_hist" ∷ ⌜last σ.(state.hist) = Some (lastDig, keys.(keyStore.plain))⌝ ∗
+  "#Hop_add_hist" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
     ∀ dig,
-    let obj' := set (state.hist) (.++ [(dig, obj.(state.pending))]) obj in
-    (own γ obj' ={∅,⊤}=∗ True)).
+    let σ' := set (state.hist) (.++ [(dig, σ.(state.pending))]) σ in
+    (own γ σ' ={∅,⊤}=∗ True)).
 
-Definition lock_perm γ ptr : iProp Σ :=
+Definition own γ ptr σ q : iProp Σ :=
+  ∃ obj,
+  "#Hown_ro" ∷ own_ro_aux γ ptr obj ∗
+  "Hown_locked" ∷ own_locked γ ptr σ obj q.
+
+Definition own_aux γ ptr q : iProp Σ := ∃ σ, own γ ptr σ q.
+
+Definition own_lock γ ptr : iProp Σ :=
   ∃ ptr_mu,
   "#Hfld_mu" ∷ ptr ↦s[server.Server::"mu"]□ ptr_mu ∗
-  "Hperm" ∷ own_RWMutex ptr_mu (λ q, ∃ obj, own γ ptr obj q).
+  "Hlock" ∷ own_RWMutex ptr_mu (own_aux γ ptr).
 
 End proof.
 End Server.
@@ -502,15 +523,15 @@ Context `{!pavG Σ}.
 Lemma wp_Server_getHist s γ obj (uid prefixLen : w64) q lastDig lastKeys :
   {{{
     is_pkg_init server ∗
-    "Hown" ∷ Server.own γ s obj q ∗
+    "Hown_serv" ∷ Server.own γ s obj q ∗
     "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
-    "%Hpre_len" ∷ ⌜uint.nat prefixLen ≤ length (lastKeys !!! uid)⌝
+    "%Heq_prefixLen" ∷ ⌜uint.nat prefixLen ≤ length (lastKeys !!! uid)⌝
   }}}
   s @ (ptrT.id server.Server.id) @ "getHist" #uid #prefixLen
   {{{
     sl_hist hist, RET #sl_hist;
     let pks := lastKeys !!! uid in
-    "Hown" ∷ Server.own γ s obj q ∗
+    "Hown_serv" ∷ Server.own γ s obj q ∗
     "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
     "#Hwish_hist" ∷ ktcore.wish_ListMemb γ.(cfg.vrf_pk) uid prefixLen lastDig hist ∗
     "%Heq_hist" ∷ ⌜Forall2
@@ -522,14 +543,14 @@ Proof. Admitted.
 Lemma wp_Server_getBound s γ obj (uid numVers : w64) q lastDig lastKeys :
   {{{
     is_pkg_init server ∗
-    "Hown" ∷ Server.own γ s obj q ∗
+    "Hown_serv" ∷ Server.own γ s obj q ∗
     "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
-    "%Hpre_bound" ∷ ⌜uint.nat numVers = length (lastKeys !!! uid)⌝
+    "%Heq_numVers" ∷ ⌜uint.nat numVers = length (lastKeys !!! uid)⌝
   }}}
   s @ (ptrT.id server.Server.id) @ "getBound" #uid #numVers
   {{{
     ptr_bound bound, RET #ptr_bound;
-    "Hown" ∷ Server.own γ s obj q ∗
+    "Hown_serv" ∷ Server.own γ s obj q ∗
     "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
     "#Hwish_bound" ∷ ktcore.wish_NonMemb γ.(cfg.vrf_pk) uid numVers lastDig bound
   }}}.
@@ -540,7 +561,7 @@ Proof. Admitted.
 Lemma wp_Server_Put s γ uid sl_pk pk ver :
   {{{
     is_pkg_init server ∗
-    "Hlock" ∷ Server.lock_perm γ s ∗
+    "#Hown_serv_ro" ∷ Server.own_ro γ s ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
     (* caller doesn't need anything from Put.
     and in fact, Put might logically execute *after* Put returns. *)
@@ -549,16 +570,13 @@ Lemma wp_Server_Put s γ uid sl_pk pk ver :
       (own γ obj' ={∅,⊤}=∗ True))
   }}}
   s @ (ptrT.id server.Server.id) @ "Put" #uid #ver #sl_pk
-  {{{
-    RET #();
-    "Hlock" ∷ Server.lock_perm γ s
-  }}}.
+  {{{ RET #(); True }}}.
 Proof. Admitted.
 
 Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
   {{{
     is_pkg_init server ∗
-    "Hlock" ∷ Server.lock_perm γ s ∗
+    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
@@ -568,7 +586,7 @@ Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #err);
     let numEps := length obj.(state.hist) in
     let pks := lastKeys !!! uid in
-    "Hlock" ∷ Server.lock_perm γ s ∗
+    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
     "HQ" ∷ Q obj ∗
     "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
     "#Herr" ∷
@@ -604,7 +622,7 @@ Proof. Admitted.
 Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
   {{{
     is_pkg_init server ∗
-    "Hlock" ∷ Server.lock_perm γ s ∗
+    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
@@ -612,7 +630,7 @@ Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
   {{{
     sl_proofs err obj, RET (#sl_proofs, #err);
     let numEps := length obj.(state.hist) in
-    "Hlock" ∷ Server.lock_perm γ s ∗
+    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
     "HQ" ∷ Q obj ∗
     "Herr" ∷
       match err with
@@ -647,7 +665,7 @@ Proof. Admitted.
 Lemma wp_Server_Start s γ Q :
   {{{
     is_pkg_init server ∗
-    "Hlock" ∷ Server.lock_perm γ s ∗
+    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
@@ -655,7 +673,7 @@ Lemma wp_Server_Start s γ Q :
   {{{
     ptr_chain chain ptr_vrf vrf obj last_link, RET (#ptr_chain, #ptr_vrf);
     let numEps := length obj.(state.hist) in
-    "Hlock" ∷ Server.lock_perm γ s ∗
+    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
     "HQ" ∷ Q obj ∗
     "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 

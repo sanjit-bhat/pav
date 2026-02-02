@@ -6,7 +6,7 @@ or unintended name shadows. *)
 (* for inG's. not exported. *)
 From New.proof Require Import proof_prelude.
 From New.proof Require Import sync.
-From New.proof.github_com.goose_lang.goose.model.channel.idiom Require Import base.
+From New.proof.github_com.goose_lang.goose.model.channel.logatom Require Import chan_au_base.
 
 (* add extra dependencies. *)
 From RecordUpdate Require Export RecordSet.
@@ -43,7 +43,7 @@ Class sigpredG Σ := {
 
 Class pavG Σ := {
   #[global] pavG_sync :: syncG Σ;
-  #[global] pavG_chan :: chan_idiomG Σ loc;
+  #[global] pavG_chan :: chanG Σ loc;
   #[global] pavG_sigpred :: sigpredG Σ;
   (* serverσ.pending. *)
   #[global] pavG_serv_pend :: ghost_varG Σ (gmap w64 (list $ list w8));
