@@ -30,10 +30,10 @@ Context `{ffi_syntax}.
 
 
 Definition Auditor : go_type := structT [
-  "mu" :: ptrT;
   "sk" :: ptrT;
-  "hist" :: ptrT;
-  "serv" :: ptrT
+  "serv" :: ptrT;
+  "mu" :: ptrT;
+  "hist" :: ptrT
 ].
 #[global] Typeclasses Opaque Auditor.
 #[global] Opaque Auditor.
@@ -66,7 +66,7 @@ Definition serv : go_type := structT [
 
 (* Update queries server for a new epoch update and applies it.
 
-   go: auditor.go:48:19 *)
+   go: auditor.go:50:19 *)
 Definition Auditor__Updateⁱᵐᵖˡ : val :=
   λ: "a" <>,
     with_defer: (let: "err" := (mem.alloc (type.zero_val #ktcore.Blame)) in
@@ -108,7 +108,7 @@ Definition Auditor__Updateⁱᵐᵖˡ : val :=
 
 Definition getNextLink : go_string := "github.com/sanjit-bhat/pav/auditor.getNextLink"%go.
 
-(* go: auditor.go:65:19 *)
+(* go: auditor.go:67:19 *)
 Definition Auditor__updOnceⁱᵐᵖˡ : val :=
   λ: "a" "p",
     exception_do (let: "err" := (mem.alloc (type.zero_val #ktcore.Blame)) in
@@ -196,7 +196,7 @@ Definition SignedLink : go_type := structT [
 (* Get returns the auditor's info for a particular epoch.
    it errors if the epoch is out of bounds.
 
-   go: auditor.go:86:19 *)
+   go: auditor.go:88:19 *)
 Definition Auditor__Getⁱᵐᵖˡ : val :=
   λ: "a" "epoch",
     with_defer: (let: "err" := (mem.alloc (type.zero_val #boolT)) in
@@ -259,7 +259,7 @@ Definition CheckStartVrf : go_string := "github.com/sanjit-bhat/pav/auditor.Chec
 
 Definition CheckStartChain : go_string := "github.com/sanjit-bhat/pav/auditor.CheckStartChain"%go.
 
-(* go: auditor.go:108:6 *)
+(* go: auditor.go:110:6 *)
 Definition Newⁱᵐᵖˡ : val :=
   λ: "servAddr" "servPk",
     exception_do (let: "err" := (mem.alloc (type.zero_val #ktcore.Blame)) in
@@ -378,17 +378,17 @@ Definition Newⁱᵐᵖˡ : val :=
     let: "$hist" := (![#ptrT] "hist") in
     let: "$serv" := (![#ptrT] "serv") in
     struct.make #Auditor [{
-      "mu" ::= "$mu";
       "sk" ::= "$sk";
-      "hist" ::= "$hist";
-      "serv" ::= "$serv"
+      "serv" ::= "$serv";
+      "mu" ::= "$mu";
+      "hist" ::= "$hist"
     }])) in
     do:  ("a" <-[#ptrT] "$r0");;;
     return: (![#ptrT] "a", ![#cryptoffi.SigPublicKey] "sigPk", ![#ktcore.Blame] "err")).
 
 Definition getNextDig : go_string := "github.com/sanjit-bhat/pav/auditor.getNextDig"%go.
 
-(* go: auditor.go:136:6 *)
+(* go: auditor.go:138:6 *)
 Definition getNextLinkⁱᵐᵖˡ : val :=
   λ: "sigPk" "prevEp" "prevDig" "prevLink" "p",
     exception_do (let: "err" := (mem.alloc (type.zero_val #boolT)) in
@@ -436,7 +436,7 @@ Definition getNextLinkⁱᵐᵖˡ : val :=
     else do:  #());;;
     return: (![#uint64T] "ep", ![#sliceT] "dig", ![#sliceT] "link", ![#boolT] "err")).
 
-(* go: auditor.go:153:6 *)
+(* go: auditor.go:155:6 *)
 Definition getNextDigⁱᵐᵖˡ : val :=
   λ: "prevDig" "updates",
     exception_do (let: "err" := (mem.alloc (type.zero_val #boolT)) in
@@ -477,7 +477,7 @@ Definition getNextDigⁱᵐᵖˡ : val :=
       do:  ("dig" <-[#sliceT] "$r0")));;;
     return: (![#sliceT] "dig", ![#boolT] "err")).
 
-(* go: auditor.go:170:6 *)
+(* go: auditor.go:172:6 *)
 Definition CheckStartChainⁱᵐᵖˡ : val :=
   λ: "servPk" "chain",
     exception_do (let: "err" := (mem.alloc (type.zero_val #boolT)) in
@@ -540,7 +540,7 @@ Definition CheckStartChainⁱᵐᵖˡ : val :=
     else do:  #());;;
     return: (![#uint64T] "ep", ![#sliceT] "dig", ![#sliceT] "link", ![#boolT] "err")).
 
-(* go: auditor.go:197:6 *)
+(* go: auditor.go:199:6 *)
 Definition CheckStartVrfⁱᵐᵖˡ : val :=
   λ: "servPk" "vrf",
     exception_do (let: "err" := (mem.alloc (type.zero_val #boolT)) in

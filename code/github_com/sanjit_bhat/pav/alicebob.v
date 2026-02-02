@@ -404,7 +404,7 @@ Definition initialize' : val :=
       do:  (package.alloc alicebob.alicebob #());;;
       do:  ((λ: <>,
         exception_do (let: "$r0" := time.Millisecond in
-        do:  ((globals.get #server.BatchTimeout) <-[#time.Duration] "$r0");;;
+        do:  ((globals.get #server.EpochTime) <-[#time.Duration] "$r0");;;
         return: #())
         ) #()))
       ).

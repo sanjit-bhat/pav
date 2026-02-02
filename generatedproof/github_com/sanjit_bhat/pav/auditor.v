@@ -24,10 +24,10 @@ Module Auditor.
 Section def.
 Context `{ffi_syntax}.
 Record t := mk {
-  mu' : loc;
   sk' : loc;
-  hist' : loc;
   serv' : loc;
+  mu' : loc;
+  hist' : loc;
 }.
 End def.
 End Auditor.
@@ -41,14 +41,14 @@ Global Instance Auditor_wf : struct.Wf auditor.Auditor.
 Proof. apply _. Qed.
 
 Global Instance settable_Auditor : Settable Auditor.t :=
-  settable! Auditor.mk < Auditor.mu'; Auditor.sk'; Auditor.hist'; Auditor.serv' >.
+  settable! Auditor.mk < Auditor.sk'; Auditor.serv'; Auditor.mu'; Auditor.hist' >.
 Global Instance into_val_Auditor : IntoVal Auditor.t :=
   {| to_val_def v :=
     struct.val_aux auditor.Auditor [
-    "mu" ::= #(Auditor.mu' v);
     "sk" ::= #(Auditor.sk' v);
-    "hist" ::= #(Auditor.hist' v);
-    "serv" ::= #(Auditor.serv' v)
+    "serv" ::= #(Auditor.serv' v);
+    "mu" ::= #(Auditor.mu' v);
+    "hist" ::= #(Auditor.hist' v)
     ]%struct
   |}.
 
@@ -61,38 +61,38 @@ Next Obligation. solve_zero_val. Qed.
 Next Obligation. solve_to_val_inj. Qed.
 Final Obligation. solve_decision. Qed.
 
-Global Instance into_val_struct_field_Auditor_mu : IntoValStructField "mu" auditor.Auditor Auditor.mu'.
-Proof. solve_into_val_struct_field. Qed.
-
 Global Instance into_val_struct_field_Auditor_sk : IntoValStructField "sk" auditor.Auditor Auditor.sk'.
-Proof. solve_into_val_struct_field. Qed.
-
-Global Instance into_val_struct_field_Auditor_hist : IntoValStructField "hist" auditor.Auditor Auditor.hist'.
 Proof. solve_into_val_struct_field. Qed.
 
 Global Instance into_val_struct_field_Auditor_serv : IntoValStructField "serv" auditor.Auditor Auditor.serv'.
 Proof. solve_into_val_struct_field. Qed.
 
+Global Instance into_val_struct_field_Auditor_mu : IntoValStructField "mu" auditor.Auditor Auditor.mu'.
+Proof. solve_into_val_struct_field. Qed.
+
+Global Instance into_val_struct_field_Auditor_hist : IntoValStructField "hist" auditor.Auditor Auditor.hist'.
+Proof. solve_into_val_struct_field. Qed.
+
 
 Context `{!ffi_model, !ffi_semantics _ _, !ffi_interp _, !heapGS Σ}.
-Global Instance wp_struct_make_Auditor mu' sk' hist' serv':
+Global Instance wp_struct_make_Auditor sk' serv' mu' hist':
   PureWp True
     (struct.make #auditor.Auditor (alist_val [
-      "mu" ::= #mu';
       "sk" ::= #sk';
-      "hist" ::= #hist';
-      "serv" ::= #serv'
+      "serv" ::= #serv';
+      "mu" ::= #mu';
+      "hist" ::= #hist'
     ]))%struct
-    #(Auditor.mk mu' sk' hist' serv').
+    #(Auditor.mk sk' serv' mu' hist').
 Proof. solve_struct_make_pure_wp. Qed.
 
 
 Global Instance Auditor_struct_fields_split dq l (v : Auditor.t) :
   StructFieldsSplit dq l v (
-    "Hmu" ∷ l ↦s[auditor.Auditor :: "mu"]{dq} v.(Auditor.mu') ∗
     "Hsk" ∷ l ↦s[auditor.Auditor :: "sk"]{dq} v.(Auditor.sk') ∗
-    "Hhist" ∷ l ↦s[auditor.Auditor :: "hist"]{dq} v.(Auditor.hist') ∗
-    "Hserv" ∷ l ↦s[auditor.Auditor :: "serv"]{dq} v.(Auditor.serv')
+    "Hserv" ∷ l ↦s[auditor.Auditor :: "serv"]{dq} v.(Auditor.serv') ∗
+    "Hmu" ∷ l ↦s[auditor.Auditor :: "mu"]{dq} v.(Auditor.mu') ∗
+    "Hhist" ∷ l ↦s[auditor.Auditor :: "hist"]{dq} v.(Auditor.hist')
   ).
 Proof.
   rewrite /named.
@@ -100,9 +100,9 @@ Proof.
   unfold_typed_pointsto; split_pointsto_app.
 
   rewrite -!/(typed_pointsto_def _ _ _) -!typed_pointsto_unseal.
-  simpl_one_flatten_struct (# (Auditor.mu' v)) (auditor.Auditor) "mu"%go.
   simpl_one_flatten_struct (# (Auditor.sk' v)) (auditor.Auditor) "sk"%go.
-  simpl_one_flatten_struct (# (Auditor.hist' v)) (auditor.Auditor) "hist"%go.
+  simpl_one_flatten_struct (# (Auditor.serv' v)) (auditor.Auditor) "serv"%go.
+  simpl_one_flatten_struct (# (Auditor.mu' v)) (auditor.Auditor) "mu"%go.
 
   solve_field_ref_f.
 Qed.
