@@ -14,15 +14,6 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 Module server.
 Import serde.server.
 
-(* gmap from uid's to list of pks (indexed by version). *)
-Definition keys_ty := gmap w64 (list $ list w8).
-
-(* FIXME: needed for lia to unify [length digs] terms where one has keys_ty and
-the other has its unfolding *)
-Global Hint Unfold keys_ty : word.
-
-Definition keys_sub : relation keys_ty := map_included (λ _, prefix).
-
 (** top-level server state and inv. *)
 
 Module cfg.
