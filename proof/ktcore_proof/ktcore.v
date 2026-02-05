@@ -5,10 +5,10 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
   cryptoffi cryptoutil hashchain merkle safemarshal.
 
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
-  common serde sigpred.
+  key_map serde sigpred.
 
 Module ktcore.
-Import common.ktcore serde.ktcore sigpred.ktcore.
+Import key_map.ktcore serde.ktcore sigpred.ktcore.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
