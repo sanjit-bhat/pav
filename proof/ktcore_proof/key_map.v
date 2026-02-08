@@ -54,7 +54,7 @@ Proof.
   done.
 Qed.
 
-Definition decode_map_label odata :=
+Local Definition decode_map_label odata :=
   rem0 ← odata;
   guard (length rem0 ≥ 8);;
   let uid := le_to_u64 (take 8 rem0) in
@@ -63,7 +63,7 @@ Definition decode_map_label odata :=
   let ver := le_to_u64 (take 8 rem1) in
   Some (uid, uint.nat ver).
 
-Definition decode_map_val odata :=
+Local Definition decode_map_val odata :=
   rem0 ← odata;
   guard (length rem0 ≥ 8);;
   let pk_len := sint.nat (le_to_u64 (take 8 rem0)) in
@@ -73,28 +73,30 @@ Definition decode_map_val odata :=
   (* drop the remaining rand. we don't need that. *)
   Some (pk).
 
-Definition is_decode_map_label vrf_pk map_label obj : iProp Σ :=
+Local Definition is_dec_map_label vrf_pk obj map_label : iProp Σ :=
   ∃ odata,
   "#His_vrf_out" ∷ cryptoffi.is_vrf_out vrf_pk odata map_label ∗
   "%Hdec" ∷ ⌜obj = decode_map_label odata⌝.
 
-Definition is_decode_map_val map_val obj : iProp Σ :=
+Local Definition is_dec_map_val obj map_val : iProp Σ :=
   ∃ odata,
   "#His_hash" ∷ cryptoffi.is_hash odata map_val ∗
   "%Hdec" ∷ ⌜obj = decode_map_val odata⌝.
 
-Definition is_flat_keys vrf_pk hidden flat : iProp Σ :=
-  ∃ decoded,
-  "#Hdec" ∷ ([∗ list] kv;d ∈ map_to_list hidden;decoded,
-    is_decode_map_label vrf_pk kv.1 d.1 ∗
-    is_decode_map_val kv.2 d.2) ∗
-  "%Hfilter" ∷ ⌜flat = omap (λ '(olabel, oval),
-    '(uid, ver) ← olabel;
-    pk ← oval;
-    Some (uid, ver, pk)) decoded⌝.
+Local Definition is_oflat vrf_pk oflat hidden : iProp Σ :=
+  ([∗ list] x;y ∈ oflat;map_to_list hidden,
+    is_dec_map_label vrf_pk x.1 y.1 ∗
+    is_dec_map_val x.2 y.2).
 
-Definition assemble (flat : list (w64 * nat * list w8)) :
-    gmap w64 (gmap nat (list w8)) :=
+Local Definition to_flat oflat : list (w64 * nat * list w8) :=
+  omap
+    (λ '(olabel, oval),
+      '(uid, ver) ← olabel;
+      pk ← oval;
+      Some (uid, ver, pk))
+    oflat.
+
+Local Definition to_mapped flat : gmap w64 (gmap nat (list w8)) :=
   foldl
     (λ m '(uid, ver, pk),
       let m_uid := m !!! uid in
@@ -102,50 +104,50 @@ Definition assemble (flat : list (w64 * nat * list w8)) :
       <[uid:=m_uid']>m)
     ∅ flat.
 
-Fixpoint get_contig (m_uid : gmap nat (list w8)) (ver fuel : nat) :=
+Local Fixpoint get_contig (m_uid : gmap nat (list w8)) ver fuel :=
   match fuel with 0%nat => [] | S fuel' =>
   match m_uid !! ver with None => [] | Some pk =>
   pk :: get_contig m_uid (S ver) fuel' end end.
 
-Definition is_plain_keys (vrf_pk : list w8) (hidden : gmap (list w8) (list w8))
-    (plain : keys_ty) : iProp Σ :=
-  ∃ flat interm,
-  "#His_flat" ∷ is_flat_keys vrf_pk hidden flat ∗
-  "%Heq_interm" ∷ ⌜interm = assemble flat⌝ ∗
+Local Definition to_plain mapped : gmap w64 (list (list w8)) :=
   (* size is simple upper bound on max ver. *)
-  "%Heq_plain" ∷ ⌜plain = (λ m_uid, get_contig m_uid 0 (size m_uid)) <$> interm⌝.
+  (λ m_uid, get_contig m_uid 0 (size m_uid)) <$> mapped.
+
+Definition is_plain_keys (vrf_pk : list w8)
+    (plain : keys_ty) (hidden : gmap (list w8) (list w8)) : iProp Σ :=
+  ∃ oflat,
+  "#His_oflat" ∷ is_oflat vrf_pk oflat hidden ∗
+  "%Heq_plain" ∷ ⌜plain = to_plain (to_mapped (to_flat oflat))⌝.
 
 (* determinism helpers. *)
 
-Lemma is_decode_map_label_det vrf_pk map_label obj0 obj1 :
-  is_decode_map_label vrf_pk map_label obj0 -∗
-  is_decode_map_label vrf_pk map_label obj1 -∗
+Local Lemma is_dec_map_label_inj vrf_pk obj0 obj1 map_label :
+  is_dec_map_label vrf_pk obj0 map_label -∗
+  is_dec_map_label vrf_pk obj1 map_label -∗
   ⌜obj0 = obj1⌝.
 Proof.
-  iIntros "H0 H1".
-  iDestruct "H0" as (odata0) "[#Hvrf0 %Hdec0]".
-  iDestruct "H1" as (odata1) "[#Hvrf1 %Hdec1]".
-  iDestruct (cryptoffi.is_vrf_out_inj with "Hvrf0 Hvrf1") as %<-.
-  iPureIntro. congruence.
+  iNamedSuffix 1 "0".
+  iNamedSuffix 1 "1".
+  iDestruct (cryptoffi.is_vrf_out_inj with "His_vrf_out0 His_vrf_out1") as %<-.
+  by simplify_eq/=.
 Qed.
 
-Lemma is_decode_map_val_det map_val obj0 obj1 :
-  is_decode_map_val map_val obj0 -∗
-  is_decode_map_val map_val obj1 -∗
+Local Lemma is_dec_map_val_inj obj0 obj1 map_val :
+  is_dec_map_val obj0 map_val -∗
+  is_dec_map_val obj1 map_val -∗
   ⌜obj0 = obj1⌝.
 Proof.
-  iIntros "H0 H1".
-  iDestruct "H0" as (odata0) "[#Hhash0 %Hdec0]".
-  iDestruct "H1" as (odata1) "[#Hhash1 %Hdec1]".
-  iDestruct (cryptoffi.is_hash_inj with "Hhash0 Hhash1") as %<-.
-  iPureIntro. congruence.
+  iNamedSuffix 1 "0".
+  iNamedSuffix 1 "1".
+  iDestruct (cryptoffi.is_hash_inj with "His_hash0 His_hash1") as %<-.
+  by simplify_eq/=.
 Qed.
 
 Local Lemma decoded_det vrf_pk l decoded0 decoded1 :
   ([∗ list] kv;d ∈ l;decoded0,
-    is_decode_map_label vrf_pk kv.1 d.1 ∗ is_decode_map_val kv.2 d.2) -∗
+    is_dec_map_label vrf_pk kv.1 d.1 ∗ is_dec_map_val kv.2 d.2) -∗
   ([∗ list] kv;d ∈ l;decoded1,
-    is_decode_map_label vrf_pk kv.1 d.1 ∗ is_decode_map_val kv.2 d.2) -∗
+    is_dec_map_label vrf_pk kv.1 d.1 ∗ is_dec_map_val kv.2 d.2) -∗
   ⌜decoded0 = decoded1⌝.
 Proof.
   revert decoded0 decoded1.
@@ -155,8 +157,8 @@ Proof.
   - destruct decoded0 as [|d0 ds0]; [iIntros "[]"|].
     destruct decoded1 as [|d1 ds1]; [iIntros "_ []"|].
     iIntros "[[#Hlabel0 #Hval0] #Htail0] [[#Hlabel1 #Hval1] #Htail1]".
-    iDestruct (is_decode_map_label_det with "Hlabel0 Hlabel1") as %Heq_fst.
-    iDestruct (is_decode_map_val_det with "Hval0 Hval1") as %Heq_snd.
+    iDestruct (is_dec_map_label_det with "Hlabel0 Hlabel1") as %Heq_fst.
+    iDestruct (is_dec_map_val_det with "Hval0 Hval1") as %Heq_snd.
     iDestruct (IH with "Htail0 Htail1") as %Heq_tail.
     iPureIntro.
     destruct d0, d1; simpl in *. congruence.
@@ -195,7 +197,7 @@ Proof. Admitted.
 
 Local Lemma decoded_invert vrf_pk l :
   ⊢ ∃ decoded, [∗ list] kv;d ∈ l;decoded,
-    is_decode_map_label vrf_pk kv.1 d.1 ∗ is_decode_map_val kv.2 d.2.
+    is_dec_map_label vrf_pk kv.1 d.1 ∗ is_dec_map_val kv.2 d.2.
 Proof.
   induction l as [|kv l' IH]; simpl.
   - iExists []. done.
@@ -205,8 +207,8 @@ Proof.
     iExists ((decode_map_label odata_l, decode_map_val odata_v) :: decoded').
     iSplit.
     + iSplit.
-      * rewrite /is_decode_map_label. iExists odata_l. iFrame "#". done.
-      * rewrite /is_decode_map_val. iExists odata_v. iFrame "#". done.
+      * rewrite /is_dec_map_label. iExists odata_l. iFrame "#". done.
+      * rewrite /is_dec_map_val. iExists odata_v. iFrame "#". done.
     + iExact "Htail".
 Qed.
 
@@ -294,8 +296,8 @@ Proof.
     { iPureIntro. by destruct kv. }
     { done. }
     (* determinism: same label/val → same decoded result. *)
-    iDestruct (is_decode_map_label_det with "Hlabel0 Hlabel1") as %Heq_l.
-    iDestruct (is_decode_map_val_det with "Hval0 Hval1") as %Heq_v.
+    iDestruct (is_dec_map_label_det with "Hlabel0 Hlabel1") as %Heq_l.
+    iDestruct (is_dec_map_val_det with "Hval0 Hval1") as %Heq_v.
     iPureIntro. exists d'. split; [|done].
     apply elem_of_list_lookup. by exists j. }
   (* now purely: decoded subset → flat subset. *)
