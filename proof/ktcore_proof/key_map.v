@@ -7,6 +7,45 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   serde.
 
+Section sep_list2.
+  Context {PROP : bi}.
+
+  Lemma big_sepL2_det_l {A B} (Φ : A → B → PROP) l1 l2 l2' :
+    ([∗ list] x1;x2 ∈ l1;l2, Φ x1 x2) -∗
+    ([∗ list] x1;x2 ∈ l1;l2', Φ x1 x2) -∗
+    (□ ∀ x1 x2 x2', Φ x1 x2 -∗ Φ x1 x2' -∗ ⌜x2 = x2'⌝) -∗
+    ⌜l2 = l2'⌝.
+  Proof.
+    iIntros "Hsep0 Hsep1 #Hdet".
+    iInduction l1 as [|? ? IH] forall (l2 l2').
+    - iDestruct (big_sepL2_nil_inv_l with "Hsep0") as %->.
+      by iDestruct (big_sepL2_nil_inv_l with "Hsep1") as %->.
+    - iDestruct (big_sepL2_cons_inv_l with "Hsep0") as "(%&%&->&H0&Hsep0)".
+      iDestruct (big_sepL2_cons_inv_l with "Hsep1") as "(%&%&->&H1&Hsep1)".
+      iDestruct ("Hdet" with "H0 H1") as %->; [done..|].
+      by iDestruct ("IH" with "Hsep0 Hsep1") as %->.
+  Qed.
+
+  Lemma big_sepL2_det_r {A B} (Φ : A → B → PROP) l1 l1' l2 :
+    ([∗ list] x1;x2 ∈ l1;l2, Φ x1 x2) -∗
+    ([∗ list] x1;x2 ∈ l1';l2, Φ x1 x2) -∗
+    (□ ∀ x1 x1' x2, Φ x1 x2 -∗ Φ x1' x2 -∗ ⌜x1 = x1'⌝) -∗
+    ⌜l1 = l1'⌝.
+  Proof.
+    iIntros "Hsep0 Hsep1 #Hdet".
+    iDestruct (big_sepL2_flip with "Hsep0") as "Hsep0".
+    iDestruct (big_sepL2_flip with "Hsep1") as "Hsep1".
+    assert (∃ Φ', ∀ x y, Φ x y = Φ' y x) as [Φ' Ht]; [naive_solver|].
+    iEval (setoid_rewrite Ht) in "Hdet".
+    iDestruct (big_sepL2_mono _ (λ _, Φ') with "Hsep0") as "Hsep0".
+    { by setoid_rewrite Ht. }
+    iDestruct (big_sepL2_mono _ (λ _, Φ') with "Hsep1") as "Hsep1".
+    { by setoid_rewrite Ht. }
+    iDestruct (big_sepL2_det_l with "Hsep0 Hsep1 []") as %->; [|done].
+    iIntros "!> *". naive_solver.
+  Qed.
+End sep_list2.
+
 Module ktcore.
 Import serde.ktcore.
 
@@ -119,7 +158,7 @@ Definition is_plain_keys (vrf_pk : list w8)
   "#His_oflat" ∷ is_oflat vrf_pk oflat hidden ∗
   "%Heq_plain" ∷ ⌜plain = to_plain (to_mapped (to_flat oflat))⌝.
 
-(* determinism helpers. *)
+(* injectivity. *)
 
 Local Lemma is_dec_map_label_inj vrf_pk obj0 obj1 map_label :
   is_dec_map_label vrf_pk obj0 map_label -∗
@@ -143,12 +182,10 @@ Proof.
   by simplify_eq/=.
 Qed.
 
-Local Lemma decoded_det vrf_pk l decoded0 decoded1 :
-  ([∗ list] kv;d ∈ l;decoded0,
-    is_dec_map_label vrf_pk kv.1 d.1 ∗ is_dec_map_val kv.2 d.2) -∗
-  ([∗ list] kv;d ∈ l;decoded1,
-    is_dec_map_label vrf_pk kv.1 d.1 ∗ is_dec_map_val kv.2 d.2) -∗
-  ⌜decoded0 = decoded1⌝.
+Local Lemma is_oflat_inj vrf_pk oflat0 oflat1 hidden :
+  is_oflat vrf_pk oflat0 hidden -∗
+  is_oflat vrf_pk oflat1 hidden -∗
+  ⌜oflat0 = oflat1⌝.
 Proof.
   revert decoded0 decoded1.
   induction l as [|kv l' IH]; intros decoded0 decoded1; simpl.
@@ -164,22 +201,10 @@ Proof.
     destruct d0, d1; simpl in *. congruence.
 Qed.
 
-Lemma is_flat_keys_det vrf_pk hidden flat0 flat1 :
-  is_flat_keys vrf_pk hidden flat0 -∗
-  is_flat_keys vrf_pk hidden flat1 -∗
-  ⌜flat0 = flat1⌝.
-Proof.
-  iIntros "#H0 #H1".
-  iDestruct "H0" as (decoded0) "[#Hdec0 %Hfilter0]".
-  iDestruct "H1" as (decoded1) "[#Hdec1 %Hfilter1]".
-  iDestruct (decoded_det with "Hdec0 Hdec1") as %<-.
-  iPureIntro. congruence.
-Qed.
-
 (* used by clients who agree across the same digs. *)
-Lemma is_plain_keys_det vrf_pk hidden plain0 plain1 :
-  is_plain_keys vrf_pk hidden plain0 -∗
-  is_plain_keys vrf_pk hidden plain1 -∗
+Lemma is_plain_keys_inj vrf_pk plain0 plain1 hidden :
+  is_plain_keys vrf_pk plain0 hidden -∗
+  is_plain_keys vrf_pk plain1 hidden -∗
   ⌜plain0 = plain1⌝.
 Proof.
   iIntros "#H0 #H1".
@@ -226,7 +251,7 @@ Qed.
 (* used by auditor.
 to prove, is_plain_keys can't require bijection. *)
 Lemma is_plain_keys_invert vrf_pk hidden :
-  ⊢ ∃ plain, is_plain_keys vrf_pk hidden plain.
+  ⊢ ∃ plain, is_plain_keys vrf_pk plain hidden.
 Proof.
   iDestruct (is_flat_keys_invert vrf_pk hidden) as (flat) "#Hflat".
   iExists ((λ m_uid, get_contig m_uid 0 (size m_uid)) <$> assemble flat).
