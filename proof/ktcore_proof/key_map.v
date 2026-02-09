@@ -44,6 +44,19 @@ Section sep_list2.
     iDestruct (big_sepL2_det_l with "Hsep0 Hsep1 []") as %->; [|done].
     iIntros "!> *". naive_solver.
   Qed.
+
+  Lemma big_sepL2_invert {A B} (Φ : A → B → PROP) l2 :
+    (∀ x2, ⊢ ∃ x1, Φ x1 x2) →
+    ⊢ ∃ l1, ([∗ list] x1;x2 ∈ l1;l2, Φ x1 x2).
+  Proof.
+    intros Hinv. iStartProof.
+    iInduction l2 as [|x2 ? IH].
+    - by iExists [].
+    - iDestruct (Hinv x2) as (x1) "H0".
+      iDestruct "IH" as (l1) "Hsep0".
+      iExists (x1 :: l1).
+      iFrame "#".
+  Qed.
 End sep_list2.
 
 Module ktcore.
@@ -189,7 +202,7 @@ Local Lemma is_oflat_inj vrf_pk oflat0 oflat1 hidden :
 Proof.
   iIntros "H0 H1".
   iDestruct (big_sepL2_det_r with "H0 H1 []") as %<-; [|done].
-  iModIntro. iIntros ([? ?] [? ?] ?). simpl.
+  iModIntro. iIntros ([??] [??] ?). simpl.
   iNamedSuffix 1 "0".
   iNamedSuffix 1 "1".
   iDestruct (is_dec_map_label_inj with "His_label0 His_label1") as %<-.
@@ -206,45 +219,39 @@ Proof.
   by iDestruct (is_oflat_inj with "His_oflat0 His_oflat1") as %<-.
 Qed.
 
-(* inversion helpers. *)
+(* inversion. *)
 
-Local Lemma decoded_invert vrf_pk l :
-  ⊢ ∃ decoded, [∗ list] kv;d ∈ l;decoded,
-    is_dec_map_label vrf_pk kv.1 d.1 ∗ is_dec_map_val kv.2 d.2.
+Local Lemma is_dec_map_label_invert vrf_pk map_label :
+  ⊢ ∃ obj, is_dec_map_label vrf_pk obj map_label.
 Proof.
-  induction l as [|kv l' IH]; simpl.
-  - iExists []. done.
-  - iDestruct IH as (decoded') "#Htail".
-    iDestruct (cryptoffi.is_vrf_out_invert vrf_pk kv.1) as (odata_l) "#Hvrf".
-    iDestruct (is_hash_invert' kv.2) as (odata_v) "#Hhash".
-    iExists ((decode_map_label odata_l, decode_map_val odata_v) :: decoded').
-    iSplit.
-    + iSplit.
-      * rewrite /is_dec_map_label. iExists odata_l. iFrame "#". done.
-      * rewrite /is_dec_map_val. iExists odata_v. iFrame "#". done.
-    + iExact "Htail".
+  iDestruct cryptoffi.is_vrf_out_invert as (?) "$".
+  naive_solver.
 Qed.
 
-Lemma is_flat_keys_invert vrf_pk hidden :
-  ⊢ ∃ flat, is_flat_keys vrf_pk hidden flat.
+Local Lemma is_dec_map_val_invert map_val :
+  ⊢ ∃ obj, is_dec_map_val obj map_val.
 Proof.
-  iDestruct (decoded_invert vrf_pk (map_to_list hidden)) as (decoded) "#Hdec".
-  iExists (omap (λ '(olabel, oval),
-    '(uid, ver) ← olabel;
-    pk ← oval;
-    Some (uid, ver, pk)) decoded).
-  rewrite /is_flat_keys. iExists decoded. iFrame "#". done.
+  iDestruct cryptoffi.is_hash_invert as (?) "$".
+  naive_solver.
+Qed.
+
+Local Lemma is_oflat_invert vrf_pk hidden :
+  ⊢ ∃ oflat, is_oflat vrf_pk oflat hidden.
+Proof.
+  iApply big_sepL2_invert.
+  iIntros ([??]). simpl.
+  iDestruct is_dec_map_label_invert as (?) "H0".
+  iDestruct is_dec_map_val_invert as (?) "H1".
+  iExists (_, _). iFrame "#".
 Qed.
 
 (* used by auditor.
-to prove, is_plain_keys can't require bijection. *)
+to prove this, is_plain_keys can't require bijection. *)
 Lemma is_plain_keys_invert vrf_pk hidden :
   ⊢ ∃ plain, is_plain_keys vrf_pk plain hidden.
 Proof.
-  iDestruct (is_flat_keys_invert vrf_pk hidden) as (flat) "#Hflat".
-  iExists ((λ m_uid, get_contig m_uid 0 (size m_uid)) <$> assemble flat).
-  rewrite /is_plain_keys.
-  iExists flat, (assemble flat). iFrame "#". done.
+  iDestruct is_oflat_invert as (?) "$".
+  naive_solver.
 Qed.
 
 (* monotonicity helpers. *)
