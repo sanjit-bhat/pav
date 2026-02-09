@@ -124,8 +124,8 @@ Local Definition is_dec_map_val obj map_val : iProp Σ :=
 
 Local Definition is_oflat vrf_pk oflat hidden : iProp Σ :=
   ([∗ list] x;y ∈ oflat;map_to_list hidden,
-    is_dec_map_label vrf_pk x.1 y.1 ∗
-    is_dec_map_val x.2 y.2).
+    "#His_label" ∷ is_dec_map_label vrf_pk x.1 y.1 ∗
+    "#His_val" ∷ is_dec_map_val x.2 y.2).
 
 Local Definition to_flat oflat : list (w64 * nat * list w8) :=
   omap
@@ -187,18 +187,13 @@ Local Lemma is_oflat_inj vrf_pk oflat0 oflat1 hidden :
   is_oflat vrf_pk oflat1 hidden -∗
   ⌜oflat0 = oflat1⌝.
 Proof.
-  revert decoded0 decoded1.
-  induction l as [|kv l' IH]; intros decoded0 decoded1; simpl.
-  - destruct decoded0 as [|? ?]; [destruct decoded1 as [|? ?]|];
-      [done|iIntros "_ []"|iIntros "[]"].
-  - destruct decoded0 as [|d0 ds0]; [iIntros "[]"|].
-    destruct decoded1 as [|d1 ds1]; [iIntros "_ []"|].
-    iIntros "[[#Hlabel0 #Hval0] #Htail0] [[#Hlabel1 #Hval1] #Htail1]".
-    iDestruct (is_dec_map_label_det with "Hlabel0 Hlabel1") as %Heq_fst.
-    iDestruct (is_dec_map_val_det with "Hval0 Hval1") as %Heq_snd.
-    iDestruct (IH with "Htail0 Htail1") as %Heq_tail.
-    iPureIntro.
-    destruct d0, d1; simpl in *. congruence.
+  iIntros "H0 H1".
+  iDestruct (big_sepL2_det_r with "H0 H1 []") as %<-; [|done].
+  iModIntro. iIntros ([? ?] [? ?] ?). simpl.
+  iNamedSuffix 1 "0".
+  iNamedSuffix 1 "1".
+  iDestruct (is_dec_map_label_inj with "His_label0 His_label1") as %<-.
+  by iDestruct (is_dec_map_val_inj with "His_val0 His_val1") as %<-.
 Qed.
 
 (* used by clients who agree across the same digs. *)
@@ -207,11 +202,8 @@ Lemma is_plain_keys_inj vrf_pk plain0 plain1 hidden :
   is_plain_keys vrf_pk plain1 hidden -∗
   ⌜plain0 = plain1⌝.
 Proof.
-  iIntros "#H0 #H1".
-  iDestruct "H0" as (flat0 interm0) "(#Hflat0 & %Hinterm0 & %Hplain0)".
-  iDestruct "H1" as (flat1 interm1) "(#Hflat1 & %Hinterm1 & %Hplain1)".
-  iDestruct (is_flat_keys_det with "Hflat0 Hflat1") as %<-.
-  iPureIntro. congruence.
+  iNamedSuffix 1 "0". iNamedSuffix 1 "1". subst.
+  by iDestruct (is_oflat_inj with "His_oflat0 His_oflat1") as %<-.
 Qed.
 
 (* inversion helpers. *)
