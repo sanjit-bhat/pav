@@ -53,17 +53,13 @@ Lemma is_hash_inj odata0 odata1 hash :
   is_hash odata0 hash -∗ is_hash odata1 hash -∗ ⌜odata0 = odata1⌝.
 Proof. Admitted.
 
-Lemma is_hash_len odata hash :
-  is_hash odata hash -∗ ⌜Z.of_nat $ length hash = hash_len⌝.
+Lemma is_hash_len data hash :
+  is_hash (Some data) hash -∗ ⌜Z.of_nat $ length hash = hash_len⌝.
 Proof. Admitted.
 
 (* key feature of prophecy hash model.
-TODO: this is missing some gnames to pin everything down.
-TODO: could prob get rid of hash_len requirement.
-inverting incorrect len just goes to None. *)
-Lemma is_hash_invert hash :
-  Z.of_nat $ length hash = hash_len → ⊢
-  ∃ odata, is_hash odata hash.
+TODO: this is missing some gnames to pin everything down. *)
+Lemma is_hash_invert hash : ⊢ ∃ odata, is_hash odata hash.
 Proof. Admitted.
 
 Definition own_Hasher (ptr : loc) (data : list w8) : iProp Σ.
@@ -281,8 +277,6 @@ Proof. Admitted.
 Lemma is_vrf_out_invert pk out : ⊢ ∃ odata, is_vrf_out pk odata out.
 Proof. Admitted.
 
-(* differs from is_hash_len in [Some data] vs [None].
-once adjust is_hash_invert to not have len req, is_hash_len will look similar. *)
 Lemma is_vrf_out_len pk data out :
   is_vrf_out pk (Some data) out -∗ ⌜Z.of_nat (length out) = hash_len⌝.
 Proof. Admitted.

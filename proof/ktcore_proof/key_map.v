@@ -208,10 +208,6 @@ Qed.
 
 (* inversion helpers. *)
 
-(* TODO: depends on dropping hash_len req from cryptoffi.is_hash_invert. *)
-Local Lemma is_hash_invert' hash : ⊢ ∃ odata, cryptoffi.is_hash odata hash.
-Proof. Admitted.
-
 Local Lemma decoded_invert vrf_pk l :
   ⊢ ∃ decoded, [∗ list] kv;d ∈ l;decoded,
     is_dec_map_label vrf_pk kv.1 d.1 ∗ is_dec_map_val kv.2 d.2.
