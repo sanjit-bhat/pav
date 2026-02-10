@@ -252,7 +252,7 @@ Proof.
   naive_solver.
 Qed.
 
-(* monotonicity helpers. *)
+(* monotonicity. *)
 
 Lemma is_dec_map_label_det vrf_pk obj map_label0 map_label1 :
   is_dec_map_label vrf_pk (Some obj) map_label0 -∗
@@ -260,35 +260,22 @@ Lemma is_dec_map_label_det vrf_pk obj map_label0 map_label1 :
   ⌜map_label0 = map_label1⌝.
 Proof. Admitted.
 
-Lemma dec_map_NoDup vrf_pk hidden oflat :
-  is_oflat vrf_pk oflat hidden -∗
-  ⌜NoDup (to_flat oflat).*1⌝.
-Proof.
-  iIntros "H".
-  (* with relational (not functional) is_dec_map_label,
-  too hard to chain NoDup from hidden all the way down.
-  instead, use decidable NoDup to go up from counter-example. *)
-  (* NOTE: if had fuctional hash inversion, could prove with NoDup_bind. *)
-  destruct (decide (NoDup (to_flat oflat).*1)) as [|Hdup]; try done.
-  iExFalso.
-  rewrite NoDup_alt in Hdup.
-  apply Classical_Pred_Type.not_all_ex_not in Hdup.
-  destruct Hdup as [? Hdup].
-  apply Classical_Pred_Type.not_all_ex_not in Hdup.
-  destruct Hdup as [? Hdup].
-  apply Classical_Pred_Type.not_all_ex_not in Hdup.
-  destruct Hdup as [? Hdup].
-  apply Classical_Prop.imply_to_and in Hdup as [? Hdup].
-  apply Classical_Prop.imply_to_and in Hdup as [? Hdup].
-Admitted.
-
 (* used by auditor. *)
+(* NOTE: this lemma requires that pks0@uid@plain0 are prefix of pks1@uid@plain1.
+moving pks0 "up the stack" is easier, since the stack only filters.
+moving pks0 "down the stack" is more tricky.
+first, we remember that pks0 passes filters0.
+some of filters1 (e.g., decode_map_label) are same as filters0.
+second, we prove that the remaining filters (e.g., get_contig)
+are strictly more permissible. *)
 Lemma is_plain_keys_over_sub vrf_pk hidden0 hidden1 plain0 plain1 :
   hidden0 ⊆ hidden1 →
   is_plain_keys vrf_pk plain0 hidden0 -∗
   is_plain_keys vrf_pk plain1 hidden1 -∗
   ⌜keys_sub plain0 plain1⌝.
 Proof. Admitted.
+
+(* "correctness", requiring bijectivity. *)
 
 (* hidden is fully made up of contiguous versions.
 i.e., hidden and the computed plain are bijective. *)
