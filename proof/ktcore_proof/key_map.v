@@ -135,39 +135,34 @@ Local Definition is_dec_map_val obj map_val : iProp Σ :=
   "#His_hash" ∷ cryptoffi.is_hash odata map_val ∗
   "%Hdec" ∷ ⌜obj = decode_map_val odata⌝.
 
-(* equivalent to converting to gmap of options.
-this approach means we can re-use some big_sepL2 infra. *)
-Local Definition is_oflat vrf_pk oflat hidden : iProp Σ :=
-  ([∗ list] x;y ∈ oflat;map_to_list hidden,
+(* we can't big_sepM2 odec and hidden bc their domains are different. *)
+Local Definition is_odec vrf_pk odec hidden : iProp Σ :=
+  ([∗ list] x;y ∈ odec;map_to_list hidden,
     "#His_label" ∷ is_dec_map_label vrf_pk x.1 y.1 ∗
     "#His_val" ∷ is_dec_map_val x.2 y.2).
 
-Local Definition to_flat oflat : list (w64 * nat * list w8) :=
+Local Definition filter_Some odec : list (w64 * nat * list w8) :=
   omap
     (λ '(olabel, oval),
       label ← olabel;
       pk ← oval;
       Some (label, pk))
-    oflat.
-
-Local Definition to_dec_map flat : gmap (w64 * nat) (list w8) := list_to_map flat.
-
-Local Definition to_mapped (dec : gmap (w64 * nat) (list w8)) := gmap_curry dec.
+    odec.
 
 Local Fixpoint get_contig (m_uid : gmap nat (list w8)) ver fuel :=
   match fuel with 0%nat => [] | S fuel' =>
   match m_uid !! ver with None => [] | Some pk =>
   pk :: get_contig m_uid (S ver) fuel' end end.
 
-Local Definition to_plain mapped : gmap w64 (list (list w8)) :=
+Local Definition filter_contig mapped : gmap w64 (list (list w8)) :=
   (* size is simple upper bound on max ver. *)
   (λ m_uid, get_contig m_uid 0 (size m_uid)) <$> mapped.
 
 Definition is_plain_keys (vrf_pk : list w8)
     (plain : keys_ty) (hidden : gmap (list w8) (list w8)) : iProp Σ :=
-  ∃ oflat,
-  "#His_oflat" ∷ is_oflat vrf_pk oflat hidden ∗
-  "%Heq_plain" ∷ ⌜plain = to_plain $ to_mapped $ to_dec_map $ to_flat oflat⌝.
+  ∃ odec,
+  "#His_odec" ∷ is_odec vrf_pk odec hidden ∗
+  "%Heq_plain" ∷ ⌜plain = filter_contig $ gmap_curry $ list_to_map $ filter_Some odec⌝.
 
 (* injectivity. *)
 
@@ -193,10 +188,10 @@ Proof.
   by simplify_eq/=.
 Qed.
 
-Local Lemma is_oflat_inj vrf_pk oflat0 oflat1 hidden :
-  is_oflat vrf_pk oflat0 hidden -∗
-  is_oflat vrf_pk oflat1 hidden -∗
-  ⌜oflat0 = oflat1⌝.
+Local Lemma is_odec_inj vrf_pk odec0 odec1 hidden :
+  is_odec vrf_pk odec0 hidden -∗
+  is_odec vrf_pk odec1 hidden -∗
+  ⌜odec0 = odec1⌝.
 Proof.
   iIntros "H0 H1".
   iDestruct (big_sepL2_det_r with "H0 H1 []") as %<-; [|done].
@@ -214,7 +209,7 @@ Lemma is_plain_keys_inj vrf_pk plain0 plain1 hidden :
   ⌜plain0 = plain1⌝.
 Proof.
   iNamedSuffix 1 "0". iNamedSuffix 1 "1". subst.
-  by iDestruct (is_oflat_inj with "His_oflat0 His_oflat1") as %<-.
+  by iDestruct (is_odec_inj with "His_odec0 His_odec1") as %<-.
 Qed.
 
 (* inversion. *)
@@ -233,8 +228,8 @@ Proof.
   naive_solver.
 Qed.
 
-Local Lemma is_oflat_invert vrf_pk hidden :
-  ⊢ ∃ oflat, is_oflat vrf_pk oflat hidden.
+Local Lemma is_odec_invert vrf_pk hidden :
+  ⊢ ∃ odec, is_odec vrf_pk odec hidden.
 Proof.
   iApply big_sepL2_invert.
   iIntros ([??]). simpl.
@@ -248,7 +243,7 @@ to prove this, is_plain_keys can't require bijection. *)
 Lemma is_plain_keys_invert vrf_pk hidden :
   ⊢ ∃ plain, is_plain_keys vrf_pk plain hidden.
 Proof.
-  iDestruct is_oflat_invert as (?) "$".
+  iDestruct is_odec_invert as (?) "$".
   naive_solver.
 Qed.
 
