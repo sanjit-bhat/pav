@@ -135,6 +135,8 @@ Local Definition is_dec_map_val obj map_val : iProp Σ :=
   "#His_hash" ∷ cryptoffi.is_hash odata map_val ∗
   "%Hdec" ∷ ⌜obj = decode_map_val odata⌝.
 
+(* equivalent to converting to gmap of options.
+this approach means we can re-use some big_sepL2 infra. *)
 Local Definition is_oflat vrf_pk oflat hidden : iProp Σ :=
   ([∗ list] x;y ∈ oflat;map_to_list hidden,
     "#His_label" ∷ is_dec_map_label vrf_pk x.1 y.1 ∗
@@ -143,18 +145,14 @@ Local Definition is_oflat vrf_pk oflat hidden : iProp Σ :=
 Local Definition to_flat oflat : list (w64 * nat * list w8) :=
   omap
     (λ '(olabel, oval),
-      '(uid, ver) ← olabel;
+      label ← olabel;
       pk ← oval;
-      Some (uid, ver, pk))
+      Some (label, pk))
     oflat.
 
-Local Definition to_mapped flat : gmap w64 (gmap nat (list w8)) :=
-  foldl
-    (λ m '(uid, ver, pk),
-      let m_uid := m !!! uid in
-      let m_uid' := <[ver:=pk]>m_uid in
-      <[uid:=m_uid']>m)
-    ∅ flat.
+Local Definition to_dec_map flat : gmap (w64 * nat) (list w8) := list_to_map flat.
+
+Local Definition to_mapped (dec : gmap (w64 * nat) (list w8)) := gmap_curry dec.
 
 Local Fixpoint get_contig (m_uid : gmap nat (list w8)) ver fuel :=
   match fuel with 0%nat => [] | S fuel' =>
@@ -169,7 +167,7 @@ Definition is_plain_keys (vrf_pk : list w8)
     (plain : keys_ty) (hidden : gmap (list w8) (list w8)) : iProp Σ :=
   ∃ oflat,
   "#His_oflat" ∷ is_oflat vrf_pk oflat hidden ∗
-  "%Heq_plain" ∷ ⌜plain = to_plain (to_mapped (to_flat oflat))⌝.
+  "%Heq_plain" ∷ ⌜plain = to_plain $ to_mapped $ to_dec_map $ to_flat oflat⌝.
 
 (* injectivity. *)
 
@@ -256,126 +254,41 @@ Qed.
 
 (* monotonicity helpers. *)
 
-Local Lemma get_contig_prefix m0 m1 ver fuel0 fuel1 :
-  m0 ⊆ m1 → fuel0 ≤ fuel1 →
-  prefix (get_contig m0 ver fuel0) (get_contig m1 ver fuel1).
+Lemma is_dec_map_label_det vrf_pk obj map_label0 map_label1 :
+  is_dec_map_label vrf_pk (Some obj) map_label0 -∗
+  is_dec_map_label vrf_pk (Some obj) map_label1 -∗
+  ⌜map_label0 = map_label1⌝.
+Proof. Admitted.
+
+Lemma dec_map_NoDup vrf_pk hidden oflat :
+  is_oflat vrf_pk oflat hidden -∗
+  ⌜NoDup (to_flat oflat).*1⌝.
 Proof.
-  revert ver fuel1.
-  induction fuel0 as [|fuel0' IH]; intros ver fuel1 Hsub Hfuel; simpl.
-  - apply prefix_nil.
-  - destruct fuel1 as [|fuel1']; [lia|].
-    destruct (m0 !! ver) as [pk|] eqn:Hlook0.
-    + apply map_subseteq_spec in Hsub.
-      pose proof (Hsub _ _ Hlook0) as Hlook1.
-      simpl. rewrite Hlook1.
-      apply prefix_cons. apply IH; [|lia].
-      by apply map_subseteq_spec.
-    + apply prefix_nil.
-Qed.
-
-(* flat0's entries are contained in flat1
-when hidden0 ⊆ hidden1. *)
-Local Lemma is_flat_keys_sub vrf_pk hidden0 hidden1 flat0 flat1 :
-  hidden0 ⊆ hidden1 →
-  is_flat_keys vrf_pk hidden0 flat0 -∗
-  is_flat_keys vrf_pk hidden1 flat1 -∗
-  ⌜∀ e, e ∈ flat0 → e ∈ flat1⌝.
-Proof.
-  iIntros (Hhsub) "#H0 #H1".
-  iDestruct "H0" as (decoded0) "[#Hdec0 %Hfilter0]".
-  iDestruct "H1" as (decoded1) "[#Hdec1 %Hfilter1]".
-  iDestruct (big_sepL2_forall with "Hdec0") as "[%Hlen0 #HH0]".
-  iDestruct (big_sepL2_forall with "Hdec1") as "[%Hlen1 #HH1]".
-  iAssert (⌜∀ d, d ∈ decoded0 →
-    ∃ d', d' ∈ decoded1 ∧ d'.1 = d.1 ∧ d'.2 = d.2⌝) as %Hdsub.
-  { iIntros (d Hd_in).
-    apply elem_of_list_lookup in Hd_in as [k Hd_look].
-    (* find the corresponding entry in map_to_list hidden0. *)
-    assert (k < length (map_to_list hidden0)) as Hk_bound.
-    { apply lookup_lt_Some in Hd_look. lia. }
-    assert (is_Some ((map_to_list hidden0) !! k)) as [kv Hkv_look].
-    { apply lookup_lt_is_Some. lia. }
-    (* get crypto facts for this entry in hidden0. *)
-    iDestruct ("HH0" $! k kv d with "[] []") as "[#Hlabel0 #Hval0]";
-      [done..|].
-    (* kv = (label, val) is in hidden0, hence in hidden1. *)
-    assert ((kv.1, kv.2) ∈ map_to_list hidden0) as Hkv_elem.
-    { apply elem_of_list_lookup. exists k. by destruct kv. }
-    apply elem_of_map_to_list in Hkv_elem.
-    apply map_subseteq_spec in Hhsub.
-    pose proof (Hhsub _ _ Hkv_elem) as Hkv_in1.
-    apply elem_of_map_to_list in Hkv_in1.
-    apply elem_of_list_lookup in Hkv_in1 as [j Hj_look].
-    (* find the corresponding decoded entry. *)
-    assert (j < length decoded1) as Hj_bound.
-    { apply lookup_lt_Some in Hj_look. lia. }
-    assert (is_Some (decoded1 !! j)) as [d' Hd'_look].
-    { apply lookup_lt_is_Some. lia. }
-    (* get crypto facts for this entry in hidden1. *)
-    iDestruct ("HH1" $! j _ d' with "[] []") as "[#Hlabel1 #Hval1]".
-    { iPureIntro. by destruct kv. }
-    { done. }
-    (* determinism: same label/val → same decoded result. *)
-    iDestruct (is_dec_map_label_det with "Hlabel0 Hlabel1") as %Heq_l.
-    iDestruct (is_dec_map_val_det with "Hval0 Hval1") as %Heq_v.
-    iPureIntro. exists d'. split; [|done].
-    apply elem_of_list_lookup. by exists j. }
-  (* now purely: decoded subset → flat subset. *)
-  iPureIntro. subst flat0 flat1.
-  intros e He.
-  apply elem_of_list_omap in He as (d & Hf & Hd_in).
-  specialize (Hdsub d Hd_in) as (d' & Hd'_in & Hfst & Hsnd).
-  apply elem_of_list_omap. exists d'. split; [|done].
-  by destruct d, d'; simpl in *; subst.
-Qed.
-
-(* assembling a subset of entries gives inner submaps.
-TODO: this relies on the collision-free property of VRF labels,
-or a stronger characterization of assemble. *)
-Local Lemma assemble_incl flat0 flat1 uid :
-  (∀ e, e ∈ flat0 → e ∈ flat1) →
-  (assemble flat0) !!! uid ⊆ (assemble flat1) !!! uid.
-Proof. Admitted.
-
-Local Lemma assemble_size_le flat0 flat1 uid :
-  (∀ e, e ∈ flat0 → e ∈ flat1) →
-  size ((assemble flat0) !!! uid) ≤ size ((assemble flat1) !!! uid).
-Proof. Admitted.
-
-Local Lemma assemble_dom flat0 flat1 uid :
-  (∀ e, e ∈ flat0 → e ∈ flat1) →
-  is_Some ((assemble flat0) !! uid) →
-  is_Some ((assemble flat1) !! uid).
-Proof. Admitted.
+  iIntros "H".
+  (* with relational (not functional) is_dec_map_label,
+  too hard to chain NoDup from hidden all the way down.
+  instead, use decidable NoDup to go up from counter-example. *)
+  (* NOTE: if had fuctional hash inversion, could prove with NoDup_bind. *)
+  destruct (decide (NoDup (to_flat oflat).*1)) as [|Hdup]; try done.
+  iExFalso.
+  rewrite NoDup_alt in Hdup.
+  apply Classical_Pred_Type.not_all_ex_not in Hdup.
+  destruct Hdup as [? Hdup].
+  apply Classical_Pred_Type.not_all_ex_not in Hdup.
+  destruct Hdup as [? Hdup].
+  apply Classical_Pred_Type.not_all_ex_not in Hdup.
+  destruct Hdup as [? Hdup].
+  apply Classical_Prop.imply_to_and in Hdup as [? Hdup].
+  apply Classical_Prop.imply_to_and in Hdup as [? Hdup].
+Admitted.
 
 (* used by auditor. *)
 Lemma is_plain_keys_over_sub vrf_pk hidden0 hidden1 plain0 plain1 :
   hidden0 ⊆ hidden1 →
-  is_plain_keys vrf_pk hidden0 plain0 -∗
-  is_plain_keys vrf_pk hidden1 plain1 -∗
+  is_plain_keys vrf_pk plain0 hidden0 -∗
+  is_plain_keys vrf_pk plain1 hidden1 -∗
   ⌜keys_sub plain0 plain1⌝.
-Proof.
-  iIntros (Hhsub) "#H0 #H1".
-  iDestruct "H0" as (flat0 interm0) "(#Hflat0 & %Hinterm0 & %Hplain0)".
-  iDestruct "H1" as (flat1 interm1) "(#Hflat1 & %Hinterm1 & %Hplain1)".
-  iDestruct (is_flat_keys_sub with "Hflat0 Hflat1") as %Hfsub; [done|].
-  iPureIntro. subst plain0 plain1 interm0 interm1.
-  rewrite /keys_sub /map_included /map_relation.
-  intros uid.
-  rewrite !lookup_fmap.
-  destruct ((assemble flat0) !! uid) as [m_uid0|] eqn:Hlook0; simpl; [|done].
-  (* uid is in assemble flat0, so it must be in assemble flat1. *)
-  destruct (assemble_dom flat0 flat1 uid Hfsub) as [m_uid1 Hlook1].
-  { by eexists. }
-  rewrite Hlook1. simpl.
-  apply get_contig_prefix.
-  - pose proof (assemble_incl flat0 flat1 uid Hfsub) as Hincl.
-    rewrite lookup_total_alt Hlook0 lookup_total_alt Hlook1 /= in Hincl.
-    done.
-  - pose proof (assemble_size_le flat0 flat1 uid Hfsub) as Hsize.
-    rewrite !lookup_total_alt Hlook0 Hlook1 /= in Hsize.
-    done.
-Qed.
+Proof. Admitted.
 
 (* hidden is fully made up of contiguous versions.
 i.e., hidden and the computed plain are bijective. *)
@@ -385,13 +298,13 @@ Admitted.
 (* used in server update. *)
 Lemma is_plain_keys_add vrf_pk hidden plain uid kt_pk label val rand :
   let pks := plain !!! uid in
-  is_plain_keys vrf_pk hidden plain -∗
+  is_plain_keys vrf_pk plain hidden -∗
   is_contig vrf_pk hidden -∗
   is_MapLabel vrf_pk uid (length pks) label -∗
   is_MapVal kt_pk rand val -∗
   let hidden' := <[label:=val]>hidden in
   let plain' := <[uid:=pks ++ [kt_pk]]>plain in
-  is_plain_keys vrf_pk hidden' plain' ∗ is_contig vrf_pk hidden'.
+  is_plain_keys vrf_pk plain' hidden' ∗ is_contig vrf_pk hidden'.
 Proof. Admitted.
 
 End proof.
