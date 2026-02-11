@@ -37,30 +37,36 @@ Qed.
 
 (** Hashes. *)
 
-(* is_hash says that [data] will hash to [hash].
-relative to the crypto model, it says the inputs are in the set of hashes. *)
-Definition is_hash (odata : option (list w8)) (hash : list w8) : iProp Σ.
+Definition hash_func (data : list w8) : option $ list w8.
 Proof. Admitted.
 
-#[global] Instance is_hash_pers odata hash : Persistent (is_hash odata hash).
+Definition hash_inv_func (hash : list w8) : option $ list w8.
 Proof. Admitted.
 
-Lemma is_hash_det data hash0 hash1 :
-  is_hash (Some data) hash0 -∗ is_hash (Some data) hash1 -∗ ⌜hash0 = hash1⌝.
+(* [hash_func] and [hash_inv_func] are partial bijections. *)
+Lemma hash_bij_l data hash :
+  hash_func data = Some hash →
+  hash_inv_func hash = Some data.
 Proof. Admitted.
 
-Lemma is_hash_inj odata0 odata1 hash :
-  is_hash odata0 hash -∗ is_hash odata1 hash -∗ ⌜odata0 = odata1⌝.
+Lemma hash_bij_r data hash :
+  hash_inv_func hash = Some data →
+  hash_func data = Some hash.
 Proof. Admitted.
 
 Lemma is_hash_len data hash :
-  is_hash (Some data) hash -∗ ⌜Z.of_nat $ length hash = hash_len⌝.
+  hash_func data = Some hash →
+  Z.of_nat $ length hash = hash_len.
 Proof. Admitted.
 
-(* key feature of prophecy hash model.
-TODO: this is missing some gnames to pin everything down. *)
-Lemma is_hash_invert hash : ⊢ ∃ odata, is_hash odata hash.
-Proof. Admitted.
+Lemma is_hash_len' data hash :
+  hash_inv_func hash = Some data →
+  Z.of_nat $ length hash = hash_len.
+Proof.
+  intros Hhash.
+  apply hash_bij_r in Hhash.
+  by apply is_hash_len in Hhash.
+Qed.
 
 Definition own_Hasher (ptr : loc) (data : list w8) : iProp Σ.
 Proof. Admitted.
@@ -99,7 +105,191 @@ Lemma wp_Hasher_Sum sl_b_in hr data b_in :
     sl_b_out hash, RET #sl_b_out;
     "Hown_hr" ∷ own_Hasher hr data ∗
     "Hsl_b_out" ∷ sl_b_out ↦* (b_in ++ hash) ∗
-    "#His_hash" ∷ is_hash (Some data) hash
+    "#His_hash" ∷ ⌜hash_func data = Some hash⌝
+  }}}.
+Proof. Admitted.
+
+(** Verifiable Random Functions (VRFs).
+IETF spec: https://www.rfc-editor.org/rfc/rfc9381.html.
+we model correctness (is_vrf_proof), "Full Uniqueness" (is_vrf_out_det),
+and "Full Collision Resistance" (is_vrf_out_inj). *)
+
+(* own_vrf_sk provides ownership of an sk from the VrfGenerateKey function. *)
+Definition own_vrf_sk (ptr_sk : loc) (pk : list w8) : iProp Σ.
+Admitted.
+
+(* think of this as DfracDiscarded. *)
+#[global] Instance own_vrf_sk_pers ptr_sk pk :
+  Persistent (own_vrf_sk ptr_sk pk).
+Proof. Admitted.
+
+(* is_vrf_pk says that pk satisfies certain mathematical crypto checks.
+this is in contrast to is_sig_pk, which additionally says that
+the corresponding sk never left the ffi. *)
+Definition is_vrf_pk (pk : list w8) : iProp Σ.
+Admitted.
+
+#[global] Instance is_vrf_pk_pers pk : Persistent (is_vrf_pk pk).
+Proof. Admitted.
+
+(* own_vrf_pk just wraps is_vrf_pk with ownership of the heap resources
+corresponding to the pk bytes. *)
+Definition own_vrf_pk (ptr_pk : loc) (pk : list w8) : iProp Σ.
+Admitted.
+
+(* think of this as DfracDiscarded. *)
+#[global] Instance own_vrf_pk_pers ptr_pk pk :
+  Persistent (own_vrf_pk ptr_pk pk).
+Proof. Admitted.
+
+Lemma own_vrf_pk_valid ptr_pk pk : own_vrf_pk ptr_pk pk -∗ is_vrf_pk pk.
+Proof. Admitted.
+
+(* is_vrf_proof helps model correctness.
+i.e., a caller gets this from Prove / Verify,
+and uses it to prove that Verify should not return an error. *)
+Definition is_vrf_proof (pk data proof : list w8) : iProp Σ.
+Admitted.
+
+#[global] Instance is_vrf_proof_pers pk data proof :
+  Persistent (is_vrf_proof pk data proof).
+Proof. Admitted.
+
+(* [vrf_func] does not talk about the VRF proof.
+this is convenient because the spec does not rule out multiple proofs
+between the same pk, data, and output. *)
+(* [vrf_func] models "Full Uniqueness". this always holds for ECVRF. *)
+Definition vrf_func (pk : list w8) (data : list w8) : option $ list w8.
+Proof. Admitted.
+
+(* [vrf_inv_func] models "Full Collision Resistance".
+From the spec, "Full" (as opposed to "Trusted") holds for ECVRF as long
+as the `validate_key` parameter to `ECVRF_verify` is true.
+key validation is done when running `VrfPublicKeyDecode`
+on an adversarially-provided pk. it is represented by [is_vrf_pk].
+in this model, the partial function internalizes valid keys. *)
+Definition vrf_inv_func (pk : list w8) (out : list w8) : option $ list w8.
+Proof. Admitted.
+
+(* [vrf_func] and [vrf_inv_func] are partial bijections. *)
+Lemma vrf_bij_l pk data out :
+  vrf_func pk data = Some out →
+  vrf_inv_func pk out = Some data.
+Proof. Admitted.
+
+Lemma vrf_bij_r pk data out :
+  vrf_inv_func pk out = Some data →
+  vrf_func pk data = Some out.
+Proof. Admitted.
+
+Lemma is_vrf_len pk data out :
+  vrf_func pk data = Some out →
+  Z.of_nat $ length out = hash_len.
+Proof. Admitted.
+
+Lemma is_vrf_len' pk data out :
+  vrf_inv_func pk out = Some data →
+  Z.of_nat $ length out = hash_len.
+Proof.
+  intros Hvrf.
+  apply vrf_bij_r in Hvrf.
+  by apply is_vrf_len in Hvrf.
+Qed.
+
+Lemma wp_VrfGenerateKey :
+  {{{ is_pkg_init cryptoffi }}}
+  @! cryptoffi.VrfGenerateKey #()
+  {{{
+    (ptr_vrfPk ptr_vrfSk : loc) (vrfPk : list w8),
+    RET (#ptr_vrfPk, #ptr_vrfSk);
+    "#Hown_vrf_pk" ∷ own_vrf_pk ptr_vrfPk vrfPk ∗
+    "#Hown_vrf_sk" ∷ own_vrf_sk ptr_vrfSk vrfPk
+  }}}.
+Proof. Admitted.
+
+Lemma wp_VrfPrivateKey_Prove ptr_sk pk sl_data (data : list w8) d0 :
+  {{{
+    is_pkg_init cryptoffi ∗
+    "#Hown_vrf_sk" ∷ own_vrf_sk ptr_sk pk ∗
+    "Hsl_data" ∷ sl_data ↦*{d0} data
+  }}}
+  ptr_sk @ (ptrT.id cryptoffi.VrfPrivateKey.id) @ "Prove" #sl_data
+  {{{
+    sl_out sl_proof (out proof : list w8), RET (#sl_out, #sl_proof);
+    "Hsl_data" ∷ sl_data ↦*{d0} data ∗
+    "Hsl_out" ∷ sl_out ↦* out ∗
+    "Hsl_proof" ∷ sl_proof ↦* proof ∗
+    "#His_vrf_proof" ∷ is_vrf_proof pk data proof ∗
+    "#His_vrf_out" ∷ ⌜vrf_func pk data = Some out⌝
+  }}}.
+Proof. Admitted.
+
+Lemma wp_VrfPrivateKey_Evaluate ptr_sk pk sl_data (data : list w8) d0 :
+  {{{
+    is_pkg_init cryptoffi ∗
+    "#Hown_vrf_sk" ∷ own_vrf_sk ptr_sk pk ∗
+    "Hsl_data" ∷ sl_data ↦*{d0} data
+  }}}
+  ptr_sk @ (ptrT.id cryptoffi.VrfPrivateKey.id) @ "Evaluate" #sl_data
+  {{{
+    sl_out (out : list w8), RET #sl_out;
+    "Hsl_data" ∷ sl_data ↦*{d0} data ∗
+    "Hsl_out" ∷ sl_out ↦* out ∗
+    "#His_vrf_out" ∷ ⌜vrf_func pk data = Some out⌝
+  }}}.
+Proof. Admitted.
+
+Lemma wp_VrfPublicKey_Verify ptr_pk pk sl_data sl_proof (data proof : list w8) d0 d1 :
+  {{{
+    is_pkg_init cryptoffi ∗
+    "#Hown_vrf_pk" ∷ own_vrf_pk ptr_pk pk ∗
+    "Hsl_data" ∷ sl_data ↦*{d0} data ∗
+    "Hsl_proof" ∷ sl_proof ↦*{d1} proof
+  }}}
+  ptr_pk @ (ptrT.id cryptoffi.VrfPublicKey.id) @ "Verify" #sl_data #sl_proof
+  {{{
+    sl_out (out : list w8) (err : bool), RET (#sl_out, #err);
+    "Hsl_data" ∷ sl_data ↦*{d0} data ∗
+    "Hsl_proof" ∷ sl_proof ↦*{d1} proof ∗
+    "Hsl_out" ∷ sl_out ↦* out ∗
+    "Hgenie" ∷
+      match err with
+      | true => ¬ is_vrf_proof pk data proof
+      | false =>
+        "#His_proof" ∷ is_vrf_proof pk data proof ∗
+        "#His_out" ∷ ⌜vrf_func pk data = Some out⌝
+      end
+  }}}.
+Proof. Admitted.
+
+Lemma wp_VrfPublicKeyEncode ptr_pk pk :
+  {{{
+    is_pkg_init cryptoffi ∗
+    "#Hown_vrf_pk" ∷ own_vrf_pk ptr_pk pk
+  }}}
+  @! cryptoffi.VrfPublicKeyEncode #ptr_pk
+  {{{
+    sl_enc, RET #sl_enc;
+    "Hsl_enc" ∷ sl_enc ↦* pk ∗
+    "#His_vrf_pk" ∷ is_vrf_pk pk
+  }}}.
+Proof. Admitted.
+
+Lemma wp_VrfPublicKeyDecode sl_enc pk d0 :
+  {{{
+    is_pkg_init cryptoffi ∗
+    "Hsl_enc" ∷ sl_enc ↦*{d0} pk
+  }}}
+  @! cryptoffi.VrfPublicKeyDecode #sl_enc
+  {{{
+    ptr_pk err, RET (#ptr_pk, #err);
+    "Hsl_enc" ∷ sl_enc ↦*{d0} pk ∗
+    "Hgenie" ∷
+      match err with
+      | true => ¬ is_vrf_pk pk
+      | false =>
+        "#Hown_vrf_pk" ∷ own_vrf_pk ptr_pk pk
+      end
   }}}.
 Proof. Admitted.
 
@@ -197,183 +387,6 @@ Lemma wp_SigPublicKey_Verify (sl_pk : cryptoffi.SigPublicKey.t) pk
       | true => ¬ is_sig pk msg sig
       | false =>
         "#His_sig" ∷ is_sig pk msg sig
-      end
-  }}}.
-Proof. Admitted.
-
-(** Verifiable Random Functions (VRFs).
-IETF spec: https://www.rfc-editor.org/rfc/rfc9381.html.
-we model correctness (is_vrf_proof), "Full Uniqueness" (is_vrf_out_det),
-and "Full Collision Resistance" (is_vrf_out_inj). *)
-
-(* own_vrf_sk provides ownership of an sk from the VrfGenerateKey function. *)
-Definition own_vrf_sk (ptr_sk : loc) (pk : list w8) : iProp Σ.
-Admitted.
-
-(* think of this as DfracDiscarded. *)
-#[global] Instance own_vrf_sk_pers ptr_sk pk :
-  Persistent (own_vrf_sk ptr_sk pk).
-Proof. Admitted.
-
-(* is_vrf_pk says that pk satisfies certain mathematical crypto checks.
-this is in contrast to is_sig_pk, which additionally says that
-the corresponding sk never left the ffi. *)
-Definition is_vrf_pk (pk : list w8) : iProp Σ.
-Admitted.
-
-#[global] Instance is_vrf_pk_pers pk : Persistent (is_vrf_pk pk).
-Proof. Admitted.
-
-(* own_vrf_pk just wraps is_vrf_pk with ownership of the heap resources
-corresponding to the pk bytes. *)
-Definition own_vrf_pk (ptr_pk : loc) (pk : list w8) : iProp Σ.
-Admitted.
-
-(* think of this as DfracDiscarded. *)
-#[global] Instance own_vrf_pk_pers ptr_pk pk :
-  Persistent (own_vrf_pk ptr_pk pk).
-Proof. Admitted.
-
-Lemma own_vrf_pk_valid ptr_pk pk : own_vrf_pk ptr_pk pk -∗ is_vrf_pk pk.
-Proof. Admitted.
-
-(* is_vrf_proof helps model correctness.
-i.e., a caller gets this from Prove / Verify,
-and uses it to prove that Verify should not return an error. *)
-Definition is_vrf_proof (pk data proof : list w8) : iProp Σ.
-Admitted.
-
-#[global] Instance is_vrf_proof_pers pk data proof :
-  Persistent (is_vrf_proof pk data proof).
-Proof. Admitted.
-
-(* is_vrf_out gets returned from Prove / Verify and abstracts out
-the specific proof associated with a VRF computation.
-this is convenient because the spec does not rule out multiple proofs
-between the same pk, data, and output. *)
-Definition is_vrf_out (pk : list w8) (odata : option $ list w8) (out : list w8) : iProp Σ.
-Admitted.
-
-#[global] Instance is_vrf_out_pers pk odata out :
-  Persistent (is_vrf_out pk odata out).
-Proof. Admitted.
-
-(* is_vrf_out_det models "Full Uniqueness".
-this always holds for ECVRF. *)
-Lemma is_vrf_out_det pk data out0 out1 :
-  is_vrf_out pk (Some data) out0 -∗ is_vrf_out pk (Some data) out1 -∗ ⌜out0 = out1⌝.
-Proof. Admitted.
-
-(* is_vrf_out_inj models "Full Collision Resistance".
-"Full" (as opposed to "Trusted") holds for ECVRF as long
-as the `validate_key` parameter to `ECVRF_verify` is true.
-key validation is done when running `VrfPublicKeyDecode`
-on an adversarially-provided pk. *)
-Lemma is_vrf_out_inj pk odata0 odata1 out :
-  is_vrf_out pk odata0 out -∗ is_vrf_out pk odata1 out -∗ ⌜odata0 = odata1⌝.
-Proof. Admitted.
-
-(* is_vrf_out_invert holds bc of is_vrf_out_inj. *)
-Lemma is_vrf_out_invert pk out : ⊢ ∃ odata, is_vrf_out pk odata out.
-Proof. Admitted.
-
-Lemma is_vrf_out_len pk data out :
-  is_vrf_out pk (Some data) out -∗ ⌜Z.of_nat (length out) = hash_len⌝.
-Proof. Admitted.
-
-Lemma wp_VrfGenerateKey :
-  {{{ is_pkg_init cryptoffi }}}
-  @! cryptoffi.VrfGenerateKey #()
-  {{{
-    (ptr_vrfPk ptr_vrfSk : loc) (vrfPk : list w8),
-    RET (#ptr_vrfPk, #ptr_vrfSk);
-    "#Hown_vrf_pk" ∷ own_vrf_pk ptr_vrfPk vrfPk ∗
-    "#Hown_vrf_sk" ∷ own_vrf_sk ptr_vrfSk vrfPk
-  }}}.
-Proof. Admitted.
-
-Lemma wp_VrfPrivateKey_Prove ptr_sk pk sl_data (data : list w8) d0 :
-  {{{
-    is_pkg_init cryptoffi ∗
-    "#Hown_vrf_sk" ∷ own_vrf_sk ptr_sk pk ∗
-    "Hsl_data" ∷ sl_data ↦*{d0} data
-  }}}
-  ptr_sk @ (ptrT.id cryptoffi.VrfPrivateKey.id) @ "Prove" #sl_data
-  {{{
-    sl_out sl_proof (out proof : list w8), RET (#sl_out, #sl_proof);
-    "Hsl_data" ∷ sl_data ↦*{d0} data ∗
-    "Hsl_out" ∷ sl_out ↦* out ∗
-    "Hsl_proof" ∷ sl_proof ↦* proof ∗
-    "#His_vrf_proof" ∷ is_vrf_proof pk data proof ∗
-    "#His_vrf_out" ∷ is_vrf_out pk (Some data) out
-  }}}.
-Proof. Admitted.
-
-Lemma wp_VrfPrivateKey_Evaluate ptr_sk pk sl_data (data : list w8) d0 :
-  {{{
-    is_pkg_init cryptoffi ∗
-    "#Hown_vrf_sk" ∷ own_vrf_sk ptr_sk pk ∗
-    "Hsl_data" ∷ sl_data ↦*{d0} data
-  }}}
-  ptr_sk @ (ptrT.id cryptoffi.VrfPrivateKey.id) @ "Evaluate" #sl_data
-  {{{
-    sl_out (out : list w8), RET #sl_out;
-    "Hsl_data" ∷ sl_data ↦*{d0} data ∗
-    "Hsl_out" ∷ sl_out ↦* out ∗
-    "#His_vrf_out" ∷ is_vrf_out pk (Some data) out
-  }}}.
-Proof. Admitted.
-
-Lemma wp_VrfPublicKey_Verify ptr_pk pk sl_data sl_proof (data proof : list w8) d0 d1 :
-  {{{
-    is_pkg_init cryptoffi ∗
-    "#Hown_vrf_pk" ∷ own_vrf_pk ptr_pk pk ∗
-    "Hsl_data" ∷ sl_data ↦*{d0} data ∗
-    "Hsl_proof" ∷ sl_proof ↦*{d1} proof
-  }}}
-  ptr_pk @ (ptrT.id cryptoffi.VrfPublicKey.id) @ "Verify" #sl_data #sl_proof
-  {{{
-    sl_out (out : list w8) (err : bool), RET (#sl_out, #err);
-    "Hsl_data" ∷ sl_data ↦*{d0} data ∗
-    "Hsl_proof" ∷ sl_proof ↦*{d1} proof ∗
-    "Hsl_out" ∷ sl_out ↦* out ∗
-    "Hgenie" ∷
-      match err with
-      | true => ¬ is_vrf_proof pk data proof
-      | false =>
-        "#His_proof" ∷ is_vrf_proof pk data proof ∗
-        "#His_out" ∷ is_vrf_out pk (Some data) out
-      end
-  }}}.
-Proof. Admitted.
-
-Lemma wp_VrfPublicKeyEncode ptr_pk pk :
-  {{{
-    is_pkg_init cryptoffi ∗
-    "#Hown_vrf_pk" ∷ own_vrf_pk ptr_pk pk
-  }}}
-  @! cryptoffi.VrfPublicKeyEncode #ptr_pk
-  {{{
-    sl_enc, RET #sl_enc;
-    "Hsl_enc" ∷ sl_enc ↦* pk ∗
-    "#His_vrf_pk" ∷ is_vrf_pk pk
-  }}}.
-Proof. Admitted.
-
-Lemma wp_VrfPublicKeyDecode sl_enc pk d0 :
-  {{{
-    is_pkg_init cryptoffi ∗
-    "Hsl_enc" ∷ sl_enc ↦*{d0} pk
-  }}}
-  @! cryptoffi.VrfPublicKeyDecode #sl_enc
-  {{{
-    ptr_pk err, RET (#ptr_pk, #err);
-    "Hsl_enc" ∷ sl_enc ↦*{d0} pk ∗
-    "Hgenie" ∷
-      match err with
-      | true => ¬ is_vrf_pk pk
-      | false =>
-        "#Hown_vrf_pk" ∷ own_vrf_pk ptr_pk pk
       end
   }}}.
 Proof. Admitted.
