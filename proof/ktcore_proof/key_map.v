@@ -122,7 +122,7 @@ Definition plain_inv_func vrf_pk hidden :=
 
 (* monotonicity. *)
 
-Lemma dec_map_label_inj {vrf_pk label0 label1 dec} :
+Local Lemma dec_map_label_inj {vrf_pk label0 label1 dec} :
   dec_map_label vrf_pk label0 = Some dec →
   dec_map_label vrf_pk label1 = Some dec →
   label0 = label1.
@@ -154,7 +154,7 @@ Proof.
   rewrite !drop_ge; [done|word..].
 Qed.
 
-Lemma dec_map_labels_lift_elem {vrf_pk hidden interm dec val} :
+Local Lemma dec_map_labels_lift_elem {vrf_pk hidden interm dec val} :
   dec_map_labels_aux vrf_pk hidden = interm →
   (dec, val) ∈ interm →
   ∃ label, dec_map_label vrf_pk label = Some dec ∧ hidden !! label = Some val.
@@ -166,7 +166,7 @@ Proof.
   naive_solver.
 Qed.
 
-Lemma dec_map_labels_drop_elem {vrf_pk hidden interm label val dec} :
+Local Lemma dec_map_labels_drop_elem {vrf_pk hidden interm label val dec} :
   dec_map_labels_aux vrf_pk hidden = interm →
   hidden !! label = Some val →
   dec_map_label vrf_pk label = Some dec →
@@ -180,7 +180,7 @@ Proof.
   by rewrite Hdec.
 Qed.
 
-Lemma dec_map_labels_unique vrf_pk hidden interm :
+Local Lemma dec_map_labels_unique vrf_pk hidden interm :
   dec_map_labels_aux vrf_pk hidden = interm →
   (∀ label val0 val1, (label, val0) ∈ interm → (label, val1) ∈ interm → val0 = val1).
 Proof.
@@ -191,7 +191,7 @@ Proof.
   by simplify_eq/=.
 Qed.
 
-Lemma dec_map_labels_NoDup vrf_pk hidden :
+Local Lemma dec_map_labels_NoDup vrf_pk hidden :
   NoDup ((dec_map_labels_aux vrf_pk hidden).*1).
 Proof.
   rewrite /dec_map_labels_aux.
@@ -204,23 +204,29 @@ Proof.
   by opose proof (dec_map_label_inj Heqo0 Heqo) as ->.
 Qed.
 
-Lemma dec_map_labels_over_sub vrf_pk hidden0 hidden1 interm0 interm1 :
-  hidden0 ⊆ hidden1 →
+Local Lemma dec_map_labels_over_sub vrf_pk hidden0 hidden1 interm0 interm1 :
   dec_map_labels vrf_pk hidden0 = interm0 →
   dec_map_labels vrf_pk hidden1 = interm1 →
+  hidden0 ⊆ hidden1 →
   interm0 ⊆ interm1.
 Proof.
-  rewrite /dec_map_labels.
-  intros Hsub <- <-.
+  rewrite /dec_map_labels. intros <- <- Hsub.
   apply map_subseteq_spec.
   intros [uid ver] val0 Hlook0.
   apply elem_of_list_to_map_2 in Hlook0.
   opose proof (dec_map_labels_lift_elem _ Hlook0) as (?&?&Hlook0'); [done|].
-  opose proof (lookup_weaken _ _ _ _ Hlook0' Hsub) as Hlook1.
   apply elem_of_list_to_map_1.
-  - apply dec_map_labels_NoDup.
-  - by eapply dec_map_labels_drop_elem.
+  { apply dec_map_labels_NoDup. }
+  eapply dec_map_labels_drop_elem; [done|idtac|done].
+  by eapply lookup_weaken.
 Qed.
+
+Local Lemma dec_map_vals_over_sub prev0 prev1 next0 next1 :
+  dec_map_vals prev0 = next0 →
+  dec_map_vals prev1 = next1 →
+  prev0 ⊆ prev1 →
+  next0 ⊆ next1.
+Proof. intros <- <- **. by apply map_omap_mono. Qed.
 
 (* used by auditor. *)
 (* NOTE: this lemma requires that pks0@uid@plain0 are prefix of pks1@uid@plain1.
@@ -230,9 +236,9 @@ we remember that pks0 passes filters0.
 filter_Some is same in stack0 and stack1.
 filter_contig in stack1 is more permissible than in stack0. *)
 Lemma plain_inv_over_sub vrf_pk hidden0 hidden1 plain0 plain1 :
-  hidden0 ⊆ hidden1 →
   plain_inv_func vrf_pk hidden0 = plain0 →
   plain_inv_func vrf_pk hidden1 = plain1 →
+  hidden0 ⊆ hidden1 →
   keys_sub plain0 plain1.
 Proof. Admitted.
 
