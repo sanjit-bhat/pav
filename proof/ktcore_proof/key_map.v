@@ -7,6 +7,23 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   serde.
 
+(* TODO: upstream. *)
+Lemma NoDup_omap {A B} (f : A → option B) l :
+  (∀ x1 x2 y, x1 ∈ l → x2 ∈ l → f x1 = Some y → f x2 = Some y → x1 = x2) →
+  NoDup l → NoDup (omap f l).
+Proof.
+  intros Hinj. induction 1 as [|x l ?? IH]; csimpl; [constructor|].
+  ospecialize (IH _).
+  { intros **.
+    eapply Hinj; [..|done|done]; auto using list_elem_of_further. }
+  destruct (f x) eqn:Hfx; [|done].
+  apply NoDup_cons. split_and!; [|done].
+  rewrite list_elem_of_omap. intros (?&?&Hfx').
+  ospecialize (Hinj _ _ _ _ _ Hfx Hfx');
+    auto using list_elem_of_here, list_elem_of_further.
+  set_solver.
+Qed.
+
 Module ktcore.
 Import serde.ktcore.
 
@@ -83,14 +100,13 @@ Local Definition dec_map_val map_val :=
 might have mult labels that go to None.
 however, after dropping None's, remaining (uid, ver) are unique. *)
 Local Definition dec_map_labels_aux vrf_pk (hidden : gmap (list w8) (list w8)) :=
-  let odec := (λ '(l, v), (dec_map_label vrf_pk l, v)) <$> map_to_list hidden in
-  omap (λ '(ol, v), l ← ol; Some (l, v)) odec.
+  omap (λ '(l, v), l' ← dec_map_label vrf_pk l; Some (l', v)) (map_to_list hidden).
 
 Local Definition dec_map_labels vrf_pk hidden : gmap (w64 * nat) (list w8) :=
   list_to_map $ dec_map_labels_aux vrf_pk hidden.
 
 Local Definition dec_map_vals interm : gmap (w64 * nat) (list w8) :=
-  omap (λ v, pk ← dec_map_val v; Some pk) interm.
+  omap (λ v, dec_map_val v) interm.
 
 Local Fixpoint get_contig (m_uid : gmap nat (list w8)) ver fuel :=
   match fuel with 0%nat => [] | S fuel' =>
@@ -106,17 +122,16 @@ Definition plain_inv_func vrf_pk hidden :=
 
 (* monotonicity. *)
 
-Lemma dec_map_label_inj vrf_pk label0 label1 :
-  dec_map_label vrf_pk label0 = dec_map_label vrf_pk label1 →
-  is_Some (dec_map_label vrf_pk label0) →
+Lemma dec_map_label_inj {vrf_pk label0 label1 dec} :
+  dec_map_label vrf_pk label0 = Some dec →
+  dec_map_label vrf_pk label1 = Some dec →
   label0 = label1.
 Proof.
-  rewrite /dec_map_label.
-  intros ?[??].
+  rewrite /dec_map_label. intros **.
   simplify_option_eq.
   autorewrite with len in *.
-  rename H1 into d0. rename H0 into d1.
-  rename Heqo into Hvrf0. rename Heqo3 into Hvrf1.
+  rename H0 into d0. rename H1 into d1.
+  rename Heqo3 into Hvrf0. rename Heqo into Hvrf1.
   rename H into Heq_uid. rename H8 into Heq_ver.
 
   assert (d0 = d1) as <-.
@@ -144,12 +159,9 @@ Lemma dec_map_labels_lift_elem {vrf_pk hidden interm dec val} :
   (dec, val) ∈ interm →
   ∃ label, dec_map_label vrf_pk label = Some dec ∧ hidden !! label = Some val.
 Proof.
-  rewrite /dec_map_labels_aux.
-  intros <- Hlook.
+  rewrite /dec_map_labels_aux. intros <- Hlook.
   apply list_elem_of_omap in Hlook as ([opt val']&Hlook&?).
-  destruct opt as [[??]|]; simplify_eq/=.
-  apply list_elem_of_fmap in Hlook as ([label val']&Ht&Hlook).
-  inv Ht as [Hdec]. rename val' into val.
+  simplify_option_eq.
   apply elem_of_map_to_list in Hlook.
   naive_solver.
 Qed.
@@ -160,33 +172,36 @@ Lemma dec_map_labels_drop_elem {vrf_pk hidden interm label val dec} :
   dec_map_label vrf_pk label = Some dec →
   (dec, val) ∈ interm.
 Proof.
-  rewrite /dec_map_labels_aux.
-  intros <- Hlook Hdec.
+  rewrite /dec_map_labels_aux. intros <- Hlook Hdec.
   apply list_elem_of_omap.
-  eexists (Some _, _).
-  split; [|done].
-  apply list_elem_of_fmap.
   eexists (_, _).
-  split; [by f_equal|].
-  by apply elem_of_map_to_list.
+  split.
+  { by apply elem_of_map_to_list. }
+  by rewrite Hdec.
 Qed.
 
-(* could have proven NoDup (interm.*1), but that's trickier with the
-current RPs for omap. (the index of [interm] lookups gets lost across omap.)
-this weaker property allows for duplicate labels,
-so long as the vals are equal. *)
-Lemma dec_map_labels_unique vrf_pk hidden interm label val0 :
+Lemma dec_map_labels_unique vrf_pk hidden interm :
   dec_map_labels_aux vrf_pk hidden = interm →
-  (label, val0) ∈ interm →
-  (∀ val1, (label, val1) ∈ interm → val0 = val1).
+  (∀ label val0 val1, (label, val0) ∈ interm → (label, val1) ∈ interm → val0 = val1).
 Proof.
-  intros Hcomp Helem0 ? Helem1.
+  intros Hcomp ??? Helem0 Helem1.
   opose proof (dec_map_labels_lift_elem Hcomp Helem0) as (?&Hdec0&?).
   opose proof (dec_map_labels_lift_elem Hcomp Helem1) as (?&Hdec1&?).
-  rewrite -Hdec0 in Hdec1.
-  symmetry in Hdec1.
-  apply dec_map_label_inj in Hdec1; [|done].
+  opose proof (dec_map_label_inj Hdec0 Hdec1) as ->.
   by simplify_eq/=.
+Qed.
+
+Lemma dec_map_labels_NoDup vrf_pk hidden :
+  NoDup ((dec_map_labels_aux vrf_pk hidden).*1).
+Proof.
+  rewrite /dec_map_labels_aux.
+  apply NoDup_fmap_fst.
+  { by eapply dec_map_labels_unique. }
+  apply NoDup_omap.
+  2: { apply NoDup_map_to_list. }
+  intros [??][??] **.
+  simplify_option_eq.
+  by opose proof (dec_map_label_inj Heqo0 Heqo) as ->.
 Qed.
 
 Lemma dec_map_labels_over_sub vrf_pk hidden0 hidden1 interm0 interm1 :
@@ -202,9 +217,9 @@ Proof.
   apply elem_of_list_to_map_2 in Hlook0.
   opose proof (dec_map_labels_lift_elem _ Hlook0) as (?&?&Hlook0'); [done|].
   opose proof (lookup_weaken _ _ _ _ Hlook0' Hsub) as Hlook1.
-  opose proof (dec_map_labels_drop_elem _ Hlook1 _) as Hlook1'; [done..|].
-  apply elem_of_list_to_map_1'; [|done].
-  by eapply dec_map_labels_unique.
+  apply elem_of_list_to_map_1.
+  - apply dec_map_labels_NoDup.
+  - by eapply dec_map_labels_drop_elem.
 Qed.
 
 (* used by auditor. *)
