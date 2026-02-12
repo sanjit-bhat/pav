@@ -2,64 +2,10 @@ From New.generatedproof.github_com.sanjit_bhat.pav Require Import ktcore.
 From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 From New.proof.github_com.sanjit_bhat.pav Require Import
-  cryptoffi cryptoutil (* hashchain merkle *) safemarshal.
+  cryptoffi safemarshal.
 
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   serde.
-
-(*
-Section sep_list2.
-  Context {PROP : bi}.
-
-  Lemma big_sepL2_det_l {A B} (Φ : A → B → PROP) l1 l2 l2' :
-    ([∗ list] x1;x2 ∈ l1;l2, Φ x1 x2) -∗
-    ([∗ list] x1;x2 ∈ l1;l2', Φ x1 x2) -∗
-    (□ ∀ x1 x2 x2', Φ x1 x2 -∗ Φ x1 x2' -∗ ⌜x2 = x2'⌝) -∗
-    ⌜l2 = l2'⌝.
-  Proof.
-    iIntros "Hsep0 Hsep1 #Hdet".
-    iInduction l1 as [|? ? IH] forall (l2 l2').
-    - iDestruct (big_sepL2_nil_inv_l with "Hsep0") as %->.
-      by iDestruct (big_sepL2_nil_inv_l with "Hsep1") as %->.
-    - iDestruct (big_sepL2_cons_inv_l with "Hsep0") as "(%&%&->&H0&Hsep0)".
-      iDestruct (big_sepL2_cons_inv_l with "Hsep1") as "(%&%&->&H1&Hsep1)".
-      iDestruct ("Hdet" with "H0 H1") as %->; [done..|].
-      by iDestruct ("IH" with "Hsep0 Hsep1") as %->.
-  Qed.
-
-  Lemma big_sepL2_det_r {A B} (Φ : A → B → PROP) l1 l1' l2 :
-    ([∗ list] x1;x2 ∈ l1;l2, Φ x1 x2) -∗
-    ([∗ list] x1;x2 ∈ l1';l2, Φ x1 x2) -∗
-    (□ ∀ x1 x1' x2, Φ x1 x2 -∗ Φ x1' x2 -∗ ⌜x1 = x1'⌝) -∗
-    ⌜l1 = l1'⌝.
-  Proof.
-    iIntros "Hsep0 Hsep1 #Hdet".
-    iDestruct (big_sepL2_flip with "Hsep0") as "Hsep0".
-    iDestruct (big_sepL2_flip with "Hsep1") as "Hsep1".
-    assert (∃ Φ', ∀ x y, Φ x y = Φ' y x) as [Φ' Ht]; [naive_solver|].
-    iEval (setoid_rewrite Ht) in "Hdet".
-    iDestruct (big_sepL2_mono _ (λ _, Φ') with "Hsep0") as "Hsep0".
-    { by setoid_rewrite Ht. }
-    iDestruct (big_sepL2_mono _ (λ _, Φ') with "Hsep1") as "Hsep1".
-    { by setoid_rewrite Ht. }
-    iDestruct (big_sepL2_det_l with "Hsep0 Hsep1 []") as %->; [|done].
-    iIntros "!> *". naive_solver.
-  Qed.
-
-  Lemma big_sepL2_invert {A B} (Φ : A → B → PROP) l2 :
-    (∀ x2, ⊢ ∃ x1, Φ x1 x2) →
-    ⊢ ∃ l1, ([∗ list] x1;x2 ∈ l1;l2, Φ x1 x2).
-  Proof.
-    intros Hinv. iStartProof.
-    iInduction l2 as [|x2 ? IH].
-    - by iExists [].
-    - iDestruct (Hinv x2) as (x1) "H0".
-      iDestruct "IH" as (l1) "Hsep0".
-      iExists (x1 :: l1).
-      iFrame "#".
-  Qed.
-End sep_list2.
-*)
 
 Module ktcore.
 Import serde.ktcore.
@@ -119,6 +65,8 @@ Local Definition dec_map_label vrf_pk map_label :=
   let rem1 := drop 8 rem0 in
   guard (length rem1 ≥ 8);;
   let ver := le_to_u64 (take 8 rem1) in
+  let rem2 := drop 8 rem1 in
+  guard (length rem2 = 0%nat);;
   Some (uid, uint.nat ver).
 
 Local Definition dec_map_val map_val :=
@@ -131,7 +79,9 @@ Local Definition dec_map_val map_val :=
   (* drop the remaining rand. we don't need that. *)
   Some (pk).
 
-(* easier to reason about list bc might be mult labels that go to None. *)
+(* easier to reason in list form bc dec_map_label not inj.
+might have mult labels that go to None.
+however, after dropping None's, remaining (uid, ver) are unique. *)
 Local Definition dec_map_labels vrf_pk hidden : gmap (w64 * nat) (list w8) :=
   let odec := (λ '(l, v), (dec_map_label vrf_pk l, v)) <$> map_to_list hidden in
   let dec := omap (λ '(ol, v), l ← ol; Some (l, v)) odec in
@@ -154,11 +104,80 @@ Definition plain_inv_func vrf_pk hidden :=
 
 (* monotonicity. *)
 
-Lemma is_dec_map_label_det vrf_pk obj map_label0 map_label1 :
-  is_dec_map_label vrf_pk (Some obj) map_label0 -∗
-  is_dec_map_label vrf_pk (Some obj) map_label1 -∗
-  ⌜map_label0 = map_label1⌝.
-Proof. Admitted.
+Lemma dec_map_label_inj vrf_pk label0 label1 :
+  dec_map_label vrf_pk label0 = dec_map_label vrf_pk label1 →
+  is_Some (dec_map_label vrf_pk label0) →
+  label0 = label1.
+Proof.
+  rewrite /dec_map_label.
+  intros ?[??].
+  simplify_option_eq.
+  assert (H1 = H0) as <-.
+  2: {
+    apply cryptoffi.vrf_bij_r in Heqo, Heqo3.
+    by simplify_eq/=. }
+  autorewrite with len in *.
+
+  (* TODO: seal le_to_u64 to avoid [inversion] extracting
+  [Naive.unsigned] from [le_to_u64 bs0 = le_to_u64 bs1]. *)
+  assert (le_to_u64 (take 8 H1) = le_to_u64 (take 8 H0)) as Heq.
+  { admit. }
+  apply (f_equal u64_le) in Heq.
+  rewrite !le_to_u64_le in Heq; [|len..].
+
+  remember (le_to_u64 (take 8 (drop 8 H1))) as ver0.
+  remember (le_to_u64 (take 8 (drop 8 H0))) as ver1.
+  replace ver0 with ver1 in * by word.
+  subst.
+  apply (f_equal u64_le) in Heqver1.
+  rewrite !le_to_u64_le in Heqver1; [|len..].
+
+  rewrite -(take_drop 8 H1).
+  rewrite -(take_drop 8 H0).
+  rewrite -(take_drop 8 (drop 8 H1)).
+  rewrite -(take_drop 8 (drop 8 H0)).
+  f_equal; [done|].
+  f_equal; [done|].
+  rewrite !drop_drop.
+  rewrite !drop_ge; [done|word..].
+Admitted.
+
+Lemma dec_map_labels_over_sub vrf_pk hidden0 hidden1 interm0 interm1 :
+  hidden0 ⊆ hidden1 →
+  dec_map_labels vrf_pk hidden0 = interm0 →
+  dec_map_labels vrf_pk hidden1 = interm1 →
+  interm0 ⊆ interm1.
+Proof.
+  rewrite /dec_map_labels.
+  intros Hsub <- <-.
+  apply map_subseteq_spec.
+  intros [uid ver] val0 Hlook0.
+  apply elem_of_list_to_map_2 in Hlook0.
+  apply list_elem_of_omap in Hlook0 as ([opt val0']&Hlook0&?).
+  destruct opt as [[??]|]; simplify_eq/=.
+  apply list_elem_of_fmap in Hlook0 as ([label0 val0']&Ht&Hlook0).
+  inv Ht as [Hdec0]. rename val0' into val0.
+  apply elem_of_map_to_list in Hlook0.
+  opose proof (lookup_weaken _ _ _ _ Hlook0 Hsub) as Hlook1.
+
+  apply elem_of_list_to_map_1'.
+  - intros val1 Hlook2.
+    apply list_elem_of_omap in Hlook2 as ([opt val1']&Hlook2&?).
+    destruct opt as [[??]|]; simplify_eq/=.
+    apply list_elem_of_fmap in Hlook2 as ([label1 val1']&Ht&Hlook2).
+    inv Ht as [Hdec1]. rename val1' into val1.
+    apply elem_of_map_to_list in Hlook2.
+    rewrite Hdec0 in Hdec1.
+    apply dec_map_label_inj in Hdec1; [|done].
+    by simplify_eq/=.
+  - apply list_elem_of_omap.
+    eexists (Some (_, _), _).
+    split; [|done].
+    apply list_elem_of_fmap.
+    eexists (_, _).
+    split; [by f_equal|].
+    by apply elem_of_map_to_list.
+Qed.
 
 (* used by auditor. *)
 (* NOTE: this lemma requires that pks0@uid@plain0 are prefix of pks1@uid@plain1.
@@ -167,11 +186,11 @@ moving pks0 "down the stack" is more tricky.
 we remember that pks0 passes filters0.
 filter_Some is same in stack0 and stack1.
 filter_contig in stack1 is more permissible than in stack0. *)
-Lemma is_plain_keys_over_sub vrf_pk hidden0 hidden1 plain0 plain1 :
+Lemma plain_inv_over_sub vrf_pk hidden0 hidden1 plain0 plain1 :
   hidden0 ⊆ hidden1 →
-  is_plain_keys vrf_pk plain0 hidden0 -∗
-  is_plain_keys vrf_pk plain1 hidden1 -∗
-  ⌜keys_sub plain0 plain1⌝.
+  plain_inv_func vrf_pk hidden0 = plain0 →
+  plain_inv_func vrf_pk hidden1 = plain1 →
+  keys_sub plain0 plain1.
 Proof. Admitted.
 
 (* "correctness", requiring bijectivity. *)
