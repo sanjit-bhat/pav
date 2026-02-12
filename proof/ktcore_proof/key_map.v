@@ -82,10 +82,12 @@ Local Definition dec_map_val map_val :=
 (* easier to reason in list form bc dec_map_label not inj.
 might have mult labels that go to None.
 however, after dropping None's, remaining (uid, ver) are unique. *)
-Local Definition dec_map_labels vrf_pk hidden : gmap (w64 * nat) (list w8) :=
+Local Definition dec_map_labels_aux vrf_pk (hidden : gmap (list w8) (list w8)) :=
   let odec := (λ '(l, v), (dec_map_label vrf_pk l, v)) <$> map_to_list hidden in
-  let dec := omap (λ '(ol, v), l ← ol; Some (l, v)) odec in
-  list_to_map dec.
+  omap (λ '(ol, v), l ← ol; Some (l, v)) odec.
+
+Local Definition dec_map_labels vrf_pk hidden : gmap (w64 * nat) (list w8) :=
+  list_to_map $ dec_map_labels_aux vrf_pk hidden.
 
 Local Definition dec_map_vals interm : gmap (w64 * nat) (list w8) :=
   omap (λ v, pk ← dec_map_val v; Some pk) interm.
@@ -112,35 +114,80 @@ Proof.
   rewrite /dec_map_label.
   intros ?[??].
   simplify_option_eq.
-  assert (H1 = H0) as <-.
-  2: {
-    apply cryptoffi.vrf_bij_r in Heqo, Heqo3.
-    by simplify_eq/=. }
   autorewrite with len in *.
+  rename H1 into d0. rename H0 into d1.
+  rename Heqo into Hvrf0. rename Heqo3 into Hvrf1.
+  rename H into Heq_uid. rename H8 into Heq_ver.
 
-  (* TODO: seal le_to_u64 to avoid [inversion] extracting
-  [Naive.unsigned] from [le_to_u64 bs0 = le_to_u64 bs1]. *)
-  assert (le_to_u64 (take 8 H1) = le_to_u64 (take 8 H0)) as Heq.
-  { admit. }
-  apply (f_equal u64_le) in Heq.
-  rewrite !le_to_u64_le in Heq; [|len..].
+  assert (d0 = d1) as <-.
+  2: {
+    apply cryptoffi.vrf_bij_r in Hvrf0, Hvrf1.
+    by simplify_eq/=. }
+  apply (f_equal u64_le) in Heq_uid.
+  rewrite !le_to_u64_le in Heq_uid; [|len..].
+  apply uint_nat_inj in Heq_ver.
+  apply (f_equal u64_le) in Heq_ver.
+  rewrite !le_to_u64_le in Heq_ver; [|len..].
 
-  remember (le_to_u64 (take 8 (drop 8 H1))) as ver0.
-  remember (le_to_u64 (take 8 (drop 8 H0))) as ver1.
-  replace ver0 with ver1 in * by word.
-  subst.
-  apply (f_equal u64_le) in Heqver1.
-  rewrite !le_to_u64_le in Heqver1; [|len..].
-
-  rewrite -(take_drop 8 H1).
-  rewrite -(take_drop 8 H0).
-  rewrite -(take_drop 8 (drop 8 H1)).
-  rewrite -(take_drop 8 (drop 8 H0)).
+  rewrite -(take_drop 8 d0).
+  rewrite -(take_drop 8 d1).
+  rewrite -(take_drop 8 (drop 8 d0)).
+  rewrite -(take_drop 8 (drop 8 d1)).
   f_equal; [done|].
   f_equal; [done|].
   rewrite !drop_drop.
   rewrite !drop_ge; [done|word..].
-Admitted.
+Qed.
+
+Lemma dec_map_labels_lift_elem {vrf_pk hidden interm dec val} :
+  dec_map_labels_aux vrf_pk hidden = interm →
+  (dec, val) ∈ interm →
+  ∃ label, dec_map_label vrf_pk label = Some dec ∧ hidden !! label = Some val.
+Proof.
+  rewrite /dec_map_labels_aux.
+  intros <- Hlook.
+  apply list_elem_of_omap in Hlook as ([opt val']&Hlook&?).
+  destruct opt as [[??]|]; simplify_eq/=.
+  apply list_elem_of_fmap in Hlook as ([label val']&Ht&Hlook).
+  inv Ht as [Hdec]. rename val' into val.
+  apply elem_of_map_to_list in Hlook.
+  naive_solver.
+Qed.
+
+Lemma dec_map_labels_drop_elem {vrf_pk hidden interm label val dec} :
+  dec_map_labels_aux vrf_pk hidden = interm →
+  hidden !! label = Some val →
+  dec_map_label vrf_pk label = Some dec →
+  (dec, val) ∈ interm.
+Proof.
+  rewrite /dec_map_labels_aux.
+  intros <- Hlook Hdec.
+  apply list_elem_of_omap.
+  eexists (Some _, _).
+  split; [|done].
+  apply list_elem_of_fmap.
+  eexists (_, _).
+  split; [by f_equal|].
+  by apply elem_of_map_to_list.
+Qed.
+
+(* could have proven NoDup (interm.*1), but that's trickier with the
+current RPs for omap. (the index of [interm] lookups gets lost across omap.)
+this weaker property allows for duplicate labels,
+so long as the vals are equal. *)
+Lemma dec_map_labels_unique vrf_pk hidden interm label val0 :
+  dec_map_labels_aux vrf_pk hidden = interm →
+  (label, val0) ∈ interm →
+  (∀ val1, (label, val1) ∈ interm → val0 = val1).
+Proof.
+  intros Hcomp Helem0 ? Helem1.
+  opose proof (dec_map_labels_lift_elem Hcomp Helem0) as (?&Hdec0&?).
+  opose proof (dec_map_labels_lift_elem Hcomp Helem1) as (?&Hdec1&?).
+  rewrite -Hdec0 in Hdec1.
+  symmetry in Hdec1.
+  apply dec_map_label_inj in Hdec1; [|done].
+  by simplify_eq/=.
+Qed.
 
 Lemma dec_map_labels_over_sub vrf_pk hidden0 hidden1 interm0 interm1 :
   hidden0 ⊆ hidden1 →
@@ -153,30 +200,11 @@ Proof.
   apply map_subseteq_spec.
   intros [uid ver] val0 Hlook0.
   apply elem_of_list_to_map_2 in Hlook0.
-  apply list_elem_of_omap in Hlook0 as ([opt val0']&Hlook0&?).
-  destruct opt as [[??]|]; simplify_eq/=.
-  apply list_elem_of_fmap in Hlook0 as ([label0 val0']&Ht&Hlook0).
-  inv Ht as [Hdec0]. rename val0' into val0.
-  apply elem_of_map_to_list in Hlook0.
-  opose proof (lookup_weaken _ _ _ _ Hlook0 Hsub) as Hlook1.
-
-  apply elem_of_list_to_map_1'.
-  - intros val1 Hlook2.
-    apply list_elem_of_omap in Hlook2 as ([opt val1']&Hlook2&?).
-    destruct opt as [[??]|]; simplify_eq/=.
-    apply list_elem_of_fmap in Hlook2 as ([label1 val1']&Ht&Hlook2).
-    inv Ht as [Hdec1]. rename val1' into val1.
-    apply elem_of_map_to_list in Hlook2.
-    rewrite Hdec0 in Hdec1.
-    apply dec_map_label_inj in Hdec1; [|done].
-    by simplify_eq/=.
-  - apply list_elem_of_omap.
-    eexists (Some (_, _), _).
-    split; [|done].
-    apply list_elem_of_fmap.
-    eexists (_, _).
-    split; [by f_equal|].
-    by apply elem_of_map_to_list.
+  opose proof (dec_map_labels_lift_elem _ Hlook0) as (?&?&Hlook0'); [done|].
+  opose proof (lookup_weaken _ _ _ _ Hlook0' Hsub) as Hlook1.
+  opose proof (dec_map_labels_drop_elem _ Hlook1 _) as Hlook1'; [done..|].
+  apply elem_of_list_to_map_1'; [|done].
+  by eapply dec_map_labels_unique.
 Qed.
 
 (* used by auditor. *)
