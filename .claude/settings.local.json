@@ -5,6 +5,10 @@
       "~/src/peren",
       "~/src/iris",
       "~/src/stdpp"
+    ],
+    "allow": [
+      "Skill(find-lemmas)",
+      "Skill(build)"
     ]
   }
 }
