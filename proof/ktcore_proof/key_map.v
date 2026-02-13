@@ -97,28 +97,28 @@ Local Definition dec_map_val map_val :=
   Some (pk).
 
 (* easier to reason in list form bc dec_map_label not inj.
-might have mult labels that go to None.
-however, after dropping None's, remaining (uid, ver) are unique. *)
-Local Definition dec_map_labels_aux vrf_pk (hidden : gmap (list w8) (list w8)) :=
-  omap (λ '(l, v), l' ← dec_map_label vrf_pk l; Some (l', v)) (map_to_list hidden).
+might have mult labels that go to None. *)
+Local Definition dec_map_labels_aux vrf_pk (m : gmap (list w8) (list w8)) :=
+  omap (λ '(l, v), l' ← dec_map_label vrf_pk l; Some (l', v)) (map_to_list m).
 
-Local Definition dec_map_labels vrf_pk hidden : gmap (w64 * nat) (list w8) :=
-  list_to_map $ dec_map_labels_aux vrf_pk hidden.
+Local Definition dec_map_labels vrf_pk m : gmap (w64 * nat) (list w8) :=
+  list_to_map $ dec_map_labels_aux vrf_pk m.
 
-Local Definition dec_map_vals interm : gmap (w64 * nat) (list w8) :=
-  omap (λ v, dec_map_val v) interm.
+Local Definition dec_map_vals m : gmap (w64 * nat) (list w8) :=
+  omap (λ v, dec_map_val v) m.
 
-Local Fixpoint get_contig (m_uid : gmap nat (list w8)) ver fuel :=
+Local Fixpoint get_contig (m : gmap nat (list w8)) ver fuel :=
   match fuel with 0%nat => [] | S fuel' =>
-  match m_uid !! ver with None => [] | Some pk =>
-  pk :: get_contig m_uid (S ver) fuel' end end.
+  match m !! ver with None => [] | Some pk =>
+  pk :: get_contig m (S ver) fuel' end end.
 
-Local Definition filter_contig mapped : gmap w64 (list (list w8)) :=
+Local Definition filter_contig m : gmap w64 (list (list w8)) :=
   (* size is simple upper bound on max ver. *)
-  (λ m_uid, get_contig m_uid 0 (size m_uid)) <$> mapped.
+  (λ m_uid, get_contig m_uid 0 (size m_uid)) <$> m.
 
 Definition plain_inv_func vrf_pk hidden :=
-  filter_contig $ gmap_curry $ dec_map_vals $ dec_map_labels vrf_pk hidden.
+  filter_contig $ map_curry (M1:=gmap _) $
+    dec_map_vals $ dec_map_labels vrf_pk hidden.
 
 (* monotonicity. *)
 
@@ -154,10 +154,10 @@ Proof.
   rewrite !drop_ge; [done|word..].
 Qed.
 
-Local Lemma dec_map_labels_lift_elem {vrf_pk hidden interm dec val} :
-  dec_map_labels_aux vrf_pk hidden = interm →
-  (dec, val) ∈ interm →
-  ∃ label, dec_map_label vrf_pk label = Some dec ∧ hidden !! label = Some val.
+Local Lemma dec_map_labels_lift_elem {vrf_pk m_prev m_next dec val} :
+  dec_map_labels_aux vrf_pk m_prev = m_next →
+  (dec, val) ∈ m_next →
+  ∃ label, dec_map_label vrf_pk label = Some dec ∧ m_prev !! label = Some val.
 Proof.
   rewrite /dec_map_labels_aux. intros <- Hlook.
   apply list_elem_of_omap in Hlook as ([opt val']&Hlook&?).
@@ -166,11 +166,11 @@ Proof.
   naive_solver.
 Qed.
 
-Local Lemma dec_map_labels_drop_elem {vrf_pk hidden interm label val dec} :
-  dec_map_labels_aux vrf_pk hidden = interm →
-  hidden !! label = Some val →
+Local Lemma dec_map_labels_drop_elem {vrf_pk m_prev m_next label val dec} :
+  dec_map_labels_aux vrf_pk m_prev = m_next →
+  m_prev !! label = Some val →
   dec_map_label vrf_pk label = Some dec →
-  (dec, val) ∈ interm.
+  (dec, val) ∈ m_next.
 Proof.
   rewrite /dec_map_labels_aux. intros <- Hlook Hdec.
   apply list_elem_of_omap.
@@ -180,9 +180,9 @@ Proof.
   by rewrite Hdec.
 Qed.
 
-Local Lemma dec_map_labels_unique vrf_pk hidden interm :
-  dec_map_labels_aux vrf_pk hidden = interm →
-  (∀ label val0 val1, (label, val0) ∈ interm → (label, val1) ∈ interm → val0 = val1).
+Local Lemma dec_map_labels_unique vrf_pk m_prev m_next :
+  dec_map_labels_aux vrf_pk m_prev = m_next →
+  (∀ label val0 val1, (label, val0) ∈ m_next → (label, val1) ∈ m_next → val0 = val1).
 Proof.
   intros Hcomp ??? Helem0 Helem1.
   opose proof (dec_map_labels_lift_elem Hcomp Helem0) as (?&Hdec0&?).
@@ -191,8 +191,8 @@ Proof.
   by simplify_eq/=.
 Qed.
 
-Local Lemma dec_map_labels_NoDup vrf_pk hidden :
-  NoDup ((dec_map_labels_aux vrf_pk hidden).*1).
+Local Lemma dec_map_labels_NoDup vrf_pk m :
+  NoDup ((dec_map_labels_aux vrf_pk m).*1).
 Proof.
   rewrite /dec_map_labels_aux.
   apply NoDup_fmap_fst.
@@ -204,13 +204,11 @@ Proof.
   by opose proof (dec_map_label_inj Heqo0 Heqo) as ->.
 Qed.
 
-Local Lemma dec_map_labels_over_sub vrf_pk hidden0 hidden1 interm0 interm1 :
-  dec_map_labels vrf_pk hidden0 = interm0 →
-  dec_map_labels vrf_pk hidden1 = interm1 →
-  hidden0 ⊆ hidden1 →
-  interm0 ⊆ interm1.
+Local Lemma dec_map_labels_mono vrf_pk m0 m1 :
+  m0 ⊆ m1 →
+  dec_map_labels vrf_pk m0 ⊆ dec_map_labels vrf_pk m1.
 Proof.
-  rewrite /dec_map_labels. intros <- <- Hsub.
+  rewrite /dec_map_labels. intros ?.
   apply map_subseteq_spec.
   intros [uid ver] val0 Hlook0.
   apply elem_of_list_to_map_2 in Hlook0.
@@ -221,12 +219,10 @@ Proof.
   by eapply lookup_weaken.
 Qed.
 
-Local Lemma dec_map_vals_over_sub prev0 prev1 next0 next1 :
-  dec_map_vals prev0 = next0 →
-  dec_map_vals prev1 = next1 →
-  prev0 ⊆ prev1 →
-  next0 ⊆ next1.
-Proof. intros <- <- **. by apply map_omap_mono. Qed.
+Local Lemma dec_map_vals_mono m0 m1 :
+  m0 ⊆ m1 →
+  dec_map_vals m0 ⊆ dec_map_vals m1.
+Proof. intros. by apply map_omap_mono. Qed.
 
 (* used by auditor. *)
 (* NOTE: this lemma requires that pks0@uid@plain0 are prefix of pks1@uid@plain1.
@@ -235,11 +231,9 @@ moving pks0 "down the stack" is more tricky.
 we remember that pks0 passes filters0.
 filter_Some is same in stack0 and stack1.
 filter_contig in stack1 is more permissible than in stack0. *)
-Lemma plain_inv_over_sub vrf_pk hidden0 hidden1 plain0 plain1 :
-  plain_inv_func vrf_pk hidden0 = plain0 →
-  plain_inv_func vrf_pk hidden1 = plain1 →
-  hidden0 ⊆ hidden1 →
-  keys_sub plain0 plain1.
+Lemma plain_inv_mono vrf_pk m0 m1 :
+  m0 ⊆ m1 →
+  keys_sub (plain_inv_func vrf_pk m0) (plain_inv_func vrf_pk m1).
 Proof. Admitted.
 
 (* "correctness", requiring bijectivity. *)
