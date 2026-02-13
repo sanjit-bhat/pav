@@ -19,7 +19,6 @@ for larger pkgs, the proof is broken into multiple files in a `{name}_proof` dir
 
 ## rules
 
-- do not run the rocq compiler.
 - if you aren't confident about something, it's perfectly fine to say that.
 there isn't much perennial / iris / rocq code out there to learn from.
 
