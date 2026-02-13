@@ -32,6 +32,15 @@ Section curry_mono.
   Definition curry_sub : relation (M1 (M2 A)) :=
     map_included (λ _, (⊆)).
 
+  Local Lemma lookup_map_curry_weaken (m0 m1 : MC A) i mi0 :
+    m0 ⊆ m1 →
+    map_curry m0 !! i = Some mi0 →
+    ∀ j v, mi0 !! j = Some v → map_curry m1 !! i ≫= (.!! j) = Some v.
+  Proof using All.
+    intros Hsub Hi0 j v Hj. rewrite lookup_map_curry.
+    eapply lookup_weaken; [|done]. by rewrite -lookup_map_curry Hi0.
+  Qed.
+
   Lemma map_curry_mono (m0 m1 : MC A) :
     m0 ⊆ m1 →
     curry_sub (map_curry m0) (map_curry m1).
@@ -39,19 +48,11 @@ Section curry_mono.
     intros Hsub i.
     destruct (map_curry m0 !! i) as [mi0|] eqn:Hi0;
       [|by destruct (map_curry m1 !! i)].
-    destruct (map_curry m1 !! i) as [mi1|] eqn:Hi1; simpl.
-    - apply map_subseteq_spec. intros j v Hj.
-      assert (m0 !! (i, j) = Some v) as Hm0.
-      { rewrite -lookup_map_curry Hi0 /=. done. }
-      eapply lookup_weaken in Hm0; [|done].
-      rewrite -lookup_map_curry Hi1 /= in Hm0. done.
-    - exfalso.
-      opose proof (map_curry_non_empty _ _ _ Hi0) as Hne.
-      apply map_choose in Hne as (j & v & Hj).
-      assert (m0 !! (i, j) = Some v) as Hm0.
-      { rewrite -lookup_map_curry Hi0 /=. done. }
-      eapply lookup_weaken in Hm0; [|done].
-      rewrite -lookup_map_curry Hi1 /= in Hm0. done.
+    pose proof (lookup_map_curry_weaken _ _ _ _ Hsub Hi0) as Hlift.
+    destruct (map_curry m1 !! i) as [mi1|]; simpl.
+    - apply map_subseteq_spec. intros j v Hj. exact (Hlift _ _ Hj).
+    - destruct (map_choose _ (map_curry_non_empty _ _ _ Hi0)) as (j & v & Hj).
+      pose proof (Hlift _ _ Hj). done.
   Qed.
 End curry_mono.
 
