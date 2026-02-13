@@ -24,6 +24,37 @@ Proof.
   set_solver.
 Qed.
 
+Section curry_mono.
+  Context `{FinMap K1 M1, FinMap K2 M2, FinMap (K1 * K2) MC} {A : Type}.
+  Notation map_curry := (map_curry (M1:=M1) (M2:=M2)).
+  Notation map_uncurry := (map_uncurry (M12:=MC)).
+
+  Definition curry_sub : relation (M1 (M2 A)) :=
+    map_included (λ _, (⊆)).
+
+  Lemma map_curry_mono (m0 m1 : MC A) :
+    m0 ⊆ m1 →
+    curry_sub (map_curry m0) (map_curry m1).
+  Proof using All.
+    intros Hsub i.
+    destruct (map_curry m0 !! i) as [mi0|] eqn:Hi0;
+      [|by destruct (map_curry m1 !! i)].
+    destruct (map_curry m1 !! i) as [mi1|] eqn:Hi1; simpl.
+    - apply map_subseteq_spec. intros j v Hj.
+      assert (m0 !! (i, j) = Some v) as Hm0.
+      { rewrite -lookup_map_curry Hi0 /=. done. }
+      eapply lookup_weaken in Hm0; [|done].
+      rewrite -lookup_map_curry Hi1 /= in Hm0. done.
+    - exfalso.
+      opose proof (map_curry_non_empty _ _ _ Hi0) as Hne.
+      apply map_choose in Hne as (j & v & Hj).
+      assert (m0 !! (i, j) = Some v) as Hm0.
+      { rewrite -lookup_map_curry Hi0 /=. done. }
+      eapply lookup_weaken in Hm0; [|done].
+      rewrite -lookup_map_curry Hi1 /= in Hm0. done.
+  Qed.
+End curry_mono.
+
 Module ktcore.
 Import serde.ktcore.
 
