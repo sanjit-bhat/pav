@@ -314,9 +314,22 @@ Definition plain_bij vrf_pk (plain : gmap w64 (list $ list w8))
 Lemma map_label_fn_is_inv vrf_pk uid ver map_label :
   map_label_fn vrf_pk uid ver = Some map_label →
   map_label_inv_fn vrf_pk map_label = Some (uid, uint.nat ver).
-Proof. Admitted.
+Proof.
+  rewrite /map_label_fn /map_label_inv_fn /MapLabel.pure_enc /safemarshal.w64.pure_enc /=.
+  intros ?%cryptoffi.vrf_bij_l.
+  simplify_option_eq; try done.
+  all: pose proof (u64_le_length uid); pose proof (u64_le_length ver).
+  all: try (autorewrite with len in *; lia).
+  rewrite take_app_le; [|lia].
+  rewrite take_ge; [|lia].
+  rewrite drop_app_le; [|lia].
+  rewrite drop_ge; [|lia]. simpl.
+  rewrite take_ge; [|lia].
+  rewrite !u64_le_to_word. done.
+Qed.
 
 Lemma map_val_fn_is_inv kt_pk rand map_val :
+  safemarshal.Slice1D.valid kt_pk →
   map_val_fn kt_pk rand = Some map_val →
   map_val_inv_fn map_val = Some kt_pk.
 Proof. Admitted.
