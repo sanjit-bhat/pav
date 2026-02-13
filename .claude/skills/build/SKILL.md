@@ -7,8 +7,8 @@ context: fork
 ---
 
 Build a Rocq proof file:
-- Run `make $ARGUMENTS.vok`.
-If the argument already ends in `.vok`, don't add it again.
+- Strip any file extension from `$ARGUMENTS`.
+- Run `make <result>.vok`.
 - If rocq doesn't return an error, return "build succeeded".
 - If rocq returns an error, give a concise summmary of it.
 The file, line number, and core of the error message.
