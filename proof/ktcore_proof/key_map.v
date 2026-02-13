@@ -90,43 +90,16 @@ Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 Context `{!pavG Σ}.
 
-(*
-Definition is_MapLabel vrf_pk uid ver map_label :=
+Definition map_label_fn vrf_pk uid ver :=
   let enc := MapLabel.pure_enc (MapLabel.mk' uid ver) in
-  cryptoffi.vrf_func vrf_pk enc = Some map_label.
+  cryptoffi.vrf_fn vrf_pk enc.
 
-Lemma is_MapLabel_det pk uid ver map_label0 map_label1 :
-  is_MapLabel pk uid ver map_label0 →
-  is_MapLabel pk uid ver map_label1 →
-  map_label0 = map_label1.
-Proof.
-  rewrite /is_MapLabel.
-  intros H0 H1.
-  iDestruct (cryptoffi.is_vrf_out_det with "H0 H1") as %->.
-  done.
-Qed.
-*)
-
-(* externalize [rand] bc some clients want to determ
-derive [map_val] from [kt_pk]. *)
-(*
-Definition is_MapVal kt_pk rand map_val : iProp Σ :=
+Definition map_val_fn kt_pk rand :=
   let enc := CommitOpen.pure_enc (CommitOpen.mk' kt_pk rand) in
-  cryptoffi.is_hash (Some enc) map_val.
+  cryptoffi.hash_fn enc.
 
-Lemma is_MapVal_det pk rand map_val0 map_val1 :
-  is_MapVal pk rand map_val0 -∗
-  is_MapVal pk rand map_val1 -∗
-  ⌜map_val0 = map_val1⌝.
-Proof.
-  iIntros "#H0 #H1".
-  iDestruct (cryptoffi.is_hash_det with "H0 H1") as %->.
-  done.
-Qed.
-*)
-
-Local Definition dec_map_label vrf_pk map_label :=
-  rem0 ← cryptoffi.vrf_inv_func vrf_pk map_label;
+Local Definition map_label_inv_fn vrf_pk map_label :=
+  rem0 ← cryptoffi.vrf_inv_fn vrf_pk map_label;
   guard (length rem0 ≥ 8);;
   let uid := le_to_u64 (take 8 rem0) in
   let rem1 := drop 8 rem0 in
@@ -136,8 +109,8 @@ Local Definition dec_map_label vrf_pk map_label :=
   guard (length rem2 = 0%nat);;
   Some (uid, uint.nat ver).
 
-Local Definition dec_map_val map_val :=
-  rem0 ← cryptoffi.hash_inv_func map_val;
+Local Definition map_val_inv_fn map_val :=
+  rem0 ← cryptoffi.hash_inv_fn map_val;
   guard (length rem0 ≥ 8);;
   let pk_len := sint.nat (le_to_u64 (take 8 rem0)) in
   let rem1 := drop 8 rem0 in
@@ -146,16 +119,16 @@ Local Definition dec_map_val map_val :=
   (* drop the remaining rand. we don't need that. *)
   Some (pk).
 
-(* easier to reason in list form bc dec_map_label not inj.
+(* easier to reason in list form bc map_label_inv_fn not inj.
 might have mult labels that go to None. *)
 Local Definition dec_map_labels_aux vrf_pk (m : gmap (list w8) (list w8)) :=
-  omap (λ '(l, v), l' ← dec_map_label vrf_pk l; Some (l', v)) (map_to_list m).
+  omap (λ '(l, v), l' ← map_label_inv_fn vrf_pk l; Some (l', v)) (map_to_list m).
 
 Local Definition dec_map_labels vrf_pk m : gmap (w64 * nat) (list w8) :=
   list_to_map $ dec_map_labels_aux vrf_pk m.
 
 Local Definition dec_map_vals m : gmap (w64 * nat) (list w8) :=
-  omap (λ v, dec_map_val v) m.
+  omap (λ v, map_val_inv_fn v) m.
 
 Local Fixpoint get_contig (m : gmap nat (list w8)) ver fuel :=
   match fuel with 0%nat => [] | S fuel' =>
@@ -166,18 +139,18 @@ Local Definition filter_contig m : gmap w64 (list (list w8)) :=
   (* size is simple upper bound on max ver. *)
   (λ m_uid, get_contig m_uid 0 (size m_uid)) <$> m.
 
-Definition plain_inv_func vrf_pk hidden :=
+Definition plain_inv_fn vrf_pk hidden :=
   filter_contig $ map_curry (M1:=gmap _) $
     dec_map_vals $ dec_map_labels vrf_pk hidden.
 
-(* monotonicity. *)
+(** monotonicity. *)
 
-Local Lemma dec_map_label_inj {vrf_pk label0 label1 dec} :
-  dec_map_label vrf_pk label0 = Some dec →
-  dec_map_label vrf_pk label1 = Some dec →
+Local Lemma map_label_inv_fn_inj {vrf_pk label0 label1 dec} :
+  map_label_inv_fn vrf_pk label0 = Some dec →
+  map_label_inv_fn vrf_pk label1 = Some dec →
   label0 = label1.
 Proof.
-  rewrite /dec_map_label. intros **.
+  rewrite /map_label_inv_fn. intros **.
   simplify_option_eq.
   autorewrite with len in *.
   rename H0 into d0. rename H1 into d1.
@@ -207,7 +180,7 @@ Qed.
 Local Lemma dec_map_labels_lift_elem {vrf_pk m_prev m_next dec val} :
   dec_map_labels_aux vrf_pk m_prev = m_next →
   (dec, val) ∈ m_next →
-  ∃ label, dec_map_label vrf_pk label = Some dec ∧ m_prev !! label = Some val.
+  ∃ label, map_label_inv_fn vrf_pk label = Some dec ∧ m_prev !! label = Some val.
 Proof.
   rewrite /dec_map_labels_aux. intros <- Hlook.
   apply list_elem_of_omap in Hlook as ([opt val']&Hlook&?).
@@ -219,7 +192,7 @@ Qed.
 Local Lemma dec_map_labels_drop_elem {vrf_pk m_prev m_next label val dec} :
   dec_map_labels_aux vrf_pk m_prev = m_next →
   m_prev !! label = Some val →
-  dec_map_label vrf_pk label = Some dec →
+  map_label_inv_fn vrf_pk label = Some dec →
   (dec, val) ∈ m_next.
 Proof.
   rewrite /dec_map_labels_aux. intros <- Hlook Hdec.
@@ -237,7 +210,7 @@ Proof.
   intros Hcomp ??? Helem0 Helem1.
   opose proof (dec_map_labels_lift_elem Hcomp Helem0) as (?&Hdec0&?).
   opose proof (dec_map_labels_lift_elem Hcomp Helem1) as (?&Hdec1&?).
-  opose proof (dec_map_label_inj Hdec0 Hdec1) as ->.
+  opose proof (map_label_inv_fn_inj Hdec0 Hdec1) as ->.
   by simplify_eq/=.
 Qed.
 
@@ -251,7 +224,7 @@ Proof.
   2: { apply NoDup_map_to_list. }
   intros [??][??] **.
   simplify_option_eq.
-  by opose proof (dec_map_label_inj Heqo0 Heqo) as ->.
+  by opose proof (map_label_inv_fn_inj Heqo0 Heqo) as ->.
 Qed.
 
 Local Lemma dec_map_labels_mono vrf_pk m0 m1 :
@@ -315,35 +288,51 @@ Qed.
 (* used by auditor. *)
 Lemma plain_inv_mono vrf_pk m0 m1 :
   m0 ⊆ m1 →
-  keys_sub (plain_inv_func vrf_pk m0) (plain_inv_func vrf_pk m1).
+  keys_sub (plain_inv_fn vrf_pk m0) (plain_inv_fn vrf_pk m1).
 Proof.
-  rewrite /plain_inv_func. intros Hsub.
+  rewrite /plain_inv_fn. intros Hsub.
   apply filter_contig_mono.
   apply map_curry_mono.
   apply map_omap_mono.
   by apply dec_map_labels_mono.
 Qed.
 
-(* "correctness", requiring bijectivity. *)
+(** "correctness". this requires a bijection between plain and hidden,
+modulo plain maps with empty pk lists. *)
 
-(* hidden is fully made up of contiguous versions.
-i.e., hidden and the computed plain are bijective. *)
-Definition is_contig (vrf_pk : list w8) (hidden : gmap (list w8) (list w8)) : iProp Σ.
-Admitted.
+Definition plain_bij vrf_pk (plain : gmap w64 (list $ list w8))
+    (hidden : gmap (list w8) (list w8)) :=
+  map_Forall
+    (λ map_label map_val,
+      ∃ uid ver pk pks,
+      map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
+      map_val_inv_fn map_val = Some pk ∧
+      plain !! uid = Some pks ∧
+      pks !! ver = Some pk)
+    hidden.
+
+Lemma map_label_fn_is_inv vrf_pk uid ver map_label :
+  map_label_fn vrf_pk uid ver = Some map_label →
+  map_label_inv_fn vrf_pk map_label = Some (uid, uint.nat ver).
+Proof. Admitted.
+
+Lemma map_val_fn_is_inv kt_pk rand map_val :
+  map_val_fn kt_pk rand = Some map_val →
+  map_val_inv_fn map_val = Some kt_pk.
+Proof. Admitted.
 
 (* used in server update. *)
-(*
-Lemma is_plain_keys_add vrf_pk hidden plain uid kt_pk label val rand :
+Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val :
   let pks := plain !!! uid in
-  is_plain_keys vrf_pk plain hidden -∗
-  is_contig vrf_pk hidden -∗
-  is_MapLabel vrf_pk uid (length pks) label -∗
-  is_MapVal kt_pk rand val -∗
-  let hidden' := <[label:=val]>hidden in
-  let plain' := <[uid:=pks ++ [kt_pk]]>plain in
-  is_plain_keys vrf_pk plain' hidden' ∗ is_contig vrf_pk hidden'.
+  plain_inv_fn vrf_pk hidden = plain →
+  plain_bij vrf_pk plain hidden →
+  map_label_fn vrf_pk uid ver = Some map_label →
+  uint.nat ver = length pks →
+  map_val_fn pk rand = Some map_val →
+  let plain' := <[uid:=pks ++ [pk]]>plain in
+  let hidden' := <[map_label:=map_val]>hidden in
+  plain_inv_fn vrf_pk hidden' = plain' ∧ plain_bij vrf_pk plain' hidden'.
 Proof. Admitted.
-*)
 
 End proof.
 End ktcore.
