@@ -41,6 +41,7 @@ Section curry_mono.
     eapply lookup_weaken; [|done]. by rewrite -lookup_map_curry Hi0.
   Qed.
 
+  (* TODO: maybe upstream. *)
   Lemma map_curry_mono (m0 m1 : MC A) :
     m0 ⊆ m1 →
     curry_sub (map_curry m0) (map_curry m1).
@@ -55,6 +56,23 @@ Section curry_mono.
       pose proof (Hlift _ _ Hj). done.
   Qed.
 End curry_mono.
+
+Section map.
+  Context `{FinMap K M} {A B : Type}.
+  (* TODO: upstream. *)
+  Lemma map_included_alt (R : K → A → B → Prop) (m1 : M A) (m2 : M B) :
+    map_included R m1 m2 ↔
+      (∀ k a, m1 !! k = Some a → ∃ b, m2 !! k = Some b ∧ R k a b).
+  Proof.
+    rewrite /map_included /map_relation /option_relation. split.
+    - intros Hincl ?? Hlook.
+      specialize (Hincl k).
+      rewrite Hlook in Hincl.
+      case_match; naive_solver.
+    - intros Hincl k.
+      repeat case_match; naive_solver.
+  Qed.
+End map.
 
 Module ktcore.
 Import serde.ktcore.
@@ -251,22 +269,60 @@ Proof.
   by eapply lookup_weaken.
 Qed.
 
-Local Lemma dec_map_vals_mono m0 m1 :
+Local Lemma get_contig_mono m0 m1 ver fuel :
   m0 ⊆ m1 →
-  dec_map_vals m0 ⊆ dec_map_vals m1.
-Proof. intros. by apply map_omap_mono. Qed.
+  get_contig m0 ver fuel `prefix_of` get_contig m1 ver fuel.
+Proof.
+  intros Hsub.
+  revert ver. induction fuel; simpl; [done|].
+  intros. destruct (m0 !! ver) eqn:Hlook.
+  2: { apply prefix_nil. }
+  opose proof (lookup_weaken _ _ _ _ Hlook Hsub) as ->.
+  apply prefix_cons.
+  naive_solver.
+Qed.
+
+Local Lemma get_contig_add_fuel m ver fuel fuel' :
+  (fuel ≤ fuel')%nat →
+  get_contig m ver fuel `prefix_of` get_contig m ver fuel'.
+Proof.
+  revert ver fuel'. induction fuel; simpl.
+  { intros. apply prefix_nil. }
+  intros. destruct fuel'; [lia|]. simpl.
+  case_match; try done.
+  apply prefix_cons.
+  apply IHfuel. lia.
+Qed.
+
+Local Lemma filter_contig_mono m0 m1 :
+  curry_sub (M1:=gmap _) m0 m1 →
+  keys_sub (filter_contig m0) (filter_contig m1).
+Proof.
+  rewrite /curry_sub /keys_sub !map_included_alt. intros Hsub.
+  rewrite /filter_contig.
+  intros uid pks Hlook.
+  rewrite lookup_fmap in Hlook.
+  simplify_option_eq. rename H into m_uid0.
+  odestruct (Hsub _ _ _) as (m_uid1&?&?); [done|].
+  opose proof (get_contig_mono m_uid0 m_uid1 0 (size m_uid0) _) as Hpref0; [done|].
+  opose proof (get_contig_add_fuel m_uid1 0 (size m_uid0) (size m_uid1) _) as Hpref1.
+  { by apply map_subseteq_size. }
+  eexists. split.
+  { rewrite lookup_fmap. by simplify_option_eq. }
+  by trans (get_contig m_uid1 0 (size m_uid0)).
+Qed.
 
 (* used by auditor. *)
-(* NOTE: this lemma requires that pks0@uid@plain0 are prefix of pks1@uid@plain1.
-moving pks0 "up the stack" is easier, since the stack only filters.
-moving pks0 "down the stack" is more tricky.
-we remember that pks0 passes filters0.
-filter_Some is same in stack0 and stack1.
-filter_contig in stack1 is more permissible than in stack0. *)
 Lemma plain_inv_mono vrf_pk m0 m1 :
   m0 ⊆ m1 →
   keys_sub (plain_inv_func vrf_pk m0) (plain_inv_func vrf_pk m1).
-Proof. Admitted.
+Proof.
+  rewrite /plain_inv_func. intros Hsub.
+  apply filter_contig_mono.
+  apply map_curry_mono.
+  apply map_omap_mono.
+  by apply dec_map_labels_mono.
+Qed.
 
 (* "correctness", requiring bijectivity. *)
 
