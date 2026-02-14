@@ -90,13 +90,8 @@ Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 Context `{!pavG Σ}.
 
-Definition map_label_fn vrf_pk uid ver :=
-  let enc := MapLabel.pure_enc (MapLabel.mk' uid ver) in
-  cryptoffi.vrf_fn vrf_pk enc.
-
-Definition map_val_fn kt_pk rand :=
-  let enc := CommitOpen.pure_enc (CommitOpen.mk' kt_pk rand) in
-  cryptoffi.hash_fn enc.
+(** backward computation from hidden to plain.
+must always succeed for invert capability. *)
 
 Local Definition map_label_inv_fn vrf_pk map_label :=
   rem0 ← cryptoffi.vrf_inv_fn vrf_pk map_label;
@@ -142,6 +137,50 @@ Local Definition filter_contig m : gmap w64 (list (list w8)) :=
 Definition plain_inv_fn vrf_pk hidden :=
   filter_contig $ map_curry (M1:=gmap _) $
     dec_map_vals $ dec_map_labels vrf_pk hidden.
+
+(** forward computation from plain to hidden.
+asserts that all computation succeeds,
+so we can derive [plain_inv_fn] from [plain_fn].
+as the names suggest, each "layer" here roughly
+corresponds to a layer in [plain_inv_fn].
+we might be able to prove correspondence between layers. *)
+
+Definition map_label_fn vrf_pk uid ver map_label :=
+  let enc := MapLabel.pure_enc (MapLabel.mk' uid ver) in
+  cryptoffi.vrf_fn vrf_pk enc = Some map_label.
+
+Definition map_val_fn kt_pk rand map_val :=
+  let enc := CommitOpen.pure_enc (CommitOpen.mk' kt_pk rand) in
+  cryptoffi.hash_fn enc = Some map_val ∧
+  safemarshal.Slice1D.valid kt_pk.
+
+Local Definition get_contig_inv l : gmap nat (list w8) :=
+  map_seq 0%nat l.
+
+Local Definition filter_contig_inv m : gmap w64 (gmap nat (list w8)) :=
+  get_contig_inv <$> m.
+
+Local Definition dec_map_vals_inv m0 (m1 : gmap (w64 * nat) (list w8)) :=
+  map_Forall2
+    (λ _ kt_pk map_val, ∃ rand, map_val_fn kt_pk rand map_val)
+    m0 m1.
+
+Local Definition dec_map_labels_inv_aux vrf_pk (l0 : list (w64 * nat)) l1 :=
+  Forall2
+    (λ '(uid, ver) map_label,
+      map_label_fn vrf_pk uid (W64 (Z.of_nat ver)) map_label)
+    l0 l1.
+
+Local Definition dec_map_labels_inv vrf_pk (m0 : gmap (w64 * nat) (list w8)) m1 :=
+  let l0 := map_to_list m0 in
+  let l1 := map_to_list m1 in
+  dec_map_labels_inv_aux vrf_pk l0.*1 l1.*1 ∧ l0.*2 = l1.*2.
+
+Definition plain_fn vrf_pk plain hidden :=
+  ∃ m1,
+  let m0 := map_uncurry (M1:=gmap _) $ filter_contig_inv $ plain in
+  dec_map_vals_inv m0 m1 ∧
+  dec_map_labels_inv vrf_pk m1 hidden.
 
 (** monotonicity. *)
 
@@ -312,14 +351,15 @@ Definition plain_bij vrf_pk (plain : gmap w64 (list $ list w8))
     hidden.
 
 Lemma map_label_fn_is_inv vrf_pk uid ver map_label :
-  map_label_fn vrf_pk uid ver = Some map_label →
+  map_label_fn vrf_pk uid ver map_label →
   map_label_inv_fn vrf_pk map_label = Some (uid, uint.nat ver).
 Proof.
   rewrite /map_label_fn /map_label_inv_fn /MapLabel.pure_enc /safemarshal.w64.pure_enc /=.
   intros ?%cryptoffi.vrf_bij_l.
   simplify_option_eq; try done.
-  all: pose proof (u64_le_length uid); pose proof (u64_le_length ver).
   all: try (autorewrite with len in *; lia).
+  pose proof (u64_le_length uid).
+  pose proof (u64_le_length ver).
   rewrite take_app_le; [|lia].
   rewrite take_ge; [|lia].
   rewrite drop_app_le; [|lia].
@@ -329,8 +369,7 @@ Proof.
 Qed.
 
 Lemma map_val_fn_is_inv kt_pk rand map_val :
-  safemarshal.Slice1D.valid kt_pk →
-  map_val_fn kt_pk rand = Some map_val →
+  map_val_fn kt_pk rand map_val →
   map_val_inv_fn map_val = Some kt_pk.
 Proof. Admitted.
 
@@ -339,9 +378,9 @@ Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val
   let pks := plain !!! uid in
   plain_inv_fn vrf_pk hidden = plain →
   plain_bij vrf_pk plain hidden →
-  map_label_fn vrf_pk uid ver = Some map_label →
+  map_label_fn vrf_pk uid ver map_label →
   uint.nat ver = length pks →
-  map_val_fn pk rand = Some map_val →
+  map_val_fn pk rand map_val →
   let plain' := <[uid:=pks ++ [pk]]>plain in
   let hidden' := <[map_label:=map_val]>hidden in
   plain_inv_fn vrf_pk hidden' = plain' ∧ plain_bij vrf_pk plain' hidden'.
