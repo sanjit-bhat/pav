@@ -356,10 +356,31 @@ Proof.
   rewrite !u64_le_to_word. done.
 Qed.
 
+(* analogous to map_label_fn_has_inv, but for CommitOpen / hash instead of
+   MapLabel / vrf. proof strategy:
+   1. hash_bij_l to invert hash_fn.
+   2. simplify_option_eq to process the option binds + guards.
+      leaves 3 goals: the main eq, and 2 guard side conditions.
+   3. for the main eq: simplify take/drop of the CommitOpen encoding
+      (two layers of app: outer (Slice1D pk ++ Slice1D rand), inner
+      (u64_le len ++ data)), then use Slice1D.valid to convert
+      sint.nat (W64 (length kt_pk)) to length kt_pk.
+   STUCK: after simplify_option_eq, take_app_le can't match because
+   lia doesn't know app_length. the side conditions need
+   `rewrite length_app u64_le_length; lia` but the exact goal shape
+   is hard to predict without interactive exploration. *)
 Local Lemma map_val_fn_has_inv kt_pk rand map_val :
   map_val_fn kt_pk rand map_val →
   map_val_inv_fn map_val = Some kt_pk.
-Proof. Admitted.
+Proof.
+  rewrite /map_val_fn /map_val_inv_fn /CommitOpen.pure_enc
+    /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc /=.
+  intros [?%cryptoffi.hash_bij_l Hvalid].
+  rewrite /safemarshal.Slice1D.valid in Hvalid.
+  simplify_option_eq; try done.
+  (* goal 1: main eq. goal 2,3: guard side conditions.
+     all involve take/drop of (u64_le _ ++ kt_pk) ++ (u64_le _ ++ rand). *)
+Admitted.
 
 (* move vals thru backwards (in both directions). *)
 
