@@ -149,29 +149,32 @@ Definition map_val_fn kt_pk rand map_val :=
   cryptoffi.hash_fn enc = Some map_val ∧
   safemarshal.Slice1D.valid kt_pk.
 
-Definition plain_to_hidden vrf_pk (plain : gmap w64 (list $ list w8))
+Local Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver pk :=
+  ∃ map_label map_val,
+  map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
+  map_val_inv_fn map_val = Some pk ∧
+  hidden !! map_label = Some map_val.
+
+Local Definition in_plain vrf_pk (plain : gmap w64 (list $ list w8)) map_label map_val :=
+  ∃ uid ver pk pks,
+  (* arbitrarily using inv version of map_label_fn. both are equiv. *)
+  map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
+  map_val_inv_fn map_val = Some pk ∧
+  plain !! uid = Some pks ∧
+  pks !! ver = Some pk.
+
+Local Definition plain_to_hidden vrf_pk (plain : gmap w64 (list $ list w8))
     (hidden : gmap (list w8) (list w8)) :=
   map_Forall
     (λ uid pks,
       length pks ≠ 0%nat ∧
-      (∀ (ver : nat) pk,
-        pks !! ver = Some pk →
-        ∃ map_label rand map_val,
-          map_label_fn vrf_pk uid (W64 ver) map_label ∧
-          map_val_fn pk rand map_val ∧
-          hidden !! map_label = Some map_val))
+      (∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver pk))
     plain.
 
-Definition hidden_to_plain vrf_pk (hidden : gmap (list w8) (list w8))
+Local Definition hidden_to_plain vrf_pk (hidden : gmap (list w8) (list w8))
     (plain : gmap w64 (list $ list w8)) :=
   map_Forall
-    (λ map_label map_val,
-      ∃ uid (ver : nat) pk pks,
-        (* arbitrarily using map_label fn vs. inv fn. they are equiv. *)
-        map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
-        map_val_inv_fn map_val = Some pk ∧
-        plain !! uid = Some pks ∧
-        pks !! ver = Some pk)
+    (λ map_label map_val, in_plain vrf_pk plain map_label map_val)
     hidden.
 
 Definition is_plain vrf_pk plain hidden :=
@@ -358,6 +361,15 @@ Local Lemma map_val_fn_has_inv kt_pk rand map_val :
   map_val_inv_fn map_val = Some kt_pk.
 Proof. Admitted.
 
+(* move vals thru backwards (in both directions). *)
+
+Local Lemma backward_lookup {vrf_pk plain hidden uid pks} ver pk :
+  plain_inv_fn vrf_pk hidden = plain →
+  plain !! uid = Some pks →
+  pks !! ver = Some pk →
+  in_hidden vrf_pk hidden uid ver pk.
+Proof. Admitted.
+
 Local Definition pks_in_m_uid (m : gmap nat (list w8)) pks :=
   ∀ (ver : nat) pk, pks !! ver = Some pk → m !! ver = Some pk ∧
   m !! (length pks) = None.
@@ -373,10 +385,54 @@ Local Lemma filter_contig_on_pks m m_uid uid pks :
   filter_contig m !! uid = Some pks.
 Proof. Admitted.
 
+Local Lemma backward_on_pks {vrf_pk plain hidden} uid pks0 :
+  plain_inv_fn vrf_pk hidden = plain →
+  length pks0 ≠ 0%nat →
+  (∀ ver pk,
+    pks0 !! ver = Some pk →
+    in_hidden vrf_pk hidden uid ver pk) →
+  ∃ pks1,
+    plain !! uid = Some pks1 ∧ pks0 `prefix_of` pks1.
+Proof. Admitted.
+
+Local Lemma backward_non_empty_pks {vrf_pk plain hidden uid pks} :
+  plain_inv_fn vrf_pk hidden = plain →
+  plain !! uid = Some pks →
+  length pks ≠ 0%nat.
+Proof. Admitted.
+
 Lemma is_plain_has_inv vrf_pk plain hidden :
   is_plain vrf_pk plain hidden →
   plain_inv_fn vrf_pk hidden = plain.
-Proof. Admitted.
+Proof.
+  rename plain into plain0. intros Hbij.
+  remember (plain_inv_fn _ _) as plain1.
+  symmetry. apply map_eq. intros uid.
+  destruct (plain0 !! uid) as [pks0|] eqn:Hlook0.
+  2: {
+    destruct (plain1 !! uid) as [[]|] eqn:Hlook1; try done; exfalso.
+    { by opose proof (backward_non_empty_pks _ _) as ?. }
+    opose proof (backward_lookup 0 _ _ _ _) as (?&?&?); [done..|].
+    destruct_and!.
+    odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&?); [done|].
+    simplify_eq/=. }
+
+  opose proof (backward_on_pks uid pks0 _ _) as (?&?&Hpref); [done|..].
+  { intros. odestruct (proj1 Hbij _ _ _) as []; [done|]. naive_solver. }
+  { intros. odestruct (proj1 Hbij _ _ _) as []; [done|]. naive_solver. }
+  destruct (plain1 !! uid) as [pks1|] eqn:Hlook1; try done.
+  simplify_eq/=.
+  destruct Hpref as ([]&->).
+  { by list_simplifier. }
+  exfalso.
+  opose proof (backward_lookup (length pks0) _ _ _ _) as (?&?&?); [done|done|..].
+  { by apply list_lookup_middle. }
+  destruct_and!.
+  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks0); [done|].
+  simplify_eq/=.
+  apply lookup_lt_Some in Hlook_pks0.
+  lia.
+Qed.
 
 (* used in server update. *)
 Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val :
