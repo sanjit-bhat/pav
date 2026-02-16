@@ -176,9 +176,13 @@ Local Definition dec_map_labels_inv vrf_pk (m0 : gmap (w64 * nat) (list w8)) m1 
   let l1 := map_to_list m1 in
   dec_map_labels_inv_aux vrf_pk l0.*1 l1.*1 ∧ l0.*2 = l1.*2.
 
+Definition non_empty_uids (m : gmap w64 (list $ list w8)) :=
+  map_Forall (λ _ pks, length pks ≠ 0%nat) m.
+
 Definition plain_fn vrf_pk plain hidden :=
   ∃ m1,
   let m0 := map_uncurry (M1:=gmap _) $ filter_contig_inv $ plain in
+  non_empty_uids plain ∧
   dec_map_vals_inv m0 m1 ∧
   dec_map_labels_inv vrf_pk m1 hidden.
 
@@ -339,17 +343,6 @@ Qed.
 (** "correctness". this requires a bijection between plain and hidden,
 modulo plain maps with empty pk lists. *)
 
-Definition plain_bij vrf_pk (plain : gmap w64 (list $ list w8))
-    (hidden : gmap (list w8) (list w8)) :=
-  map_Forall
-    (λ map_label map_val,
-      ∃ uid ver pk pks,
-      map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
-      map_val_inv_fn map_val = Some pk ∧
-      plain !! uid = Some pks ∧
-      pks !! ver = Some pk)
-    hidden.
-
 Lemma map_label_fn_is_inv vrf_pk uid ver map_label :
   map_label_fn vrf_pk uid ver map_label →
   map_label_inv_fn vrf_pk map_label = Some (uid, uint.nat ver).
@@ -373,17 +366,21 @@ Lemma map_val_fn_is_inv kt_pk rand map_val :
   map_val_inv_fn map_val = Some kt_pk.
 Proof. Admitted.
 
+Lemma plain_fn_is_inv vrf_pk plain hidden :
+  plain_fn vrf_pk plain hidden →
+  plain_inv_fn vrf_pk hidden = plain.
+Proof. Admitted.
+
 (* used in server update. *)
 Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val :
   let pks := plain !!! uid in
-  plain_inv_fn vrf_pk hidden = plain →
-  plain_bij vrf_pk plain hidden →
+  plain_fn vrf_pk plain hidden →
   map_label_fn vrf_pk uid ver map_label →
   uint.nat ver = length pks →
   map_val_fn pk rand map_val →
   let plain' := <[uid:=pks ++ [pk]]>plain in
   let hidden' := <[map_label:=map_val]>hidden in
-  plain_inv_fn vrf_pk hidden' = plain' ∧ plain_bij vrf_pk plain' hidden'.
+  plain_fn vrf_pk plain' hidden'.
 Proof. Admitted.
 
 End proof.
