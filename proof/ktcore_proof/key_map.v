@@ -138,12 +138,7 @@ Definition plain_inv_fn vrf_pk hidden :=
   filter_contig $ map_curry (M1:=gmap _) $
     dec_map_vals $ dec_map_labels vrf_pk hidden.
 
-(** forward computation from plain to hidden.
-asserts that all computation succeeds,
-so we can derive [plain_inv_fn] from [plain_fn].
-as the names suggest, each "layer" here roughly
-corresponds to a layer in [plain_inv_fn].
-we might be able to prove correspondence between layers. *)
+(** forward relation - bijection between plain and hidden. *)
 
 Definition map_label_fn vrf_pk uid ver map_label :=
   let enc := MapLabel.pure_enc (MapLabel.mk' uid ver) in
@@ -154,37 +149,34 @@ Definition map_val_fn kt_pk rand map_val :=
   cryptoffi.hash_fn enc = Some map_val ∧
   safemarshal.Slice1D.valid kt_pk.
 
-Local Definition get_contig_inv l : gmap nat (list w8) :=
-  map_seq 0%nat l.
+Definition plain_to_hidden vrf_pk (plain : gmap w64 (list $ list w8))
+    (hidden : gmap (list w8) (list w8)) :=
+  map_Forall
+    (λ uid pks,
+      length pks ≠ 0%nat ∧
+      (∀ (ver : nat) pk,
+        pks !! ver = Some pk →
+        ∃ map_label rand map_val,
+          map_label_fn vrf_pk uid (W64 ver) map_label ∧
+          map_val_fn pk rand map_val ∧
+          hidden !! map_label = Some map_val))
+    plain.
 
-Local Definition filter_contig_inv m : gmap w64 (gmap nat (list w8)) :=
-  get_contig_inv <$> m.
+Definition hidden_to_plain vrf_pk (hidden : gmap (list w8) (list w8))
+    (plain : gmap w64 (list $ list w8)) :=
+  map_Forall
+    (λ map_label map_val,
+      ∃ uid (ver : nat) pk pks,
+        (* arbitrarily using map_label fn vs. inv fn. they are equiv. *)
+        map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
+        map_val_inv_fn map_val = Some pk ∧
+        plain !! uid = Some pks ∧
+        pks !! ver = Some pk)
+    hidden.
 
-Local Definition dec_map_vals_inv m0 (m1 : gmap (w64 * nat) (list w8)) :=
-  map_Forall2
-    (λ _ kt_pk map_val, ∃ rand, map_val_fn kt_pk rand map_val)
-    m0 m1.
-
-Local Definition dec_map_labels_inv_aux vrf_pk (l0 : list (w64 * nat)) l1 :=
-  Forall2
-    (λ '(uid, ver) map_label,
-      map_label_fn vrf_pk uid (W64 (Z.of_nat ver)) map_label)
-    l0 l1.
-
-Local Definition dec_map_labels_inv vrf_pk (m0 : gmap (w64 * nat) (list w8)) m1 :=
-  let l0 := map_to_list m0 in
-  let l1 := map_to_list m1 in
-  dec_map_labels_inv_aux vrf_pk l0.*1 l1.*1 ∧ l0.*2 = l1.*2.
-
-Definition non_empty_uids (m : gmap w64 (list $ list w8)) :=
-  map_Forall (λ _ pks, length pks ≠ 0%nat) m.
-
-Definition plain_fn vrf_pk plain hidden :=
-  ∃ m1,
-  let m0 := map_uncurry (M1:=gmap _) $ filter_contig_inv $ plain in
-  non_empty_uids plain ∧
-  dec_map_vals_inv m0 m1 ∧
-  dec_map_labels_inv vrf_pk m1 hidden.
+Definition is_plain vrf_pk plain hidden :=
+  plain_to_hidden vrf_pk plain hidden ∧
+  hidden_to_plain vrf_pk hidden plain.
 
 (** monotonicity. *)
 
@@ -343,7 +335,7 @@ Qed.
 (** "correctness". this requires a bijection between plain and hidden,
 modulo plain maps with empty pk lists. *)
 
-Lemma map_label_fn_is_inv vrf_pk uid ver map_label :
+Local Lemma map_label_fn_has_inv vrf_pk uid ver map_label :
   map_label_fn vrf_pk uid ver map_label →
   map_label_inv_fn vrf_pk map_label = Some (uid, uint.nat ver).
 Proof.
@@ -361,26 +353,41 @@ Proof.
   rewrite !u64_le_to_word. done.
 Qed.
 
-Lemma map_val_fn_is_inv kt_pk rand map_val :
+Local Lemma map_val_fn_has_inv kt_pk rand map_val :
   map_val_fn kt_pk rand map_val →
   map_val_inv_fn map_val = Some kt_pk.
 Proof. Admitted.
 
-Lemma plain_fn_is_inv vrf_pk plain hidden :
-  plain_fn vrf_pk plain hidden →
+Local Definition pks_in_m_uid (m : gmap nat (list w8)) pks :=
+  ∀ (ver : nat) pk, pks !! ver = Some pk → m !! ver = Some pk ∧
+  m !! (length pks) = None.
+
+Local Lemma get_contig_on_pks m pks :
+  pks_in_m_uid m pks →
+  get_contig m 0%nat (size m) = pks.
+Proof. Admitted.
+
+Local Lemma filter_contig_on_pks m m_uid uid pks :
+  m !! uid = Some m_uid →
+  pks_in_m_uid m_uid pks →
+  filter_contig m !! uid = Some pks.
+Proof. Admitted.
+
+Lemma is_plain_has_inv vrf_pk plain hidden :
+  is_plain vrf_pk plain hidden →
   plain_inv_fn vrf_pk hidden = plain.
 Proof. Admitted.
 
 (* used in server update. *)
 Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val :
   let pks := plain !!! uid in
-  plain_fn vrf_pk plain hidden →
+  is_plain vrf_pk plain hidden →
   map_label_fn vrf_pk uid ver map_label →
   uint.nat ver = length pks →
   map_val_fn pk rand map_val →
   let plain' := <[uid:=pks ++ [pk]]>plain in
   let hidden' := <[map_label:=map_val]>hidden in
-  plain_fn vrf_pk plain' hidden'.
+  is_plain vrf_pk plain' hidden'.
 Proof. Admitted.
 
 End proof.
