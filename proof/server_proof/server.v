@@ -393,7 +393,7 @@ Definition is_audits γ digs audits : iProp Σ :=
   "%Hlen_audits" ∷ ⌜length digs = length audits⌝ ∗
   "#His_upds" ∷ ([∗ list] ep ↦ aud ∈ audits,
     (* AuditProof is a transition to an epoch.
-    for AuditProof @ ep0, need init_dig to transition from. *)
+    for AuditProof @! ep0, need init_dig to transition from. *)
     ∃ dig0 dig1,
     "%Hlook0" ∷ ⌜(init_dig :: digs) !! ep = Some dig0⌝ ∗
     "%Hlook1" ∷ ⌜(init_dig :: digs) !! (S ep) = Some dig1⌝ ∗
@@ -465,8 +465,8 @@ Context `{!pavG Σ}.
 
 Definition own_ro_aux γ ptr obj : iProp Σ :=
   ∃ ptr_secs ptr_workQ workQγ,
-  "#Hfld_secs" ∷ ptr ↦s[server.Server::"secs"]□ ptr_secs ∗
-  "#Hfld_workQ" ∷ ptr ↦s[server.Server::"workQ"]□ ptr_workQ ∗
+  "#Hfld_secs" ∷ ptr.[server.Server.t, "secs"] ↦□ ptr_secs ∗
+  "#Hfld_workQ" ∷ ptr.[server.Server.t, "workQ"] ↦□ ptr_workQ ∗
 
   "#Hown_secs" ∷ secrets.own γ ptr_secs obj.(secs) ∗
   "#His_workQ" ∷ handoff.is_chan_handoff workQγ ptr_workQ (work.own_aux γ obj.(secs)).
@@ -475,8 +475,8 @@ Definition own_ro γ ptr : iProp Σ := ∃ obj, own_ro_aux γ ptr obj.
 
 Definition own_locked γ ptr σ obj q : iProp Σ :=
   ∃ ptr_keys keys ptr_hist hist lastDig,
-  "#Hfld_keys" ∷ ptr ↦s[server.Server::"keys"]□ ptr_keys ∗
-  "#Hfld_hist" ∷ ptr ↦s[server.Server::"hist"]□ ptr_hist ∗
+  "#Hfld_keys" ∷ ptr.[server.Server.t, "keys"] ↦□ ptr_keys ∗
+  "#Hfld_hist" ∷ ptr.[server.Server.t, "hist"] ↦□ ptr_hist ∗
 
   "Hown_keys" ∷ keyStore.own γ ptr_keys keys obj.(secs) lastDig q ∗
   "Hown_hist" ∷ history.own γ ptr_hist hist q ∗
@@ -499,7 +499,7 @@ Definition own_aux γ ptr q : iProp Σ := ∃ σ, own γ ptr σ q.
 
 Definition own_lock γ ptr : iProp Σ :=
   ∃ ptr_mu,
-  "#Hfld_mu" ∷ ptr ↦s[server.Server::"mu"]□ ptr_mu ∗
+  "#Hfld_mu" ∷ ptr.[server.Server.t, "mu"] ↦□ ptr_mu ∗
   "Hlock" ∷ own_RWMutex ptr_mu (own_aux γ ptr).
 
 End proof.
@@ -518,7 +518,7 @@ Lemma wp_Server_getHist s γ obj (uid prefixLen : w64) q lastDig lastKeys :
     "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
     "%Heq_prefixLen" ∷ ⌜uint.nat prefixLen ≤ length (lastKeys !!! uid)⌝
   }}}
-  s @ (ptrT.id server.Server.id) @ "getHist" #uid #prefixLen
+  s @! (go.PointerType server.Server) @! "getHist" #uid #prefixLen
   {{{
     sl_hist hist, RET #sl_hist;
     let pks := lastKeys !!! uid in
@@ -538,7 +538,7 @@ Lemma wp_Server_getBound s γ obj (uid numVers : w64) q lastDig lastKeys :
     "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
     "%Heq_numVers" ∷ ⌜uint.nat numVers = length (lastKeys !!! uid)⌝
   }}}
-  s @ (ptrT.id server.Server.id) @ "getBound" #uid #numVers
+  s @! (go.PointerType server.Server) @! "getBound" #uid #numVers
   {{{
     ptr_bound bound, RET #ptr_bound;
     "Hown_serv" ∷ Server.own γ s obj q ∗
@@ -560,7 +560,7 @@ Lemma wp_Server_Put s γ uid sl_pk pk ver :
       let obj' := set state.pending (pure_put uid ver pk) obj in
       (own γ obj' ={∅,⊤}=∗ True))
   }}}
-  s @ (ptrT.id server.Server.id) @ "Put" #uid #ver #sl_pk
+  s @! (go.PointerType server.Server) @! "Put" #uid #ver #sl_pk
   {{{ RET #(); True }}}.
 Proof. Admitted.
 
@@ -571,7 +571,7 @@ Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
-  s @ (ptrT.id server.Server.id) @ "History" #uid #prevEpoch #prevVerLen
+  s @! (go.PointerType server.Server) @! "History" #uid #prevEpoch #prevVerLen
   {{{
     sl_chainProof sl_linkSig sl_hist ptr_bound err obj lastDig lastKeys,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #err);
@@ -617,7 +617,7 @@ Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
-  s @ (ptrT.id server.Server.id) @ "Audit" #prevEpoch
+  s @! (go.PointerType server.Server) @! "Audit" #prevEpoch
   {{{
     sl_proofs err obj, RET (#sl_proofs, #err);
     let numEps := length obj.(state.hist) in
@@ -660,7 +660,7 @@ Lemma wp_Server_Start s γ Q :
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
-  s @ (ptrT.id server.Server.id) @ "Start" #()
+  s @! (go.PointerType server.Server) @! "Start" #()
   {{{
     ptr_chain chain ptr_vrf vrf obj last_link, RET (#ptr_chain, #ptr_vrf);
     let numEps := length obj.(state.hist) in

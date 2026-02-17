@@ -7,10 +7,13 @@ From New.proof.github_com.sanjit_bhat.pav Require Import cryptoffi cryptoutil.
 
 Module hashchain.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : hashchain.Assumptions}.
+Collection W := sem + package_sem.
+Set Default Proof Using "W".
 
-#[global] Instance : IsPkgInit hashchain := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf hashchain := build_get_is_pkg_init_wf.
+#[global] Instance : IsPkgInit (iProp Σ) hashchain := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) hashchain := build_get_is_pkg_init_wf.
 
 (** impl / spec requirements for hashchain:
 - allow for "bootstrapping", where a user starts following the hashchain
@@ -378,7 +381,7 @@ Lemma wp_HashChain_Append ptr_c vals sl_val d0 val :
     "Hsl_val" ∷ sl_val ↦*{d0} val ∗
     "%Hlen_val" ∷ ⌜Z.of_nat $ length val = cryptoffi.hash_len⌝
   }}}
-  ptr_c @ (ptrT.id hashchain.HashChain.id) @ "Append" #sl_val
+  ptr_c @! (go.PointerType hashchain.HashChain) @! "Append" #sl_val
   {{{
     sl_newLink newLink, RET #sl_newLink;
     "Hown_HashChain" ∷ own ptr_c (vals ++ [val]) 1 ∗
@@ -568,7 +571,7 @@ Lemma wp_HashChain_Prove c vals d (prevLen : w64) :
     "Hown_HashChain" ∷ own c vals d ∗
     "%Hlt_prevLen" ∷ ⌜uint.Z prevLen <= length vals⌝
   }}}
-  c @ (ptrT.id hashchain.HashChain.id) @ "Prove" #prevLen
+  c @! (go.PointerType hashchain.HashChain) @! "Prove" #prevLen
   {{{
     sl_proof proof, RET #sl_proof;
     let new_vals := drop (uint.nat prevLen) vals in
@@ -604,7 +607,7 @@ Lemma wp_HashChain_Bootstrap c vals d old_vals last_val :
     "Hown_HashChain" ∷ own c vals d ∗
     "->" ∷ ⌜vals = old_vals ++ [last_val]⌝
   }}}
-  c @ (ptrT.id hashchain.HashChain.id) @ "Bootstrap" #()
+  c @! (go.PointerType hashchain.HashChain) @! "Bootstrap" #()
   {{{
     sl_bootLink bootLink sl_proof proof, RET (#sl_bootLink, #sl_proof);
     "Hown_HashChain" ∷ own c vals d ∗

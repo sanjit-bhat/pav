@@ -1,9 +1,10 @@
 From New.proof Require Import proof_prelude.
+From New.golang Require Import theory.
 
 Notation hash_len := 32 (only parsing).
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context `{!ghost_varG Σ (list (list w8))}.
 
 (* [hash_fun] is the hash function itself: [hash_fun v] is the hash of [v].
@@ -26,7 +27,7 @@ Definition is_hash_history γ (h: list (list w8)) : iProp Σ :=
   ghost_var (hash_hist γ) 1%Qp h.
 
 Definition is_hash_prophecy γ (p: list (list w8)) : iProp Σ :=
-  proph (hash_proph γ) (to_val <$> p).
+  proph (hash_proph γ) (into_val <$> p).
 
 Definition is_hash_map_inner γ : iProp Σ :=
   ∃ h p,

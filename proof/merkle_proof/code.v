@@ -305,7 +305,7 @@ Lemma wp_node_getChild n d0 nodeTy sl_hash ptr_child0 ptr_child1 l v sl_label d1
       (merkle.node.mk nodeTy sl_hash ptr_child0 ptr_child1 l v) ∗
     "Hsl_label" ∷ sl_label ↦*{d1} label
   }}}
-  n @ (ptrT.id merkle.node.id) @ "getChild" #sl_label #depth
+  n @! (go.PointerType merkle.node) @! "getChild" #sl_label #depth
   {{{
     ptr_cb ptr_cnb, RET (#ptr_cb, #ptr_cnb);
     sl_label ↦*{d1} label ∗
@@ -345,7 +345,7 @@ Lemma wp_node_getHash t n d :
     is_pkg_init merkle ∗
     "Hown_tree" ∷ own_tree n t d
   }}}
-  n @ (ptrT.id merkle.node.id) @ "getHash" #()
+  n @! (go.PointerType merkle.node) @! "getHash" #()
   {{{
     sl_hash hash, RET #sl_hash;
     "Hown_tree" ∷ own_tree n t d ∗
@@ -927,7 +927,7 @@ Lemma wp_node_find n t d0 sl_label d1 label (getProof : bool) :
     bigger shell (input-label) goes down recur tree, not Cut. *)
     "%Hsorted" ∷ ⌜is_sorted t⌝
   }}}
-  n @ (ptrT.id merkle.node.id) @ "find" #(W64 0) #sl_label #getProof
+  n @! (go.PointerType merkle.node) @! "find" #(W64 0) #sl_label #getProof
   {{{
     (found : bool) sl_foundLabel foundLabel sl_foundVal foundVal sl_sibs sibs_enc oleaf,
     RET (#found, #sl_foundLabel, #sl_foundVal, #sl_sibs);
@@ -1331,7 +1331,7 @@ Lemma wp_node_prove n t d0 sl_label d1 label getProof :
     "%Hlen_label" ∷ ⌜Z.of_nat $ length label = cryptoffi.hash_len⌝ ∗
     "%Hconst_len" ∷ ⌜is_const_label_len t⌝
   }}}
-  n @ (ptrT.id merkle.node.id) @ "prove" #sl_label #getProof
+  n @! (go.PointerType merkle.node) @! "prove" #sl_label #getProof
   {{{
     oval inTree sl_val val sl_proof proof, RET (#inTree, #sl_val, #sl_proof);
     "Hown_tree" ∷ own_tree n t d0 ∗
@@ -1567,7 +1567,7 @@ Lemma wp_Map_Hash ptr m hash d0 :
     is_pkg_init merkle ∗
     "Hown_Map" ∷ own_Map ptr m hash d0
   }}}
-  ptr @ (ptrT.id merkle.Map.id) @ "Hash" #()
+  ptr @! (go.PointerType merkle.Map) @! "Hash" #()
   {{{
     sl_hash, RET #sl_hash;
     "Hown_Map" ∷ own_Map ptr m hash d0 ∗
@@ -1591,7 +1591,7 @@ Lemma wp_Map_Prove ptr m hash d0 sl_label d1 label :
     "Hsl_label" ∷ sl_label ↦*{d1} label ∗
     "%Hlen_label" ∷ ⌜Z.of_nat $ length label = cryptoffi.hash_len⌝
   }}}
-  ptr @ (ptrT.id merkle.Map.id) @ "Prove" #sl_label
+  ptr @! (go.PointerType merkle.Map) @! "Prove" #sl_label
   {{{
     inMap sl_val val sl_entryProof entryProof, RET (#inMap, #sl_val, #sl_entryProof);
     "Hown_Map" ∷ own_Map ptr m hash d0 ∗
@@ -1636,7 +1636,7 @@ Lemma wp_Map_Put ptr m hash sl_label label sl_val val :
     "%Hmono" ∷ ⌜m !! label = None⌝ ∗
     "%Hlen_label" ∷ ⌜Z.of_nat $ length label = cryptoffi.hash_len⌝
   }}}
-  ptr @ (ptrT.id merkle.Map.id) @ "Put" #sl_label #sl_val
+  ptr @! (go.PointerType merkle.Map) @! "Put" #sl_label #sl_val
   {{{
     sl_updProof updProof hash', RET #sl_updProof;
     "Hown_Map" ∷ own_Map ptr (<[label:=val]>m) hash' 1 ∗

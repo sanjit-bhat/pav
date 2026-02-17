@@ -250,7 +250,7 @@ Proof.
 
   iClear "His_args".
   iApply big_sepL_intro.
-  iModIntro. iIntros (?? Hlook_proofs) "!> * @ %".
+  iModIntro. iIntros (?? Hlook_proofs) "!> * @! %".
   rewrite /wish_getNextLink /history.align_serv.
   destruct adtr_hist, σ. simplify_eq/=.
   iDestruct (big_sepL_lookup with "His_upds") as "{His_upds} @"; [done|].

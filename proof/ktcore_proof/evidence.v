@@ -139,7 +139,7 @@ Lemma wp_EvidVrf_check ptr_e e sl_pk pk :
     "#Hown_evid" ∷ EvidVrf.own ptr_e e (□) ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk
   }}}
-  ptr_e @ (ptrT.id ktcore.EvidVrf.id) @ "check" #sl_pk
+  ptr_e @! (go.PointerType ktcore.EvidVrf) @! "check" #sl_pk
   {{{
     (err : bool), RET #err;
     "Hgenie" ∷
@@ -223,7 +223,7 @@ Lemma wp_EvidLink_check ptr_e e sl_pk pk :
     "#Hown_evid" ∷ EvidLink.own ptr_e e (□) ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk
   }}}
-  ptr_e @ (ptrT.id ktcore.EvidLink.id) @ "check" #sl_pk
+  ptr_e @! (go.PointerType ktcore.EvidLink) @! "check" #sl_pk
   {{{
     (err : bool), RET #err;
     "Hgenie" ∷
@@ -283,7 +283,7 @@ Lemma wp_Evid_Check ptr_e e sl_pk pk :
     "#Hown_evid" ∷ Evid.own ptr_e e (□) ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk
   }}}
-  ptr_e @ (ptrT.id ktcore.Evid.id) @ "Check" #sl_pk
+  ptr_e @! (go.PointerType ktcore.Evid) @! "Check" #sl_pk
   {{{
     (err : bool), RET #err;
     "Hgenie" ∷

@@ -9,8 +9,8 @@ Module auditor.
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 
-#[global] Instance : IsPkgInit auditor := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf auditor := build_get_is_pkg_init_wf.
+#[global] Instance : IsPkgInit (iProp Σ) auditor := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) auditor := build_get_is_pkg_init_wf.
 
 End proof.
 End auditor.

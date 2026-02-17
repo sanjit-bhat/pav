@@ -66,7 +66,7 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#Hfupd" ∷ match good with None => True | Some γ =>
       □ (|={⊤,∅}=> ∃ σ, own γ σ ∗ (own γ σ ={∅,⊤}=∗ Q γ σ)) end
   }}}
-  c @ (ptrT.id advrpc.Client.id) @ "Call" server.HistoryRpc #sl_arg #ptr_reply
+  c @! (go.PointerType advrpc.Client) @! "Call" server.HistoryRpc #sl_arg #ptr_reply
   {{{
     sl_reply err0, RET #err0;
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
@@ -128,7 +128,7 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#Hfupd" ∷ match good with None => True | Some γ =>
       □ (|={⊤,∅}=> ∃ σ, own γ σ ∗ (own γ σ ={∅,⊤}=∗ Q γ σ)) end
   }}}
-  c @ (ptrT.id advrpc.Client.id) @ "Call" server.AuditRpc #sl_arg #ptr_reply
+  c @! (go.PointerType advrpc.Client) @! "Call" server.AuditRpc #sl_arg #ptr_reply
   {{{
     sl_reply err0, RET #err0;
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
@@ -182,7 +182,7 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#Hfupd" ∷ match good with None => True | Some γ =>
       □ (|={⊤,∅}=> ∃ obj, own γ obj ∗ (own γ obj ={∅,⊤}=∗ Q γ obj)) end
   }}}
-  c @ (ptrT.id advrpc.Client.id) @ "Call" server.StartRpc #sl_arg #ptr_reply
+  c @! (go.PointerType advrpc.Client) @! "Call" server.StartRpc #sl_arg #ptr_reply
   {{{
     sl_reply err0, RET #err0;
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗

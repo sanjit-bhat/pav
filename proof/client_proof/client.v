@@ -462,7 +462,7 @@ Lemma wp_Client_Put ptr_c c sl_pk pk :
       | Some pk' => pk = pk'
       end⌝
   }}}
-  ptr_c @ (ptrT.id client.Client.id) @ "Put" #sl_pk
+  ptr_c @! (go.PointerType client.Client) @! "Put" #sl_pk
   {{{
     RET #();
     let c' := set Client.pend (λ p, set nextVer.pendingPk (λ _, Some pk) p) c in
@@ -546,7 +546,7 @@ Lemma wp_Client_Get ptr_c c (uid : w64) :
     is_pkg_init client ∗
     "Hclient" ∷ Client.own ptr_c c
   }}}
-  ptr_c @ (ptrT.id client.Client.id) @ "Get" #uid
+  ptr_c @! (go.PointerType client.Client) @! "Get" #uid
   {{{
     (ep : w64) (isReg : bool) (sl_pk : slice.t) err,
     (* TODO: pin down isReg and sl_pk. *)
@@ -701,7 +701,7 @@ Lemma wp_Client_SelfMon ptr_c c :
     is_pkg_init client ∗
     "Hclient" ∷ Client.own ptr_c c
   }}}
-  ptr_c @ (ptrT.id client.Client.id) @ "SelfMon" #()
+  ptr_c @! (go.PointerType client.Client) @! "SelfMon" #()
   {{{
     (ep : w64) (isChanged : bool) err,
     RET (#ep, #isChanged, #(ktcore.blame_to_u64 err));
