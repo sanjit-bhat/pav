@@ -5,27 +5,28 @@ From New.proof.github_com.tchajed Require Import marshal.
 
 Module safemarshal.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
+Collection W := sem + package_sem.
+Set Default Proof Using "W".
 
 #[global] Instance : IsPkgInit (iProp Σ) safemarshal := define_is_pkg_init True%I.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) safemarshal := build_get_is_pkg_init_wf.
 
 Lemma wp_initialize' get_is_pkg_init :
   get_is_pkg_init_prop safemarshal get_is_pkg_init →
-  {{{ own_initializing get_is_pkg_init ∗ is_go_context ∗ □ is_pkg_defined safemarshal }}}
+  {{{ own_initializing get_is_pkg_init }}}
     safemarshal.initialize' #()
   {{{ RET #(); own_initializing get_is_pkg_init ∗ is_pkg_init safemarshal }}}.
 Proof.
-  intros Hinit. wp_start as "(Hown & #? & #Hdef)".
-  wp_call. wp_apply (wp_package_init with "[$Hown] HΦ").
+  intros Hinit. wp_start as "Hown".
+  wp_apply (wp_package_init with "[$Hown] HΦ") as "Hown".
   { destruct Hinit as (-> & ?); done. }
-  iIntros "Hown". wp_auto.
 
   wp_apply (marshal.wp_initialize' with "[$Hown]").
   { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
   iIntros "(Hown & #?)". wp_auto.
-  wp_call. iFrame. iEval (rewrite is_pkg_init_unfold).
+  iFrame. iEval (rewrite is_pkg_init_unfold).
   simpl. iFrame "#". done.
 Qed.
 

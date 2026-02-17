@@ -12,25 +12,25 @@ Proof. done. Qed.
 #[global] Opaque hash_len.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : cryptoffi.Assumptions}.
+Collection W := sem + package_sem.
+Set Default Proof Using "W".
 
 #[global] Instance : IsPkgInit (iProp Σ) cryptoffi := define_is_pkg_init True%I.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) cryptoffi := build_get_is_pkg_init_wf.
 
 Lemma wp_initialize' get_is_pkg_init :
   get_is_pkg_init_prop cryptoffi get_is_pkg_init →
-  {{{ own_initializing get_is_pkg_init ∗ is_go_context ∗ □ is_pkg_defined cryptoffi }}}
+  {{{ own_initializing get_is_pkg_init }}}
     cryptoffi.initialize' #()
   {{{ RET #(); own_initializing get_is_pkg_init ∗ is_pkg_init cryptoffi }}}.
 Proof.
-  intros Hinit. wp_start as "(Hown & #? & #Hdef)".
-  wp_call. wp_apply (wp_package_init with "[$Hown] HΦ").
+  intros Hinit. wp_start as "Hown".
+  wp_apply (wp_package_init with "[$Hown] HΦ") as "Hown".
   { destruct Hinit as (-> & ?); done. }
-  iIntros "Hown". wp_auto.
   wp_apply (ed25519.wp_initialize' with "[$Hown]") as "[Hown #?]".
   { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
-  wp_call.
   iEval (rewrite is_pkg_init_unfold /=).
   by iFrame "∗#".
 Qed.
