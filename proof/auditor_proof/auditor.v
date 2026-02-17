@@ -116,9 +116,9 @@ Context `{!pavG Σ}.
 
 Definition own ptr obj γ σ q : iProp Σ :=
   ∃ ptr_sk ptr_hist ptr_serv maps,
-  "#Hfld_sk" ∷ ptr ↦s[auditor.Auditor::"sk"]□ ptr_sk ∗
-  "#Hfld_hist" ∷ ptr ↦s[auditor.Auditor::"hist"]□ ptr_hist ∗
-  "#Hfld_serv" ∷ ptr ↦s[auditor.Auditor::"serv"]□ ptr_serv ∗
+  "#Hfld_sk" ∷ ptr.[auditor.Auditor.t, "sk"] ↦□ ptr_sk ∗
+  "#Hfld_hist" ∷ ptr.[auditor.Auditor.t, "hist"] ↦□ ptr_hist ∗
+  "#Hfld_serv" ∷ ptr.[auditor.Auditor.t, "serv"] ↦□ ptr_serv ∗
 
   "#Hown_sk" ∷ cryptoffi.own_sig_sk ptr_sk γ.(cfg.adtr_sig_pk)
     (ktcore.sigpred γ.(cfg.sigpredγ)) ∗
@@ -138,7 +138,7 @@ Definition own_aux ptr γ q : iProp Σ := ∃ obj σ, own ptr obj γ σ q.
 
 Definition lock_perm ptr γ : iProp Σ :=
   ∃ ptr_mu,
-  "#Hfld_mu" ∷ ptr ↦s[auditor.Auditor::"mu"]□ ptr_mu ∗
+  "#Hfld_mu" ∷ ptr.[auditor.Auditor.t, "mu"] ↦□ ptr_mu ∗
   "Hperm" ∷ own_RWMutex ptr_mu (own_aux ptr γ).
 
 #[global] Instance own_aux_frac ptr γ :
@@ -270,7 +270,7 @@ Proof.
   wp_start as "@".
   iNamed "Hown_vrf". destruct vrf. simpl.
   wp_auto.
-  wp_apply cryptoffi.wp_VrfPublicKeyDecode as "* @ {Hsl_enc}".
+  wp_apply cryptoffi.wp_VrfPublicKeyDecode as "* @! {Hsl_enc}".
   { iFrame "#". }
   wp_if_destruct.
   { iApply "HΦ". iNamedSuffix 1 "'". simpl in *. by iApply "Hgenie". }
@@ -460,7 +460,7 @@ Lemma wp_Auditor_Get a γ epoch Q :
     "#Hfupd" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
       (own γ σ ={∅,⊤}=∗ Q σ))
   }}}
-  a @ (ptrT.id auditor.Auditor.id) @ "Get" #epoch
+  a @! (go.PointerType auditor.Auditor) @! "Get" #epoch
   {{{
     ptr_link ptr_vrf err σ, RET (#ptr_link, #ptr_vrf, #err);
     "Hlock" ∷ Auditor.lock_perm a γ ∗
@@ -549,7 +549,7 @@ Lemma wp_Auditor_updOnce ptr_a a γ σ Q ptr_proof proof :
         a.(Auditor.hist) σ proof ep dig link ∗
       "#Halign_next" ∷ history.align_serv hist' σ' servγ end
   }}}
-  ptr_a @ (ptrT.id auditor.Auditor.id) @ "updOnce" #ptr_proof
+  ptr_a @! (go.PointerType auditor.Auditor) @! "updOnce" #ptr_proof
   {{{
     err, RET #(ktcore.blame_to_u64 err);
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
@@ -683,7 +683,7 @@ Lemma wp_Auditor_Update ptr_a γ Q :
       let σ' := set state.links (.++ new_links) σ in
       own γ σ' ={∅,⊤}=∗ Q σ'))
   }}}
-  ptr_a @ (ptrT.id auditor.Auditor.id) @ "Update" #()
+  ptr_a @! (go.PointerType auditor.Auditor) @! "Update" #()
   {{{
     err σ, RET #(ktcore.blame_to_u64 err);
     "Hlock" ∷ Auditor.lock_perm ptr_a γ ∗

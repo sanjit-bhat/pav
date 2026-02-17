@@ -7,8 +7,8 @@ Module safemarshal.
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 
-#[global] Instance : IsPkgInit safemarshal := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf safemarshal := build_get_is_pkg_init_wf.
+#[global] Instance : IsPkgInit (iProp Σ) safemarshal := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) safemarshal := build_get_is_pkg_init_wf.
 
 Lemma wp_initialize' get_is_pkg_init :
   get_is_pkg_init_prop safemarshal get_is_pkg_init →

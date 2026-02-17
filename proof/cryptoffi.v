@@ -14,8 +14,8 @@ Proof. done. Qed.
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 
-#[global] Instance : IsPkgInit cryptoffi := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf cryptoffi := build_get_is_pkg_init_wf.
+#[global] Instance : IsPkgInit (iProp Σ) cryptoffi := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) cryptoffi := build_get_is_pkg_init_wf.
 
 Lemma wp_initialize' get_is_pkg_init :
   get_is_pkg_init_prop cryptoffi get_is_pkg_init →
@@ -86,7 +86,7 @@ Lemma wp_Hasher_Write hr data sl_b d0 b :
     "Hown_hr" ∷ own_Hasher hr data ∗
     "Hsl_b" ∷ sl_b ↦*{d0} b
   }}}
-  hr @ (ptrT.id cryptoffi.Hasher.id) @ "Write" #sl_b
+  hr @! (go.PointerType cryptoffi.Hasher) @! "Write" #sl_b
   {{{
     RET #();
     "Hown_hr" ∷ own_Hasher hr (data ++ b) ∗
@@ -100,7 +100,7 @@ Lemma wp_Hasher_Sum sl_b_in hr data b_in :
     "Hown_hr" ∷ own_Hasher hr data ∗
     "Hsl_b_in" ∷ sl_b_in ↦* b_in
   }}}
-  hr @ (ptrT.id cryptoffi.Hasher.id) @ "Sum" #sl_b_in
+  hr @! (go.PointerType cryptoffi.Hasher) @! "Sum" #sl_b_in
   {{{
     sl_b_out hash, RET #sl_b_out;
     "Hown_hr" ∷ own_Hasher hr data ∗
@@ -213,7 +213,7 @@ Lemma wp_VrfPrivateKey_Prove ptr_sk pk sl_data (data : list w8) d0 :
     "#Hown_vrf_sk" ∷ own_vrf_sk ptr_sk pk ∗
     "Hsl_data" ∷ sl_data ↦*{d0} data
   }}}
-  ptr_sk @ (ptrT.id cryptoffi.VrfPrivateKey.id) @ "Prove" #sl_data
+  ptr_sk @! (go.PointerType cryptoffi.VrfPrivateKey) @! "Prove" #sl_data
   {{{
     sl_out sl_proof (out proof : list w8), RET (#sl_out, #sl_proof);
     "Hsl_data" ∷ sl_data ↦*{d0} data ∗
@@ -230,7 +230,7 @@ Lemma wp_VrfPrivateKey_Evaluate ptr_sk pk sl_data (data : list w8) d0 :
     "#Hown_vrf_sk" ∷ own_vrf_sk ptr_sk pk ∗
     "Hsl_data" ∷ sl_data ↦*{d0} data
   }}}
-  ptr_sk @ (ptrT.id cryptoffi.VrfPrivateKey.id) @ "Evaluate" #sl_data
+  ptr_sk @! (go.PointerType cryptoffi.VrfPrivateKey) @! "Evaluate" #sl_data
   {{{
     sl_out (out : list w8), RET #sl_out;
     "Hsl_data" ∷ sl_data ↦*{d0} data ∗
@@ -246,7 +246,7 @@ Lemma wp_VrfPublicKey_Verify ptr_pk pk sl_data sl_proof (data proof : list w8) d
     "Hsl_data" ∷ sl_data ↦*{d0} data ∗
     "Hsl_proof" ∷ sl_proof ↦*{d1} proof
   }}}
-  ptr_pk @ (ptrT.id cryptoffi.VrfPublicKey.id) @ "Verify" #sl_data #sl_proof
+  ptr_pk @! (go.PointerType cryptoffi.VrfPublicKey) @! "Verify" #sl_data #sl_proof
   {{{
     sl_out (out : list w8) (err : bool), RET (#sl_out, #err);
     "Hsl_data" ∷ sl_data ↦*{d0} data ∗
@@ -359,7 +359,7 @@ Lemma wp_SigPrivateKey_Sign ptr_sk pk P sl_msg msg d0 :
     "Hsl_msg" ∷ sl_msg ↦*{d0} msg ∗
     "HP" ∷ P msg
   }}}
-  ptr_sk @ (ptrT.id cryptoffi.SigPrivateKey.id) @ "Sign" #sl_msg
+  ptr_sk @! (go.PointerType cryptoffi.SigPrivateKey) @! "Sign" #sl_msg
   {{{
     sl_sig (sig : list w8), RET #sl_sig;
     "Hsl_msg" ∷ sl_msg ↦*{d0} msg ∗
@@ -376,7 +376,7 @@ Lemma wp_SigPublicKey_Verify (sl_pk : cryptoffi.SigPublicKey.t) pk
     "Hsl_msg" ∷ sl_msg ↦*{d1} msg ∗
     "Hsl_sig" ∷ sl_sig ↦*{d2} sig
   }}}
-  sl_pk @ cryptoffi.SigPublicKey.id @ "Verify" #sl_msg #sl_sig
+  sl_pk @! cryptoffi.SigPublicKey @! "Verify" #sl_msg #sl_sig
   {{{
     (err : bool), RET #err;
     "Hsl_sig_pk" ∷ sl_pk ↦*{d0} pk ∗

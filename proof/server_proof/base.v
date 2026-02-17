@@ -11,8 +11,8 @@ Module server.
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 
-#[global] Instance : IsPkgInit server := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf server := build_get_is_pkg_init_wf.
+#[global] Instance : IsPkgInit (iProp Σ) server := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) server := build_get_is_pkg_init_wf.
 
 End proof.
 End server.

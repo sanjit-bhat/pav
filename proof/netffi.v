@@ -5,8 +5,8 @@ Module netffi.
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 
-#[global] Instance : IsPkgInit netffi := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf netffi := build_get_is_pkg_init_wf.
+#[global] Instance : IsPkgInit (iProp Σ) netffi := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) netffi := build_get_is_pkg_init_wf.
 
 End proof.
 End netffi.

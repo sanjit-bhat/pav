@@ -1,4 +1,5 @@
 From New.proof Require Import proof_prelude.
+From New.golang Require Import theory.
 
 Section genie_equiv.
 Context `{hg : heapGS Σ}.

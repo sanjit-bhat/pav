@@ -8,8 +8,8 @@ Module cryptoutil.
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
 
-#[global] Instance : IsPkgInit cryptoutil := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf cryptoutil := build_get_is_pkg_init_wf.
+#[global] Instance : IsPkgInit (iProp Σ) cryptoutil := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) cryptoutil := build_get_is_pkg_init_wf.
 
 Lemma wp_initialize' get_is_pkg_init :
   get_is_pkg_init_prop cryptoutil get_is_pkg_init →
