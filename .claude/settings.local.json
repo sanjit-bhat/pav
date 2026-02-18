@@ -1,14 +1,17 @@
 {
   "permissions": {
+    "allow": [
+      "Skill(find-lemmas)",
+      "Skill(build)"
+    ],
     "additionalDirectories": [
       "~/src/pav",
       "~/src/peren",
       "~/src/iris",
       "~/src/stdpp"
-    ],
-    "allow": [
-      "Skill(find-lemmas)",
-      "Skill(build)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "rocq"
+  ]
 }
