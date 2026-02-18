@@ -21,10 +21,8 @@ for larger pkgs, the proof is broken into multiple files in a `{name}_proof` dir
 
 - if you aren't confident about something, it's perfectly fine to say that.
 there isn't much perennial / iris / rocq code out there to learn from.
-- for read-only ops, heavily prefer using your built-in tools
-(e.g., Read, Grep) to custom bash commands.
-the bash commands have a bad permission model,
-whereas the read-only commands are always allowed.
+- NEVER use Bash for file reading/searching. use Read, Grep, Glob instead.
+these are already allowed and don't require approval.
 
 ## files to read
 
