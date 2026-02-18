@@ -1,8 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Skill(find-lemmas)",
-      "Skill(build)"
+      "mcp__rocq"
     ],
     "additionalDirectories": [
       "~/src/pav",
