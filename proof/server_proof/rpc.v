@@ -22,7 +22,10 @@ Module server.
 Import serde.server server.server.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 (* TODO: make [is_rpc_cli] generic. currently, specialized to server. *)
 Definition is_rpc_cli (c : loc) (good : option cfg.t) : iProp Σ :=

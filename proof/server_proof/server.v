@@ -49,7 +49,10 @@ Record t :=
 End state.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own_aux γ obj q : iProp Σ :=
   "Hown_pend" ∷ dghost_var γ.(cfg.pendγ) (DfracOwn q) obj.(state.pending) ∗
@@ -324,7 +327,10 @@ Record t := mk' {
 }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own γ ptr obj : iProp Σ :=
   ∃ ptr_sig ptr_vrf sl_commit,
@@ -344,7 +350,10 @@ Record t := mk' {
 }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own_plain ptr_plain (plain : keys_ty) q : iProp Σ :=
   ∃ ptr0_plain,
@@ -382,7 +391,10 @@ Record t := mk' {
 }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition is_audits γ digs audits : iProp Σ :=
   ∃ init_dig,
@@ -425,7 +437,10 @@ Record t := mk' {
 }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own γ secs ptr obj : iProp Σ :=
   ∃ sl_pk sl_mapLabel mapLabel sl_mapVal mapVal rand uidγ i,
@@ -453,7 +468,10 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 (* experimenting with diff abstractions to fit the diff use cases. *)
 
@@ -500,7 +518,10 @@ End proof.
 End Server.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 (** fetch-side helper funcs. *)
 

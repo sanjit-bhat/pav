@@ -16,7 +16,10 @@ Module auditor.
 Import base.auditor rpc.auditor serde.auditor.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own_aux γ σ q : iProp Σ :=
   "#Hgs_start_ep" ∷ dghost_var γ.(cfg.sigpredγ).(ktcore.sigpred_cfg.start_ep)
@@ -78,7 +81,10 @@ End proof.
 
 Module serv.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr γ good : iProp Σ :=
   ∃ ptr_cli sl_sigPk sl_vrfPk sl_servVrfSig servVrfSig sl_adtrVrfSig adtrVrfSig,
@@ -109,7 +115,10 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj γ σ q : iProp Σ :=
   ∃ ptr_sk ptr_hist ptr_serv maps,
@@ -168,7 +177,10 @@ End proof.
 End Auditor.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Lemma wp_CheckStartChain sl_servPk servPk ptr_chain chain :
   {{{

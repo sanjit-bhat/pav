@@ -10,7 +10,10 @@ Notation get_bit l n := (bytes_to_bits l !!! n : bool).
 Module merkle.
 Import base.merkle serde.merkle.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 (** tree. *)
 

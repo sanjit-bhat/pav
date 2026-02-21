@@ -8,7 +8,10 @@ From New.proof.github_com.tchajed Require Import marshal.
 
 Module ktcore.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 #[global] Instance : IsPkgInit (iProp Σ) ktcore := define_is_pkg_init True%I.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) ktcore := build_get_is_pkg_init_wf.

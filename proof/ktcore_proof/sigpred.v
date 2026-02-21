@@ -23,7 +23,10 @@ Record t :=
 End sigpred_cfg.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition sigpred_vrf γ (vrfPk : list w8) : iProp Σ :=
   "#Hshot" ∷ dghost_var γ.(sigpred_cfg.vrf) (□) vrfPk.

@@ -21,7 +21,10 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_VrfPk0 sl_Sig0 sl_VrfPk1 sl_Sig1,
@@ -46,7 +49,10 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_Link0 sl_Sig0 sl_Link1 sl_Sig1,
@@ -68,7 +74,10 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ ptr_Vrf ptr_Link,
@@ -89,7 +98,10 @@ End proof.
 End Evid.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition wish_EvidVrf e pk : iProp Σ :=
   "#Hwish0" ∷ wish_VrfSig pk e.(EvidVrf.VrfPk0) e.(EvidVrf.Sig0) ∗

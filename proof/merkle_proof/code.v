@@ -12,7 +12,10 @@ From New.proof.github_com.sanjit_bhat.pav.merkle_proof Require Import base serde
 Module merkle.
 Import base.merkle serde.merkle theory.merkle.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 (** tree predicates. *)
 

@@ -37,7 +37,10 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj ep γ : iProp Σ :=
   ∃ sl_link sl_servSig servSig sl_adtrSig adtrSig,
@@ -59,7 +62,10 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj γ σ q : iProp Σ :=
   ∃ sl_lastDig lastDig sl_epochs sl0_epochs,
@@ -119,7 +125,10 @@ End proof.
 End history.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition wish_getNextLink sig_pk hist σ proof (ep : w64) dig link : iProp Σ :=
   ∃ prevDig,

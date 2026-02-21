@@ -11,7 +11,10 @@ Module ktcore.
 Import key_map.ktcore serde.ktcore sigpred.ktcore.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition wish_VrfSig sig_pk vrf_pk sig : iProp Σ :=
   let obj := VrfSig.mk' (W8 VrfSigTag) vrf_pk in

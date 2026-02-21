@@ -6,7 +6,10 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
 
 Module advrpc.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : advrpc.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 #[global] Instance : IsPkgInit (iProp Σ) advrpc := define_is_pkg_init True%I.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) advrpc := build_get_is_pkg_init_wf.

@@ -40,7 +40,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_PrevLink sl_ChainProof sl_LinkSig,
@@ -116,7 +119,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_VrfPk sl_VrfSig,
@@ -191,7 +197,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ ptr_Chain ptr_Vrf,
@@ -267,7 +276,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_Pk,
@@ -338,7 +350,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   "Hstruct" ∷ ptr ↦{d} (server.HistoryArg.mk obj.(Uid) obj.(PrevEpoch) obj.(PrevVerLen)).
@@ -417,7 +432,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_ChainProof sl_LinkSig ptr_Hist ptr_Bound,
@@ -487,7 +505,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   "Hstruct" ∷ ptr ↦{d} (server.AuditArg.mk obj.(PrevEpoch)).
@@ -557,7 +578,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
   ∃ ptr_P,
