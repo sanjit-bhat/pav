@@ -70,7 +70,7 @@ Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
-Set Default Proof Using "W".
+#[local] Set Default Proof Using "W".
 
 Lemma rw_Blame0 err :
   blame_to_u64 err = W64 0 ↔ err = ∅.
