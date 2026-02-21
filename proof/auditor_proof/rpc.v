@@ -60,7 +60,6 @@ Record t :=
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition own ptr obj γ σ q : iProp Σ :=
   ∃ sl_lastDig lastDig sl_epochs sl0_epochs,
@@ -121,7 +120,6 @@ End history.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition wish_getNextLink sig_pk hist σ proof (ep : w64) dig link : iProp Σ :=
   ∃ prevDig,

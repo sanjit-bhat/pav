@@ -88,7 +88,6 @@ Definition keys_sub : relation keys_ty := map_included (λ _, prefix).
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 (** backward computation from hidden to plain.
 must always succeed for invert capability. *)

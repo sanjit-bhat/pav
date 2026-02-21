@@ -90,7 +90,6 @@ End Evid.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition wish_EvidVrf e pk : iProp Σ :=
   "#Hwish0" ∷ wish_VrfSig pk e.(EvidVrf.VrfPk0) e.(EvidVrf.Sig0) ∗

@@ -23,7 +23,6 @@ Record t :=
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition uid_inv γ : iProp Σ :=
   ∃ puts,
@@ -77,7 +76,6 @@ Record t :=
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition own ptr obj : iProp Σ :=
   ∃ ptr_cli sl_sigPk ptr_vrfPk sl_vrfSig,
@@ -113,7 +111,6 @@ Record t :=
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition own ptr obj : iProp Σ :=
   ∃ ptr_pend ptr_last ptr_serv,
@@ -133,7 +130,6 @@ End Client.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Lemma wp_getNextEp ptr_prev prev info sl_sigPk sigPk sl_chainProof chainProof sl_sig sig :
   {{{

@@ -24,10 +24,9 @@ End sigpred_cfg.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition sigpred_vrf γ (vrfPk : list w8) : iProp Σ :=
-  "#Hshot" ∷ ghost_var γ.(sigpred_cfg.vrf) (□) vrfPk.
+  "#Hshot" ∷ dghost_var γ.(sigpred_cfg.vrf) (□) vrfPk.
 
 Definition sigpred_vrf_aux γ enc : iProp Σ :=
   ∃ vrfPk,
@@ -55,7 +54,7 @@ Definition sigpred_links γ (ep : w64) link : iProp Σ :=
   (* [links] are all audited. they start from [start_ep]. *)
   ∃ start_ep links digs cut maps,
   (* externalize start_ep so that users agree on the epochs associated with links. *)
-  "#Hshot" ∷ ghost_var γ.(sigpred_cfg.start_ep) (□) start_ep ∗
+  "#Hshot" ∷ dghost_var γ.(sigpred_cfg.start_ep) (□) start_ep ∗
   "#Hlb" ∷ mono_list_lb_own γ.(sigpred_cfg.links) links ∗
   "%Hlook" ∷ ⌜links !! (uint.nat ep - uint.nat start_ep)%nat = Some link⌝ ∗
   "#Hinv" ∷ sigpred_links_inv start_ep links digs cut maps.

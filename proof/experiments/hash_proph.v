@@ -5,7 +5,6 @@ Notation hash_len := 32 (only parsing).
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context `{!ghost_varG Σ (list (list w8))}.
 
 (* [hash_fun] is the hash function itself: [hash_fun v] is the hash of [v].
  *)

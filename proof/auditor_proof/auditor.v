@@ -17,10 +17,9 @@ Import base.auditor rpc.auditor serde.auditor.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition own_aux γ σ q : iProp Σ :=
-  "#Hgs_start_ep" ∷ ghost_var γ.(cfg.sigpredγ).(ktcore.sigpred_cfg.start_ep)
+  "#Hgs_start_ep" ∷ dghost_var γ.(cfg.sigpredγ).(ktcore.sigpred_cfg.start_ep)
     (□) σ.(state.start_ep) ∗
   (* 1/2 in lock inv, 1/2 in GS inv. *)
   "Hgs_links" ∷ mono_list_auth_own γ.(cfg.sigpredγ).(ktcore.sigpred_cfg.links)
@@ -80,7 +79,6 @@ End proof.
 Module serv.
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition own ptr γ good : iProp Σ :=
   ∃ ptr_cli sl_sigPk sl_vrfPk sl_servVrfSig servVrfSig sl_adtrVrfSig adtrVrfSig,
@@ -112,7 +110,6 @@ Record t :=
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition own ptr obj γ σ q : iProp Σ :=
   ∃ ptr_sk ptr_hist ptr_serv maps,
@@ -172,7 +169,6 @@ End Auditor.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Lemma wp_CheckStartChain sl_servPk servPk ptr_chain chain :
   {{{
@@ -864,9 +860,9 @@ Proof.
   iNamed "Hgenie".
 
   wp_apply wp_alloc as "* Hmu".
-  iMod (ghost_var_alloc vrf.(server.StartVrf.VrfPk)) as (vrfγ) "Hshot_vrf".
+  iMod (dghost_var_alloc vrf.(server.StartVrf.VrfPk)) as (vrfγ) "Hshot_vrf".
   iPersist "Hshot_vrf".
-  iMod (ghost_var_alloc ep) as (start_epγ) "Hshot_start_ep".
+  iMod (dghost_var_alloc ep) as (start_epγ) "Hshot_start_ep".
   iPersist "Hshot_start_ep".
   iMod (mono_list_own_alloc [link]) as (linksγ) "[Hauth_links #Hlb_links]".
   wp_apply (cryptoffi.wp_SigGenerateKey

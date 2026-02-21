@@ -40,7 +40,6 @@ Record t :=
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 Definition own ptr obj serv : iProp Σ :=
   ∃ sl_dig sl_link sl_sig,
@@ -67,7 +66,6 @@ End epoch.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
-Context `{!pavG Σ}.
 
 (* TODO: might be able to hide [newDigs]. *)
 Definition wish_getNextEp prev sigPk chainProof sig newDigs next : iProp Σ :=
