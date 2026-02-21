@@ -8,7 +8,7 @@ Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
 Collection W := sem + package_sem.
-Set Default Proof Using "W".
+#[local] Set Default Proof Using "W".
 
 #[global] Instance : IsPkgInit (iProp Σ) safemarshal := define_is_pkg_init True%I.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) safemarshal := build_get_is_pkg_init_wf.
@@ -47,7 +47,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Lemma wp_enc obj sl_b b :
   {{{
@@ -101,7 +104,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Lemma wp_enc obj sl_b b :
   {{{
@@ -155,7 +161,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Lemma wp_enc obj sl_b b :
   {{{
@@ -198,7 +207,7 @@ Module Slice1D.
 Definition t := list w8.
 
 Definition pure_enc obj :=
-  w64.pure_enc (length obj) ++ obj.
+  w64.pure_enc (W64 $ length obj) ++ obj.
 
 Definition valid (obj : t) :=
   sint.Z (W64 (length obj)) = length obj.
@@ -214,7 +223,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _, !globalsGS Σ} {go_ctx : GoContext}.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
