@@ -391,14 +391,22 @@ Local Lemma get_contig_out_lookup {m fuel pks} ver pk :
   pks !! ver = Some pk →
   m !! ver = Some pk.
 Proof.
-  remember 0%nat as ver'.
-  assert (ver ≥ ver'); [lia|].
-  clear Heqver'.
-  generalize dependent ver'. revert pks ver.
-  induction fuel; simpl; intros ???? Hfn Hlook_pks.
-  { admit. }
+  intros Hfn Hlook_pks.
+  remember 0%nat as scan_ver.
+  assert (ver ≥ scan_ver); [lia|].
+  replace ver with (ver - scan_ver)%nat in Hlook_pks by lia.
+  clear Heqscan_ver.
+  generalize dependent scan_ver. revert pks ver.
+  induction fuel; simpl; intros ??? Hfn Hlook_pks ?.
+  { list_simplifier. }
   case_match; subst; [|list_simplifier].
-Admitted.
+  destruct (decide (ver = scan_ver)).
+  { replace (_ - _)%nat with 0%nat in Hlook_pks by lia.
+    by simplify_eq/=. }
+  rewrite lookup_cons_ne_0 in Hlook_pks; [|lia].
+  replace (pred _) with (ver - S scan_ver)%nat in Hlook_pks by lia.
+  eapply IHfuel; [done..|]. lia.
+Qed.
 
 Local Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
   plain_inv_fn vrf_pk hidden = plain →
