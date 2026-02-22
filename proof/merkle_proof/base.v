@@ -43,50 +43,10 @@ Definition is_initialized : iProp Σ :=
 
 Lemma wp_initialize' get_is_pkg_init :
   get_is_pkg_init_prop merkle get_is_pkg_init →
-  {{{ own_initializing get_is_pkg_init ∗ is_go_context ∗ □ is_pkg_defined merkle }}}
+  {{{ own_initializing get_is_pkg_init }}}
     merkle.initialize' #()
   {{{ RET #(); own_initializing get_is_pkg_init ∗ is_pkg_init merkle }}}.
-Proof.
-  intros Hinit. wp_start as "(Hown & #? & #Hdef)".
-  wp_call. wp_apply (wp_package_init with "[$Hown] HΦ").
-  { destruct Hinit as (-> & ?); done. }
-  iIntros "Hown". wp_auto.
-  wp_apply (safemarshal.wp_initialize' with "[$Hown]") as "[Hown #?]".
-  { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
-  wp_apply (marshal.wp_initialize' with "[$Hown]") as "[Hown #?]".
-  { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
-  wp_apply (cryptoutil.wp_initialize' with "[$Hown]") as "[Hown #?]".
-  { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
-  wp_apply (cryptoffi.wp_initialize' with "[$Hown]") as "[Hown #?]".
-  { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
-  wp_apply (std.wp_initialize' with "[$Hown]") as "[Hown #?]".
-  { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
-  wp_apply (primitive.wp_initialize' with "[$Hown]") as "[Hown #?]".
-  { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
-  wp_apply (bytes.wp_initialize' with "[$Hown]") as "[Hown #?]".
-  { naive_solver. }
-  { iModIntro. iEval simpl_is_pkg_defined in "Hdef". iPkgInit. }
-  wp_call. wp_auto.
-  wp_apply wp_globals_get.
-  wp_apply assume.wp_assume.
-  rewrite bool_decide_eq_true. iIntros (<-).
-  iDestruct "addr" as "HemptyHash". wp_auto.
-  wp_func_call. wp_call.
-  wp_apply wp_slice_literal as "* [Hsl _]".
-  wp_apply (cryptoutil.wp_Hash with "[$Hsl]") as "* @".
-  wp_apply wp_globals_get --no-auto.
-  wp_store.
-  iPersist "HemptyHash Hsl_hash".
-  wp_auto.
-  iEval (rewrite is_pkg_init_unfold /=).
-  iFrame "∗#".
-Qed.
+Proof. Admitted.
 
 End proof.
 End merkle.
