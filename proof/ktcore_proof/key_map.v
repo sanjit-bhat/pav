@@ -386,12 +386,32 @@ Admitted.
 
 (* move vals thru plain_inv_fn (in both directions). *)
 
+Local Lemma get_contig_out_lookup {m fuel pks} ver pk :
+  get_contig m 0%nat fuel = pks →
+  pks !! ver = Some pk →
+  m !! ver = Some pk.
+Proof.
+  remember 0%nat as ver'.
+  assert (ver ≥ ver'); [lia|].
+  clear Heqver'.
+  generalize dependent ver'. revert pks ver.
+  induction fuel; simpl; intros ???? Hfn Hlook_pks.
+  { admit. }
+  case_match; subst; [|list_simplifier].
+Admitted.
+
 Local Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
   pks !! ver = Some pk →
   in_hidden vrf_pk hidden uid ver pk.
-Proof. Admitted.
+Proof.
+  rewrite /plain_inv_fn. intros Hfn Hlook_plain Hlook_pks.
+  rewrite /filter_contig in Hfn.
+  apply (f_equal (lookup uid)) in Hfn.
+  rewrite {}Hlook_plain in Hfn. clear plain.
+  apply lookup_fmap_Some in Hfn as (?&?&Hfn).
+Admitted.
 
 (* helpers for inv_fn_on_pks. up for change. *)
 Local Definition pks_in_m_uid (m : gmap nat (list w8)) pks :=
