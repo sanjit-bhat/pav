@@ -394,6 +394,7 @@ Proof.
   intros Hfn Hlook_pks.
   remember 0%nat as scan_ver.
   assert (ver ≥ scan_ver); [lia|].
+  (* lookup idx in pks "decreases" with each scan_ver. *)
   replace ver with (ver - scan_ver)%nat in Hlook_pks by lia.
   clear Heqscan_ver.
   generalize dependent scan_ver. revert pks ver.
@@ -405,7 +406,7 @@ Proof.
     by simplify_eq/=. }
   rewrite lookup_cons_ne_0 in Hlook_pks; [|lia].
   replace (pred _) with (ver - S scan_ver)%nat in Hlook_pks by lia.
-  eapply IHfuel; [done..|]. lia.
+  eapply IHfuel; [done..|lia].
 Qed.
 
 Local Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
@@ -418,8 +419,23 @@ Proof.
   rewrite /filter_contig in Hfn.
   apply (f_equal (lookup uid)) in Hfn.
   rewrite {}Hlook_plain in Hfn. clear plain.
-  apply lookup_fmap_Some in Hfn as (?&?&Hfn).
-Admitted.
+  apply lookup_fmap_Some in Hfn as (m_uid&?&Hfn).
+  opose proof (get_contig_out_lookup _ _ _ _) as  Hlook_uid; [done..|].
+  rename Hfn into Hfn'.
+  opose proof (lookup_map_curry _ uid ver) as Hfn.
+  setoid_rewrite Hfn' in Hfn. simpl in *.
+  rewrite Hlook_uid in Hfn. symmetry in Hfn. clear Hfn'.
+  rewrite /dec_map_vals in Hfn.
+  apply lookup_omap_Some in Hfn as (?&?&Hfn).
+  rewrite /dec_map_labels in Hfn.
+  apply elem_of_list_to_map_2 in Hfn.
+  rewrite /dec_map_labels_aux in Hfn.
+  apply list_elem_of_omap in Hfn as ([??]&Hfn&Hlabel).
+  simplify_option_eq.
+  apply elem_of_map_to_list in Hfn.
+  rewrite /in_hidden.
+  naive_solver.
+Qed.
 
 (* helpers for inv_fn_on_pks. up for change. *)
 Local Definition pks_in_m_uid (m : gmap nat (list w8)) pks :=
