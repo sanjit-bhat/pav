@@ -413,7 +413,7 @@ Module MembSlice1D.
 Definition t := list Memb.t.
 
 Definition pure_enc obj :=
-  safemarshal.w64.pure_enc (length obj) ++ mjoin (Memb.pure_enc <$> obj).
+  safemarshal.w64.pure_enc (W64 $ length obj) ++ mjoin (Memb.pure_enc <$> obj).
 
 Definition valid (obj : t) :=
   sint.Z (W64 (length obj)) = length obj ∧
@@ -645,7 +645,7 @@ Module UpdateProofSlice1D.
 Definition t := list UpdateProof.t.
 
 Definition pure_enc obj :=
-  safemarshal.w64.pure_enc (length obj) ++ mjoin (UpdateProof.pure_enc <$> obj).
+  safemarshal.w64.pure_enc (W64 $ length obj) ++ mjoin (UpdateProof.pure_enc <$> obj).
 
 Definition valid (obj : t) :=
   sint.Z (W64 (length obj)) = length obj ∧
@@ -795,7 +795,7 @@ Module AuditProofSlice1D.
 Definition t := list AuditProof.t.
 
 Definition pure_enc obj :=
-  safemarshal.w64.pure_enc (length obj) ++ mjoin (AuditProof.pure_enc <$> obj).
+  safemarshal.w64.pure_enc (W64 $ length obj) ++ mjoin (AuditProof.pure_enc <$> obj).
 
 Definition valid (obj : t) :=
   sint.Z (W64 (length obj)) = length obj ∧
