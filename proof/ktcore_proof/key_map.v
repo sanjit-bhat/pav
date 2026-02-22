@@ -430,14 +430,34 @@ Proof.
   rewrite /dec_map_labels in Hfn.
   apply elem_of_list_to_map_2 in Hfn.
   rewrite /dec_map_labels_aux in Hfn.
-  apply list_elem_of_omap in Hfn as ([??]&Hfn&Hlabel).
+  apply list_elem_of_omap in Hfn as ([??]&Hfn&?).
   simplify_option_eq.
   apply elem_of_map_to_list in Hfn.
   rewrite /in_hidden.
   naive_solver.
 Qed.
 
-(* helpers for inv_fn_on_pks. up for change. *)
+(* helpers for inv_fn_in_lookup. *)
+Local Lemma to_contig_in_lookup {vrf_pk m0 m1} uid ver pk :
+  map_curry (M1:=gmap _) (M2:=gmap _) $ dec_map_vals $ dec_map_labels vrf_pk m0 = m1 →
+  in_hidden vrf_pk m0 uid ver pk →
+  m1 !! uid ≫= lookup ver = Some pk.
+Proof.
+  rewrite /in_hidden. intros <- (?&?&?&?&Hfn).
+  rewrite lookup_map_curry.
+  rewrite /dec_map_vals.
+  rewrite lookup_omap_Some.
+  eexists. split; try done.
+  rewrite /dec_map_labels.
+  apply elem_of_list_to_map_1.
+  { apply dec_map_labels_NoDup. }
+  rewrite /dec_map_labels_aux.
+  rewrite list_elem_of_omap.
+  eexists (_, _). split.
+  2: { by simplify_option_eq. }
+  by rewrite elem_of_map_to_list.
+Qed.
+
 Local Definition pks_in_m_uid (m : gmap nat (list w8)) pks :=
   ∀ (ver : nat) pk, pks !! ver = Some pk → m !! ver = Some pk ∧
   m !! (length pks) = None.
@@ -453,7 +473,7 @@ Local Lemma filter_contig_on_pks m m_uid uid pks :
   filter_contig m !! uid = Some pks.
 Proof. Admitted.
 
-Local Lemma inv_fn_on_pks_aux {vrf_pk plain hidden} uid pks0 :
+Local Lemma inv_fn_in_lookup {vrf_pk plain hidden} uid pks0 :
   plain_inv_fn vrf_pk hidden = plain →
   length pks0 ≠ 0%nat →
   (∀ ver pk,
@@ -471,7 +491,7 @@ Local Lemma inv_fn_on_pks {vrf_pk plain0 plain1 hidden} uid pks :
 Proof.
   intros Hbij ? Hlook0.
   rename pks into pks0.
-  opose proof (inv_fn_on_pks_aux uid pks0 _ _) as (?&?&Hpref); [done|..].
+  opose proof (inv_fn_in_lookup uid pks0 _ _) as (?&?&Hpref); [done|..].
   { intros. odestruct (proj1 Hbij _ _ _) as []; [done|]. naive_solver. }
   { intros. odestruct (proj1 Hbij _ _ _) as []; [done|]. naive_solver. }
   destruct (plain1 !! uid) as [pks1|] eqn:Hlook1; try done.
@@ -488,7 +508,7 @@ Proof.
   lia.
 Qed.
 
-Local Lemma inv_fn_non_empty_pks {vrf_pk plain hidden uid pks} :
+Local Lemma inv_fn_non_empty_pks {vrf_pk plain hidden} uid pks :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
   length pks ≠ 0%nat.
@@ -504,7 +524,7 @@ Proof.
   destruct (plain0 !! uid) as [pks0|] eqn:Hlook0.
   { by erewrite inv_fn_on_pks. }
   destruct (plain1 !! uid) as [[]|] eqn:Hlook1; try done; exfalso.
-  { by opose proof (inv_fn_non_empty_pks _ _) as ?. }
+  { by opose proof (inv_fn_non_empty_pks _ _ _ _) as ?. }
   opose proof (inv_fn_out_lookup 0 _ _ _ _) as (?&?&?); [done..|].
   destruct_and!.
   odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&?); [done|].
