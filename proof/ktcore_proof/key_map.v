@@ -92,7 +92,7 @@ Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-(** backward computation from hidden to plain.
+(** inverse computation from hidden to plain.
 must always succeed for invert capability. *)
 
 Local Definition map_label_inv_fn vrf_pk map_label :=
@@ -337,8 +337,8 @@ Proof.
   by apply dec_map_labels_mono.
 Qed.
 
-(** "correctness". this requires a bijection between plain and hidden,
-modulo plain maps with empty pk lists. *)
+(** "correctness". this requires a bijection (modulo empty uid's)
+between plain and hidden. *)
 
 Local Lemma map_label_fn_has_inv vrf_pk uid ver map_label :
   map_label_fn vrf_pk uid ver map_label →
@@ -384,15 +384,16 @@ Proof.
      all involve take/drop of (u64_le _ ++ kt_pk) ++ (u64_le _ ++ rand). *)
 Admitted.
 
-(* move vals thru backwards (in both directions). *)
+(* move vals thru plain_inv_fn (in both directions). *)
 
-Local Lemma backward_lookup {vrf_pk plain hidden uid pks} ver pk :
+Local Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
   pks !! ver = Some pk →
   in_hidden vrf_pk hidden uid ver pk.
 Proof. Admitted.
 
+(* helpers for inv_fn_on_pks. up for change. *)
 Local Definition pks_in_m_uid (m : gmap nat (list w8)) pks :=
   ∀ (ver : nat) pk, pks !! ver = Some pk → m !! ver = Some pk ∧
   m !! (length pks) = None.
@@ -408,7 +409,7 @@ Local Lemma filter_contig_on_pks m m_uid uid pks :
   filter_contig m !! uid = Some pks.
 Proof. Admitted.
 
-Local Lemma backward_on_pks {vrf_pk plain hidden} uid pks0 :
+Local Lemma inv_fn_on_pks_aux {vrf_pk plain hidden} uid pks0 :
   plain_inv_fn vrf_pk hidden = plain →
   length pks0 ≠ 0%nat →
   (∀ ver pk,
@@ -418,7 +419,32 @@ Local Lemma backward_on_pks {vrf_pk plain hidden} uid pks0 :
     plain !! uid = Some pks1 ∧ pks0 `prefix_of` pks1.
 Proof. Admitted.
 
-Local Lemma backward_non_empty_pks {vrf_pk plain hidden uid pks} :
+Local Lemma inv_fn_on_pks {vrf_pk plain0 plain1 hidden} uid pks :
+  is_plain vrf_pk plain0 hidden →
+  plain_inv_fn vrf_pk hidden = plain1 →
+  plain0 !! uid = Some pks →
+  plain1 !! uid = Some pks.
+Proof.
+  intros Hbij ? Hlook0.
+  rename pks into pks0.
+  opose proof (inv_fn_on_pks_aux uid pks0 _ _) as (?&?&Hpref); [done|..].
+  { intros. odestruct (proj1 Hbij _ _ _) as []; [done|]. naive_solver. }
+  { intros. odestruct (proj1 Hbij _ _ _) as []; [done|]. naive_solver. }
+  destruct (plain1 !! uid) as [pks1|] eqn:Hlook1; try done.
+  simplify_eq/=.
+  destruct Hpref as ([]&->).
+  { by list_simplifier. }
+  exfalso.
+  opose proof (inv_fn_out_lookup (length pks0) _ _ _ _) as (?&?&?); [done|done|..].
+  { by apply list_lookup_middle. }
+  destruct_and!.
+  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks0); [done|].
+  simplify_eq/=.
+  apply lookup_lt_Some in Hlook_pks0.
+  lia.
+Qed.
+
+Local Lemma inv_fn_non_empty_pks {vrf_pk plain hidden uid pks} :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
   length pks ≠ 0%nat.
@@ -432,29 +458,13 @@ Proof.
   remember (plain_inv_fn _ _) as plain1.
   symmetry. apply map_eq. intros uid.
   destruct (plain0 !! uid) as [pks0|] eqn:Hlook0.
-  2: {
-    destruct (plain1 !! uid) as [[]|] eqn:Hlook1; try done; exfalso.
-    { by opose proof (backward_non_empty_pks _ _) as ?. }
-    opose proof (backward_lookup 0 _ _ _ _) as (?&?&?); [done..|].
-    destruct_and!.
-    odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&?); [done|].
-    simplify_eq/=. }
-
-  opose proof (backward_on_pks uid pks0 _ _) as (?&?&Hpref); [done|..].
-  { intros. odestruct (proj1 Hbij _ _ _) as []; [done|]. naive_solver. }
-  { intros. odestruct (proj1 Hbij _ _ _) as []; [done|]. naive_solver. }
-  destruct (plain1 !! uid) as [pks1|] eqn:Hlook1; try done.
-  simplify_eq/=.
-  destruct Hpref as ([]&->).
-  { by list_simplifier. }
-  exfalso.
-  opose proof (backward_lookup (length pks0) _ _ _ _) as (?&?&?); [done|done|..].
-  { by apply list_lookup_middle. }
+  { by erewrite inv_fn_on_pks. }
+  destruct (plain1 !! uid) as [[]|] eqn:Hlook1; try done; exfalso.
+  { by opose proof (inv_fn_non_empty_pks _ _) as ?. }
+  opose proof (inv_fn_out_lookup 0 _ _ _ _) as (?&?&?); [done..|].
   destruct_and!.
-  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks0); [done|].
+  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&?); [done|].
   simplify_eq/=.
-  apply lookup_lt_Some in Hlook_pks0.
-  lia.
 Qed.
 
 (* used in server update. *)
