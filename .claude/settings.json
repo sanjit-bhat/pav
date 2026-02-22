@@ -1,6 +1,12 @@
 {
   "permissions": {
     "allow": [
+      "Edit(./**)",
+      "Write(./**)",
+      "Edit(//tmp/**)",
+      "Write(//tmp/**)",
+      "Read(//tmp/**)",
+      "Bash(git *)",
       "mcp__rocq"
     ],
     "additionalDirectories": [

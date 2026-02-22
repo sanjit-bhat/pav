@@ -17,13 +17,6 @@ which is built on the rocq theorem prover.
 - inside `proof/`, there's a file for every go pkg.
 for larger pkgs, the proof is broken into multiple files in a `{name}_proof` dir.
 
-## rules
-
-- if you aren't confident about something, it's perfectly fine to say that.
-there isn't much perennial / iris / rocq code out there to learn from.
-- NEVER use Bash for file reading/searching. use Read, Grep, Glob instead.
-these are already allowed and don't require approval.
-
 ## files to read
 
 - the relevant pav go code for the component you're working on.
@@ -36,3 +29,18 @@ are a good reference for predicate structure.
 - `rpc.go` (RPC stubs)
 - `serde/` (serde compiler)
 - `*.out.go`, `serde.v` (generated serde code)
+
+## rules
+
+- if you aren't confident about something, it's perfectly fine to say that.
+there isn't much perennial / iris / rocq code out there to learn from.
+- NEVER chain shell commands with && or ; or |.
+  run each command as its own separate Bash call.
+  this ensures each call matches an allowed permission pattern (e.g. `git *`).
+- NEVER use Bash for file reading/searching. use Read, Grep, Glob instead.
+these are already allowed and don't require approval.
+- commit checkpoints. write concise, descriptive commits.
+- write commit messages to a fresh random file in `/tmp`,
+  then run `git commit -F {file_path}`.
+  this avoids multi-line shell quoting issues with the `Bash(git *)` permission pattern.
+- test often to make sure you're on the right track.
