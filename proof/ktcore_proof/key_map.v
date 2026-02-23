@@ -485,6 +485,16 @@ Proof.
   by replace (pred _) with (ver - S scan_ver)%nat by lia.
 Qed.
 
+Local Lemma size_approx (m : gmap _ (list w8)) pks :
+  map_seq 0 pks ⊆ m →
+  (length pks ≤ size m)%nat.
+Proof.
+  intros Hpks%subseteq_dom.
+  rewrite dom_seq in Hpks.
+  apply subseteq_size in Hpks.
+  by rewrite size_set_seq -map_size_dom in Hpks.
+Qed.
+
 Local Lemma inv_fn_in_lookup {vrf_pk plain hidden} uid pks0 :
   plain_inv_fn vrf_pk hidden = plain →
   length pks0 ≠ 0%nat →
