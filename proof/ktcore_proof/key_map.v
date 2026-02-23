@@ -441,7 +441,7 @@ Qed.
 Local Lemma to_contig_in_lookup {vrf_pk m0 m1} uid ver pk :
   map_curry (M1:=gmap _) (M2:=gmap _) $ dec_map_vals $ dec_map_labels vrf_pk m0 = m1 →
   in_hidden vrf_pk m0 uid ver pk →
-  m1 !! uid ≫= lookup ver = Some pk.
+  m1 !! uid ≫= (!!) ver = Some pk.
 Proof.
   rewrite /in_hidden. intros <- (?&?&?&?&Hfn).
   rewrite lookup_map_curry.
@@ -458,20 +458,32 @@ Proof.
   by rewrite elem_of_map_to_list.
 Qed.
 
-Local Definition pks_in_m_uid (m : gmap nat (list w8)) pks :=
-  ∀ (ver : nat) pk, pks !! ver = Some pk → m !! ver = Some pk ∧
-  m !! (length pks) = None.
-
-Local Lemma get_contig_on_pks m pks :
-  pks_in_m_uid m pks →
-  get_contig m 0%nat (size m) = pks.
-Proof. Admitted.
-
-Local Lemma filter_contig_on_pks m m_uid uid pks :
-  m !! uid = Some m_uid →
-  pks_in_m_uid m_uid pks →
-  filter_contig m !! uid = Some pks.
-Proof. Admitted.
+Local Lemma get_contig_in_lookup m pks :
+  (∀ ver pk, pks !! ver = Some pk → m !! ver = Some pk) →
+  get_contig m 0%nat (length pks) = pks.
+Proof.
+  intros Hpks.
+  remember 0%nat as scan_ver.
+  assert (∀ ver pk,
+    ver ≥ scan_ver →
+    pks !! (ver - scan_ver)%nat = Some pk →
+    m !! ver = Some pk).
+  { intros *? Hlook_pks.
+    replace (_ - _)%nat with ver in Hlook_pks by lia.
+    naive_solver. }
+  clear Hpks Heqscan_ver.
+  generalize dependent scan_ver.
+  induction pks; simpl; intros * Hpks; try done.
+  opose proof (Hpks scan_ver _ _ _) as ?; [lia|..].
+  { by replace (_ - _)%nat with 0%nat by lia. }
+  case_match; try done.
+  simplify_eq/=. f_equal.
+  eapply IHpks.
+  intros *? Hlook_pks.
+  apply Hpks; [lia|].
+  setoid_rewrite lookup_cons_ne_0; [|lia].
+  by replace (pred _) with (ver - S scan_ver)%nat by lia.
+Qed.
 
 Local Lemma inv_fn_in_lookup {vrf_pk plain hidden} uid pks0 :
   plain_inv_fn vrf_pk hidden = plain →
