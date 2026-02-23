@@ -459,30 +459,23 @@ Proof.
 Qed.
 
 Local Lemma get_contig_in_lookup m pks :
-  (∀ ver pk, pks !! ver = Some pk → m !! ver = Some pk) →
+  map_seq 0 pks ⊆ m →
   get_contig m 0%nat (length pks) = pks.
 Proof.
-  intros Hpks.
   remember 0%nat as scan_ver.
-  assert (∀ ver pk,
-    ver ≥ scan_ver →
-    pks !! (ver - scan_ver)%nat = Some pk →
-    m !! ver = Some pk).
-  { intros *? Hlook_pks.
-    replace (_ - _)%nat with ver in Hlook_pks by lia.
-    naive_solver. }
-  clear Hpks Heqscan_ver.
-  generalize dependent scan_ver.
+  clear Heqscan_ver.
+  revert scan_ver.
   induction pks; simpl; intros * Hpks; try done.
-  opose proof (Hpks scan_ver _ _ _) as ?; [lia|..].
-  { by replace (_ - _)%nat with 0%nat by lia. }
+  eapply lookup_weaken in Hpks as ?.
+  2: { by erewrite lookup_insert_eq. }
   case_match; try done.
   simplify_eq/=. f_equal.
-  eapply IHpks.
-  intros *? Hlook_pks.
-  apply Hpks; [lia|].
-  setoid_rewrite lookup_cons_ne_0; [|lia].
-  by replace (pred _) with (ver - S scan_ver)%nat by lia.
+  apply IHpks.
+  rewrite insert_union_singleton_l in Hpks.
+  etrans; [|done].
+  apply map_union_subseteq_r.
+  apply map_disjoint_singleton_l.
+  apply map_seq_cons_disjoint.
 Qed.
 
 Local Lemma size_approx (m : gmap _ (list w8)) pks :
