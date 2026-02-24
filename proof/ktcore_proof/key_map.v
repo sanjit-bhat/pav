@@ -540,27 +540,30 @@ Proof.
     naive_solver. }
   eexists. split; [|done].
 
-  assert (map_seq 0 pks ⊆ m).
-  { (* transfer pks from plain. *)
-    admit. }
+  opose proof (get_contig_in_lookup m pks _) as ([]&?).
+  2: { by list_simplifier. }
+  2: {
+    (* contradict versions bigger than pks.
+    move them back into plain. *)
+    exfalso.
+    opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?); [done|..].
+    { apply lookup_fmap_Some. naive_solver. }
+    { by apply list_lookup_middle. }
+    destruct_and!.
+    odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks); [done|].
+    simplify_eq/=.
+    apply lookup_lt_Some in Hlook_pks.
+    lia. }
 
-  opose proof (get_contig_add_fuel m 0 _ _ _) as Hpref.
-  { by apply size_approx. }
-  rewrite get_contig_in_lookup in Hpref; [|done].
-  destruct Hpref as ([]&?).
-  { by list_simplifier. }
-
-  (* contradict versions bigger than pks. *)
-  exfalso.
-  opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?); [done|..].
-  { apply lookup_fmap_Some. naive_solver. }
-  { by apply list_lookup_middle. }
-  destruct_and!.
-  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks); [done|].
-  simplify_eq/=.
-  apply lookup_lt_Some in Hlook_pks.
-  lia.
-Admitted.
+  (* transfer pks from plain. *)
+  apply map_seq_subseteq.
+  intros ver pk Hlook_pks.
+  replace (_ + _)%nat with ver by lia.
+  opose proof (to_contig_in_lookup _ _ _ _ _); [done|..].
+  2: { by simplify_option_eq. }
+  odestruct (proj1 Hbij _ _ _) as (?&Hpks); [done|].
+  by apply Hpks.
+Qed.
 
 Local Lemma inv_fn_non_empty_pks {vrf_pk plain hidden} uid pks :
   plain_inv_fn vrf_pk hidden = plain →
