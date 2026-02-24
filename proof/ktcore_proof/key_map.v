@@ -543,8 +543,7 @@ Proof.
   opose proof (get_contig_in_lookup m pks _) as ([]&?).
   2: { by list_simplifier. }
   2: {
-    (* contradict versions bigger than pks.
-    move them back into plain. *)
+    (* contradict versions bigger than pks. move them back into plain. *)
     exfalso.
     opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?); [done|..].
     { apply lookup_fmap_Some. naive_solver. }
@@ -565,6 +564,10 @@ Proof.
   by apply Hpks.
 Qed.
 
+(* BUG: not provable.
+if hidden (1) does not have ver 0 and (2) has ver 5,
+plain !! uid = Some [].
+FIX: add step after get_contig that filters for [] lists. *)
 Local Lemma inv_fn_non_empty_pks {vrf_pk plain hidden} uid pks :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
