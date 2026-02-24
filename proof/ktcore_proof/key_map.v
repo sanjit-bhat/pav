@@ -41,39 +41,6 @@ Proof.
     by apply lookup_map_seq_Some_inv.
 Qed.
 
-Section curry_mono.
-  Context `{FinMap K1 M1, FinMap K2 M2, FinMap (K1 * K2) MC} {A : Type}.
-  Notation map_curry := (map_curry (M1:=M1) (M2:=M2)).
-  Notation map_uncurry := (map_uncurry (M12:=MC)).
-
-  Definition curry_sub : relation (M1 (M2 A)) :=
-    map_included (λ _, (⊆)).
-
-  Local Lemma lookup_map_curry_weaken (m0 m1 : MC A) i mi0 :
-    m0 ⊆ m1 →
-    map_curry m0 !! i = Some mi0 →
-    ∀ j v, mi0 !! j = Some v → map_curry m1 !! i ≫= (.!! j) = Some v.
-  Proof using All.
-    intros Hsub Hi0 j v Hj. rewrite lookup_map_curry.
-    eapply lookup_weaken; [|done]. by rewrite -lookup_map_curry Hi0.
-  Qed.
-
-  (* TODO: maybe upstream. *)
-  Lemma map_curry_mono (m0 m1 : MC A) :
-    m0 ⊆ m1 →
-    curry_sub (map_curry m0) (map_curry m1).
-  Proof using All.
-    intros Hsub i.
-    destruct (map_curry m0 !! i) as [mi0|] eqn:Hi0;
-      [|by destruct (map_curry m1 !! i)].
-    pose proof (lookup_map_curry_weaken _ _ _ _ Hsub Hi0) as Hlift.
-    destruct (map_curry m1 !! i) as [mi1|]; simpl.
-    - apply map_subseteq_spec. intros j v Hj. exact (Hlift _ _ Hj).
-    - destruct (map_choose _ (map_curry_non_empty _ _ _ Hi0)) as (j & v & Hj).
-      pose proof (Hlift _ _ Hj). done.
-  Qed.
-End curry_mono.
-
 Section map.
   Context `{FinMap K M} {A B : Type}.
   (* TODO: upstream. *)
@@ -109,8 +76,7 @@ Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-(** inverse computation from hidden to plain.
-must always succeed for invert capability. *)
+(** [plain_inv_fn] definition. *)
 
 Local Definition map_label_inv_fn vrf_pk map_label :=
   rem0 ← cryptoffi.vrf_inv_fn vrf_pk map_label;
@@ -162,10 +128,12 @@ Local Definition filter_contig m : gmap w64 (list (list w8)) :=
 
 Notation map_curry := (map_curry (M1:=gmap _) (M2:=gmap _)).
 
+(* inversion from hidden to plain.
+inversion must succeed on every hidden, so we make this a function. *)
 Definition plain_inv_fn vrf_pk hidden :=
   filter_contig $ map_curry $ dec_map_vals $ dec_map_labels vrf_pk hidden.
 
-(** forward relation - bijection between plain and hidden. *)
+(** [is_plain] definition. *)
 
 Definition map_label_fn vrf_pk uid ver map_label :=
   let enc := MapLabel.pure_enc (MapLabel.mk' uid ver) in
@@ -182,6 +150,9 @@ Local Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver pk
   map_val_inv_fn map_val = Some pk ∧
   hidden !! map_label = Some map_val.
 
+Local Definition pks_in_hidden vrf_pk hidden uid (pks : list _) :=
+  ∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver pk.
+
 Local Definition in_plain vrf_pk (plain : gmap w64 (list $ list w8)) map_label map_val :=
   ∃ uid ver pk pks,
   (* arbitrarily using inv version of map_label_fn. both are equiv. *)
@@ -193,9 +164,7 @@ Local Definition in_plain vrf_pk (plain : gmap w64 (list $ list w8)) map_label m
 Local Definition plain_to_hidden vrf_pk (plain : gmap w64 (list $ list w8))
     (hidden : gmap (list w8) (list w8)) :=
   map_Forall
-    (λ uid pks,
-      length pks ≠ 0%nat ∧
-      (∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver pk))
+    (λ uid pks, length pks ≠ 0%nat ∧ pks_in_hidden vrf_pk hidden uid pks)
     plain.
 
 Local Definition hidden_to_plain vrf_pk (hidden : gmap (list w8) (list w8))
@@ -204,11 +173,86 @@ Local Definition hidden_to_plain vrf_pk (hidden : gmap (list w8) (list w8))
     (λ map_label map_val, in_plain vrf_pk plain map_label map_val)
     hidden.
 
+(* bijection (modulo empty uid's) between plain and hidden.
+required to prove "correctness" (see below). *)
 Definition is_plain vrf_pk plain hidden :=
   plain_to_hidden vrf_pk plain hidden ∧
   hidden_to_plain vrf_pk hidden plain.
 
-(** monotonicity. *)
+(** out->in reasoning for [plain_inv_fn]. *)
+
+Local Lemma dec_map_labels_out_lookup {vrf_pk m_prev m_next dec val} :
+  dec_map_labels_aux vrf_pk m_prev = m_next →
+  (dec, val) ∈ m_next →
+  ∃ label, map_label_inv_fn vrf_pk label = Some dec ∧ m_prev !! label = Some val.
+Proof.
+  rewrite /dec_map_labels_aux. intros <- Hlook.
+  apply list_elem_of_omap in Hlook as ([opt val']&Hlook&?).
+  simplify_option_eq.
+  apply elem_of_map_to_list in Hlook.
+  naive_solver.
+Qed.
+
+Local Lemma get_contig_out_lookup {m pks} ver pk :
+  get_contig m = pks →
+  pks !! ver = Some pk →
+  m !! ver = Some pk.
+Proof.
+  rewrite /get_contig. intros Hfn Hlook_pks.
+  remember 0%nat as scan_ver.
+  assert (ver ≥ scan_ver); [lia|].
+  (* lookup idx in pks "decreases" with each scan_ver. *)
+  replace ver with (ver - scan_ver)%nat in Hlook_pks by lia.
+  clear Heqscan_ver.
+  remember (size m) as fuel. clear Heqfuel.
+  generalize dependent scan_ver. revert pks ver.
+  induction fuel; simpl; intros ??? Hfn Hlook_pks ?.
+  { list_simplifier. }
+  case_match; subst; [|list_simplifier].
+  destruct (decide (ver = scan_ver)).
+  { replace (_ - _)%nat with 0%nat in Hlook_pks by lia.
+    by simplify_eq/=. }
+  rewrite lookup_cons_ne_0 in Hlook_pks; [|lia].
+  replace (pred _) with (ver - S scan_ver)%nat in Hlook_pks by lia.
+  eapply IHfuel; [done..|lia].
+Qed.
+
+Local Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
+  plain_inv_fn vrf_pk hidden = plain →
+  plain !! uid = Some pks →
+  pks !! ver = Some pk →
+  in_hidden vrf_pk hidden uid ver pk.
+Proof.
+  rewrite /plain_inv_fn. intros Hfn Hlook_plain Hlook_pks.
+  (* TODO: clean up with backwards reasoning? *)
+  rewrite /filter_contig in Hfn.
+  apply (f_equal (lookup uid)) in Hfn.
+  rewrite {}Hlook_plain in Hfn. clear plain.
+  apply lookup_omap_Some in Hfn as (m_uid&?&Hfn).
+  simplify_option_eq.
+  opose proof (get_contig_out_lookup _ _ _ _) as  Hlook_uid; [done..|].
+  rename Hfn into Hfn'.
+  opose proof (lookup_map_curry _ uid ver) as Hfn.
+  setoid_rewrite Hfn' in Hfn. simpl in *.
+  rewrite Hlook_uid in Hfn. symmetry in Hfn. clear Hfn'.
+  rewrite /dec_map_vals in Hfn.
+  apply lookup_omap_Some in Hfn as (?&?&Hfn).
+  rewrite /dec_map_labels in Hfn.
+  apply elem_of_list_to_map_2 in Hfn.
+  rename Hfn into Hfn'.
+  opose proof (dec_map_labels_out_lookup _ _) as (?&Hfn&?); [done..|].
+  clear Hfn'.
+  rewrite /in_hidden.
+  naive_solver.
+Qed.
+
+Lemma inv_fn_out_pks {vrf_pk plain hidden} uid pks :
+  plain_inv_fn vrf_pk hidden = plain →
+  plain !! uid = Some pks →
+  pks_in_hidden vrf_pk hidden uid pks.
+Proof. intros **?**. by eapply inv_fn_out_lookup. Qed.
+
+(** in->out reasoning for [plain_inv_fn]. *)
 
 Local Lemma map_label_inv_fn_inj {vrf_pk label0 label1 dec} :
   map_label_inv_fn vrf_pk label0 = Some dec →
@@ -242,39 +286,13 @@ Proof.
   rewrite !drop_ge; [done|word..].
 Qed.
 
-Local Lemma dec_map_labels_lift_elem {vrf_pk m_prev m_next dec val} :
-  dec_map_labels_aux vrf_pk m_prev = m_next →
-  (dec, val) ∈ m_next →
-  ∃ label, map_label_inv_fn vrf_pk label = Some dec ∧ m_prev !! label = Some val.
-Proof.
-  rewrite /dec_map_labels_aux. intros <- Hlook.
-  apply list_elem_of_omap in Hlook as ([opt val']&Hlook&?).
-  simplify_option_eq.
-  apply elem_of_map_to_list in Hlook.
-  naive_solver.
-Qed.
-
-Local Lemma dec_map_labels_drop_elem {vrf_pk m_prev m_next label val dec} :
-  dec_map_labels_aux vrf_pk m_prev = m_next →
-  m_prev !! label = Some val →
-  map_label_inv_fn vrf_pk label = Some dec →
-  (dec, val) ∈ m_next.
-Proof.
-  rewrite /dec_map_labels_aux. intros <- Hlook Hdec.
-  apply list_elem_of_omap.
-  eexists (_, _).
-  split.
-  { by apply elem_of_map_to_list. }
-  by rewrite Hdec.
-Qed.
-
 Local Lemma dec_map_labels_unique vrf_pk m_prev m_next :
   dec_map_labels_aux vrf_pk m_prev = m_next →
   (∀ label val0 val1, (label, val0) ∈ m_next → (label, val1) ∈ m_next → val0 = val1).
 Proof.
   intros Hcomp ??? Helem0 Helem1.
-  opose proof (dec_map_labels_lift_elem Hcomp Helem0) as (?&Hdec0&?).
-  opose proof (dec_map_labels_lift_elem Hcomp Helem1) as (?&Hdec1&?).
+  opose proof (dec_map_labels_out_lookup Hcomp Helem0) as (?&Hdec0&?).
+  opose proof (dec_map_labels_out_lookup Hcomp Helem1) as (?&Hdec1&?).
   opose proof (map_label_inv_fn_inj Hdec0 Hdec1) as ->.
   by simplify_eq/=.
 Qed.
@@ -292,180 +310,7 @@ Proof.
   by opose proof (map_label_inv_fn_inj Heqo0 Heqo) as ->.
 Qed.
 
-Local Lemma dec_map_labels_mono vrf_pk m0 m1 :
-  m0 ⊆ m1 →
-  dec_map_labels vrf_pk m0 ⊆ dec_map_labels vrf_pk m1.
-Proof.
-  rewrite /dec_map_labels. intros ?.
-  apply map_subseteq_spec.
-  intros [uid ver] val0 Hlook0.
-  apply elem_of_list_to_map_2 in Hlook0.
-  opose proof (dec_map_labels_lift_elem _ Hlook0) as (?&?&Hlook0'); [done|].
-  apply elem_of_list_to_map_1.
-  { apply dec_map_labels_NoDup. }
-  eapply dec_map_labels_drop_elem; [done|idtac|done].
-  by eapply lookup_weaken.
-Qed.
-
-Local Lemma get_contig_mono m0 m1 ver fuel :
-  m0 ⊆ m1 →
-  get_contig_aux m0 ver fuel `prefix_of` get_contig_aux m1 ver fuel.
-Proof.
-  intros Hsub.
-  revert ver. induction fuel; simpl; [done|].
-  intros. destruct (m0 !! ver) eqn:Hlook.
-  2: { apply prefix_nil. }
-  opose proof (lookup_weaken _ _ _ _ Hlook Hsub) as ->.
-  apply prefix_cons.
-  naive_solver.
-Qed.
-
-Local Lemma get_contig_add_fuel m ver fuel fuel' :
-  (fuel ≤ fuel')%nat →
-  get_contig_aux m ver fuel `prefix_of` get_contig_aux m ver fuel'.
-Proof.
-  revert ver fuel'. induction fuel; simpl.
-  { intros. apply prefix_nil. }
-  intros. destruct fuel'; [lia|]. simpl.
-  case_match; try done.
-  apply prefix_cons.
-  apply IHfuel. lia.
-Qed.
-
-Local Lemma filter_contig_mono m0 m1 :
-  curry_sub (M1:=gmap _) m0 m1 →
-  keys_sub (filter_contig m0) (filter_contig m1).
-Proof. Admitted. (*
-  rewrite /curry_sub /keys_sub !map_included_alt. intros Hsub.
-  rewrite /filter_contig.
-  intros uid pks Hlook.
-  rewrite lookup_fmap in Hlook.
-  simplify_option_eq. rename H into m_uid0.
-  odestruct (Hsub _ _ _) as (m_uid1&?&?); [done|].
-  opose proof (get_contig_mono m_uid0 m_uid1 0 (size m_uid0) _) as Hpref0; [done|].
-  opose proof (get_contig_add_fuel m_uid1 0 (size m_uid0) (size m_uid1) _) as Hpref1.
-  { by apply map_subseteq_size. }
-  eexists. split.
-  { rewrite lookup_fmap. by simplify_option_eq. }
-  by trans (get_contig_aux m_uid1 0 (size m_uid0)).
-Qed. *)
-
-(* used by auditor. *)
-Lemma plain_inv_mono vrf_pk m0 m1 :
-  m0 ⊆ m1 →
-  keys_sub (plain_inv_fn vrf_pk m0) (plain_inv_fn vrf_pk m1).
-Proof.
-  rewrite /plain_inv_fn. intros Hsub.
-  apply filter_contig_mono.
-  apply map_curry_mono.
-  apply map_omap_mono.
-  by apply dec_map_labels_mono.
-Qed.
-
-(** "correctness". this requires a bijection (modulo empty uid's)
-between plain and hidden. *)
-
-Local Lemma map_label_fn_has_inv vrf_pk uid ver map_label :
-  map_label_fn vrf_pk uid ver map_label →
-  map_label_inv_fn vrf_pk map_label = Some (uid, uint.nat ver).
-Proof.
-  rewrite /map_label_fn /map_label_inv_fn /MapLabel.pure_enc /safemarshal.w64.pure_enc /=.
-  intros ?%cryptoffi.vrf_bij_l.
-  simplify_option_eq; try done.
-  all: try (autorewrite with len in *; lia).
-  pose proof (u64_le_length uid).
-  pose proof (u64_le_length ver).
-  rewrite take_app_le; [|lia].
-  rewrite take_ge; [|lia].
-  rewrite drop_app_le; [|lia].
-  rewrite drop_ge; [|lia]. simpl.
-  rewrite take_ge; [|lia].
-  rewrite !u64_le_to_word. done.
-Qed.
-
-(* analogous to map_label_fn_has_inv, but for CommitOpen / hash instead of
-   MapLabel / vrf. proof strategy:
-   1. hash_bij_l to invert hash_fn.
-   2. simplify_option_eq to process the option binds + guards.
-      leaves 3 goals: the main eq, and 2 guard side conditions.
-   3. for the main eq: simplify take/drop of the CommitOpen encoding
-      (two layers of app: outer (Slice1D pk ++ Slice1D rand), inner
-      (u64_le len ++ data)), then use Slice1D.valid to convert
-      sint.nat (W64 (length kt_pk)) to length kt_pk.
-   STUCK: after simplify_option_eq, take_app_le can't match because
-   lia doesn't know app_length. the side conditions need
-   `rewrite length_app u64_le_length; lia` but the exact goal shape
-   is hard to predict without interactive exploration. *)
-Local Lemma map_val_fn_has_inv kt_pk rand map_val :
-  map_val_fn kt_pk rand map_val →
-  map_val_inv_fn map_val = Some kt_pk.
-Proof.
-  rewrite /map_val_fn /map_val_inv_fn /CommitOpen.pure_enc
-    /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc /=.
-  intros [?%cryptoffi.hash_bij_l Hvalid].
-  rewrite /safemarshal.Slice1D.valid in Hvalid.
-  simplify_option_eq; try done.
-  (* goal 1: main eq. goal 2,3: guard side conditions.
-     all involve take/drop of (u64_le _ ++ kt_pk) ++ (u64_le _ ++ rand). *)
-Admitted.
-
-(* move vals thru plain_inv_fn (in both directions). *)
-
-Local Lemma get_contig_out_lookup {m pks} ver pk :
-  get_contig m = pks →
-  pks !! ver = Some pk →
-  m !! ver = Some pk.
-Proof.
-  rewrite /get_contig. intros Hfn Hlook_pks.
-  remember 0%nat as scan_ver.
-  assert (ver ≥ scan_ver); [lia|].
-  (* lookup idx in pks "decreases" with each scan_ver. *)
-  replace ver with (ver - scan_ver)%nat in Hlook_pks by lia.
-  clear Heqscan_ver.
-  remember (size m) as fuel. clear Heqfuel.
-  generalize dependent scan_ver. revert pks ver.
-  induction fuel; simpl; intros ??? Hfn Hlook_pks ?.
-  { list_simplifier. }
-  case_match; subst; [|list_simplifier].
-  destruct (decide (ver = scan_ver)).
-  { replace (_ - _)%nat with 0%nat in Hlook_pks by lia.
-    by simplify_eq/=. }
-  rewrite lookup_cons_ne_0 in Hlook_pks; [|lia].
-  replace (pred _) with (ver - S scan_ver)%nat in Hlook_pks by lia.
-  eapply IHfuel; [done..|lia].
-Qed.
-
-Local Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
-  plain_inv_fn vrf_pk hidden = plain →
-  plain !! uid = Some pks →
-  pks !! ver = Some pk →
-  in_hidden vrf_pk hidden uid ver pk.
-Proof.
-  rewrite /plain_inv_fn. intros Hfn Hlook_plain Hlook_pks.
-  rewrite /filter_contig in Hfn.
-  apply (f_equal (lookup uid)) in Hfn.
-  rewrite {}Hlook_plain in Hfn. clear plain.
-  apply lookup_omap_Some in Hfn as (m_uid&?&Hfn).
-  simplify_option_eq.
-  opose proof (get_contig_out_lookup _ _ _ _) as  Hlook_uid; [done..|].
-  rename Hfn into Hfn'.
-  opose proof (lookup_map_curry _ uid ver) as Hfn.
-  setoid_rewrite Hfn' in Hfn. simpl in *.
-  rewrite Hlook_uid in Hfn. symmetry in Hfn. clear Hfn'.
-  rewrite /dec_map_vals in Hfn.
-  apply lookup_omap_Some in Hfn as (?&?&Hfn).
-  rewrite /dec_map_labels in Hfn.
-  apply elem_of_list_to_map_2 in Hfn.
-  rewrite /dec_map_labels_aux in Hfn.
-  apply list_elem_of_omap in Hfn as ([??]&Hfn&?).
-  simplify_option_eq.
-  apply elem_of_map_to_list in Hfn.
-  rewrite /in_hidden.
-  naive_solver.
-Qed.
-
-(* helpers for inv_fn_in_lookup. *)
-Local Lemma to_contig_in_lookup {vrf_pk m0 m1} uid ver pk :
+Local Lemma to_contig_inp_lookup {vrf_pk m0 m1} uid ver pk :
   map_curry $ dec_map_vals $ dec_map_labels vrf_pk m0 = m1 →
   in_hidden vrf_pk m0 uid ver pk →
   m1 !! uid ≫= (!!) ver = Some pk.
@@ -485,7 +330,7 @@ Proof.
   by rewrite elem_of_map_to_list.
 Qed.
 
-Local Lemma get_contig_aux_in_lookup m pks :
+Local Lemma get_contig_aux_inp_lookup m pks :
   map_seq 0 pks ⊆ m →
   get_contig_aux m 0%nat (length pks) = pks.
 Proof.
@@ -505,7 +350,7 @@ Proof.
   apply map_seq_cons_disjoint.
 Qed.
 
-Local Lemma size_approx (m : gmap _ (list w8)) pks :
+Local Lemma map_seq_approx_len (m : gmap _ (list w8)) pks :
   map_seq 0 pks ⊆ m →
   (length pks ≤ size m)%nat.
 Proof.
@@ -515,67 +360,94 @@ Proof.
   by rewrite size_set_seq -map_size_dom in Hpks.
 Qed.
 
-Local Lemma get_contig_in_lookup m pks :
+Local Lemma get_contig_add_fuel m ver fuel fuel' :
+  (fuel ≤ fuel')%nat →
+  get_contig_aux m ver fuel `prefix_of` get_contig_aux m ver fuel'.
+Proof.
+  revert ver fuel'. induction fuel; simpl.
+  { intros. apply prefix_nil. }
+  intros. destruct fuel'; [lia|]. simpl.
+  case_match; try done.
+  apply prefix_cons.
+  apply IHfuel. lia.
+Qed.
+
+Local Lemma get_contig_inp_lookup m pks :
   map_seq 0 pks ⊆ m →
   pks `prefix_of` get_contig m.
 Proof.
   intros Hseq.
-  opose proof (get_contig_aux_in_lookup _ _ _) as <-; [done|].
+  opose proof (get_contig_aux_inp_lookup _ _ _) as <-; [done|].
   rewrite /get_contig.
   apply get_contig_add_fuel.
-  by apply size_approx.
+  by apply map_seq_approx_len.
 Qed.
 
-Local Lemma inv_fn_on_pks {vrf_pk plain0 plain1 hidden} uid pks :
+Local Lemma inv_fn_inp_pks {vrf_pk plain hidden} uid pks0 :
+  plain_inv_fn vrf_pk hidden = plain →
+  pks_in_hidden vrf_pk hidden uid pks0 →
+  length pks0 ≠ 0%nat →
+  ∃ pks1, plain !! uid = Some pks1 ∧ pks0 `prefix_of` pks1.
+Proof.
+  intros <- Hpks ?.
+  remember (plain_inv_fn _ _ !! _) as fn.
+  assert (∃ x, fn = Some x) as (pks1&Hfn); subst.
+  2: {
+    (* assuming pks1, do backwards reasoning. *)
+    eexists. split; [done|].
+    rewrite /plain_inv_fn /filter_contig in Hfn.
+    apply lookup_omap_Some in Hfn as (m_uid&?&?).
+    simplify_option_eq.
+    apply get_contig_inp_lookup.
+    apply map_seq_subseteq.
+    intros ver pk Hlook_pks.
+    replace (_ + _)%nat with ver by lia.
+    opose proof (to_contig_inp_lookup _ _ _ _ _); [done|..].
+    2: { by simplify_option_eq. }
+    by apply Hpks. }
+
+  (* fill in pks1 using forward reasoning on ver 0. *)
+  rewrite /plain_inv_fn.
+  destruct pks0 as [|pk]; try done.
+  ospecialize (Hpks 0%nat _ _); [done|].
+  opose proof (to_contig_inp_lookup _ _ _ _ _) as Hlook_fn; [done..|].
+  simplify_option_eq. rename H0 into m_uid.
+  eexists. rewrite /filter_contig.
+  apply lookup_omap_Some.
+  eexists. split; [|done].
+  simplify_option_eq; [|done].
+
+  exfalso.
+  opose proof (get_contig_inp_lookup m_uid [pk] _) as Hpref.
+  2: { apply prefix_length in Hpref. simpl in *. lia. }
+  apply map_seq_subseteq.
+  intros ?? Hlook.
+  apply list_lookup_singleton_Some in Hlook as [-> ->].
+  by replace (_ + _)%nat with 0%nat by lia.
+Qed.
+
+Local Lemma inv_fn_inp_pks_weak {vrf_pk plain0 plain1 hidden} uid pks :
   is_plain vrf_pk plain0 hidden →
   plain_inv_fn vrf_pk hidden = plain1 →
   plain0 !! uid = Some pks →
   plain1 !! uid = Some pks.
 Proof.
-  intros Hbij <- Hlook.
-  rename plain0 into plain.
-  rewrite /plain_inv_fn /filter_contig.
-  apply lookup_omap_Some.
-  remember (map_curry _) as fn.
-  assert (∃ x, fn !! uid = Some x) as (m&?); subst.
-  { odestruct (proj1 Hbij _ _ _) as (?&Hpks); [done|].
-    destruct pks; try done.
-    ospecialize (Hpks 0%nat _ _); [done|].
-    opose proof (to_contig_in_lookup _ _ _ _ _) as Hlook_fn; [done..|].
-    apply bind_Some in Hlook_fn as (?&?&?).
-    naive_solver. }
-  eexists. split; [|done].
-
-  opose proof (get_contig_in_lookup m pks _) as ([]&Hpref).
-  2: {
-    list_simplifier.
-    odestruct (proj1 Hbij _ _ _) as []; [done|].
-    by simplify_option_eq. }
-  2: {
-    (* contradict versions bigger than pks. move them back into plain. *)
-    exfalso.
-    opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?); [done|..].
-    { apply lookup_omap_Some.
-      eexists. split; [|done].
-      simplify_option_eq; [|done].
-      apply (f_equal length) in Hpref.
-      autorewrite with len in *. lia. }
-    { rewrite Hpref. by apply list_lookup_middle. }
-    destruct_and!.
-    odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks); [done|].
-    simplify_eq/=.
-    apply lookup_lt_Some in Hlook_pks.
-    lia. }
-
-  (* transfer pks from plain. *)
-  apply map_seq_subseteq.
-  intros ver pk Hlook_pks.
-  replace (_ + _)%nat with ver by lia.
-  opose proof (to_contig_in_lookup _ _ _ _ _); [done|..].
-  2: { by simplify_option_eq. }
-  odestruct (proj1 Hbij _ _ _) as (?&Hpks); [done|].
-  by apply Hpks.
+  intros Hbij Hfn Hlook.
+  opose proof (inv_fn_inp_pks uid pks _ _ _) as (pks1&?&Hpref); [done|..].
+  1-2: by eapply Hbij.
+  destruct Hpref as ([]&Hpref).
+  { by list_simplifier. }
+  exfalso.
+  opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?); [done|done|..].
+  { rewrite Hpref. by apply list_lookup_middle. }
+  destruct_and!.
+  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks); [done|].
+  simplify_eq/=.
+  apply lookup_lt_Some in Hlook_pks.
+  lia.
 Qed.
+
+(** monotonicity. *)
 
 Local Lemma inv_fn_non_empty_pks {vrf_pk plain hidden} uid pks :
   plain_inv_fn vrf_pk hidden = plain →
@@ -587,6 +459,27 @@ Proof.
   by simplify_option_eq.
 Qed.
 
+(* used by auditor. *)
+Lemma plain_inv_mono vrf_pk m0 m1 :
+  m0 ⊆ m1 →
+  keys_sub (plain_inv_fn vrf_pk m0) (plain_inv_fn vrf_pk m1).
+Proof.
+  rewrite /keys_sub. intros Hsub.
+  apply map_included_alt.
+  intros uid pks Hfn.
+  eapply inv_fn_inp_pks; [done|..].
+  2: { by eapply inv_fn_non_empty_pks. }
+  assert (pks_in_hidden vrf_pk m0 uid pks) as Hin.
+  { by eapply inv_fn_out_pks. }
+  intros ?**.
+  opose proof (Hin _ _ _) as (?&?&?); [done|].
+  destruct_and!.
+  repeat eexists; [done..|].
+  by eapply lookup_weaken.
+Qed.
+
+(** relation between [is_plain] and [plain_inv_fn]. *)
+
 Lemma is_plain_has_inv vrf_pk plain hidden :
   is_plain vrf_pk plain hidden →
   plain_inv_fn vrf_pk hidden = plain.
@@ -595,7 +488,7 @@ Proof.
   remember (plain_inv_fn _ _) as plain1.
   symmetry. apply map_eq. intros uid.
   destruct (plain0 !! uid) as [pks0|] eqn:Hlook0.
-  { by erewrite inv_fn_on_pks. }
+  { by erewrite inv_fn_inp_pks_weak. }
   destruct (plain1 !! uid) as [[]|] eqn:Hlook1; try done; exfalso.
   { by opose proof (inv_fn_non_empty_pks _ _ _ _) as ?. }
   opose proof (inv_fn_out_lookup 0 _ _ _ _) as (?&?&?); [done..|].
@@ -603,6 +496,39 @@ Proof.
   odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&?); [done|].
   simplify_eq/=.
 Qed.
+
+(** "correctness". *)
+
+Local Lemma map_label_fn_has_inv vrf_pk uid ver map_label :
+  map_label_fn vrf_pk uid ver map_label →
+  map_label_inv_fn vrf_pk map_label = Some (uid, uint.nat ver).
+Proof.
+  rewrite /map_label_fn /map_label_inv_fn /MapLabel.pure_enc /safemarshal.w64.pure_enc /=.
+  intros ?%cryptoffi.vrf_bij_l.
+  simplify_option_eq; try done.
+  all: try (autorewrite with len in *; lia).
+  pose proof (u64_le_length uid).
+  pose proof (u64_le_length ver).
+  rewrite take_app_le; [|lia].
+  rewrite take_ge; [|lia].
+  rewrite drop_app_le; [|lia].
+  rewrite drop_ge; [|lia]. simpl.
+  rewrite take_ge; [|lia].
+  rewrite !u64_le_to_word. done.
+Qed.
+
+(* TODO: hopefully claude can do this, given access to proof window.
+claude needs to see the hyps generated by simplify_option_eq. *)
+Local Lemma map_val_fn_has_inv kt_pk rand map_val :
+  map_val_fn kt_pk rand map_val →
+  map_val_inv_fn map_val = Some kt_pk.
+Proof.
+  rewrite /map_val_fn /map_val_inv_fn /CommitOpen.pure_enc
+    /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc /=.
+  intros [?%cryptoffi.hash_bij_l Hvalid].
+  rewrite /safemarshal.Slice1D.valid in Hvalid.
+  simplify_option_eq; try done.
+Admitted.
 
 (* used in server update. *)
 Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val :
