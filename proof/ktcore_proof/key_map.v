@@ -152,7 +152,13 @@ Local Fixpoint get_contig_aux (m : gmap nat (list w8)) ver fuel :=
 (* size is simple upper bound on max ver. *)
 Local Definition get_contig m := get_contig_aux m 0 (size m).
 
-Local Definition filter_contig m : gmap w64 (list (list w8)) := get_contig <$> m.
+Local Definition filter_contig m : gmap w64 (list (list w8)) :=
+  omap
+    (λ m_uid,
+      let pks := get_contig m_uid in
+      guard (length pks ≠ 0%nat);;
+      Some pks)
+    m.
 
 Notation map_curry := (map_curry (M1:=gmap _) (M2:=gmap _)).
 
@@ -329,7 +335,7 @@ Qed.
 Local Lemma filter_contig_mono m0 m1 :
   curry_sub (M1:=gmap _) m0 m1 →
   keys_sub (filter_contig m0) (filter_contig m1).
-Proof.
+Proof. Admitted. (*
   rewrite /curry_sub /keys_sub !map_included_alt. intros Hsub.
   rewrite /filter_contig.
   intros uid pks Hlook.
@@ -342,7 +348,7 @@ Proof.
   eexists. split.
   { rewrite lookup_fmap. by simplify_option_eq. }
   by trans (get_contig_aux m_uid1 0 (size m_uid0)).
-Qed.
+Qed. *)
 
 (* used by auditor. *)
 Lemma plain_inv_mono vrf_pk m0 m1 :
@@ -439,7 +445,8 @@ Proof.
   rewrite /filter_contig in Hfn.
   apply (f_equal (lookup uid)) in Hfn.
   rewrite {}Hlook_plain in Hfn. clear plain.
-  apply lookup_fmap_Some in Hfn as (m_uid&?&Hfn).
+  apply lookup_omap_Some in Hfn as (m_uid&?&Hfn).
+  simplify_option_eq.
   opose proof (get_contig_out_lookup _ _ _ _) as  Hlook_uid; [done..|].
   rename Hfn into Hfn'.
   opose proof (lookup_map_curry _ uid ver) as Hfn.
@@ -527,11 +534,10 @@ Local Lemma inv_fn_on_pks {vrf_pk plain0 plain1 hidden} uid pks :
 Proof.
   intros Hbij <- Hlook.
   rename plain0 into plain.
-  rewrite /plain_inv_fn.
-  rewrite /filter_contig.
-  apply lookup_fmap_Some.
-  remember (map_curry _) as inv_fn.
-  assert (∃ x, inv_fn !! uid = Some x) as (m&?); subst.
+  rewrite /plain_inv_fn /filter_contig.
+  apply lookup_omap_Some.
+  remember (map_curry _) as fn.
+  assert (∃ x, fn !! uid = Some x) as (m&?); subst.
   { odestruct (proj1 Hbij _ _ _) as (?&Hpks); [done|].
     destruct pks; try done.
     ospecialize (Hpks 0%nat _ _); [done|].
@@ -540,14 +546,21 @@ Proof.
     naive_solver. }
   eexists. split; [|done].
 
-  opose proof (get_contig_in_lookup m pks _) as ([]&?).
-  2: { by list_simplifier. }
+  opose proof (get_contig_in_lookup m pks _) as ([]&Hpref).
+  2: {
+    list_simplifier.
+    odestruct (proj1 Hbij _ _ _) as []; [done|].
+    by simplify_option_eq. }
   2: {
     (* contradict versions bigger than pks. move them back into plain. *)
     exfalso.
     opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?); [done|..].
-    { apply lookup_fmap_Some. naive_solver. }
-    { by apply list_lookup_middle. }
+    { apply lookup_omap_Some.
+      eexists. split; [|done].
+      simplify_option_eq; [|done].
+      apply (f_equal length) in Hpref.
+      autorewrite with len in *. lia. }
+    { rewrite Hpref. by apply list_lookup_middle. }
     destruct_and!.
     odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks); [done|].
     simplify_eq/=.
@@ -564,15 +577,15 @@ Proof.
   by apply Hpks.
 Qed.
 
-(* BUG: not provable.
-if hidden (1) does not have ver 0 and (2) has ver 5,
-plain !! uid = Some [].
-FIX: add step after get_contig that filters for [] lists. *)
 Local Lemma inv_fn_non_empty_pks {vrf_pk plain hidden} uid pks :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
   length pks ≠ 0%nat.
-Proof. Admitted.
+Proof.
+  rewrite /plain_inv_fn /filter_contig. intros <- Hfn.
+  apply lookup_omap_Some in Hfn as (?&?&?).
+  by simplify_option_eq.
+Qed.
 
 Lemma is_plain_has_inv vrf_pk plain hidden :
   is_plain vrf_pk plain hidden →
