@@ -24,6 +24,23 @@ Proof.
   set_solver.
 Qed.
 
+(* TODO: upstream. *)
+Lemma map_seq_subseteq {A} start (vs : list A) (m : gmap _ _) :
+  (∀ i v, vs !! i = Some v → m !! (start + i)%nat = Some v) ↔
+  map_seq start vs ⊆ m.
+Proof.
+  split.
+  - intros Hvs.
+    apply map_subseteq_spec.
+    intros ?? Hlook.
+    apply lookup_map_seq_Some in Hlook as [? Hlook].
+    ospecialize (Hvs _ _ _); [done|].
+    by replace (_ + _)%nat with i in Hvs by lia.
+  - intros Hseq ?? Hlook.
+    eapply lookup_weaken; [|done].
+    by apply lookup_map_seq_Some_inv.
+Qed.
+
 Section curry_mono.
   Context `{FinMap K1 M1, FinMap K2 M2, FinMap (K1 * K2) MC} {A : Type}.
   Notation map_curry := (map_curry (M1:=M1) (M2:=M2)).
