@@ -144,14 +144,15 @@ Local Definition dec_map_labels vrf_pk m : gmap (w64 * nat) (list w8) :=
 Local Definition dec_map_vals m : gmap (w64 * nat) (list w8) :=
   omap (λ v, map_val_inv_fn v) m.
 
-Local Fixpoint get_contig (m : gmap nat (list w8)) ver fuel :=
+Local Fixpoint get_contig_aux (m : gmap nat (list w8)) ver fuel :=
   match fuel with 0%nat => [] | S fuel' =>
   match m !! ver with None => [] | Some pk =>
-  pk :: get_contig m (S ver) fuel' end end.
+  pk :: get_contig_aux m (S ver) fuel' end end.
 
-Local Definition filter_contig m : gmap w64 (list (list w8)) :=
-  (* size is simple upper bound on max ver. *)
-  (λ m_uid, get_contig m_uid 0 (size m_uid)) <$> m.
+(* size is simple upper bound on max ver. *)
+Local Definition get_contig m := get_contig_aux m 0 (size m).
+
+Local Definition filter_contig m : gmap w64 (list (list w8)) := get_contig <$> m.
 
 Notation map_curry := (map_curry (M1:=gmap _) (M2:=gmap _)).
 
@@ -302,7 +303,7 @@ Qed.
 
 Local Lemma get_contig_mono m0 m1 ver fuel :
   m0 ⊆ m1 →
-  get_contig m0 ver fuel `prefix_of` get_contig m1 ver fuel.
+  get_contig_aux m0 ver fuel `prefix_of` get_contig_aux m1 ver fuel.
 Proof.
   intros Hsub.
   revert ver. induction fuel; simpl; [done|].
@@ -315,7 +316,7 @@ Qed.
 
 Local Lemma get_contig_add_fuel m ver fuel fuel' :
   (fuel ≤ fuel')%nat →
-  get_contig m ver fuel `prefix_of` get_contig m ver fuel'.
+  get_contig_aux m ver fuel `prefix_of` get_contig_aux m ver fuel'.
 Proof.
   revert ver fuel'. induction fuel; simpl.
   { intros. apply prefix_nil. }
@@ -340,7 +341,7 @@ Proof.
   { by apply map_subseteq_size. }
   eexists. split.
   { rewrite lookup_fmap. by simplify_option_eq. }
-  by trans (get_contig m_uid1 0 (size m_uid0)).
+  by trans (get_contig_aux m_uid1 0 (size m_uid0)).
 Qed.
 
 (* used by auditor. *)
@@ -404,17 +405,18 @@ Admitted.
 
 (* move vals thru plain_inv_fn (in both directions). *)
 
-Local Lemma get_contig_out_lookup {m fuel pks} ver pk :
-  get_contig m 0%nat fuel = pks →
+Local Lemma get_contig_out_lookup {m pks} ver pk :
+  get_contig m = pks →
   pks !! ver = Some pk →
   m !! ver = Some pk.
 Proof.
-  intros Hfn Hlook_pks.
+  rewrite /get_contig. intros Hfn Hlook_pks.
   remember 0%nat as scan_ver.
   assert (ver ≥ scan_ver); [lia|].
   (* lookup idx in pks "decreases" with each scan_ver. *)
   replace ver with (ver - scan_ver)%nat in Hlook_pks by lia.
   clear Heqscan_ver.
+  remember (size m) as fuel. clear Heqfuel.
   generalize dependent scan_ver. revert pks ver.
   induction fuel; simpl; intros ??? Hfn Hlook_pks ?.
   { list_simplifier. }
@@ -476,9 +478,9 @@ Proof.
   by rewrite elem_of_map_to_list.
 Qed.
 
-Local Lemma get_contig_in_lookup m pks :
+Local Lemma get_contig_aux_in_lookup m pks :
   map_seq 0 pks ⊆ m →
-  get_contig m 0%nat (length pks) = pks.
+  get_contig_aux m 0%nat (length pks) = pks.
 Proof.
   remember 0%nat as scan_ver.
   clear Heqscan_ver.
@@ -504,6 +506,17 @@ Proof.
   rewrite dom_seq in Hpks.
   apply subseteq_size in Hpks.
   by rewrite size_set_seq -map_size_dom in Hpks.
+Qed.
+
+Local Lemma get_contig_in_lookup m pks :
+  map_seq 0 pks ⊆ m →
+  pks `prefix_of` get_contig m.
+Proof.
+  intros Hseq.
+  opose proof (get_contig_aux_in_lookup _ _ _) as <-; [done|].
+  rewrite /get_contig.
+  apply get_contig_add_fuel.
+  by apply size_approx.
 Qed.
 
 Local Lemma inv_fn_on_pks {vrf_pk plain0 plain1 hidden} uid pks :
