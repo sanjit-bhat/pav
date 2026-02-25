@@ -130,17 +130,10 @@ Notation map_curry := (map_curry (M1:=gmap _) (M2:=gmap _)).
 inversion must succeed on every hidden, so we make this a function. *)
 Definition plain_inv_fn vrf_pk hidden :=
   filter_contig $ map_curry $ dec_map_vals $ dec_map_labels vrf_pk hidden.
+#[global] Opaque plain_inv_fn.
+#[local] Transparent plain_inv_fn.
 
 (** [is_plain] definition. *)
-
-Definition map_label_fn vrf_pk uid ver map_label :=
-  let enc := MapLabel.pure_enc (MapLabel.mk' uid ver) in
-  cryptoffi.vrf_fn vrf_pk enc = Some map_label.
-
-Definition map_val_fn kt_pk rand map_val :=
-  let enc := CommitOpen.pure_enc (CommitOpen.mk' kt_pk rand) in
-  cryptoffi.hash_fn enc = Some map_val ∧
-  safemarshal.Slice1D.valid kt_pk.
 
 Local Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver pk :=
   ∃ map_label map_val,
@@ -153,7 +146,6 @@ Local Definition pks_in_hidden vrf_pk hidden uid (pks : list _) :=
 
 Local Definition in_plain vrf_pk (plain : gmap w64 (list $ list w8)) map_label map_val :=
   ∃ uid ver pk pks,
-  (* arbitrarily using inv version of map_label_fn. both are equiv. *)
   map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
   map_val_inv_fn map_val = Some pk ∧
   plain !! uid = Some pks ∧
@@ -176,6 +168,8 @@ required to prove "correctness" (see below). *)
 Definition is_plain vrf_pk plain hidden :=
   plain_to_hidden vrf_pk plain hidden ∧
   hidden_to_plain vrf_pk hidden plain.
+#[global] Opaque is_plain.
+#[local] Transparent is_plain.
 
 (** out->in reasoning for [plain_inv_fn]. *)
 
@@ -496,6 +490,21 @@ Qed.
 
 (** "correctness". *)
 
+(* clients only need to compute the label.
+the inverse computation, [map_label_inv_fn], is internal to this file. *)
+Definition map_label_fn vrf_pk uid ver map_label :=
+  let enc := MapLabel.pure_enc (MapLabel.mk' uid ver) in
+  cryptoffi.vrf_fn vrf_pk enc = Some map_label.
+#[global] Opaque map_label_fn.
+#[local] Transparent map_label_fn.
+
+Definition map_val_fn kt_pk rand map_val :=
+  let enc := CommitOpen.pure_enc (CommitOpen.mk' kt_pk rand) in
+  cryptoffi.hash_fn enc = Some map_val ∧
+  safemarshal.Slice1D.valid kt_pk.
+#[global] Opaque map_val_fn.
+#[local] Transparent map_val_fn.
+
 Local Lemma map_label_fn_has_inv vrf_pk uid ver map_label :
   map_label_fn vrf_pk uid ver map_label →
   map_label_inv_fn vrf_pk map_label = Some (uid, uint.nat ver).
@@ -527,6 +536,86 @@ Proof.
   simplify_option_eq; try done.
 Admitted.
 
+Local Lemma pks_in_hidden_insert {vrf_pk hidden uid pks} map_label map_val :
+  pks_in_hidden vrf_pk hidden uid pks →
+  hidden !! map_label = None →
+  pks_in_hidden vrf_pk (<[map_label:=map_val]>hidden) uid pks.
+Proof.
+  intros Hrel Hnone ?? Hlook.
+  opose proof (Hrel _ _ _) as (?&?&?); [done|].
+  destruct_and!.
+  rewrite /in_hidden.
+  repeat eexists; [done..|].
+  rewrite insert_union_singleton_l lookup_union.
+  by simplify_map_eq/=.
+Qed.
+
+Local Lemma pks_in_hidden_snoc {vrf_pk hidden uid pks} pk :
+  pks_in_hidden vrf_pk hidden uid pks →
+  in_hidden vrf_pk hidden uid (length pks) pk →
+  pks_in_hidden vrf_pk hidden uid (pks ++ [pk]).
+Proof.
+  rewrite /pks_in_hidden. intros Hrel Hin ver ? Hlook.
+  apply lookup_app_Some in Hlook as [?|[? Hlook]].
+  - by eapply Hrel.
+  - apply list_lookup_singleton_Some in Hlook as [? ->].
+    by replace ver with (length pks) by lia.
+Qed.
+
+Local Lemma pks_in_hidden_insert_both {vrf_pk hidden uid pks} map_label map_val pk :
+  pks_in_hidden vrf_pk hidden uid pks →
+  map_label_inv_fn vrf_pk map_label = Some (uid, length pks) →
+  map_val_inv_fn map_val = Some pk →
+  hidden !! map_label = None →
+  pks_in_hidden vrf_pk (<[map_label:=map_val]>hidden) uid (pks ++ [pk]).
+Proof.
+  intros Hrel Hlab Hval Hnone.
+  apply pks_in_hidden_snoc.
+  { by apply pks_in_hidden_insert. }
+  repeat eexists; [done..|].
+  rewrite insert_union_singleton_l lookup_union.
+  simplify_map_eq/=.
+  by rewrite union_Some_l.
+Qed.
+
+Local Lemma in_plain_insert {vrf_pk plain map_label map_val} uid pk :
+  in_plain vrf_pk plain map_label map_val →
+  in_plain vrf_pk (<[uid:=plain !!! uid ++ [pk]]>plain) map_label map_val.
+Proof.
+  rewrite /in_plain. intros (uid0&ver0&pk0&pks0&?&?&Hlook_plain&Hlook_pks).
+  rewrite lookup_total_alt.
+  setoid_rewrite insert_union_singleton_l.
+  setoid_rewrite lookup_union.
+  destruct (decide (uid = uid0)).
+  - subst. do 3 eexists. exists (pks0 ++ [pk]).
+    repeat split; try done.
+    + rewrite Hlook_plain.
+      simplify_map_eq/=.
+      by rewrite union_Some_l.
+    + by apply lookup_app_l_Some.
+  - repeat eexists; try done.
+    rewrite Hlook_plain.
+    by simplify_map_eq/=.
+Qed.
+
+Local Lemma hidden_insert_unique {vrf_pk plain hidden} uid ver map_label :
+  hidden_to_plain vrf_pk hidden plain →
+  map_label_inv_fn vrf_pk map_label = Some (uid, ver) →
+  ver = length $ plain !!! uid →
+  hidden !! map_label = None.
+Proof.
+  simpl. intros Hhtop Hlab ?.
+  destruct (decide (hidden !! map_label = None)) as [|Ht]; [done|].
+  exfalso.
+  apply not_eq_None_Some in Ht as [? Hsome].
+  opose proof (Hhtop _ _ _) as (?&?&?&pks&?&?&Hlook_plain&Hlook_pks); [done|].
+  simplify_eq/=.
+  rewrite lookup_total_alt Hlook_plain /= in Hlook_pks.
+  replace pks with (pks ++ []) in Hlook_pks at 2.
+  2: { by list_simplifier. }
+  by rewrite lookup_app_r in Hlook_pks; [|lia].
+Qed.
+
 (* used in server update. *)
 Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val :
   let pks := plain !!! uid in
@@ -537,7 +626,36 @@ Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val
   let plain' := <[uid:=pks ++ [pk]]>plain in
   let hidden' := <[map_label:=map_val]>hidden in
   is_plain vrf_pk plain' hidden'.
-Proof. Admitted.
+Proof.
+  simpl. intros Hbij Hlabel Heq_ver Hval.
+  eapply map_label_fn_has_inv in Hlabel.
+  eapply map_val_fn_has_inv in Hval.
+  destruct Hbij as [Hptoh Hhtop].
+  split.
+  - rewrite /plain_to_hidden in Hptoh |-*.
+    opose proof (hidden_insert_unique _ _ _ _ _ _); [done..|word|].
+    apply map_Forall_insert_2.
+    + split; [len|].
+      eapply pks_in_hidden_insert_both; try done.
+      2: { exact_eq Hlabel. repeat f_equal. word. }
+      rewrite lookup_total_alt.
+      destruct (plain !! uid) eqn:?; [|done].
+      by apply Hptoh.
+    + eapply map_Forall_impl; [done|].
+      simpl. intros * [].
+      split; [done|].
+      by apply pks_in_hidden_insert.
+  - rewrite /hidden_to_plain in Hhtop |-*.
+    apply map_Forall_insert_2.
+    + repeat eexists; try done.
+      * rewrite insert_union_singleton_l lookup_union.
+        simplify_map_eq/=.
+        by rewrite union_Some_l.
+      * by rewrite Heq_ver lookup_snoc.
+    + eapply map_Forall_impl; [done|].
+      simpl. intros **.
+      by apply in_plain_insert.
+Qed.
 
 End proof.
 End ktcore.
