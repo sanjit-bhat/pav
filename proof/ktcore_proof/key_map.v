@@ -41,22 +41,20 @@ Proof.
     by apply lookup_map_seq_Some_inv.
 Qed.
 
-Section map.
-  Context `{FinMap K M} {A B : Type}.
-  (* TODO: upstream. *)
-  Lemma map_included_alt (R : K → A → B → Prop) (m1 : M A) (m2 : M B) :
-    map_included R m1 m2 ↔
-      (∀ k a, m1 !! k = Some a → ∃ b, m2 !! k = Some b ∧ R k a b).
-  Proof.
-    rewrite /map_included /map_relation /option_relation. split.
-    - intros Hincl ?? Hlook.
-      specialize (Hincl k).
-      rewrite Hlook in Hincl.
-      case_match; naive_solver.
-    - intros Hincl k.
-      repeat case_match; naive_solver.
-  Qed.
-End map.
+(* TODO: upstream. *)
+Lemma map_included_alt `{FinMap K M} {A B : Type}
+    (R : K → A → B → Prop) (m1 : M A) (m2 : M B) :
+  map_included R m1 m2 ↔
+  (∀ k a, m1 !! k = Some a → ∃ b, m2 !! k = Some b ∧ R k a b).
+Proof.
+  rewrite /map_included /map_relation /option_relation. split.
+  - intros Hincl ?? Hlook.
+    specialize (Hincl k).
+    rewrite Hlook in Hincl.
+    case_match; naive_solver.
+  - intros Hincl k.
+    repeat case_match; naive_solver.
+Qed.
 
 Module ktcore.
 Import serde.ktcore.
@@ -108,7 +106,7 @@ Local Definition dec_map_labels vrf_pk m : gmap (w64 * nat) (list w8) :=
   list_to_map $ dec_map_labels_aux vrf_pk m.
 
 Local Definition dec_map_vals m : gmap (w64 * nat) (list w8) :=
-  omap (λ v, map_val_inv_fn v) m.
+  omap map_val_inv_fn m.
 
 Local Fixpoint get_contig_aux (m : gmap nat (list w8)) ver fuel :=
   match fuel with 0%nat => [] | S fuel' =>
@@ -224,13 +222,12 @@ Local Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
   in_hidden vrf_pk hidden uid ver pk.
 Proof.
   rewrite /plain_inv_fn. intros Hfn Hlook_plain Hlook_pks.
-  (* TODO: clean up with backwards reasoning? *)
   rewrite /filter_contig in Hfn.
   apply (f_equal (lookup uid)) in Hfn.
   rewrite {}Hlook_plain in Hfn. clear plain.
   apply lookup_omap_Some in Hfn as (m_uid&?&Hfn).
   simplify_option_eq.
-  opose proof (get_contig_out_lookup _ _ _ _) as  Hlook_uid; [done..|].
+  opose proof (get_contig_out_lookup _ _ _ _) as Hlook_uid; [done..|].
   rename Hfn into Hfn'.
   opose proof (lookup_map_curry _ uid ver) as Hfn.
   setoid_rewrite Hfn' in Hfn. simpl in *.
