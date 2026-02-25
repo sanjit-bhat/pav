@@ -127,99 +127,19 @@ Proof.
   by rewrite decode_link_det_aux.
 Qed.
 
-(* in practice, limit should be length of list. *)
-Fixpoint is_chain l (cut : option $ list w8) h limit : iProp Σ :=
-  ∃ d,
-  "#His_hash" ∷ cryptoffi.is_hash d h ∗
-  "#Hdecode" ∷
-    match decode_chain d with
-    | DecEmpty =>
-      "(%&%)" ∷ ⌜l = [] ∧ cut = None⌝
-    | DecLink prevLink val =>
-      match limit with
-      | 0%nat =>
-        "(%&%)" ∷ ⌜l = [] ∧ cut = Some h⌝
-      | S limit' =>
-        ∃ l',
-        "%" ∷ ⌜l = l' ++ [val]⌝ ∗
-        "#Hrecur" ∷ is_chain l' cut prevLink limit'
-      end
-    | DecInvalid =>
-      "(%&%)" ∷ ⌜l = [] ∧ cut = Some h⌝
-    end.
-#[global] Opaque is_chain.
-#[local] Transparent is_chain.
-
-Local Lemma is_chain_unfold l cut h limit :
-  is_chain l cut h limit
-  ⊣⊢
-  ∃ d,
-  "#His_hash" ∷ cryptoffi.is_hash d h ∗
-  "#Hdecode" ∷
-    match decode_chain d with
-    | DecEmpty =>
-      "(%&%)" ∷ ⌜l = [] ∧ cut = None⌝
-    | DecLink prevLink val =>
-      match limit with
-      | 0%nat =>
-        "(%&%)" ∷ ⌜l = [] ∧ cut = Some h⌝
-      | S limit' =>
-        ∃ l',
-        "%" ∷ ⌜l = l' ++ [val]⌝ ∗
-        "#Hrecur" ∷ is_chain l' cut prevLink limit'
-      end
-    | DecInvalid =>
-      "(%&%)" ∷ ⌜l = [] ∧ cut = Some h⌝
-    end.
-Proof. destruct limit; naive_solver. Qed.
-
-#[global] Instance is_chain_pers l c h limit : Persistent (is_chain l c h limit).
-Proof.
-  revert l h. induction limit as [? IH] using lt_wf_ind. intros.
-  setoid_rewrite is_chain_unfold.
-  apply exist_persistent. intros.
-  repeat case_match; try apply _.
-  ospecialize (IH n _); [lia|].
-  apply _.
-Qed.
-
-Lemma is_chain_hash_len l c h limit :
-  is_chain l c h limit -∗
-  ⌜Z.of_nat $ length h = cryptoffi.hash_len⌝.
-Proof.
-  destruct limit; iNamed 1;
-    by iDestruct (cryptoffi.is_hash_len with "His_hash") as %?.
-Qed.
-
-Lemma is_chain_invert h limit :
-  Z.of_nat (length h) = cryptoffi.hash_len → ⊢
-  ∃ l cut, is_chain l cut h limit.
-Proof.
-  revert h. induction limit as [? IH] using lt_wf_ind. intros.
-  setoid_rewrite is_chain_unfold.
-  iDestruct (cryptoffi.is_hash_invert h) as "[% $]"; [done|].
-  destruct (decode_chain _) eqn:Hdec; try case_match; try naive_solver.
-  apply decode_link_inj in Hdec as [-> ?].
-  ospecialize (IH n _); [lia|].
-  iDestruct (IH prevLink) as "(%&%&$)"; [done|].
-  naive_solver.
-Qed.
-
-Lemma is_chain_inj l0 l1 cut0 cut1 h limit :
-  is_chain l0 cut0 h limit -∗
-  is_chain l1 cut1 h limit -∗
-  ⌜l0 = l1 ∧ cut0 = cut1⌝.
-Proof.
-  iInduction (limit) as [? IH] using lt_wf_ind forall (l0 l1 cut0 cut1 h).
-  iEval (setoid_rewrite is_chain_unfold).
-  iNamedSuffix 1 "0". iNamedSuffix 1 "1".
-  iDestruct (cryptoffi.is_hash_inj with "His_hash0 His_hash1") as %->.
-  destruct (decode_chain _) eqn:Hdec; try case_match;
-    iNamedSuffix "Hdecode0" "0"; iNamedSuffix "Hdecode1" "1";
-    simplify_eq/=; try done.
-  iSpecialize ("IH" $! n with "[]"); [word|].
-  by iDestruct ("IH" with "Hrecur0 Hrecur1") as %[-> ->].
-Qed.
+(* returns vs and cut.
+to invert all [vs], fuel should at least be [length vs]. *)
+Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
+  match decode_chain (cryptoffi.hash_inv_fn hash) with
+  | DecEmpty => ([], None)
+  | DecLink prevLink v =>
+    match fuel with 0%nat => ([], Some hash) | S fuel' =>
+    let '(vs, cut) := inv_fn prevLink fuel' in
+    (vs ++ [v], cut) end
+  | DecInvalid => ([], Some hash)
+  end.
+#[global] Opaque inv_fn.
+#[local] Transparent inv_fn.
 
 (* [is_chain_det] is used in correctness proofs to go from
 lists equal to hashes equal.
