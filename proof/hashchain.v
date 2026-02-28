@@ -36,12 +36,12 @@ for inversion, we go from ptr -> obj.
 - it's hard to have an inductive inversion proof without [limit].
 there's nothing else to induct on! *)
 
-Inductive dec_chain :=
+Inductive DecChain :=
   | DecEmpty
   | DecLink (prevLink val : list w8)
   | DecInvalid.
 
-Local Definition decode_link data : option (list w8 * list w8) :=
+Local Definition dec_link data : option (list w8 * list w8) :=
   let rem0 := data in
   match bool_decide (Z.of_nat $ length rem0 >= cryptoffi.hash_len) with
   | false => None
@@ -51,14 +51,14 @@ Local Definition decode_link data : option (list w8 * list w8) :=
     Some (prevLink, val)
   end.
 
-Local Definition decode_chain data :=
+Local Definition dec_chain data :=
   match data with
   | None => DecInvalid
   | Some d =>
     match d with
     | [] => DecEmpty
     | _ =>
-      match decode_link d with
+      match dec_link d with
       | None => DecInvalid
       | Some x => DecLink x.1 x.2
       end
@@ -66,21 +66,21 @@ Local Definition decode_chain data :=
   end.
 
 Local Lemma decode_empty_inj d :
-  decode_chain d = DecEmpty →
+  dec_chain d = DecEmpty →
   d = Some $ [].
 Proof.
-  rewrite /decode_chain. intros.
+  rewrite /dec_chain. intros.
   case_match; [|done].
   case_match; [done|].
   by case_match.
 Qed.
 
-Local Lemma decode_link_inj_aux d x :
-  decode_link d = Some x →
+Local Lemma dec_link_inj_aux d x :
+  dec_link d = Some x →
   d = x.1 ++ x.2 ∧
     Z.of_nat $ length x.1 = cryptoffi.hash_len.
 Proof.
-  rewrite /decode_link. intros.
+  rewrite /dec_link. intros.
   case_bool_decide; [|done].
   simplify_eq/=.
   remember d as rem0.
@@ -89,25 +89,25 @@ Proof.
   split; [done|len].
 Qed.
 
-Lemma decode_link_inj d prevLink val :
-  decode_chain d = DecLink prevLink val →
+Lemma dec_link_inj d prevLink val :
+  dec_chain d = DecLink prevLink val →
   d = Some $ prevLink ++ val ∧
     Z.of_nat $ length prevLink = cryptoffi.hash_len.
 Proof.
-  rewrite /decode_chain. intros.
+  rewrite /dec_chain. intros.
   case_match; [|done].
   case_match; [done|].
   case_match; [|done].
-  opose proof (decode_link_inj_aux _ _ _) as [Heq ?]; [done|].
+  opose proof (dec_link_inj_aux _ _ _) as [Heq ?]; [done|].
   rewrite Heq.
   by simplify_eq/=.
 Qed.
 
-Local Lemma decode_link_det_aux prevLink val :
+Local Lemma dec_link_det_aux prevLink val :
   Z.of_nat $ length prevLink = cryptoffi.hash_len →
-  decode_link (prevLink ++ val) = Some (prevLink, val).
+  dec_link (prevLink ++ val) = Some (prevLink, val).
 Proof.
-  intros. rewrite /decode_link.
+  intros. rewrite /dec_link.
   case_bool_decide.
   2: { autorewrite with len in *. word. }
   rewrite take_app_length'; [|word].
@@ -115,61 +115,60 @@ Proof.
   done.
 Qed.
 
-Local Lemma decode_link_det prevLink val :
+Local Lemma dec_link_det prevLink val :
   Z.of_nat $ length prevLink = cryptoffi.hash_len →
-  decode_chain (Some $ prevLink ++ val) = DecLink prevLink val.
+  dec_chain (Some $ prevLink ++ val) = DecLink prevLink val.
 Proof.
   intros. simpl.
   case_match eqn:Heq.
   { apply (f_equal length) in Heq.
     autorewrite with len in *. word. }
   rewrite -{}Heq.
-  by rewrite decode_link_det_aux.
+  by rewrite dec_link_det_aux.
 Qed.
 
-(* returns vs and cut.
-to invert all [vs], fuel should at least be [length vs]. *)
+(* returns [vs] and [cut].
+to invert all [vs], fuel should at least be [S $ length vs]. *)
 Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
-  match decode_chain (cryptoffi.hash_inv_fn hash) with
+  match fuel with 0%nat => ([], Some hash) | S fuel' =>
+  match dec_chain (cryptoffi.hash_inv_fn hash) with
   | DecEmpty => ([], None)
   | DecLink prevLink v =>
-    match fuel with 0%nat => ([], Some hash) | S fuel' =>
-    let '(vs, cut) := inv_fn prevLink fuel' in
-    (vs ++ [v], cut) end
+    let x := inv_fn prevLink fuel' in
+    (x.1 ++ [v], x.2)
   | DecInvalid => ([], Some hash)
-  end.
+  end end.
 #[global] Opaque inv_fn.
 #[local] Transparent inv_fn.
 
-(* [is_chain_det] is used in correctness proofs to go from
-lists equal to hashes equal.
-proving [is_chain_det] requires the Cut hash to be visible.
-hashchains are over lists, so unlike merkle trees, there's only one place
-(the list bottom) where Cuts can show up.
-using that observation, we make Cut an [is_chain] arg,
-so that we can use a normal list for the remaining object. *)
-Lemma is_chain_det l cut h0 h1 limit limit' :
-  is_chain l cut h0 limit -∗
-  is_chain l cut h1 limit' -∗
-  ⌜h0 = h1⌝.
+(* there are multiple parties (some operating under is_Some cut)
+that rely on the HashChain API to determ compute the same hash.
+lucky for us, a hashchain (unlike a merkle tree) only has one location for cuts.
+so long as we externalize the one cut hash, we get determinism. *)
+Lemma det hash0 hash1 fuel0 fuel1 :
+  inv_fn hash0 fuel0 = inv_fn hash1 fuel1 →
+  hash0 = hash1.
 Proof.
-  iInduction (limit) as [? IH] using lt_wf_ind forall (l cut h0 h1 limit').
-  iEval (setoid_rewrite is_chain_unfold).
-  iNamedSuffix 1 "0". iNamedSuffix 1 "1".
-  destruct (decode_chain d) eqn:Hdec0;
-    destruct (decode_chain d0) eqn:Hdec1;
-    repeat case_match;
-    iNamedSuffix "Hdecode0" "0"; iNamedSuffix "Hdecode1" "1";
-    simplify_eq/=; try done; try discriminate_list.
+  revert hash0 hash1 fuel1.
+  induction fuel0; intros;
+    destruct fuel1; simplify_eq/=; try done;
+    try destruct (dec_chain (cryptoffi.hash_inv_fn hash0)) eqn:Hdec0;
+    try destruct (dec_chain (cryptoffi.hash_inv_fn hash1)) eqn:Hdec1;
+    simplify_eq/=; try done;
+    try discriminate_list.
   - apply decode_empty_inj in Hdec0.
     apply decode_empty_inj in Hdec1.
-    simplify_eq/=.
-    by iDestruct (cryptoffi.is_hash_det with "His_hash0 His_hash1") as %->.
+    apply cryptoffi.hash_bij_r in Hdec0.
+    apply cryptoffi.hash_bij_r in Hdec1.
+    by simplify_eq/=.
   - list_simplifier.
-    iDestruct ("IH" $! n with "[] Hrecur0 Hrecur1") as %->; [word|].
-    apply decode_link_inj in Hdec0 as [-> _].
-    apply decode_link_inj in Hdec1 as [-> _].
-    by iDestruct (cryptoffi.is_hash_det with "His_hash0 His_hash1") as %->.
+    opose proof (IHfuel0 prevLink prevLink0 fuel1 _) as ->.
+    { do 2 destruct (inv_fn _ _). by simplify_eq/=. }
+    apply dec_link_inj in Hdec0 as [Hdec0 _].
+    apply dec_link_inj in Hdec1 as [Hdec1 _].
+    apply cryptoffi.hash_bij_r in Hdec0.
+    apply cryptoffi.hash_bij_r in Hdec1.
+    by simplify_eq/=.
 Qed.
 
 Local Lemma is_chain_snoc l v cut prevLink nextLink len :
@@ -180,7 +179,7 @@ Proof.
   iIntros "#His_chain #His_hash".
   iFrame "#". fold is_chain.
   iDestruct (is_chain_hash_len with "His_chain") as %?.
-  rewrite decode_link_det; [|done].
+  rewrite dec_link_det; [|done].
   by iFrame "#".
 Qed.
 
