@@ -65,7 +65,7 @@ Local Definition dec_chain data :=
     end
   end.
 
-Local Lemma decode_empty_inj d :
+Local Lemma dec_empty_inj d :
   dec_chain d = DecEmpty →
   d = Some $ [].
 Proof.
@@ -141,6 +141,12 @@ Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
 #[global] Opaque inv_fn.
 #[local] Transparent inv_fn.
 
+(* for now, intentionally left transp.
+callers should be use valid vs. inv_fn when needed. *)
+Definition valid vs cut hash fuel :=
+  inv_fn hash fuel = (vs, cut) ∧
+  (∀ x, cut = Some x → Z.of_nat (length x) = cryptoffi.hash_len).
+
 (* there are multiple parties (some operating under is_Some cut)
 that rely on the HashChain API to determ compute the same hash.
 lucky for us, a hashchain (unlike a merkle tree) only has one location for cuts.
@@ -156,8 +162,8 @@ Proof.
     try destruct (dec_chain (cryptoffi.hash_inv_fn hash1)) eqn:Hdec1;
     simplify_eq/=; try done;
     try discriminate_list.
-  - apply decode_empty_inj in Hdec0.
-    apply decode_empty_inj in Hdec1.
+  - apply dec_empty_inj in Hdec0.
+    apply dec_empty_inj in Hdec1.
     apply cryptoffi.hash_bij_r in Hdec0.
     apply cryptoffi.hash_bij_r in Hdec1.
     by simplify_eq/=.
@@ -171,38 +177,32 @@ Proof.
     by simplify_eq/=.
 Qed.
 
+Local Lemma valid_len vs cut hash fuel :
+  valid vs cut hash fuel →
+  Z.of_nat (length hash) = cryptoffi.hash_len.
+Proof.
+  intros [Hfn ?].
+  destruct fuel; simplify_eq/=; [naive_solver|].
+  case_match eqn:Hdec; simplify_eq/=.
+  - apply dec_empty_inj in Hdec.
+    by apply cryptoffi.is_hash_len' in Hdec.
+  - apply dec_link_inj in Hdec as [Hdec _].
+    by apply cryptoffi.is_hash_len' in Hdec.
+  - naive_solver.
+Qed.
+
 Local Lemma snoc vs v cut prev_link next_link fuel :
-  inv_fn prev_link fuel = (vs, cut) →
+  valid vs cut prev_link fuel →
   cryptoffi.hash_fn (prev_link ++ v) = Some next_link →
-  inv_fn next_link (S fuel) = (vs ++ [v], cut).
+  valid (vs ++ [v]) cut next_link (S fuel).
 Proof.
-  intros Hfn Hhash%cryptoffi.hash_bij_l. simpl.
+  intros Hfn Hhash%cryptoffi.hash_bij_l.
+  apply valid_len in Hfn as ?.
+  destruct Hfn as [Hfn ?].
+  split; [|done]. simpl.
   rewrite Hhash.
-  rewrite dec_link_det.
-  2: { Fail done.
-  (* TODO: stuck.
-  prev: is_hash always determined hash len.
-  curr: hash_inv_fn accepts all hash inputs,
-  and only determines len if valid output.
-
-  issue: if prev_link is invalid hash, might not have right len.
-  need len for proper decoding.
-
-  one fix: create a wrapper pred around inv_fn that locks down the cut len.
-  in merkle lib: the "updater-side" own_map will similarly
-  lock down the cut lens. *)
-Admitted.
-
-Local Lemma is_chain_snoc l v cut prev_link nextLink len :
-  is_chain l cut prev_link len -∗
-  cryptoffi.is_hash (Some (prev_link ++ v)) nextLink -∗
-  is_chain (l ++ [v]) cut nextLink (S len).
-Proof.
-  iIntros "#His_chain #His_hash".
-  iFrame "#". fold is_chain.
-  iDestruct (is_chain_hash_len with "His_chain") as %?.
   rewrite dec_link_det; [|done].
-  by iFrame "#".
+  by rewrite Hfn.
 Qed.
 
 Lemma wp_GetEmptyLink :
