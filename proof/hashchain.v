@@ -222,11 +222,7 @@ Proof.
   iPureIntro.
   split; [|done]. simpl.
   apply cryptoffi.hash_bij_l in His_hash.
-
-  Set Printing All.
-  Fail rewrite His_hash.
-  (* TODO: rewrite fails bc both hashchain and cryptoutil have
-  cryptoffi.hash_inv_fn, and their pkg Assumptions differ. *)
+  rewrite His_hash.
 Admitted.
 
 Lemma wp_GetNextLink sl_prev_link d0 prev_link sl_nextVal d1 nextVal l cut len :

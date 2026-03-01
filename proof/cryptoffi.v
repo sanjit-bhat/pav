@@ -37,11 +37,11 @@ Qed.
 
 (** Hashes. *)
 
-Definition hash_fn (data : list w8) : option $ list w8.
-Proof. Admitted.
+(* data → ohash. *)
+Axiom hash_fn : ∀ `{heapGS Σ}, list w8 → option $ list w8.
 
-Definition hash_inv_fn (hash : list w8) : option $ list w8.
-Proof. Admitted.
+(* hash → odata. *)
+Axiom hash_inv_fn : ∀ `{heapGS Σ}, list w8 → option $ list w8.
 
 (* [hash_fn] and [hash_inv_fn] are partial bijections. *)
 Lemma hash_bij_l data hash :
@@ -68,8 +68,10 @@ Proof.
   by apply is_hash_len in Hhash.
 Qed.
 
-Definition own_Hasher (ptr : loc) (data : list w8) : iProp Σ.
-Proof. Admitted.
+(* TODO: the iProp Σ Axiom's in this file are missing more assumptions.
+i.e., go.Semantics. we'll fill those in later. *)
+(* ptr → data. *)
+Axiom own_Hasher : loc → list w8 → iProp Σ.
 
 Lemma wp_NewHasher :
   {{{ is_pkg_init cryptoffi }}}
@@ -115,8 +117,8 @@ we model correctness (is_vrf_proof), "Full Uniqueness" (is_vrf_out_det),
 and "Full Collision Resistance" (is_vrf_out_inj). *)
 
 (* own_vrf_sk provides ownership of an sk from the VrfGenerateKey function. *)
-Definition own_vrf_sk (ptr_sk : loc) (pk : list w8) : iProp Σ.
-Admitted.
+(* ptr_sk → pk. *)
+Axiom own_vrf_sk : loc → list w8 → iProp Σ.
 
 (* think of this as DfracDiscarded. *)
 #[global] Instance own_vrf_sk_pers ptr_sk pk :
@@ -126,16 +128,16 @@ Proof. Admitted.
 (* is_vrf_pk says that pk satisfies certain mathematical crypto checks.
 this is in contrast to is_sig_pk, which additionally says that
 the corresponding sk never left the ffi. *)
-Definition is_vrf_pk (pk : list w8) : iProp Σ.
-Admitted.
+(* pk. *)
+Axiom is_vrf_pk : list w8 → iProp Σ.
 
 #[global] Instance is_vrf_pk_pers pk : Persistent (is_vrf_pk pk).
 Proof. Admitted.
 
 (* own_vrf_pk just wraps is_vrf_pk with ownership of the heap resources
 corresponding to the pk bytes. *)
-Definition own_vrf_pk (ptr_pk : loc) (pk : list w8) : iProp Σ.
-Admitted.
+(* ptr_pk → pk. *)
+Axiom own_vrf_pk : loc → list w8 → iProp Σ.
 
 (* think of this as DfracDiscarded. *)
 #[global] Instance own_vrf_pk_pers ptr_pk pk :
@@ -148,8 +150,8 @@ Proof. Admitted.
 (* is_vrf_proof helps model correctness.
 i.e., a caller gets this from Prove / Verify,
 and uses it to prove that Verify should not return an error. *)
-Definition is_vrf_proof (pk data proof : list w8) : iProp Σ.
-Admitted.
+(* pk → data → proof. *)
+Axiom is_vrf_proof : list w8 → list w8 → list w8 → iProp Σ.
 
 #[global] Instance is_vrf_proof_pers pk data proof :
   Persistent (is_vrf_proof pk data proof).
@@ -159,8 +161,8 @@ Proof. Admitted.
 this is convenient because the spec does not rule out multiple proofs
 between the same pk, data, and output. *)
 (* [vrf_fn] models "Full Uniqueness". this always holds for ECVRF. *)
-Definition vrf_fn (pk : list w8) (data : list w8) : option $ list w8.
-Proof. Admitted.
+(* pk → data → oout. *)
+Axiom vrf_fn : ∀ `{heapGS Σ}, list w8 → list w8 → option $ list w8.
 
 (* [vrf_inv_fn] models "Full Collision Resistance".
 From the spec, "Full" (as opposed to "Trusted") holds for ECVRF as long
@@ -168,8 +170,8 @@ as the `validate_key` parameter to `ECVRF_verify` is true.
 key validation is done when running `VrfPublicKeyDecode`
 on an adversarially-provided pk. it is represented by [is_vrf_pk].
 in this model, the partial function internalizes valid keys. *)
-Definition vrf_inv_fn (pk : list w8) (out : list w8) : option $ list w8.
-Proof. Admitted.
+(* pk → out → odata. *)
+Axiom vrf_inv_fn : ∀ `{heapGS Σ}, list w8 → list w8 → option $ list w8.
 
 (* [vrf_fn] and [vrf_inv_fn] are partial bijections. *)
 Lemma vrf_bij_l pk data out :
@@ -301,8 +303,8 @@ and the underlying sk is enclosed in the ffi,
 forcing all users to establish the sigpred.
 pk is a mathematical list so it can leave the ffi and be sent
 between parties. *)
-Definition own_sig_sk (ptr_sk : loc) (pk : list w8) (P : list w8 → iProp Σ) : iProp Σ.
-Admitted.
+(* ptr_sk → pk → P. *)
+Axiom own_sig_sk : loc → list w8 → (list w8 → iProp Σ) → iProp Σ.
 
 (* think of this as DfracDiscarded. *)
 #[global] Instance own_sig_sk_pers ptr_sk pk P :
@@ -312,8 +314,8 @@ Proof. Admitted.
 (* is_sig_pk says that pk is in-distribution.
 also, that it came from the Generate fn,
 tied by P to a corresponding sk in the ffi. *)
-Definition is_sig_pk (pk : list w8) (P : list w8 → iProp Σ) : iProp Σ.
-Admitted.
+(* pk → P. *)
+Axiom is_sig_pk : list w8 → (list w8 → iProp Σ) → iProp Σ.
 
 #[global] Instance is_sig_pk_pers pk P : Persistent (is_sig_pk pk P).
 Proof. Admitted.
@@ -324,8 +326,8 @@ Proof. Admitted.
 (* is_sig says that Verify will ret True on these inputs.
 relative to the crypto model, it says the inputs are in the set of
 memoized=True Verify inputs. *)
-Definition is_sig (pk msg sig : list w8) : iProp Σ.
-Admitted.
+(* pk → msg → sig. *)
+Axiom is_sig : list w8 → list w8 → list w8 → iProp Σ.
 
 #[global] Instance is_sig_pers pk msg sig : Persistent (is_sig pk msg sig).
 Proof. Admitted.
