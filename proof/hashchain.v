@@ -209,17 +209,25 @@ Lemma wp_GetEmptyLink :
   {{{ is_pkg_init hashchain }}}
   @! hashchain.GetEmptyLink #()
   {{{
-    sl h, RET #sl;
-    "Hsl_hash" ∷ sl ↦* h ∗
-    "#His_chain" ∷ is_chain [] None h 0%nat
+    sl_hash hash, RET #sl_hash;
+    "Hsl_hash" ∷ sl_hash ↦* hash ∗
+    "%His_chain" ∷ ⌜valid [] None hash 1⌝
   }}}.
 Proof.
   wp_start.
   wp_apply (cryptoutil.wp_Hash _ inhabitant) as "* @".
   { iApply own_slice_nil. }
   iApply "HΦ".
-  by iFrame "∗#".
-Qed.
+  iFrame.
+  iPureIntro.
+  split; [|done]. simpl.
+  apply cryptoffi.hash_bij_l in His_hash.
+
+  Set Printing All.
+  Fail rewrite His_hash.
+  (* TODO: rewrite fails bc both hashchain and cryptoutil have
+  cryptoffi.hash_inv_fn, and their pkg Assumptions differ. *)
+Admitted.
 
 Lemma wp_GetNextLink sl_prev_link d0 prev_link sl_nextVal d1 nextVal l cut len :
   {{{

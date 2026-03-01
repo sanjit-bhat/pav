@@ -105,7 +105,7 @@ Lemma wp_Hasher_Sum sl_b_in hr data b_in :
     sl_b_out hash, RET #sl_b_out;
     "Hown_hr" ∷ own_Hasher hr data ∗
     "Hsl_b_out" ∷ sl_b_out ↦* (b_in ++ hash) ∗
-    "#His_hash" ∷ ⌜hash_fn data = Some hash⌝
+    "%His_hash" ∷ ⌜hash_fn data = Some hash⌝
   }}}.
 Proof. Admitted.
 
@@ -220,7 +220,7 @@ Lemma wp_VrfPrivateKey_Prove ptr_sk pk sl_data (data : list w8) d0 :
     "Hsl_out" ∷ sl_out ↦* out ∗
     "Hsl_proof" ∷ sl_proof ↦* proof ∗
     "#His_vrf_proof" ∷ is_vrf_proof pk data proof ∗
-    "#His_vrf_out" ∷ ⌜vrf_fn pk data = Some out⌝
+    "%His_vrf_out" ∷ ⌜vrf_fn pk data = Some out⌝
   }}}.
 Proof. Admitted.
 
@@ -235,7 +235,7 @@ Lemma wp_VrfPrivateKey_Evaluate ptr_sk pk sl_data (data : list w8) d0 :
     sl_out (out : list w8), RET #sl_out;
     "Hsl_data" ∷ sl_data ↦*{d0} data ∗
     "Hsl_out" ∷ sl_out ↦* out ∗
-    "#His_vrf_out" ∷ ⌜vrf_fn pk data = Some out⌝
+    "%His_vrf_out" ∷ ⌜vrf_fn pk data = Some out⌝
   }}}.
 Proof. Admitted.
 
@@ -257,7 +257,7 @@ Lemma wp_VrfPublicKey_Verify ptr_pk pk sl_data sl_proof (data proof : list w8) d
       | true => ¬ is_vrf_proof pk data proof
       | false =>
         "#His_proof" ∷ is_vrf_proof pk data proof ∗
-        "#His_out" ∷ ⌜vrf_fn pk data = Some out⌝
+        "%His_out" ∷ ⌜vrf_fn pk data = Some out⌝
       end
   }}}.
 Proof. Admitted.

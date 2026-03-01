@@ -39,7 +39,7 @@ Lemma wp_Hash sl_b d0 b :
     sl_hash hash, RET #sl_hash;
     "Hsl_b" ∷ sl_b ↦*{d0} b ∗
     "Hsl_hash" ∷ sl_hash ↦* hash ∗
-    "#His_hash" ∷ ⌜cryptoffi.hash_fn b = Some hash⌝
+    "%His_hash" ∷ ⌜cryptoffi.hash_fn b = Some hash⌝
   }}}.
 Proof.
   wp_start. iNamed "Hpre".
@@ -50,7 +50,7 @@ Proof.
   { iApply own_slice_nil. }
   iApply "HΦ".
   list_simplifier.
-  iFrame "∗#".
+  iFrame "∗%".
 Qed.
 
 End proof.
