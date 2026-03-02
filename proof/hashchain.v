@@ -191,7 +191,7 @@ Proof.
   - naive_solver.
 Qed.
 
-Local Lemma snoc vs v cut prev_link next_link fuel :
+Local Lemma snoc {vs cut prev_link fuel} v next_link :
   valid vs cut prev_link fuel →
   cryptoffi.hash_fn (prev_link ++ v) = Some next_link →
   valid (vs ++ [v]) cut next_link (S fuel).
@@ -221,24 +221,23 @@ Proof.
   iFrame.
   iPureIntro.
   split; [|done]. simpl.
-  apply cryptoffi.hash_bij_l in His_hash.
-  rewrite His_hash.
-Admitted.
+  by apply cryptoffi.hash_bij_l in His_hash as ->.
+Qed.
 
-Lemma wp_GetNextLink sl_prev_link d0 prev_link sl_nextVal d1 nextVal l cut len :
+Lemma wp_GetNextLink sl_prev_link d0 prev_link sl_next_val d1 next_val vs cut fuel :
   {{{
     is_pkg_init hashchain ∗
     "Hsl_prev_link" ∷ sl_prev_link ↦*{d0} prev_link ∗
-    "Hsl_nextVal" ∷ sl_nextVal ↦*{d1} nextVal ∗
-    "#His_chain" ∷ is_chain l cut prev_link len
+    "Hsl_next_val" ∷ sl_next_val ↦*{d1} next_val ∗
+    "%His_chain" ∷ ⌜valid vs cut prev_link fuel⌝
   }}}
-  @! hashchain.GetNextLink #sl_prev_link #sl_nextVal
+  @! hashchain.GetNextLink #sl_prev_link #sl_next_val
   {{{
-    sl_nextLink nextLink, RET #sl_nextLink;
+    sl_next_link next_link, RET #sl_next_link;
     "Hsl_prev_link" ∷ sl_prev_link ↦*{d0} prev_link ∗
-    "Hsl_nextVal" ∷ sl_nextVal ↦*{d1} nextVal ∗
-    "Hsl_nextLink" ∷ sl_nextLink ↦* nextLink ∗
-    "#His_chain" ∷ is_chain (l ++ [nextVal]) cut nextLink (S len)
+    "Hsl_next_val" ∷ sl_next_val ↦*{d1} next_val ∗
+    "Hsl_next_link" ∷ sl_next_link ↦* next_link ∗
+    "%His_chain" ∷ ⌜valid (vs ++ [next_val]) cut next_link (S fuel)⌝
   }}}.
 Proof.
   wp_start. iNamed "Hpre".
@@ -246,33 +245,33 @@ Proof.
   wp_apply cryptoffi.wp_NewHasher as "* @".
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_prev_link]").
   iNamedSuffix 1 "0". wp_auto.
-  wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr0 $Hsl_nextVal]").
+  wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr0 $Hsl_next_val]").
   iNamedSuffix 1 "1". wp_auto.
   wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr1]").
   { iApply own_slice_nil. }
   iIntros "*". iNamed 1.
   wp_auto.
   iApply "HΦ".
-  iDestruct (is_chain_snoc with "His_chain His_hash") as "$".
   iFrame.
+  iPureIntro. by eapply snoc.
 Qed.
 
-Definition own (ptr : loc) (vals : list $ list w8) (d : dfrac) : iProp Σ :=
-  ∃ sl_predLastLink predLastLink sl_lastLink lastLink sl_enc enc,
-  "Hstruct" ∷ ptr ↦{d} (hashchain.HashChain.mk sl_predLastLink sl_lastLink sl_enc) ∗
+Definition own (ptr : loc) (vs : list $ list w8) (d : dfrac) : iProp Σ :=
+  ∃ sl_pred_last_link pred_last_link sl_last_link last_link sl_enc enc,
+  "Hstruct" ∷ ptr ↦{d} (hashchain.HashChain.mk sl_pred_last_link sl_last_link sl_enc) ∗
 
-  "#Hsl_predLastLink" ∷ sl_predLastLink ↦*□ predLastLink ∗
-  "#His_chain_pred" ∷ (∀ x vals',
-    ⌜vals = vals' ++ [x]⌝ -∗
-    is_chain vals' None predLastLink (length vals')) ∗
+  "#Hsl_pred_last_link" ∷ sl_pred_last_link ↦*□ pred_last_link ∗
+  "%His_chain_pred" ∷ ⌜∀ x vs',
+    vs = vs' ++ [x] →
+    valid vs' None pred_last_link (S $ length vs')⌝ ∗
 
-  "#Hsl_lastLink" ∷ sl_lastLink ↦*□ lastLink ∗
-  "#His_chain" ∷ is_chain vals None lastLink (length vals) ∗
+  "#Hsl_last_link" ∷ sl_last_link ↦*□ last_link ∗
+  "%His_chain" ∷ ⌜valid vs None last_link (S $ length vs)⌝ ∗
 
   "Hsl_enc" ∷ sl_enc ↦*{d} enc ∗
   "Hsl_enc_cap" ∷ own_slice_cap w8 sl_enc d ∗
-  "%" ∷ ⌜enc = mjoin vals⌝ ∗
-  "%Hsame_len" ∷ ⌜Forall (λ x, length x = Z.to_nat cryptoffi.hash_len) vals⌝.
+  "%" ∷ ⌜enc = mjoin vs⌝ ∗
+  "%Hsame_len" ∷ ⌜Forall (λ x, length x = Z.to_nat cryptoffi.hash_len) vs⌝.
 #[global] Opaque own.
 #[local] Transparent own.
 
@@ -289,11 +288,11 @@ Proof.
     + iIntros "[H0 H1]".
       iNamedSuffix "H0" "0".
       iNamedSuffix "H1" "1".
-      iCombine "Hstruct0 Hstruct1" as "Hstruct" gives %[_ ?].
+      iCombine "Hstruct0 Hstruct1" as "Hstruct" gives %?.
       simplify_eq/=.
       iCombine "Hsl_enc0 Hsl_enc1" as "Hsl_enc".
       iCombine "Hsl_enc_cap0 Hsl_enc_cap1" as "Hsl_enc_cap".
-      by iFrame "∗#".
+      by iFrame "∗#%".
   - apply _.
   - intros ?. iNamed 1.
     iPersist "Hstruct Hsl_enc Hsl_enc_cap".
@@ -343,10 +342,10 @@ Proof.
   wp_apply (wp_GetNextLink with "[Hsl_val]").
   { iFrame "∗#". }
   iIntros "*". iNamedSuffix 1 "_n".
-  iPersist "Hsl_prev_link_n Hsl_nextLink_n".
+  iPersist "Hsl_prev_link_n Hsl_next_link_n".
   wp_auto.
-  wp_apply (wp_slice_append with "[$Hsl_enc $Hsl_enc_cap $Hsl_nextVal_n]")
-    as "* (Hsl_enc & Hsl_enc_cap & Hsl_nextVal_n)".
+  wp_apply (wp_slice_append with "[$Hsl_enc $Hsl_enc_cap $Hsl_next_val_n]")
+    as "* (Hsl_enc & Hsl_enc_cap & Hsl_next_val_n)".
   iApply "HΦ".
   iFrame "∗#".
   repeat iSplit.
@@ -482,7 +481,7 @@ Proof.
   wp_pure; [word|].
   wp_auto.
   wp_apply (wp_GetNextLink with "[$Hsl_newLink $Hsl_newVal $His_chain]") as "{His_chain} * @".
-  iMod (own_slice_update_to_dfrac d0 with "Hsl_nextLink") as "Hsl_nextLink"; [done|].
+  iMod (own_slice_update_to_dfrac d0 with "Hsl_next_link") as "Hsl_next_link"; [done|].
   iModIntro.
   wp_for_post.
   iFrame "newLink ∗".
