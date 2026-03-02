@@ -411,12 +411,6 @@ Proof.
   wp_start. iNamed "Hpre".
   wp_auto.
   apply valid_len in His_chain as ?.
-  (*
-  iDestruct (own_slice_valid with "Hsl_prev_link") as %Ht.
-  { by rewrite go_type_size_unseal. }
-  destruct Ht as [|Ht].
-  2: { apply (f_equal length) in Ht. simpl in *. word. }
-  *)
   iDestruct (own_slice_len with "Hsl_proof") as %[? ?].
 
   wp_if_destruct.
@@ -487,12 +481,11 @@ Proof.
     as "(Hsl_new_v&_&Hsl_proof)"; [word|].
   wp_apply (wp_GetNextLink with "[$Hsl_new_link $Hsl_new_v]") as "* @"; [done|].
   iMod (own_slice_update_to_dfrac d0 with "Hsl_next_link") as "Hsl_next_link".
-  { Fail done.
-    (* TODO: need own_slice_valid for this. *)
-  (*
+  { (* TODO: need to extract [✓ d0] from Hsl_prev_link. *)
+    admit. }
   iModIntro.
   wp_for_post.
-  iFrame "new_link ∗".
+  iFrame "newLink ∗".
 
   iEval (rewrite drop_drop) in "Hsl_proof".
   replace (uint.Z (word.add _ _)) with (uint.Z i + 1) by word.
@@ -500,11 +493,10 @@ Proof.
     with (Z.to_nat ((uint.Z i + 1) * cryptoffi.hash_len))%nat by word.
   iFrame "Hsl_proof".
 
-  rewrite subslice_from_start.
-  Opaque is_chain.
   list_simplifier.
+  Opaque valid.
   iExists _. repeat iSplit; try iPureIntro.
-  6: { iExactEq "His_chain". rewrite /named. repeat f_equal. len. }
+  6: { exact_eq His_chain0. len. }
   - word.
   - apply Forall_snoc. split; [done|len].
   - rewrite join_app.
@@ -515,7 +507,7 @@ Proof.
     repeat f_equal. word.
   - len.
   - rewrite last_snoc /=. f_equal; word.
-  *)
+  (* TODO: [word] in goose v4 seems to take much longer than in goose v3. *)
 Admitted.
 
 Lemma wp_HashChain_Prove c vs d (prevLen : w64) :
