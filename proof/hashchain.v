@@ -481,7 +481,11 @@ Proof.
     as "(Hsl_new_v&_&Hsl_proof)"; [word|].
   wp_apply (wp_GetNextLink with "[$Hsl_new_link $Hsl_new_v]") as "* @"; [done|].
   iMod (own_slice_update_to_dfrac d0 with "Hsl_next_link") as "Hsl_next_link".
-  { (* TODO: need to extract [✓ d0] from Hsl_prev_link. *)
+  { (* TODO: need to extract [✓ d0] from Hsl_prev_link.
+    one easy fix: prove validity OR empty list.
+    this seems like a "hack" that works for the goose v4 slice model.
+    but at its core, we're dealing with a zero-sized alloc problem,
+    and make({}struct, 10) is still zero-sized. *)
     admit. }
   iModIntro.
   wp_for_post.
