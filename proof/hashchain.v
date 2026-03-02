@@ -538,23 +538,17 @@ Proof.
   case_decide; [|word].
   wp_auto.
   remember (word.mul _ _) as split.
-  iDestruct (own_slice_slice split split with "Hsl_proof")
-    as "(Hsl_newVal&_&Hsl_proof)"; [word|].
-
-  wp_apply (wp_slice_slice with "[$Hsl_enc]") as "(Hsl0 & Hsl1 & Hsl2)"; [word|].
-  wp_apply (bytes.wp_Clone with "[$Hsl1]") as "* @".
-  iDestruct (own_slice_f with "[$Hsl0 $Hsl_b $Hsl2]") as "?"; [word|].
+  iDestruct (own_slice_slice split split with "Hsl_enc")
+    as "(Hsl0&Hsl1&Hsl2)"; [word|].
+  wp_apply (bytes.wp_Clone with "[$Hsl2]") as "* @".
+  iDestruct (own_slice_slice with "[$Hsl0 $Hsl1 $Hsl_b]") as "?"; [word|].
 
   iApply "HΦ".
   iFrame "∗#%".
-  iPureIntro. split.
-  { by apply Forall_drop. }
-  subst.
-  opose proof (join_same_len_subslice (uint.nat prevLen) (length vs)
-    (Z.to_nat cryptoffi.hash_len) vs ltac:(word) Hsame_len) as Heq.
-  rewrite subslice_to_end in Heq; [|done].
-  rewrite Heq.
-  f_equal; word.
+  iPureIntro. subst.
+  split. { by apply Forall_drop. }
+  erewrite join_same_len_drop; [|done|word].
+  f_equal. word.
 Qed.
 
 Lemma wp_HashChain_Bootstrap c vs d old_vs last_val :
@@ -570,7 +564,7 @@ Lemma wp_HashChain_Bootstrap c vs d old_vs last_val :
     "#Hsl_bootLink" ∷ sl_bootLink ↦*□ bootLink ∗
     "Hsl_proof" ∷ sl_proof ↦* proof ∗
 
-    "#His_bootLink" ∷ is_chain old_vs None bootLink (length old_vs) ∗
+    "%His_bootLink" ∷ ⌜valid old_vs None bootLink (S $ length old_vs)⌝ ∗
     "%Hwish" ∷ ⌜wish_Proof proof [last_val]⌝
   }}}.
 Proof.
@@ -578,24 +572,25 @@ Proof.
   iDestruct (own_slice_len with "Hsl_enc") as %?.
   apply join_same_len_length in Hsame_len as Hlen.
   rewrite app_length /= in Hlen.
-  wp_apply (wp_slice_slice with "[$Hsl_enc]") as "(Hsl0 & Hsl1 & Hsl2)"; [word|].
-  wp_apply (bytes.wp_Clone with "[$Hsl1]") as "* @".
-  iDestruct (own_slice_f with "[$Hsl0 $Hsl_b $Hsl2]") as "?"; [word|].
+  iDestruct (own_slice_wf with "Hsl_enc") as %?.
+  case_decide; [|word].
+  wp_auto.
+  remember (word.sub _ _) as split.
+  iDestruct (own_slice_slice split split with "Hsl_enc")
+    as "(Hsl0&Hsl1&Hsl2)"; [word|].
+  wp_apply (bytes.wp_Clone with "[$Hsl2]") as "* @".
+  iDestruct (own_slice_slice with "[$Hsl0 $Hsl1 $Hsl_b]") as "?"; [word|].
 
   iApply "HΦ".
-  iDestruct ("His_chain_pred" with "[//]") as "?".
+  opose proof (His_chain_pred _ _ _); [done|].
   iFrame "∗#%".
-  iPureIntro. split.
+  iPureIntro. subst. split.
   - apply Forall_snoc in Hsame_len as [??].
     by rewrite Forall_singleton.
   - replace (sint.nat (word.sub _ _)) with
-      ((length old_vs + 0) * (Z.to_nat cryptoffi.hash_len))%nat by word.
-    replace (sint.nat _) with
-      ((length old_vs + 1) * (Z.to_nat cryptoffi.hash_len))%nat by word.
-    subst.
-    rewrite -join_same_len_subslice; [|len|done].
-    rewrite subslice_app_length.
-    by list_simplifier.
+      (length old_vs * Z.to_nat cryptoffi.hash_len)%nat by word.
+    erewrite <-join_same_len_drop; [|done|len].
+    by rewrite drop_app_length.
 Qed.
 
 End proof.
