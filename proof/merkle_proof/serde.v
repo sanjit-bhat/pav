@@ -265,10 +265,10 @@ Definition encodes (obj : t) (enc : list w8) : Prop :=
   uint.Z (W64 (length obj.(LeafLabel))) = length obj.(LeafLabel) ∧
   uint.Z (W64 (length obj.(LeafVal))) = length obj.(LeafVal) ∧
 
-  enc = u64_le (length obj.(Siblings)) ++ obj.(Siblings) ++
+  enc = (u64_le $ W64 $ length obj.(Siblings)) ++ obj.(Siblings) ++
   [(if obj.(IsOtherLeaf) then W8 1 else W8 0)] ++
-  u64_le (length obj.(LeafLabel)) ++ obj.(LeafLabel) ++
-  u64_le (length obj.(LeafVal)) ++ obj.(LeafVal).
+  (u64_le $ W64 $ length obj.(LeafLabel)) ++ obj.(LeafLabel) ++
+  (u64_le $ W64 $ length obj.(LeafVal)) ++ obj.(LeafVal).
 
 Lemma inj {obj0 obj1 enc0 enc1 tail0 tail1} :
   enc0 ++ tail0 = enc1 ++ tail1 →

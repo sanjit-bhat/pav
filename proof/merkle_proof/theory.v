@@ -260,137 +260,19 @@ this allows proving [is_full_tree_inj].
 [limit] prevents infinite recursion.
 NOTE: many of the below cases are invariant to whether limit=0 or S l'.
 to prevent duplicate proof branches, we use strong induction: [lt_wf_ind]. *)
-Fixpoint is_full_tree' t h limit : iProp Σ :=
-  ∃ d,
-  "#His_hash" ∷ cryptoffi.is_hash d h ∗
-  "#Hdecode" ∷ match decode_node d with
-  | DecEmpty =>
-    "%" ∷ ⌜t = Empty⌝
-  | DecLeaf l v =>
-    "%" ∷ ⌜t = Leaf l v⌝
-  | DecInner h0 h1 =>
-    match limit with
-    | 0%nat =>
-      "%" ∷ ⌜t = Cut h⌝
-    | S limit' =>
-      ∃ t0 t1,
-      "#Hchild0" ∷ is_full_tree' t0 h0 limit' ∗
-      "#Hchild1" ∷ is_full_tree' t1 h1 limit' ∗
-      "%" ∷ ⌜t = Inner t0 t1⌝
-    end
-  | DecInvalid =>
-    "%" ∷ ⌜t = Cut h⌝
-  end.
-#[global] Arguments is_full_tree' !_.
-Definition is_full_tree t h := is_full_tree' t h max_depth.
-Hint Unfold is_full_tree : merkle.
+Fixpoint tree_inv_fn' hash fuel : tree :=
+  match fuel with 0%nat => Cut hash | S fuel' =>
+  match decode_node (cryptoffi.hash_inv_fn hash) with
+  | DecEmpty => Empty
+  | DecLeaf l v => Leaf l v
+  | DecInner hash0 hash1 => Inner (tree_inv_fn' hash0 fuel') (tree_inv_fn' hash1 fuel')
+  | DecInvalid => Cut hash
+  end end.
+Definition tree_inv_fn hash := tree_inv_fn' hash max_depth.
+Hint Unfold tree_inv_fn : merkle.
 
-(* rocq kernel doesn't allow reducing a fixpoint on its args without
-the decreasing arg being a constructor.
-this forces us to prove a manual unfolding lemma.
-NOTE: ideally, automation could prove this. *)
-Lemma is_full_tree_unfold t h limit :
-  is_full_tree' t h limit
-  ⊣⊢
-  ∃ d,
-  "#His_hash" ∷ cryptoffi.is_hash d h ∗
-  "#Hdecode" ∷ match decode_node d with
-  | DecEmpty =>
-    "%" ∷ ⌜t = Empty⌝
-  | DecLeaf l v =>
-    "%" ∷ ⌜t = Leaf l v⌝
-  | DecInner h0 h1 =>
-    match limit with
-    | 0%nat =>
-      "%" ∷ ⌜t = Cut h⌝
-    | S limit' =>
-      ∃ t0 t1,
-      "#Hchild0" ∷ is_full_tree' t0 h0 limit' ∗
-      "#Hchild1" ∷ is_full_tree' t1 h1 limit' ∗
-      "%" ∷ ⌜t = Inner t0 t1⌝
-    end
-  | DecInvalid =>
-    "%" ∷ ⌜t = Cut h⌝
-  end.
-Proof. destruct limit; naive_solver. Qed.
-
-#[global] Instance is_full_tree_pers t h l : Persistent (is_full_tree' t h l).
-Proof.
-  revert t h. induction l as [? IH] using lt_wf_ind. intros.
-  setoid_rewrite is_full_tree_unfold.
-  apply exist_persistent. intros.
-  repeat case_match; try apply _.
-  ospecialize (IH n _); [lia|].
-  apply _.
-Qed.
-
-Lemma is_full_tree_invert h l :
-  Z.of_nat (length h) = cryptoffi.hash_len → ⊢
-  ∃ t, is_full_tree' t h l.
-Proof.
-  revert h. induction l as [? IH] using lt_wf_ind. intros.
-  setoid_rewrite is_full_tree_unfold.
-  iDestruct (cryptoffi.is_hash_invert h) as "[% $]"; [done|].
-  repeat case_match; try naive_solver.
-  opose proof (decode_inner_inj _ _ _ _) as (_&?&?); [done|].
-  ospecialize (IH n _); [lia|].
-  iDestruct (IH hash0) as "[% $]"; [done|].
-  iDestruct (IH hash1) as "[% $]"; [done|].
-  naive_solver.
-Qed.
-
-(* [is_full_tree_inj] demands the same [limit], which allows it to perform
-the same number of hash inversions before potentially reaching [Cut].
-merkle clients should all use the same [limit] in their code and proofs.
-in practice, this limit is the hash length,
-which was anyways required for liveness, and now is required for safety.
-another approach is defining a predicate for limit validity.
-however, the inversion lemma can't always guarantee this. *)
-Lemma is_full_tree_inj t0 t1 h limit :
-  is_full_tree' t0 h limit -∗
-  is_full_tree' t1 h limit -∗
-  ⌜t0 = t1⌝.
-Proof.
-  iInduction (limit) as [? IH] using lt_wf_ind forall (t0 t1 h);
-    iEval (setoid_rewrite is_full_tree_unfold);
-    iNamedSuffix 1 "0"; iNamedSuffix 1 "1";
-    iDestruct (cryptoffi.is_hash_inj with "His_hash0 His_hash1") as %->;
-    repeat case_match;
-    iNamedSuffix "Hdecode0" "0"; iNamedSuffix "Hdecode1" "1";
-    simplify_eq/=; try done.
-  iSpecialize ("IH" $! n with "[]"); [word|].
-  iDestruct ("IH" with "Hchild00 Hchild01") as %->.
-  by iDestruct ("IH" with "Hchild10 Hchild11") as %->.
-Qed.
-
-Definition is_map m h : iProp Σ :=
-  ∃ t,
-  "%Heq_map" ∷ ⌜m = to_map t⌝ ∗
-  "#His_tree" ∷ is_full_tree t h.
-Hint Unfold is_map : merkle.
-
-#[global] Instance is_map_pers m h : Persistent (is_map m h).
-Proof. apply _. Qed.
-
-Lemma is_map_invert h :
-  Z.of_nat (length h) = cryptoffi.hash_len → ⊢
-  ∃ m, is_map m h.
-Proof.
-  intros.
-  iDestruct is_full_tree_invert as "[% H]"; [done|].
-  iFrame "#".
-  iPureIntro. naive_solver.
-Qed.
-
-Lemma is_map_inj m0 m1 h :
-  is_map m0 h -∗
-  is_map m1 h -∗
-  ⌜m0 = m1⌝.
-Proof.
-  iNamedSuffix 1 "0". iNamedSuffix 1 "1".
-  iDestruct (is_full_tree_inj with "His_tree0 His_tree1") as %->.
-  by subst.
-Qed.
+Definition inv_fn hash := to_map $ tree_inv_fn hash.
+Hint Unfold inv_fn : merkle.
 
 (** cut trees. *)
 

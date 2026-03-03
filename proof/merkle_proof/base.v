@@ -36,7 +36,7 @@ Definition is_initialized : iProp Σ :=
   ∃ sl_emptyHash emptyHash,
   "#HemptyHash" ∷ (global_addr merkle.emptyHash) ↦□ sl_emptyHash ∗
   "#Hsl_emptyHash" ∷ sl_emptyHash ↦*□ emptyHash ∗
-  "#His_emptyHash" ∷ cryptoffi.is_hash (Some [emptyNodeTag]) emptyHash.
+  "%His_emptyHash" ∷ ⌜cryptoffi.hash_fn [emptyNodeTag] = Some emptyHash⌝.
 
 #[global] Instance : IsPkgInit (iProp Σ) merkle := define_is_pkg_init is_initialized.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) merkle := build_get_is_pkg_init_wf.

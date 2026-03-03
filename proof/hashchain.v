@@ -142,7 +142,7 @@ Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
 #[local] Transparent inv_fn.
 
 (* for now, intentionally left transp.
-callers should be use valid vs. inv_fn when needed. *)
+callers should use valid vs. inv_fn when needed. *)
 Definition valid vs cut hash fuel :=
   inv_fn hash fuel = (vs, cut) ∧
   (∀ x, cut = Some x → Z.of_nat (length x) = cryptoffi.hash_len).
