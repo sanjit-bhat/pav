@@ -13,6 +13,8 @@ Module hashchain.
 
 Definition HashChain {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/hashchain.HashChain"%go [].
 
+#[global] Opaque HashChain.
+
 Definition Verify {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/hashchain.Verify"%go.
 
 Definition New {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/hashchain.New"%go.

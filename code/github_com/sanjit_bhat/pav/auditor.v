@@ -20,19 +20,35 @@ Module auditor.
 
 Definition Auditor {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.Auditor"%go [].
 
+#[global] Opaque Auditor.
+
 Definition history {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.history"%go [].
+
+#[global] Opaque history.
 
 Definition epoch {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.epoch"%go [].
 
+#[global] Opaque epoch.
+
 Definition serv {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.serv"%go [].
+
+#[global] Opaque serv.
 
 Definition GetArg {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.GetArg"%go [].
 
+#[global] Opaque GetArg.
+
 Definition SignedLink {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.SignedLink"%go [].
+
+#[global] Opaque SignedLink.
 
 Definition SignedVrf {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.SignedVrf"%go [].
 
+#[global] Opaque SignedVrf.
+
 Definition GetReply {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.GetReply"%go [].
+
+#[global] Opaque GetReply.
 
 Definition GetRpc {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 0).
 
@@ -68,7 +84,7 @@ Definition GetReplyDecode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_st
 
 (* Update queries server for a new epoch update and applies it.
 
-   go: auditor.go:48:19 *)
+   go: auditor.go:49:19 *)
 Definition Auditor__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "a" <>,
     with_defer: (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -92,7 +108,7 @@ Definition Auditor__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     let: "$r1" := "$ret1" in
     do:  ("upd" <-[go.SliceType (go.PointerType ktcore.AuditProof)] "$r0");;;
     do:  ("err" <-[ktcore.Blame] "$r1");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err")
     else do:  #());;;
     let: "$range" := (![go.SliceType (go.PointerType ktcore.AuditProof)] "upd") in
@@ -103,12 +119,12 @@ Definition Auditor__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
       (let: "$r0" := (let: "$a0" := (![go.PointerType ktcore.AuditProof] "p") in
       (MethodResolve (go.PointerType Auditor) "updOnce"%go (![go.PointerType Auditor] "a")) "$a0") in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+      (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
       then return: (![ktcore.Blame] "err")
       else do:  #()))));;;
     return: (![ktcore.Blame] "err")).
 
-(* go: auditor.go:65:19 *)
+(* go: auditor.go:66:19 *)
 Definition Auditor__updOnceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "a" "p",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -171,8 +187,6 @@ Definition Auditor__updOnceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
     CompositeLiteral (go.SliceType (go.PointerType epoch)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType epoch) "$sl0")]))) in
     (FuncResolve go.append [go.SliceType (go.PointerType epoch)] #()) "$a0" "$a1") in
     do:  ((StructFieldRef history "epochs"%go (![go.PointerType history] "hist")) <-[go.SliceType (go.PointerType epoch)] "$r0");;;
-    let: "$r0" := (![go.PointerType history] "hist") in
-    do:  ((StructFieldRef Auditor "hist"%go (![go.PointerType Auditor] "a")) <-[go.PointerType history] "$r0");;;
     return: (![ktcore.Blame] "err")).
 
 (* Get returns the auditor's info for a particular epoch.
@@ -249,7 +263,7 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     do:  ("chain" <-[go.PointerType server.StartChain] "$r0");;;
     do:  ("vrf" <-[go.PointerType server.StartVrf] "$r1");;;
     do:  ("err" <-[ktcore.Blame] "$r2");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![go.PointerType Auditor] "a", ![cryptoffi.SigPublicKey] "sigPk", ![ktcore.Blame] "err")
     else do:  #());;;
     let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -914,10 +928,10 @@ Section def.
 Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
 Record t :=
 mk {
-  mu' : loc;
   sk' : loc;
-  hist' : loc;
   serv' : loc;
+  mu' : loc;
+  hist' : loc;
 }.
 
 #[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _) (zero_val _)|}.
@@ -928,10 +942,10 @@ End def.
 End Auditor.
 
 Definition Auditor'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
-  (go.FieldDecl "mu"%go (go.PointerType sync.RWMutex));
   (go.FieldDecl "sk"%go (go.PointerType cryptoffi.SigPrivateKey));
-  (go.FieldDecl "hist"%go (go.PointerType history));
-  (go.FieldDecl "serv"%go (go.PointerType serv))
+  (go.FieldDecl "serv"%go (go.PointerType serv));
+  (go.FieldDecl "mu"%go (go.PointerType sync.RWMutex));
+  (go.FieldDecl "hist"%go (go.PointerType history))
 ].
 Program Definition Auditor'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (Auditor'fds_unsealed).
 Global Instance equals_unfold_Auditor {ext : ffi_syntax} {go_gctx : GoGlobalContext} : Auditor'fds =→ Auditor'fds_unsealed.
@@ -943,14 +957,14 @@ Class Auditor_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalConte
 {
   #[global] Auditor_type_repr  :: go.TypeReprUnderlying Auditorⁱᵐᵖˡ Auditor.t;
   #[global] Auditor_underlying :: (Auditor) <u (Auditorⁱᵐᵖˡ);
-  #[global] Auditor_get_mu (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "mu", #x⟧ ⤳[under] #x.(Auditor.mu');
-  #[global] Auditor_set_mu (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "mu", (#x, #y)⟧ ⤳[under] #(x <|Auditor.mu' := y|>);
   #[global] Auditor_get_sk (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "sk", #x⟧ ⤳[under] #x.(Auditor.sk');
   #[global] Auditor_set_sk (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "sk", (#x, #y)⟧ ⤳[under] #(x <|Auditor.sk' := y|>);
-  #[global] Auditor_get_hist (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "hist", #x⟧ ⤳[under] #x.(Auditor.hist');
-  #[global] Auditor_set_hist (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "hist", (#x, #y)⟧ ⤳[under] #(x <|Auditor.hist' := y|>);
   #[global] Auditor_get_serv (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "serv", #x⟧ ⤳[under] #x.(Auditor.serv');
   #[global] Auditor_set_serv (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "serv", (#x, #y)⟧ ⤳[under] #(x <|Auditor.serv' := y|>);
+  #[global] Auditor_get_mu (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "mu", #x⟧ ⤳[under] #x.(Auditor.mu');
+  #[global] Auditor_set_mu (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "mu", (#x, #y)⟧ ⤳[under] #(x <|Auditor.mu' := y|>);
+  #[global] Auditor_get_hist (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "hist", #x⟧ ⤳[under] #x.(Auditor.hist');
+  #[global] Auditor_set_hist (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "hist", (#x, #y)⟧ ⤳[under] #(x <|Auditor.hist' := y|>);
   #[global] Auditor'ptr_Get_unfold :: MethodUnfold (go.PointerType (Auditor)) "Get" (Auditor__Getⁱᵐᵖˡ);
   #[global] Auditor'ptr_Update_unfold :: MethodUnfold (go.PointerType (Auditor)) "Update" (Auditor__Updateⁱᵐᵖˡ);
   #[global] Auditor'ptr_updOnce_unfold :: MethodUnfold (go.PointerType (Auditor)) "updOnce" (Auditor__updOnceⁱᵐᵖˡ);

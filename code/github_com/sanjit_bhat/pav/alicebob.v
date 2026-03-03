@@ -19,6 +19,8 @@ Module alicebob.
 
 Definition histEntry {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/alicebob.histEntry"%go [].
 
+#[global] Opaque histEntry.
+
 Definition aliceUid {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 0).
 
 Definition bobUid {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 1).
@@ -66,7 +68,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     do:  ("adtr" <-[go.PointerType auditor.Auditor] "$r0");;;
     do:  ("adtrPk" <-[cryptoffi.SigPublicKey] "$r1");;;
     do:  ("err" <-[ktcore.Blame] "$r2");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     let: "adtrRpc" := (GoAlloc (go.PointerType advrpc.Server) (GoZeroVal (go.PointerType advrpc.Server) #())) in
@@ -86,7 +88,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     let: "$r1" := "$ret1" in
     do:  ("alice" <-[go.PointerType client.Client] "$r0");;;
     do:  ("err" <-[ktcore.Blame] "$r1");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     let: "bob" := (GoAlloc (go.PointerType client.Client) (GoZeroVal (go.PointerType client.Client) #())) in
@@ -98,7 +100,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     let: "$r1" := "$ret1" in
     do:  ("bob" <-[go.PointerType client.Client] "$r0");;;
     do:  ("err" <-[ktcore.Blame] "$r1");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     (let: ("$ret0", "$ret1") := (let: "$a0" := (![go.uint64] "adtrAddr") in
@@ -108,7 +110,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     let: "$r1" := "$ret1" in
     do:  ("err" <-[ktcore.Blame] "$r0");;;
     do:  ("evid" <-[go.PointerType ktcore.Evid] "$r1");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #()));;;
     (let: ("$ret0", "$ret1") := (let: "$a0" := (![go.uint64] "adtrAddr") in
@@ -118,7 +120,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     let: "$r1" := "$ret1" in
     do:  ("err" <-[ktcore.Blame] "$r0");;;
     do:  ("evid" <-[go.PointerType ktcore.Evid] "$r1");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #()));;;
     let: "aliceHist" := (GoAlloc (go.SliceType (go.PointerType histEntry)) (GoZeroVal (go.SliceType (go.PointerType histEntry)) #())) in
@@ -173,13 +175,13 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
       ) in
     do:  (Fork ("$go" #()));;;
     do:  ((MethodResolve (go.PointerType sync.WaitGroup) "Wait"%go (![go.PointerType sync.WaitGroup] "wg")) #());;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "aliceErr") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "aliceErr") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then
       let: "$r0" := (![ktcore.Blame] "aliceErr") in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
       return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "bobErr") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "bobErr") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then
       let: "$r0" := (![ktcore.Blame] "bobErr") in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
@@ -187,7 +189,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     else do:  #());;;
     (let: "$r0" := ((MethodResolve (go.PointerType auditor.Auditor) "Update"%go (![go.PointerType auditor.Auditor] "adtr")) #()) in
     do:  ("err" <-[ktcore.Blame] "$r0");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #()));;;
     (let: ("$ret0", "$ret1") := (let: "$a0" := (![go.uint64] "adtrAddr") in
@@ -197,7 +199,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     let: "$r1" := "$ret1" in
     do:  ("err" <-[ktcore.Blame] "$r0");;;
     do:  ("evid" <-[go.PointerType ktcore.Evid] "$r1");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #()));;;
     (let: ("$ret0", "$ret1") := (let: "$a0" := (![go.uint64] "adtrAddr") in
@@ -207,7 +209,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     let: "$r1" := "$ret1" in
     do:  ("err" <-[ktcore.Blame] "$r0");;;
     do:  ("evid" <-[go.PointerType ktcore.Evid] "$r1");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #()));;;
     do:  (let: "$a0" := ((![go.uint64] "bobEp") <⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType histEntry)] "aliceHist") in
@@ -259,7 +261,7 @@ Definition runAliceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
     do:  ("ep" <-[go.uint64] "$r0");;;
     do:  ("isInsert" <-[go.bool] "$r1");;;
     do:  ("err" <-[ktcore.Blame] "$r2");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![go.SliceType (go.PointerType histEntry)] "hist", ![ktcore.Blame] "err")
     else do:  #());;;
     do:  (let: "$a0" := (⟨go.bool⟩! (![go.bool] "isInsert")) in
@@ -275,7 +277,7 @@ Definition runAliceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
     let: "$r0" := #(W64 0) in
     do:  ("i" <-[go.int] "$r0");;;
     (for: (λ: <>, (![go.int] "i") <⟨go.int⟩ #(W64 20)); (λ: <>, do:  ("i" <-[go.int] ((![go.int] "i") +⟨go.int⟩ #(W64 1)))) := λ: <>,
-      do:  (let: "$a0" := (#(W64 5) *⟨go.int64⟩ time.Millisecond) in
+      do:  (let: "$a0" := (#(W64 5) *⟨time.Duration⟩ time.Millisecond) in
       (FuncResolve time.Sleep [] #()) "$a0");;;
       let: "pk" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
       let: "$r0" := (let: "$a0" := #(W64 32) in
@@ -288,7 +290,7 @@ Definition runAliceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
       (FuncResolve go.len [go.SliceType (go.PointerType histEntry)] #()) "$a0")) in
       (FuncResolve loopPending [] #()) "$a0" "$a1") in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+      (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
       then return: (![go.SliceType (go.PointerType histEntry)] "hist", ![ktcore.Blame] "err")
       else do:  #()));;;
       let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType histEntry)] "hist") in
@@ -316,7 +318,7 @@ Definition loopPendingⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
       do:  ("ep0" <-[go.uint64] "$r0");;;
       do:  ("done" <-[go.bool] "$r1");;;
       do:  ("err" <-[ktcore.Blame] "$r2");;;
-      (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+      (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
       then return: (![ktcore.Blame] "err")
       else do:  #());;;
       (if: ![go.bool] "done"
@@ -336,7 +338,7 @@ Definition runBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : va
     let: "ent" := (GoAlloc (go.PointerType histEntry) (GoZeroVal (go.PointerType histEntry) #())) in
     let: "ep" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: "cli" := (GoAlloc (go.PointerType client.Client) "cli") in
-    do:  (let: "$a0" := (#(W64 120) *⟨go.int64⟩ time.Millisecond) in
+    do:  (let: "$a0" := (#(W64 120) *⟨time.Duration⟩ time.Millisecond) in
     (FuncResolve time.Sleep [] #()) "$a0");;;
     let: "pk" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "isReg" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -376,7 +378,7 @@ Definition initialize' {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
       do:  (bytes.initialize' #());;;
       do:  ((λ: <>,
         exception_do (let: "$r0" := time.Millisecond in
-        do:  ((GlobalVarAddr server.BatchTimeout #()) <-[time.Duration] "$r0");;;
+        do:  ((GlobalVarAddr server.EpochTime #()) <-[time.Duration] "$r0");;;
         return: #())
         ) #()))
       ).

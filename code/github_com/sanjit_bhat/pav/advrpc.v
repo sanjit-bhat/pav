@@ -12,7 +12,11 @@ Module advrpc.
 
 Definition Server {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/advrpc.Server"%go [].
 
+#[global] Opaque Server.
+
 Definition Client {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/advrpc.Client"%go [].
+
+#[global] Opaque Client.
 
 Definition NewServer {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/advrpc.NewServer"%go.
 

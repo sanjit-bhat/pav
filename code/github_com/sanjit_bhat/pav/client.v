@@ -18,11 +18,19 @@ Module client.
 
 Definition Client {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/client.Client"%go [].
 
+#[global] Opaque Client.
+
 Definition nextVer {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/client.nextVer"%go [].
+
+#[global] Opaque nextVer.
 
 Definition epoch {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/client.epoch"%go [].
 
+#[global] Opaque epoch.
+
 Definition serv {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/client.serv"%go [].
+
+#[global] Opaque serv.
 
 Definition New {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/client.New"%go.
 
@@ -94,7 +102,7 @@ Definition Client__Getⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     do:  ("hist" <-[go.SliceType (go.PointerType ktcore.Memb)] "$r2");;;
     do:  ("bound" <-[go.PointerType ktcore.NonMemb] "$r3");;;
     do:  ("err" <-[ktcore.Blame] "$r4");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![go.uint64] "ep", ![go.bool] "isReg", ![go.SliceType go.byte] "pk", ![ktcore.Blame] "err")
     else do:  #());;;
     let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -182,7 +190,7 @@ Definition Client__SelfMonⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     do:  ("hist" <-[go.SliceType (go.PointerType ktcore.Memb)] "$r2");;;
     do:  ("bound" <-[go.PointerType ktcore.NonMemb] "$r3");;;
     do:  ("err" <-[ktcore.Blame] "$r4");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
     else do:  #());;;
     let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -245,7 +253,7 @@ Definition Client__SelfMonⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     then
       (if: Convert go.untyped_bool go.bool ((![go.uint64] "histLen") ≠⟨go.uint64⟩ #(W64 0))
       then
-        let: "$r0" := (ktcore.BlameServFull |⟨go.uint64⟩ ktcore.BlameClients) in
+        let: "$r0" := (ktcore.BlameServFull |⟨ktcore.Blame⟩ ktcore.BlameClients) in
         do:  ("err" <-[ktcore.Blame] "$r0");;;
         return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
       else do:  #());;;
@@ -255,7 +263,7 @@ Definition Client__SelfMonⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     else do:  #());;;
     (if: Convert go.untyped_bool go.bool ((![go.uint64] "histLen") >⟨go.uint64⟩ #(W64 1))
     then
-      let: "$r0" := (ktcore.BlameServFull |⟨go.uint64⟩ ktcore.BlameClients) in
+      let: "$r0" := (ktcore.BlameServFull |⟨ktcore.Blame⟩ ktcore.BlameClients) in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
       return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
     else do:  #());;;
@@ -272,7 +280,7 @@ Definition Client__SelfMonⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     let: "$a1" := (![go.SliceType go.byte] (StructFieldRef nextVer "pendingPk"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))))) in
     (FuncResolve bytes.Equal [] #()) "$a0" "$a1"))
     then
-      let: "$r0" := (ktcore.BlameServFull |⟨go.uint64⟩ ktcore.BlameClients) in
+      let: "$r0" := (ktcore.BlameServFull |⟨ktcore.Blame⟩ ktcore.BlameClients) in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
       return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
     else do:  #());;;
@@ -314,7 +322,7 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  ("link" <-[go.PointerType auditor.SignedLink] "$r0");;;
     do:  ("vrf" <-[go.PointerType auditor.SignedVrf] "$r1");;;
     do:  ("err" <-[ktcore.Blame] "$r2");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     (if: let: "$a0" := (![cryptoffi.SigPublicKey] (StructFieldRef serv "sigPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
@@ -395,7 +403,7 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     do:  ("chain" <-[go.PointerType server.StartChain] "$r0");;;
     do:  ("vrf" <-[go.PointerType server.StartVrf] "$r1");;;
     do:  ("err" <-[ktcore.Blame] "$r2");;;
-    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨go.uint64⟩ ktcore.BlameNone)
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![go.PointerType Client] "c", ![ktcore.Blame] "err")
     else do:  #());;;
     let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -541,8 +549,9 @@ Definition checkMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
     then return: (![go.bool] "err")
     else do:  #());;;
     let: "mapVal" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "$r0" := (let: "$a0" := (![go.PointerType ktcore.CommitOpen] (StructFieldRef ktcore.Memb "PkOpen"%go (![go.PointerType ktcore.Memb] "memb"))) in
-    (FuncResolve ktcore.GetMapVal [] #()) "$a0") in
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef ktcore.CommitOpen "Val"%go (![go.PointerType ktcore.CommitOpen] (StructFieldRef ktcore.Memb "PkOpen"%go (![go.PointerType ktcore.Memb] "memb"))))) in
+    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef ktcore.CommitOpen "Rand"%go (![go.PointerType ktcore.CommitOpen] (StructFieldRef ktcore.Memb "PkOpen"%go (![go.PointerType ktcore.Memb] "memb"))))) in
+    (FuncResolve ktcore.GetMapVal [] #()) "$a0" "$a1") in
     do:  ("mapVal" <-[go.SliceType go.byte] "$r0");;;
     let: "dig0" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType go.byte] "label") in

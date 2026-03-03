@@ -9,7 +9,11 @@ Module netffi.
 
 Definition Conn {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/netffi.Conn"%go [].
 
+#[global] Opaque Conn.
+
 Definition Listener {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/netffi.Listener"%go [].
+
+#[global] Opaque Listener.
 
 Axiom Connⁱᵐᵖˡ : ∀ {ext : ffi_syntax} {go_gctx : GoGlobalContext}, go.type.
 

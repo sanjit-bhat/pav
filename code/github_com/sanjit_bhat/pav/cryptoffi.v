@@ -10,13 +10,23 @@ Module cryptoffi.
 
 Definition Hasher {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/cryptoffi.Hasher"%go [].
 
+#[global] Opaque Hasher.
+
 Definition SigPrivateKey {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/cryptoffi.SigPrivateKey"%go [].
+
+#[global] Opaque SigPrivateKey.
 
 Definition SigPublicKey {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/cryptoffi.SigPublicKey"%go [].
 
+#[global] Opaque SigPublicKey.
+
 Definition VrfPrivateKey {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/cryptoffi.VrfPrivateKey"%go [].
 
+#[global] Opaque VrfPrivateKey.
+
 Definition VrfPublicKey {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/cryptoffi.VrfPublicKey"%go [].
+
+#[global] Opaque VrfPublicKey.
 
 Axiom Hasherⁱᵐᵖˡ : ∀ {ext : ffi_syntax} {go_gctx : GoGlobalContext}, go.type.
 

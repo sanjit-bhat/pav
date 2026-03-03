@@ -14,27 +14,51 @@ Module ktcore.
 
 Definition Blame {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.Blame"%go [].
 
+#[global] Opaque Blame.
+
 Definition Evid {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.Evid"%go [].
+
+#[global] Opaque Evid.
 
 Definition EvidVrf {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.EvidVrf"%go [].
 
+#[global] Opaque EvidVrf.
+
 Definition EvidLink {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.EvidLink"%go [].
+
+#[global] Opaque EvidLink.
 
 Definition VrfSig {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.VrfSig"%go [].
 
+#[global] Opaque VrfSig.
+
 Definition LinkSig {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.LinkSig"%go [].
+
+#[global] Opaque LinkSig.
 
 Definition MapLabel {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.MapLabel"%go [].
 
+#[global] Opaque MapLabel.
+
 Definition CommitOpen {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.CommitOpen"%go [].
+
+#[global] Opaque CommitOpen.
 
 Definition Memb {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.Memb"%go [].
 
+#[global] Opaque Memb.
+
 Definition NonMemb {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.NonMemb"%go [].
+
+#[global] Opaque NonMemb.
 
 Definition AuditProof {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.AuditProof"%go [].
 
+#[global] Opaque AuditProof.
+
 Definition UpdateProof {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.UpdateProof"%go [].
+
+#[global] Opaque UpdateProof.
 
 Definition BlameNone {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 0).
 
@@ -192,7 +216,7 @@ Definition SignVrfⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
     let: "vrfPk" := (GoAlloc (go.SliceType go.byte) "vrfPk") in
     let: "sk" := (GoAlloc (go.PointerType cryptoffi.SigPrivateKey) "sk") in
     let: "b" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "$r0" := ((FuncResolve go.make3 [go.SliceType go.byte] #()) #(W64 0) (#(W64 9) +⟨go.uint64⟩ cryptoffi.HashLen)) in
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType go.byte] #()) #(W64 0) #(W64 41)) in
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
     let: "$a1" := (GoAlloc VrfSig (let: "$v0" := VrfSigTag in
@@ -213,7 +237,7 @@ Definition VerifyVrfSigⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     let: "vrfPk" := (GoAlloc (go.SliceType go.byte) "vrfPk") in
     let: "pk" := (GoAlloc cryptoffi.SigPublicKey "pk") in
     let: "b" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "$r0" := ((FuncResolve go.make3 [go.SliceType go.byte] #()) #(W64 0) (#(W64 9) +⟨go.uint64⟩ cryptoffi.HashLen)) in
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType go.byte] #()) #(W64 0) #(W64 41)) in
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
     let: "$a1" := (GoAlloc VrfSig (let: "$v0" := VrfSigTag in
@@ -223,7 +247,7 @@ Definition VerifyVrfSigⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     return: (let: "$a0" := (![go.SliceType go.byte] "b") in
      let: "$a1" := (![go.SliceType go.byte] "sig") in
-     (MethodResolve cryptoffi.SigPublicKey "Verify"%go (![cryptoffi.SigPublicKey] "pk")) "$a0" "$a1")).
+     (MethodResolve (go.PointerType cryptoffi.SigPublicKey) "Verify"%go "pk") "$a0" "$a1")).
 
 (* go: ktcore.go:26:6 *)
 Definition SignLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
@@ -267,7 +291,7 @@ Definition VerifyLinkSigⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     return: (let: "$a0" := (![go.SliceType go.byte] "b") in
      let: "$a1" := (![go.SliceType go.byte] "sig") in
-     (MethodResolve cryptoffi.SigPublicKey "Verify"%go (![cryptoffi.SigPublicKey] "pk")) "$a0" "$a1")).
+     (MethodResolve (go.PointerType cryptoffi.SigPublicKey) "Verify"%go "pk") "$a0" "$a1")).
 
 (* go: ktcore.go:40:6 *)
 Definition ProveMapLabelⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
@@ -334,12 +358,17 @@ Definition CheckMapLabelⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
 
 (* go: ktcore.go:58:6 *)
 Definition GetMapValⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "pkOpen",
+  λ: "pk" "rand",
     exception_do (let: "val" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "pkOpen" := (GoAlloc (go.PointerType CommitOpen) "pkOpen") in
+    let: "rand" := (GoAlloc (go.SliceType go.byte) "rand") in
+    let: "pk" := (GoAlloc (go.SliceType go.byte) "pk") in
     let: "b" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "$r0" := (let: "$a0" := (Convert go.untyped_nil (go.SliceType go.byte) UntypedNil) in
-    let: "$a1" := (![go.PointerType CommitOpen] "pkOpen") in
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType go.byte] #()) #(W64 0) (#(W64 48) +⟨go.uint64⟩ cryptoffi.HashLen)) in
+    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+    let: "$a1" := (GoAlloc CommitOpen (let: "$v0" := (![go.SliceType go.byte] "pk") in
+    let: "$v1" := (![go.SliceType go.byte] "rand") in
+    CompositeLiteral CommitOpen (LiteralValue [KeyedElement (Some (KeyField "Val"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "Rand"%go)) (ElementExpression (go.SliceType go.byte) "$v1")]))) in
     (FuncResolve CommitOpenEncode [] #()) "$a0" "$a1") in
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     return: (let: "$a0" := (![go.SliceType go.byte] "b") in
@@ -348,7 +377,7 @@ Definition GetMapValⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
 (* GetCommitRand computes the psuedo-random (wrt commitSecret) bits
    used in a mapVal commitment.
 
-   go: ktcore.go:65:6 *)
+   go: ktcore.go:66:6 *)
 Definition GetCommitRandⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "commitSecret" "label",
     exception_do (let: "rand" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in

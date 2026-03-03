@@ -554,11 +554,11 @@ Local Set Default Proof Using "All".
   {|
     typed_pointsto_def l v dq :=
       (
-      "mu" ∷ l.[(server.Server.t), "mu"] ↦{dq} v.(server.Server.mu') ∗
       "secs" ∷ l.[(server.Server.t), "secs"] ↦{dq} v.(server.Server.secs') ∗
+      "workQ" ∷ l.[(server.Server.t), "workQ"] ↦{dq} v.(server.Server.workQ') ∗
+      "mu" ∷ l.[(server.Server.t), "mu"] ↦{dq} v.(server.Server.mu') ∗
       "keys" ∷ l.[(server.Server.t), "keys"] ↦{dq} v.(server.Server.keys') ∗
       "hist" ∷ l.[(server.Server.t), "hist"] ↦{dq} v.(server.Server.hist') ∗
-      "workQ" ∷ l.[(server.Server.t), "workQ"] ↦{dq} v.(server.Server.workQ') ∗
       "_" ∷ True
       )%I
   |}.
@@ -568,19 +568,6 @@ Final Obligation. solve_typed_pointsto_agree. Qed.
    :
   IntoValTypedUnderlying (server.Server.t) (server.Serverⁱᵐᵖˡ).
 Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance Server_access_load_mu l (v : (server.Server.t)) dq :
-  AccessStrict
-    (l.[(server.Server.t), "mu"] ↦{dq} (v.(server.Server.mu')))
-    (l.[(server.Server.t), "mu"] ↦{dq} (v.(server.Server.mu')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance Server_access_store_mu l (v : (server.Server.t)) mu' :
-  AccessStrict
-    (l.[(server.Server.t), "mu"] ↦ (v.(server.Server.mu')))
-    (l.[(server.Server.t), "mu"] ↦ mu')
-    (l ↦ v) (l ↦ (v <|(server.Server.mu') := mu'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance Server_access_load_secs l (v : (server.Server.t)) dq :
   AccessStrict
     (l.[(server.Server.t), "secs"] ↦{dq} (v.(server.Server.secs')))
@@ -593,6 +580,32 @@ Proof. solve_pointsto_access_struct. Qed.
     (l.[(server.Server.t), "secs"] ↦ (v.(server.Server.secs')))
     (l.[(server.Server.t), "secs"] ↦ secs')
     (l ↦ v) (l ↦ (v <|(server.Server.secs') := secs'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance Server_access_load_workQ l (v : (server.Server.t)) dq :
+  AccessStrict
+    (l.[(server.Server.t), "workQ"] ↦{dq} (v.(server.Server.workQ')))
+    (l.[(server.Server.t), "workQ"] ↦{dq} (v.(server.Server.workQ')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance Server_access_store_workQ l (v : (server.Server.t)) workQ' :
+  AccessStrict
+    (l.[(server.Server.t), "workQ"] ↦ (v.(server.Server.workQ')))
+    (l.[(server.Server.t), "workQ"] ↦ workQ')
+    (l ↦ v) (l ↦ (v <|(server.Server.workQ') := workQ'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance Server_access_load_mu l (v : (server.Server.t)) dq :
+  AccessStrict
+    (l.[(server.Server.t), "mu"] ↦{dq} (v.(server.Server.mu')))
+    (l.[(server.Server.t), "mu"] ↦{dq} (v.(server.Server.mu')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance Server_access_store_mu l (v : (server.Server.t)) mu' :
+  AccessStrict
+    (l.[(server.Server.t), "mu"] ↦ (v.(server.Server.mu')))
+    (l.[(server.Server.t), "mu"] ↦ mu')
+    (l ↦ v) (l ↦ (v <|(server.Server.mu') := mu'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance Server_access_load_keys l (v : (server.Server.t)) dq :
   AccessStrict
@@ -619,19 +632,6 @@ Proof. solve_pointsto_access_struct. Qed.
     (l.[(server.Server.t), "hist"] ↦ (v.(server.Server.hist')))
     (l.[(server.Server.t), "hist"] ↦ hist')
     (l ↦ v) (l ↦ (v <|(server.Server.hist') := hist'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance Server_access_load_workQ l (v : (server.Server.t)) dq :
-  AccessStrict
-    (l.[(server.Server.t), "workQ"] ↦{dq} (v.(server.Server.workQ')))
-    (l.[(server.Server.t), "workQ"] ↦{dq} (v.(server.Server.workQ')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance Server_access_store_workQ l (v : (server.Server.t)) workQ' :
-  AccessStrict
-    (l.[(server.Server.t), "workQ"] ↦ (v.(server.Server.workQ')))
-    (l.[(server.Server.t), "workQ"] ↦ workQ')
-    (l ↦ v) (l ↦ (v <|(server.Server.workQ') := workQ'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 
 End def.
@@ -830,7 +830,7 @@ Proof. solve_pointsto_access_struct. Qed.
 End def.
 End history.
 
-Module Work.
+Module work.
 Section def.
 
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
@@ -839,133 +839,92 @@ Context {package_sem' : server.Assumptions}.
 
 Local Set Default Proof Using "All".
 
-#[global]Program Instance Work_typed_pointsto  :
-  TypedPointsto (Σ:=Σ) (server.Work.t) :=
+#[global]Program Instance work_typed_pointsto  :
+  TypedPointsto (Σ:=Σ) (server.work.t) :=
   {|
     typed_pointsto_def l v dq :=
       (
-      "Uid" ∷ l.[(server.Work.t), "Uid"] ↦{dq} v.(server.Work.Uid') ∗
-      "Pk" ∷ l.[(server.Work.t), "Pk"] ↦{dq} v.(server.Work.Pk') ∗
-      "Ver" ∷ l.[(server.Work.t), "Ver"] ↦{dq} v.(server.Work.Ver') ∗
-      "Err" ∷ l.[(server.Work.t), "Err"] ↦{dq} v.(server.Work.Err') ∗
+      "uid" ∷ l.[(server.work.t), "uid"] ↦{dq} v.(server.work.uid') ∗
+      "ver" ∷ l.[(server.work.t), "ver"] ↦{dq} v.(server.work.ver') ∗
+      "pk" ∷ l.[(server.work.t), "pk"] ↦{dq} v.(server.work.pk') ∗
+      "mapLabel" ∷ l.[(server.work.t), "mapLabel"] ↦{dq} v.(server.work.mapLabel') ∗
+      "mapVal" ∷ l.[(server.work.t), "mapVal"] ↦{dq} v.(server.work.mapVal') ∗
       "_" ∷ True
       )%I
   |}.
 Final Obligation. solve_typed_pointsto_agree. Qed.
 
-#[global] Instance Work_into_val_typed
+#[global] Instance work_into_val_typed
    :
-  IntoValTypedUnderlying (server.Work.t) (server.Workⁱᵐᵖˡ).
+  IntoValTypedUnderlying (server.work.t) (server.workⁱᵐᵖˡ).
 Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance Work_access_load_Uid l (v : (server.Work.t)) dq :
+#[global] Instance work_access_load_uid l (v : (server.work.t)) dq :
   AccessStrict
-    (l.[(server.Work.t), "Uid"] ↦{dq} (v.(server.Work.Uid')))
-    (l.[(server.Work.t), "Uid"] ↦{dq} (v.(server.Work.Uid')))
+    (l.[(server.work.t), "uid"] ↦{dq} (v.(server.work.uid')))
+    (l.[(server.work.t), "uid"] ↦{dq} (v.(server.work.uid')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance Work_access_store_Uid l (v : (server.Work.t)) Uid' :
+#[global] Instance work_access_store_uid l (v : (server.work.t)) uid' :
   AccessStrict
-    (l.[(server.Work.t), "Uid"] ↦ (v.(server.Work.Uid')))
-    (l.[(server.Work.t), "Uid"] ↦ Uid')
-    (l ↦ v) (l ↦ (v <|(server.Work.Uid') := Uid'|>))%I.
+    (l.[(server.work.t), "uid"] ↦ (v.(server.work.uid')))
+    (l.[(server.work.t), "uid"] ↦ uid')
+    (l ↦ v) (l ↦ (v <|(server.work.uid') := uid'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance Work_access_load_Pk l (v : (server.Work.t)) dq :
+#[global] Instance work_access_load_ver l (v : (server.work.t)) dq :
   AccessStrict
-    (l.[(server.Work.t), "Pk"] ↦{dq} (v.(server.Work.Pk')))
-    (l.[(server.Work.t), "Pk"] ↦{dq} (v.(server.Work.Pk')))
+    (l.[(server.work.t), "ver"] ↦{dq} (v.(server.work.ver')))
+    (l.[(server.work.t), "ver"] ↦{dq} (v.(server.work.ver')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance Work_access_store_Pk l (v : (server.Work.t)) Pk' :
+#[global] Instance work_access_store_ver l (v : (server.work.t)) ver' :
   AccessStrict
-    (l.[(server.Work.t), "Pk"] ↦ (v.(server.Work.Pk')))
-    (l.[(server.Work.t), "Pk"] ↦ Pk')
-    (l ↦ v) (l ↦ (v <|(server.Work.Pk') := Pk'|>))%I.
+    (l.[(server.work.t), "ver"] ↦ (v.(server.work.ver')))
+    (l.[(server.work.t), "ver"] ↦ ver')
+    (l ↦ v) (l ↦ (v <|(server.work.ver') := ver'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance Work_access_load_Ver l (v : (server.Work.t)) dq :
+#[global] Instance work_access_load_pk l (v : (server.work.t)) dq :
   AccessStrict
-    (l.[(server.Work.t), "Ver"] ↦{dq} (v.(server.Work.Ver')))
-    (l.[(server.Work.t), "Ver"] ↦{dq} (v.(server.Work.Ver')))
+    (l.[(server.work.t), "pk"] ↦{dq} (v.(server.work.pk')))
+    (l.[(server.work.t), "pk"] ↦{dq} (v.(server.work.pk')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance Work_access_store_Ver l (v : (server.Work.t)) Ver' :
+#[global] Instance work_access_store_pk l (v : (server.work.t)) pk' :
   AccessStrict
-    (l.[(server.Work.t), "Ver"] ↦ (v.(server.Work.Ver')))
-    (l.[(server.Work.t), "Ver"] ↦ Ver')
-    (l ↦ v) (l ↦ (v <|(server.Work.Ver') := Ver'|>))%I.
+    (l.[(server.work.t), "pk"] ↦ (v.(server.work.pk')))
+    (l.[(server.work.t), "pk"] ↦ pk')
+    (l ↦ v) (l ↦ (v <|(server.work.pk') := pk'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance Work_access_load_Err l (v : (server.Work.t)) dq :
+#[global] Instance work_access_load_mapLabel l (v : (server.work.t)) dq :
   AccessStrict
-    (l.[(server.Work.t), "Err"] ↦{dq} (v.(server.Work.Err')))
-    (l.[(server.Work.t), "Err"] ↦{dq} (v.(server.Work.Err')))
+    (l.[(server.work.t), "mapLabel"] ↦{dq} (v.(server.work.mapLabel')))
+    (l.[(server.work.t), "mapLabel"] ↦{dq} (v.(server.work.mapLabel')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance Work_access_store_Err l (v : (server.Work.t)) Err' :
+#[global] Instance work_access_store_mapLabel l (v : (server.work.t)) mapLabel' :
   AccessStrict
-    (l.[(server.Work.t), "Err"] ↦ (v.(server.Work.Err')))
-    (l.[(server.Work.t), "Err"] ↦ Err')
-    (l ↦ v) (l ↦ (v <|(server.Work.Err') := Err'|>))%I.
+    (l.[(server.work.t), "mapLabel"] ↦ (v.(server.work.mapLabel')))
+    (l.[(server.work.t), "mapLabel"] ↦ mapLabel')
+    (l ↦ v) (l ↦ (v <|(server.work.mapLabel') := mapLabel'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance work_access_load_mapVal l (v : (server.work.t)) dq :
+  AccessStrict
+    (l.[(server.work.t), "mapVal"] ↦{dq} (v.(server.work.mapVal')))
+    (l.[(server.work.t), "mapVal"] ↦{dq} (v.(server.work.mapVal')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance work_access_store_mapVal l (v : (server.work.t)) mapVal' :
+  AccessStrict
+    (l.[(server.work.t), "mapVal"] ↦ (v.(server.work.mapVal')))
+    (l.[(server.work.t), "mapVal"] ↦ mapVal')
+    (l ↦ v) (l ↦ (v <|(server.work.mapVal') := mapVal'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 
 End def.
-End Work.
-
-Module mapEntry.
-Section def.
-
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics}.
-Context {package_sem' : server.Assumptions}.
-
-Local Set Default Proof Using "All".
-
-#[global]Program Instance mapEntry_typed_pointsto  :
-  TypedPointsto (Σ:=Σ) (server.mapEntry.t) :=
-  {|
-    typed_pointsto_def l v dq :=
-      (
-      "label" ∷ l.[(server.mapEntry.t), "label"] ↦{dq} v.(server.mapEntry.label') ∗
-      "val" ∷ l.[(server.mapEntry.t), "val"] ↦{dq} v.(server.mapEntry.val') ∗
-      "_" ∷ True
-      )%I
-  |}.
-Final Obligation. solve_typed_pointsto_agree. Qed.
-
-#[global] Instance mapEntry_into_val_typed
-   :
-  IntoValTypedUnderlying (server.mapEntry.t) (server.mapEntryⁱᵐᵖˡ).
-Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance mapEntry_access_load_label l (v : (server.mapEntry.t)) dq :
-  AccessStrict
-    (l.[(server.mapEntry.t), "label"] ↦{dq} (v.(server.mapEntry.label')))
-    (l.[(server.mapEntry.t), "label"] ↦{dq} (v.(server.mapEntry.label')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance mapEntry_access_store_label l (v : (server.mapEntry.t)) label' :
-  AccessStrict
-    (l.[(server.mapEntry.t), "label"] ↦ (v.(server.mapEntry.label')))
-    (l.[(server.mapEntry.t), "label"] ↦ label')
-    (l ↦ v) (l ↦ (v <|(server.mapEntry.label') := label'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance mapEntry_access_load_val l (v : (server.mapEntry.t)) dq :
-  AccessStrict
-    (l.[(server.mapEntry.t), "val"] ↦{dq} (v.(server.mapEntry.val')))
-    (l.[(server.mapEntry.t), "val"] ↦{dq} (v.(server.mapEntry.val')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance mapEntry_access_store_val l (v : (server.mapEntry.t)) val' :
-  AccessStrict
-    (l.[(server.mapEntry.t), "val"] ↦ (v.(server.mapEntry.val')))
-    (l.[(server.mapEntry.t), "val"] ↦ val')
-    (l ↦ v) (l ↦ (v <|(server.mapEntry.val') := val'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-End def.
-End mapEntry.
+End work.
 
 End server.

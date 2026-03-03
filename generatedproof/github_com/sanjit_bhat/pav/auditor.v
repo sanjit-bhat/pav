@@ -31,10 +31,10 @@ Local Set Default Proof Using "All".
   {|
     typed_pointsto_def l v dq :=
       (
-      "mu" ∷ l.[(auditor.Auditor.t), "mu"] ↦{dq} v.(auditor.Auditor.mu') ∗
       "sk" ∷ l.[(auditor.Auditor.t), "sk"] ↦{dq} v.(auditor.Auditor.sk') ∗
-      "hist" ∷ l.[(auditor.Auditor.t), "hist"] ↦{dq} v.(auditor.Auditor.hist') ∗
       "serv" ∷ l.[(auditor.Auditor.t), "serv"] ↦{dq} v.(auditor.Auditor.serv') ∗
+      "mu" ∷ l.[(auditor.Auditor.t), "mu"] ↦{dq} v.(auditor.Auditor.mu') ∗
+      "hist" ∷ l.[(auditor.Auditor.t), "hist"] ↦{dq} v.(auditor.Auditor.hist') ∗
       "_" ∷ True
       )%I
   |}.
@@ -44,19 +44,6 @@ Final Obligation. solve_typed_pointsto_agree. Qed.
    :
   IntoValTypedUnderlying (auditor.Auditor.t) (auditor.Auditorⁱᵐᵖˡ).
 Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance Auditor_access_load_mu l (v : (auditor.Auditor.t)) dq :
-  AccessStrict
-    (l.[(auditor.Auditor.t), "mu"] ↦{dq} (v.(auditor.Auditor.mu')))
-    (l.[(auditor.Auditor.t), "mu"] ↦{dq} (v.(auditor.Auditor.mu')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance Auditor_access_store_mu l (v : (auditor.Auditor.t)) mu' :
-  AccessStrict
-    (l.[(auditor.Auditor.t), "mu"] ↦ (v.(auditor.Auditor.mu')))
-    (l.[(auditor.Auditor.t), "mu"] ↦ mu')
-    (l ↦ v) (l ↦ (v <|(auditor.Auditor.mu') := mu'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance Auditor_access_load_sk l (v : (auditor.Auditor.t)) dq :
   AccessStrict
     (l.[(auditor.Auditor.t), "sk"] ↦{dq} (v.(auditor.Auditor.sk')))
@@ -70,19 +57,6 @@ Proof. solve_pointsto_access_struct. Qed.
     (l.[(auditor.Auditor.t), "sk"] ↦ sk')
     (l ↦ v) (l ↦ (v <|(auditor.Auditor.sk') := sk'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance Auditor_access_load_hist l (v : (auditor.Auditor.t)) dq :
-  AccessStrict
-    (l.[(auditor.Auditor.t), "hist"] ↦{dq} (v.(auditor.Auditor.hist')))
-    (l.[(auditor.Auditor.t), "hist"] ↦{dq} (v.(auditor.Auditor.hist')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance Auditor_access_store_hist l (v : (auditor.Auditor.t)) hist' :
-  AccessStrict
-    (l.[(auditor.Auditor.t), "hist"] ↦ (v.(auditor.Auditor.hist')))
-    (l.[(auditor.Auditor.t), "hist"] ↦ hist')
-    (l ↦ v) (l ↦ (v <|(auditor.Auditor.hist') := hist'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance Auditor_access_load_serv l (v : (auditor.Auditor.t)) dq :
   AccessStrict
     (l.[(auditor.Auditor.t), "serv"] ↦{dq} (v.(auditor.Auditor.serv')))
@@ -95,6 +69,32 @@ Proof. solve_pointsto_access_struct. Qed.
     (l.[(auditor.Auditor.t), "serv"] ↦ (v.(auditor.Auditor.serv')))
     (l.[(auditor.Auditor.t), "serv"] ↦ serv')
     (l ↦ v) (l ↦ (v <|(auditor.Auditor.serv') := serv'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance Auditor_access_load_mu l (v : (auditor.Auditor.t)) dq :
+  AccessStrict
+    (l.[(auditor.Auditor.t), "mu"] ↦{dq} (v.(auditor.Auditor.mu')))
+    (l.[(auditor.Auditor.t), "mu"] ↦{dq} (v.(auditor.Auditor.mu')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance Auditor_access_store_mu l (v : (auditor.Auditor.t)) mu' :
+  AccessStrict
+    (l.[(auditor.Auditor.t), "mu"] ↦ (v.(auditor.Auditor.mu')))
+    (l.[(auditor.Auditor.t), "mu"] ↦ mu')
+    (l ↦ v) (l ↦ (v <|(auditor.Auditor.mu') := mu'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance Auditor_access_load_hist l (v : (auditor.Auditor.t)) dq :
+  AccessStrict
+    (l.[(auditor.Auditor.t), "hist"] ↦{dq} (v.(auditor.Auditor.hist')))
+    (l.[(auditor.Auditor.t), "hist"] ↦{dq} (v.(auditor.Auditor.hist')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance Auditor_access_store_hist l (v : (auditor.Auditor.t)) hist' :
+  AccessStrict
+    (l.[(auditor.Auditor.t), "hist"] ↦ (v.(auditor.Auditor.hist')))
+    (l.[(auditor.Auditor.t), "hist"] ↦ hist')
+    (l ↦ v) (l ↦ (v <|(auditor.Auditor.hist') := hist'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 
 End def.
