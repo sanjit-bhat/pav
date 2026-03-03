@@ -2,8 +2,8 @@ package merkle
 
 import (
 	"bytes"
+	"encoding/binary"
 
-	"github.com/goose-lang/primitive"
 	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/cryptoffi"
 	"github.com/sanjit-bhat/pav/cryptoutil"
@@ -129,7 +129,7 @@ func (m *Map) Prove(label []byte) (inMap bool, val, entryProof []byte) {
 func (n *node) prove(label []byte, getProof bool) (inTree bool, val, proof []byte) {
 	found, foundLabel, val, proof := n.find(0, label, getProof)
 	if getProof {
-		primitive.UInt64Put(proof, uint64(len(proof))-8) // SibsLen
+		binary.LittleEndian.PutUint64(proof, uint64(len(proof))-8) // SibsLen
 	}
 
 	if !found {
