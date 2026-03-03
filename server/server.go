@@ -13,7 +13,7 @@ import (
 
 // performance params.
 var (
-	// AKD uses 1-second epochs.
+	// EpochTime roughly matches AKD.
 	EpochTime = time.Second
 )
 
@@ -22,7 +22,6 @@ type Server struct {
 	// workQ for batching puts into one epoch update.
 	workQ chan *work
 
-	// mu protects the following fields.
 	mu   *sync.RWMutex
 	keys *keyStore
 	hist *history

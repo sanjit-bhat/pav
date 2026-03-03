@@ -17,7 +17,6 @@ type Auditor struct {
 	sk   *cryptoffi.SigPrivateKey
 	serv *serv
 
-	// mu protects the following fields.
 	mu   *sync.RWMutex
 	hist *history
 }
