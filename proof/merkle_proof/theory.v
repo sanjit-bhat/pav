@@ -332,6 +332,11 @@ Proof.
   case_match; naive_solver.
 Qed.
 
+Local Tactic Notation "destruct_exis" := repeat
+  match goal with
+  | H : ∃ _, _ |- _ => destruct H as (?&H)
+  end.
+
 Lemma is_cut_tree_len t h:
   is_cut_tree t h →
   Z.of_nat $ length h = cryptoffi.hash_len.
@@ -339,7 +344,7 @@ Proof.
   destruct t; simpl; intros;
     destruct_and?; try done.
   1-2: by eapply cryptoffi.is_hash_len.
-  destruct H as (?&?&?).
+  destruct_exis.
   eapply cryptoffi.is_hash_len.
   naive_solver.
 Qed.
@@ -371,7 +376,7 @@ Proof.
   - apply cryptoffi.hash_bij_l in Ht0.
     apply cryptoffi.hash_bij_l in H3.
     by simplify_eq/=.
-  - destruct Ht1 as (?&?&?). destruct_and?.
+  - destruct_exis. destruct_and?.
     apply cryptoffi.hash_bij_l in Ht0.
     apply cryptoffi.hash_bij_l in H3.
     by simplify_eq/=.
@@ -394,7 +399,7 @@ Proof.
     apply (inj u64_le) in Hlen_label.
     apply app_inj_1 in Henc as [<- Henc]; [|word].
     by apply app_inj_1 in Henc as [_ <-]; [|len].
-  - destruct Ht1 as (?&?&?). destruct_and?.
+  - destruct_exis. destruct_and?.
     apply cryptoffi.hash_bij_l in H3.
     apply cryptoffi.hash_bij_l in H6.
     by simplify_eq/=.
@@ -409,23 +414,23 @@ Lemma cut_cut_reln_Inner c0 c1 t h :
     cut_cut_reln c1 c1' h1.
 Proof.
   destruct t; intros (Ht0&Ht1) **; simpl in *; destruct_and?; try naive_solver.
-  - destruct Ht0 as (?&?&?). destruct_and?.
+  - destruct_exis. destruct_and?.
     apply cryptoffi.hash_bij_l in H3.
     apply cryptoffi.hash_bij_l in Ht1.
     by simplify_eq/=.
-  - destruct Ht0 as (?&?&?). destruct_and?.
+  - destruct_exis. destruct_and?.
     apply cryptoffi.hash_bij_l in H6.
     apply cryptoffi.hash_bij_l in H3.
     by simplify_eq/=.
-  - destruct Ht0 as (?&?&?). destruct Ht1 as (?&?&?). destruct_and?.
+  - destruct_exis. destruct_and?.
     apply cryptoffi.hash_bij_l in H6.
-    apply cryptoffi.hash_bij_l in H4.
+    apply cryptoffi.hash_bij_l in H3.
     list_simplifier.
-    apply is_cut_tree_len in H3 as ?.
+    apply is_cut_tree_len in H1 as ?.
+    apply is_cut_tree_len in H5 as ?.
     apply is_cut_tree_len in H0 as ?.
     apply is_cut_tree_len in H2 as ?.
-    apply is_cut_tree_len in H1 as ?.
-    rename H5 into Henc.
+    rename H4 into Henc.
     apply app_inj_1 in Henc as [<- <-]; [|word].
     by repeat eexists.
 Qed.
@@ -446,12 +451,19 @@ Definition cut_full_reln' ct ft fuel h :=
 Definition cut_full_reln ct ft h := cut_full_reln' ct ft (S max_depth) h.
 #[local] Hint Unfold cut_full_reln : merkle.
 
+Local Tactic Notation "rw_hash" := repeat
+  match goal with
+  | H0 : context[cryptoffi.hash_inv_fn ?h], H1 : cryptoffi.hash_fn _ = Some ?h |- _ =>
+    apply cryptoffi.hash_bij_l in H1; rewrite {}H1 in H0
+  | H1 : cryptoffi.hash_fn _ = Some ?h |- context[cryptoffi.hash_inv_fn ?h] =>
+    apply cryptoffi.hash_bij_l in H1; rewrite {}H1
+  end.
+
 Lemma cut_full_reln_Empty ft fuel h :
   cut_full_reln' Empty ft (S fuel) h → ft = Empty.
 Proof.
   intros (Hc&Hf). simpl in *.
-  apply cryptoffi.hash_bij_l in Hc.
-  rewrite Hc in Hf.
+  rw_hash.
   by rewrite decode_empty_det in Hf.
 Qed.
 
@@ -459,8 +471,7 @@ Lemma cut_full_reln_Leaf {label val} ft fuel h :
   cut_full_reln' (Leaf label val) ft (S fuel) h → ft = Leaf label val.
 Proof.
   intros (Hc&Hf). simpl in *. destruct_and?.
-  apply cryptoffi.hash_bij_l in H2.
-  rewrite H2 in Hf.
+  rw_hash.
   by rewrite decode_leaf_det in Hf.
 Qed.
 
@@ -474,11 +485,10 @@ Lemma cut_full_reln_Inner ft t0 t1 fuel h :
     tree_inv_fn' h1 fuel = t3.
 Proof.
   intros (Hc&Hf). simpl in *.
-  destruct Hc as (?&?&?). destruct_and?.
-  apply cryptoffi.hash_bij_l in H2.
-  rewrite H2 in Hf.
-  apply is_cut_tree_len in H0 as ?.
+  destruct_exis. destruct_and?.
+  rw_hash.
   apply is_cut_tree_len in H as ?.
+  apply is_cut_tree_len in H1 as ?.
   rewrite decode_inner_det in Hf; [|done..].
   naive_solver.
 Qed.
@@ -492,8 +502,7 @@ Proof.
   rewrite /is_initialized. iNamed "Hinit".
   iPureIntro.
   eexists. split; try done. simpl.
-  apply cryptoffi.hash_bij_l in His_emptyHash.
-  rewrite His_emptyHash.
+  rw_hash.
   by rewrite decode_empty_det.
 Qed.
 
@@ -502,8 +511,7 @@ Lemma cut_to_full_Empty fuel h :
   tree_inv_fn' h (S fuel) = Empty.
 Proof.
   simpl. intros.
-  apply cryptoffi.hash_bij_l in H.
-  rewrite H.
+  rw_hash.
   by rewrite decode_empty_det.
 Qed.
 
@@ -512,8 +520,7 @@ Lemma cut_to_full_Leaf fuel l v h :
   tree_inv_fn' h (S fuel) = Leaf l v.
 Proof.
   simpl. intros. destruct_and?.
-  apply cryptoffi.hash_bij_l in H2.
-  rewrite H2.
+  rw_hash.
   by rewrite decode_leaf_det.
 Qed.
 
@@ -550,15 +557,10 @@ Proof.
   revert h fuel.
   induction t; simpl; intros; destruct_and?;
     destruct fuel; try done; simpl.
-  - apply cryptoffi.hash_bij_l in H1.
-    rewrite H1.
-    by rewrite decode_empty_det.
-  - apply cryptoffi.hash_bij_l in H4.
-    rewrite H4.
-    by rewrite decode_leaf_det.
-  - destruct H1 as (?&?&?). destruct_and?.
-    apply cryptoffi.hash_bij_l in H5.
-    rewrite H5.
+  - rw_hash. by rewrite decode_empty_det.
+  - rw_hash. by rewrite decode_leaf_det.
+  - destruct_exis. destruct_and?.
+    rw_hash.
     apply is_cut_tree_len in H1 as ?.
     apply is_cut_tree_len in H as ?.
     rewrite decode_inner_det; [|done..].
@@ -864,8 +866,37 @@ Proof.
     by apply entry_eq_lookup.
 Qed.
 
-(* note: since put is pure, this lemma can't *give* post-put hash resources.
-instead it requires them. *)
+Lemma cut_full_over_put t0 t0' t1 h0 h1 label val :
+  cut_full_reln t0 t0' h0 →
+  pure_put t0 label val = Some t1 →
+  is_cut_tree t1 h1 →
+  pure_put t0' label val = Some $ tree_inv_fn h1.
+Proof.
+  autounfold with merkle.
+  remember (S max_depth) as fuel. clear Heqfuel.
+  remember 0%nat as depth. clear Heqdepth.
+  revert t0 t0' t1 h0 h1 depth.
+  induction fuel; [done|].
+  destruct t0; intros; simplify_eq/=; destruct_and?.
+  - apply cut_full_reln_Empty in H. subst.
+    rw_hash. by rewrite decode_leaf_det.
+  - apply cut_full_reln_Leaf in H. subst.
+    case_decide.
+    { simplify_eq/=. destruct_and?.
+      rw_hash. by rewrite decode_leaf_det. }
+    case_match; try done.
+    simplify_eq/=.
+    destruct_exis. destruct_and?.
+    apply is_cut_tree_len in H0 as ?.
+    apply is_cut_tree_len in H1 as ?.
+    rw_hash.
+    rewrite decode_inner_det; [|done..].
+    f_equal.
+    repeat case_match.
+Admitted.
+
+(* note: [pure_put] doesn't compute hash, so this lemma can't give [cut_full_reln].
+instead, it must require it. *)
 Lemma cut_full_over_put t0 t0' t1 t1' h0 h1 label val :
   (* to demonstrate Empty hash. *)
   is_pkg_init merkle -∗
