@@ -19,11 +19,11 @@ Collection W := sem + package_sem.
 (** tree. *)
 
 (* [Cut]s denote a cut off tree.
-for full trees, they come from invalid hashes,
+for inv trees, they come from invalid hashes,
 while for partial trees, it's just an unknown-origin hash.
 unifying these two types of Cuts allows for unified tree predicates.
 
-a different approach to invalid full trees bubbles invalidness all the way to the top,
+a different approach to invalid inv trees bubbles invalidness all the way to the top,
 i.e., inversion resulting in option map.
 that has the undesirable effect of invalidness "stopping the proof". *)
 Inductive tree :=
@@ -249,7 +249,7 @@ Proof.
   intuition.
 Qed.
 
-(** full trees / maps. *)
+(** inv trees / maps. *)
 
 (* the overall structure of [is_full_tree] is a bit unconventional.
 from the hash [h], it recursively computes (via [decode_node]) the tree [t].
@@ -435,7 +435,7 @@ Proof.
     by repeat eexists.
 Qed.
 
-(** full <-> cut tree reln. *)
+(** inv <-> cut tree reln. *)
 
 Fixpoint is_fuel' t fuel :=
   match fuel with 0%nat => False | S fuel' =>
@@ -454,7 +454,7 @@ Local Tactic Notation "rw_hash" := repeat
     apply cryptoffi.hash_bij_l in H1; rewrite {}H1
   end.
 
-Lemma cut_to_full_Empty fuel h :
+Lemma cut_inv_Empty fuel h :
   is_cut_tree Empty h →
   tree_inv_fn' h (S fuel) = Empty.
 Proof.
@@ -463,7 +463,7 @@ Proof.
   by rewrite decode_empty_det.
 Qed.
 
-Lemma cut_to_full_Leaf {label val} fuel h :
+Lemma cut_inv_Leaf {label val} fuel h :
   is_cut_tree (Leaf label val) h →
   tree_inv_fn' h (S fuel) = Leaf label val.
 Proof.
@@ -472,7 +472,7 @@ Proof.
   by rewrite decode_leaf_det.
 Qed.
 
-Lemma cut_to_full_Inner t0 t1 fuel h :
+Lemma cut_inv_Inner t0 t1 fuel h :
   is_cut_tree (Inner t0 t1) h →
   ∃ h0 h1,
     tree_inv_fn' h (S fuel) = Inner (tree_inv_fn' h0 fuel) (tree_inv_fn' h1 fuel) ∧
@@ -488,26 +488,33 @@ Proof.
   naive_solver.
 Qed.
 
-Local Tactic Notation "rw_tree" := repeat
+Local Tactic Notation "tree_inv" := repeat
   match goal with
   | H0 : is_cut_tree Empty ?h, H1 : context[tree_inv_fn' ?h (S _)] |- _ =>
-    eapply cut_to_full_Empty in H0 as Ht; erewrite Ht in H1; clear Ht
+    eapply cut_inv_Empty in H0 as Ht; erewrite Ht in H1; clear Ht
   | H0 : is_cut_tree Empty ?h |- context[tree_inv_fn' ?h (S _)] =>
-    eapply cut_to_full_Empty in H0 as Ht; erewrite Ht; clear Ht
+    eapply cut_inv_Empty in H0 as Ht; erewrite Ht; clear Ht
   | H0 : is_cut_tree (Leaf _ _) ?h, H1 : context[tree_inv_fn' ?h (S _)] |- _ =>
-    eapply cut_to_full_Leaf in H0 as Ht; erewrite Ht in H1; clear Ht
+    eapply cut_inv_Leaf in H0 as Ht; erewrite Ht in H1; clear Ht
   | H0 : is_cut_tree (Leaf _ _) ?h |- context[tree_inv_fn' ?h (S _)] =>
-    eapply cut_to_full_Leaf in H0 as Ht; erewrite Ht; clear Ht
+    eapply cut_inv_Leaf in H0 as Ht; erewrite Ht; clear Ht
   | H0 : is_cut_tree (Inner _ _) ?h, H1 : context[tree_inv_fn' ?h (S _)] |- _ =>
     let Hchild0 := fresh "Hchild" in
     let Hchild1 := fresh "Hchild" in
-    eapply cut_to_full_Inner in H0 as (?&?&Ht&Hchild0&Hchild1);
+    eapply cut_inv_Inner in H0 as (?&?&Ht&Hchild0&Hchild1);
       erewrite Ht in H1; clear Ht
   | H0 : is_cut_tree (Inner _ _) ?h |- context[tree_inv_fn' ?h (S _)] =>
     let Hchild0 := fresh "Hchild" in
     let Hchild1 := fresh "Hchild" in
-    eapply cut_to_full_Inner in H0 as (?&?&Ht&Hchild0&Hchild1);
+    eapply cut_inv_Inner in H0 as (?&?&Ht&Hchild0&Hchild1);
       erewrite Ht; clear Ht
+  end.
+
+Local Tactic Notation "tree_det" := repeat
+  match goal with
+  | H0 : is_cut_tree ?t _, H1 : is_cut_tree ?t _ |- _ =>
+      tryif constr_eq H0 H1 then fail 1 else
+      pose proof (is_cut_tree_det _ _ _ H0 H1) as ->; clear H1
   end.
 
 Lemma init_to_Empty :
@@ -534,16 +541,16 @@ Proof.
   Opaque is_cut_tree.
   induction t0; simpl; intros * ??? Hc;
     destruct fuel; try done.
-  - rw_tree. naive_solver.
-  - rw_tree. naive_solver.
-  - rw_tree.
+  - tree_inv. naive_solver.
+  - tree_inv. naive_solver.
+  - tree_inv.
     destruct_and?.
     simpl. case_match.
     + by eapply IHt0_2.
     + by eapply IHt0_1.
 Qed.
 
-Lemma cut_to_full t h :
+Lemma cut_inv t h :
   is_cutless t →
   is_fuel t →
   is_cut_tree t h →
@@ -555,9 +562,9 @@ Proof.
   Opaque is_cut_tree.
   induction t; simpl; intros * ?? Hc;
     destruct fuel; try done.
-  - by rw_tree.
-  - by rw_tree.
-  - rw_tree.
+  - by tree_inv.
+  - by tree_inv.
+  - tree_inv.
     destruct_and?.
     erewrite <-IHt1; [|done..].
     erewrite <-IHt2; [|done..].
@@ -876,7 +883,7 @@ Lemma rw_bit0 (b0 b1 : bool) {A} (x0 x1 : A) :
   if decide (b0 = b1) then x0 else x1.
 Proof. by repeat case_match. Qed.
 
-Lemma cut_full_over_put t0 t1 h0 h1 label val :
+Lemma cut_inv_put t0 t1 h0 h1 label val :
   (* for "generating" Empty hashes.
   this applies when parent spawns new Empty node that it doesn't itself have. *)
   (∃ h, is_cut_tree Empty h) →
@@ -893,21 +900,21 @@ Proof.
   induction fuel; [done|].
   Opaque is_cut_tree tree_inv_fn'.
   destruct t0; intros * ? Hc0 Hc1; simplify_eq/=.
-  - by rw_tree.
-  - rw_tree.
+  - by tree_inv.
+  - tree_inv.
     case_decide.
-    { simplify_eq/=. by rw_tree. }
+    { simplify_eq/=. by tree_inv. }
     simplify_option_eq.
     rename Heqo into Hput.
-    rw_tree.
+    tree_inv.
     eremember (get_bit label _) as b. clear Heqb.
     eremember (get_bit label0 _) as b'. clear Heqb'.
     rewrite rw_bit0 in Hput.
     f_equal.
     ospecialize (IHfuel
-      (* control flow that determines what the input hash is. *)
+      (* control flow that determines put input hash. *)
       (if decide (b = b') then _ else _)
-      (* control flow that determines what the output hash is. *)
+      (* control flow that determines put output hash. *)
       (if b then _ else _)).
     eapply IHfuel in Hput as Hput_inv; cycle 1.
     { by case_decide. }
@@ -915,142 +922,24 @@ Proof.
     clear IHfuel.
     destruct fuel; [done|].
     destruct b, b'; case_decide; try done;
-      rw_tree; congruence.
-Admitted.
-
-(* note: [pure_put] doesn't compute hash, so this lemma can't give [cut_full_reln].
-instead, it must require it. *)
-Lemma cut_full_over_put t0 t0' t1 t1' h0 h1 label val :
-  (* to demonstrate Empty hash. *)
-  is_pkg_init merkle -∗
-  cut_full_reln t0 t0' h0 -∗
-  ⌜pure_put t0 label val = Some t1⌝ -∗
-  cut_full_reln t1 t1' h1 -∗
-  ⌜pure_put t0' label val = Some t1'⌝.
-Proof.
-  autounfold with merkle.
-  remember (S max_depth) as fuel. clear Heqfuel.
-  remember 0%nat as depth. clear Heqdepth.
-  iIntros "#Hinit".
-  iInduction fuel as [? IH] using lt_wf_ind forall (t0 t0' t1 t1' h0 h1 depth).
-  iNamedSuffix 1 "0". iIntros "%Hput". iNamedSuffix 1 "1".
-
-  rewrite pure_put_unfold in Hput.
-  destruct t0; try done.
-  - (* get t0'. *)
-    iDestruct (cut_full_reln_Empty t0' with "[$]") as %->.
-    rewrite pure_put_unfold.
-    simplify_eq/=.
-    (* get t1'. *)
-    by iDestruct (cut_full_reln_Leaf t1' with "[$]") as %->.
-
-  - (* get t0'. *)
-    iDestruct (cut_full_reln_Leaf t0' with "[$]") as %->.
-    rewrite pure_put_unfold.
-    simplify_eq/=. rewrite Hput.
-    (* t1 casework, to get t1'. *)
-    case_decide; try case_match; simplify_eq/=.
-    { by iDestruct (cut_full_reln_Leaf t1' with "[$]") as %->. }
-    iSpecialize ("IH" $! n with "[]"); [word|].
-    case_match; try done.
-    simplify_eq/=.
-    iDestruct (cut_full_reln_Inner with "[$]") as
-      "{Hct1 Hft1} (%&%&%&%&%& #Hchild0_ct1 & #Hchild1_ct1 & #Hchild0_ft1 & #Hchild1_ft1)".
-    simplify_eq/=.
-
-    (* t1=Inner case. very tricky. *)
-    ereplace
-      (if get_bit label depth
-        then if get_bit label0 depth then ?[a] else ?[b]
-        else if get_bit label0 depth then ?b else ?a)
-      with
-      (if decide (get_bit label depth = get_bit label0 depth) then ?a else ?b) in H0.
-    2: { by repeat case_match. }
-
-    (* massage full tree children to look like cut tree children. *)
-    iAssert (∃ t0', is_full_tree' (if get_bit label depth then
-      if get_bit label0 depth then Empty else Leaf label0 val0 else t0') h2 n)%I as "[% Ht0]".
-    { destruct (get_bit label _).
-      2: { iFrame "#". }
-      destruct (get_bit label0 depth).
-      { by iDestruct (cut_to_full_Empty with "[$]") as "$". }
-      { by iDestruct (cut_to_full_Leaf with "[$]") as "$". } }
-
-    iAssert (∃ t1', is_full_tree' (if get_bit label depth then t1'
-      else if get_bit label0 depth then Leaf label0 val0 else Empty) h3 n)%I as "[% Ht1]".
-    { destruct (get_bit label _).
-      { iFrame "#". }
-      destruct (get_bit label0 depth).
-      { by iDestruct (cut_to_full_Leaf with "[$]") as "$". }
-      { by iDestruct (cut_to_full_Empty with "[$]") as "$". } }
-
-    iDestruct (is_full_tree_inj with "Hchild0_ft1 Ht0") as %->.
-    iDestruct (is_full_tree_inj with "Hchild1_ft1 Ht1") as %->.
-    iClear "Ht0 Ht1".
-
-    (* learn that t0 recursive put call gives massaged form. *)
-    iDestruct (init_to_reln_Empty with "[$]") as "[% #Hreln_Empty]".
-    iDestruct ("IH" $! _
-      (if decide (get_bit label depth = get_bit label0 depth) then _ else _)
-      _
-      (if get_bit label depth then _ else _)
-      (if decide (get_bit label depth = get_bit label0 depth) then _ else _)
-      (* dep label, recur out is some child. *)
-      (if get_bit label depth then h3 else h2)
-      with "[][//][]") as "%".
-    { case_decide.
-      - iFrame "Hct0".
-        iDestruct (cut_to_full_Leaf with "[$]") as "$".
-      - iFrame "#". }
-    { destruct (get_bit label _); iFrame "#". }
-
-    iPureIntro. simplify_eq/=. by repeat case_match.
-
-  - (* get t0'. *)
-    case_match; try done.
-    iSpecialize ("IH" $! n with "[]"); [word|].
-
-    iDestruct (cut_full_reln_Inner with "[]") as
-      "{Hct0 Hft0} (%&%&%&%&%& #Hchild0_ct0 & #Hchild1_ct0 & #Hchild0_ft0 & #Hchild1_ft0)".
-    { iFrame "Hct0 #". }
-    simpl in *. case_match; try done. simplify_eq/=.
-
-    (* get t1'. *)
-    iDestruct (cut_full_reln_Inner with "[]") as
-      "{Hct1 Hft1} (%&%&%&%&%& #Hchild0_ct1 & #Hchild1_ct1 & #Hchild0_ft1 & #Hchild1_ft1)".
-    { iFrame "Hct1 #". }
-    simplify_eq/=.
-
-    (* t0 / t1 (the final full tree children) aren't just the recur put out.
-    they correspond to additional branching, as shown in the final cut trees.
-    we need to make the branching structure evident. *)
-    iAssert (∃ t0', is_full_tree'
-      (if get_bit label depth then t2 else t0') h4 n)%I as "[% Ht0]".
-    { destruct (get_bit label _).
-      2: { iFrame "#". }
-      iDestruct (is_cut_tree_det with "Hchild0_ct0 Hchild0_ct1") as %->.
-      by iFrame "#". }
-    iAssert (∃ t1', is_full_tree'
-      (if get_bit label depth then t1' else t3) h5 n)%I as "[% Ht1]".
-    { destruct (get_bit label _).
-      { iFrame "#". }
-      iDestruct (is_cut_tree_det with "Hchild1_ct0 Hchild1_ct1") as %->.
-      by iFrame "#". }
-    iDestruct (is_full_tree_inj with "Hchild0_ft1 Ht0") as %->.
-    iDestruct (is_full_tree_inj with "Hchild1_ft1 Ht1") as %->.
-    iClear "Ht0 Ht1".
-
-    iDestruct ("IH" $! _
-      (if get_bit label depth then _ else _)
-      _
-      (if get_bit label depth then _ else _)
-      (if get_bit label depth then h3 else h2)
-      (if get_bit label depth then h5 else h4)
-      with "[][//][]") as "->".
-    { case_match; iFrame "#". }
-    { case_match; iFrame "#". }
-
-    simplify_eq/=. iPureIntro. by case_match.
+      tree_inv; congruence.
+  - tree_inv.
+    simplify_option_eq. rename Heqo into Hput.
+    tree_inv.
+    eremember (get_bit label _) as b. clear Heqb.
+    ospecialize (IHfuel
+      (if b then _ else _)
+      (if b then _ else _)).
+    eapply IHfuel in Hput as Hput_inv; cycle 1.
+    { by destruct b. }
+    { by destruct b. }
+    clear IHfuel.
+    replace (tree_inv_fn' (if b then x1 else x0) fuel) with
+      (if b then tree_inv_fn' x1 fuel else tree_inv_fn' x0 fuel) in Hput_inv.
+    2: { by case_match. }
+    rewrite Hput_inv /=.
+    f_equal.
+    case_match; by tree_det.
 Qed.
 
 Lemma cut_cut_hash_over_put t0 t1 h label val t0' t1' h' :
