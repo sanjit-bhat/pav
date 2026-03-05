@@ -275,6 +275,7 @@ Definition tree_inv_fn h := tree_inv_fn' h (S max_depth).
 Definition inv_fn h := to_map $ tree_inv_fn h.
 #[local] Hint Unfold inv_fn : merkle.
 
+(* TODO: rename to is_tree. *)
 (** cut trees. *)
 
 (* [is_cut_tree] has a more traditional structure,
@@ -662,15 +663,14 @@ Definition pure_proofToTree label sibs oleaf :=
 
 (** invariants on [pure_put]. *)
 
-(*
 Lemma put_impl_non_cut t depth label val fuel :
   is_Some (pure_put' t depth label val (S fuel)) →
   ∀ h, t ≠ Cut h.
 Proof. naive_solver. Qed.
 
 Lemma const_label_len_over_put t t' label val :
-  is_const_label_len t →
   pure_put t label val = Some t' →
+  is_const_label_len t →
   length label = Z.to_nat (cryptoffi.hash_len) →
   is_const_label_len t'.
 Proof.
@@ -682,14 +682,9 @@ Proof.
   revert t' depth.
   induction fuel; [done|].
   intros *.
-  destruct t; simpl; intros;
-    try case_decide; try case_match;
-    simplify_eq/=; try done.
-  - word.
-  - repeat case_match;
-      simplify_eq/=; intuition;
-      by (eapply IHfuel; [|done..]).
-  - repeat case_match; try done; naive_solver.
+  destruct t; simpl; intros; try done;
+    repeat (progress (try case_decide; simplify_option_eq; try case_match));
+    intuition; [word|..]; by eapply IHfuel.
 Qed.
 
 Lemma put_impl_cutless_pre t label val :
@@ -702,9 +697,9 @@ Proof.
   revert t depth.
   induction fuel; [naive_solver|].
   intros *.
-  destruct t; simpl; intros; try done.
-  case_match; try done.
-  case_match; by eapply IHfuel.
+  destruct t; simpl; intros []; try done.
+  simplify_option_eq.
+  case_match; eapply IHfuel; naive_solver.
 Qed.
 
 Lemma cutless_new_put t t' label val :
@@ -717,15 +712,14 @@ Proof.
   revert t t' depth.
   induction fuel; [done|].
   intros *.
-  destruct t; simpl; intros;
-    repeat case_decide; repeat case_match; simplify_eq/=; try done;
-    repeat case_match; try done;
-    by eapply IHfuel.
+  destruct t; simpl; intros; try done;
+    repeat (progress (try case_decide; simplify_option_eq; try case_match));
+    try done; by eapply IHfuel.
 Qed.
 
 Lemma cutless_path_over_put t t' label0 label1 val :
-  is_cutless_path t label0 →
   pure_put t label1 val = Some t' →
+  is_cutless_path t label0 →
   is_cutless_path t' label0.
 Proof.
   autounfold with merkle.
@@ -734,15 +728,14 @@ Proof.
   revert t t' depth.
   induction fuel; [done|].
   intros *.
-  destruct t; simpl; intros;
-    repeat case_decide; repeat case_match; simplify_eq/=; try done;
-    repeat case_match; try done;
-    (by eapply IHfuel; [|done]).
+  destruct t; simpl; intros; try done;
+    repeat (progress (try case_decide; simplify_option_eq; try case_match));
+    try done; by eapply IHfuel.
 Qed.
 
 Lemma cutless_over_put t label val t' :
-  is_cutless t →
   pure_put t label val = Some t' →
+  is_cutless t →
   is_cutless t'.
 Proof.
   autounfold with merkle.
@@ -751,16 +744,16 @@ Proof.
   revert t t' depth.
   induction fuel; [done|].
   intros *.
-  destruct t; simpl; intros;
-    repeat case_decide; repeat case_match; simplify_eq/=; try done;
-    intuition; (by eapply IHfuel; [|done]).
+  destruct t; simpl; intros; try done;
+    repeat (progress (try case_decide; simplify_option_eq; try case_match));
+    intuition; by eapply IHfuel.
 Qed.
 
 (* [pure_put] definitionally guarantees [fuel] down the put path.
 for [Inner] nodes down the opposite path, it preserves [fuel]. *)
 Lemma is_fuel_over_put t t' label val :
-  is_fuel t →
   pure_put t label val = Some t' →
+  is_fuel t →
   is_fuel t'.
 Proof.
   autounfold with merkle.
@@ -769,20 +762,20 @@ Proof.
   revert t t' depth.
   induction fuel; [done|].
   intros *.
-  destruct t; simpl; intros;
-    try case_decide; try case_match;
-    simplify_eq/=; try done.
-  - repeat case_match; try done;
-      simplify_eq/=; intuition;
-      repeat case_match; try done;
-      (eapply IHfuel; [|done]);
-      simpl; by repeat case_match.
-  - intuition; repeat case_match; try done; naive_solver.
+  destruct t; simpl; intros; try done.
+  - by simplify_eq/=.
+  - case_decide. { by simplify_eq/=. }
+    simplify_option_eq.
+    repeat case_match; simpl;
+      repeat case_match; try done; intuition;
+      by eapply IHfuel.
+  - simplify_option_eq.
+    intuition; repeat case_match; try done; naive_solver.
 Qed.
 
 Lemma is_sorted_over_put t t' label val :
-  is_sorted t →
   pure_put t label val = Some t' →
+  is_sorted t →
   is_sorted t'.
 Proof.
   autounfold with merkle.
@@ -797,18 +790,20 @@ Proof.
 
   induction fuel; [done|].
   intros *.
-  destruct t; simpl; intros;
-    try case_decide; try case_match;
-    simplify_eq/=; try done.
-  - replace (S _) with (length $ pref_ext pref label) in * by len.
+  destruct t; simpl; intros; try done.
+  - by simplify_eq/=.
+  - case_decide. { by simplify_eq/=. }
+    simplify_option_eq.
+    replace (S _) with (length $ pref_ext pref label) in * by len.
     assert (prefix_total (pref_ext pref label) (bytes_to_bits label)).
     { by eapply prefix_total_snoc. }
     assert (prefix_total (pref_ext pref label0) (bytes_to_bits label0)).
     { by eapply prefix_total_snoc. }
     repeat case_match; try done;
       simplify_eq/=; intuition;
-      by (eapply IHfuel; last done).
-  - replace (S _) with (length $ pref_ext pref label) in * by len.
+      by eapply IHfuel.
+  - simplify_option_eq.
+    replace (S _) with (length $ pref_ext pref label) in * by len.
     assert (prefix_total (pref_ext pref label) (bytes_to_bits label)).
     { by eapply prefix_total_snoc. }
     repeat case_match; try done;
@@ -830,16 +825,15 @@ Proof.
 
   induction fuel; [done|].
   intros *.
-  destruct t; simpl; intros;
-    try case_decide; try case_match;
-    simplify_eq/=; try done;
-    repeat case_match; simplify_eq/=; naive_solver.
+  destruct t; simpl; intros; try done;
+    repeat (progress (try case_decide; simplify_option_eq; try case_match));
+    naive_solver.
 Qed.
 
 Lemma old_entry_over_put t t' label label' oval' val :
-  is_entry t label' oval' →
   pure_put t label val = Some t' →
   label ≠ label' →
+  is_entry t label' oval' →
   is_entry t' label' oval'.
 Proof.
   autounfold with merkle.
@@ -851,11 +845,9 @@ Proof.
 
   induction fuel; [done|].
   intros *.
-  destruct t; simpl; intros (?&?&?); intros;
-    try case_decide; try case_match;
-    simplify_eq/=.
-  1-2: naive_solver.
-  all: repeat case_match; simplify_eq/=; try congruence; naive_solver.
+  destruct t; simpl; intros ? (?&?&?); try done;
+    repeat (progress (try case_decide; simplify_option_eq; try case_match));
+    try naive_solver.
 Qed.
 
 (* easier [map_eq] extensional proof vs. using fin_map reductions. *)
@@ -868,10 +860,9 @@ Proof.
   - apply entry_eq_lookup.
     by eapply put_new_entry.
   - rewrite -entry_eq_lookup.
-    eapply old_entry_over_put; [|done..].
+    eapply old_entry_over_put; [done..|].
     by apply entry_eq_lookup.
 Qed.
-*)
 
 Lemma rw_bit0 (b0 b1 : bool) {A} (x0 x1 : A) :
   (if b0
@@ -943,15 +934,16 @@ Proof.
 Qed.
 
 Lemma cut_cut_hash_over_put t0 t1 h label val t0' t1' h' :
-  cut_cut_reln t0 t1 h -∗
-  ⌜pure_put t0 label val = Some t0'⌝ -∗
-  ⌜pure_put t1 label val = Some t1'⌝ -∗
-  is_cut_tree t0' h' -∗
+  cut_cut_reln t0 t1 h →
+  pure_put t0 label val = Some t0' →
+  pure_put t1 label val = Some t1' →
+  is_cut_tree t0' h' →
   is_cut_tree t1' h'.
 Proof.
   autounfold with merkle.
   remember (S max_depth) as fuel. clear Heqfuel.
   remember 0%nat as depth. clear Heqdepth.
+  induction fuel.
   iInduction fuel as [? IH] using lt_wf_ind forall (t0 t1 h t0' t1' h' depth).
   iIntros "#Hreln %Hput0 %Hput1 #Hhash_t0'".
   rewrite pure_put_unfold in Hput0.
