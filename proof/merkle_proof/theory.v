@@ -607,9 +607,9 @@ Fixpoint pure_put' t depth label val (fuel : nat) :=
         Some $ Inner t1_0 t1_1
       else
         (* don't recurse. *)
-        let t0 := if b then t else new in
-        let t1 := if b then new else t in
-        Some $ Inner t0 t1
+        Some $ Inner
+          (Leaf (if b then label' else label) (if b then val' else val))
+          (Leaf (if b then label else label') (if b then val else val'))
   | Inner c0 c1 =>
     let t0 := if b then c1 else c0 in
     t1 ← pure_put' t0 (S depth) label val fuel';
@@ -899,7 +899,12 @@ Proof.
       destruct_exis. destruct Hc1 as (Heq&Hc2&Hc3&?&?).
       erewrite Heq. clear Heq.
       simplify_eq/=.
-
+      destruct fuel.
+      { Transparent tree_inv_fn'.
+        simpl in *.
+        exfalso.
+        (* run out of fuel to compute Leaf.
+        need to use IH. *)
 
     case_match; try done.
     simplify_eq/=.
