@@ -436,6 +436,19 @@ Proof.
     by repeat eexists.
 Qed.
 
+Local Tactic Notation "tree_reln" := repeat
+  match goal with
+  | H : cut_cut_reln Empty _ _ |- _ =>
+    eapply cut_cut_reln_Empty in H as ->; [|done]; clear H
+  | H : cut_cut_reln (Leaf _ _) _ _ |- _ =>
+    eapply cut_cut_reln_Leaf in H as ->; [|done]; clear H
+  | H : cut_cut_reln (Inner _ _) _ _ |- _ =>
+    let Hchild0 := fresh "Hchild" in
+    let Hchild1 := fresh "Hchild" in
+    eapply cut_cut_reln_Inner in H as (?&?&?&?&->&Hchild0&Hchild1);
+      [|done]; clear H
+  end.
+
 (** inv <-> cut tree reln. *)
 
 Fixpoint is_fuel' t fuel :=
@@ -539,6 +552,7 @@ Proof.
   remember (S max_depth) as fuel. clear Heqfuel.
   remember 0%nat as depth. clear Heqdepth.
   revert h fuel depth.
+  (* TODO: can prob globalize this. *)
   Opaque is_cut_tree.
   induction t0; simpl; intros * ??? Hc;
     destruct fuel; try done.
@@ -639,6 +653,9 @@ Fixpoint pure_put' t depth label val (fuel : nat) :=
 Definition pure_put t label val := pure_put' t 0 label val (S max_depth).
 #[local] Hint Unfold pure_put : merkle.
 
+Tactic Notation "destruct_put" :=
+  repeat (progress (try case_decide; simplify_option_eq; try case_match)).
+
 (* [sibs] order reversed from code for easier fixpoint. *)
 Fixpoint pure_newShell' depth label (sibs : list $ list w8) :=
   match sibs with
@@ -663,10 +680,10 @@ Definition pure_proofToTree label sibs oleaf :=
 
 (** invariants on [pure_put]. *)
 
-Lemma put_impl_non_cut t depth label val fuel :
-  is_Some (pure_put' t depth label val (S fuel)) →
+Lemma put_impl_non_cut {depth label val fuel} t :
+  is_Some (pure_put' t depth label val fuel) →
   ∀ h, t ≠ Cut h.
-Proof. naive_solver. Qed.
+Proof. intros []. destruct fuel; try done. naive_solver. Qed.
 
 Lemma const_label_len_over_put t t' label val :
   pure_put t label val = Some t' →
@@ -683,8 +700,7 @@ Proof.
   induction fuel; [done|].
   intros *.
   destruct t; simpl; intros; try done;
-    repeat (progress (try case_decide; simplify_option_eq; try case_match));
-    intuition; [word|..]; by eapply IHfuel.
+    destruct_put; intuition; [word|..]; by eapply IHfuel.
 Qed.
 
 Lemma put_impl_cutless_pre t label val :
@@ -713,8 +729,7 @@ Proof.
   induction fuel; [done|].
   intros *.
   destruct t; simpl; intros; try done;
-    repeat (progress (try case_decide; simplify_option_eq; try case_match));
-    try done; by eapply IHfuel.
+    destruct_put; try done; by eapply IHfuel.
 Qed.
 
 Lemma cutless_path_over_put t t' label0 label1 val :
@@ -729,8 +744,7 @@ Proof.
   induction fuel; [done|].
   intros *.
   destruct t; simpl; intros; try done;
-    repeat (progress (try case_decide; simplify_option_eq; try case_match));
-    try done; by eapply IHfuel.
+    destruct_put; try done; by eapply IHfuel.
 Qed.
 
 Lemma cutless_over_put t label val t' :
@@ -745,8 +759,7 @@ Proof.
   induction fuel; [done|].
   intros *.
   destruct t; simpl; intros; try done;
-    repeat (progress (try case_decide; simplify_option_eq; try case_match));
-    intuition; by eapply IHfuel.
+    destruct_put; intuition; by eapply IHfuel.
 Qed.
 
 (* [pure_put] definitionally guarantees [fuel] down the put path.
@@ -826,8 +839,7 @@ Proof.
   induction fuel; [done|].
   intros *.
   destruct t; simpl; intros; try done;
-    repeat (progress (try case_decide; simplify_option_eq; try case_match));
-    naive_solver.
+    destruct_put; naive_solver.
 Qed.
 
 Lemma old_entry_over_put t t' label label' oval' val :
@@ -846,8 +858,7 @@ Proof.
   induction fuel; [done|].
   intros *.
   destruct t; simpl; intros ? (?&?&?); try done;
-    repeat (progress (try case_decide; simplify_option_eq; try case_match));
-    try naive_solver.
+    destruct_put; try naive_solver.
 Qed.
 
 (* easier [map_eq] extensional proof vs. using fin_map reductions. *)
@@ -934,55 +945,35 @@ Proof.
 Qed.
 
 Lemma cut_cut_hash_over_put t0 t1 h label val t0' t1' h' :
-  cut_cut_reln t0 t1 h →
   pure_put t0 label val = Some t0' →
   pure_put t1 label val = Some t1' →
+  cut_cut_reln t0 t1 h →
   is_cut_tree t0' h' →
   is_cut_tree t1' h'.
 Proof.
   autounfold with merkle.
   remember (S max_depth) as fuel. clear Heqfuel.
   remember 0%nat as depth. clear Heqdepth.
-  induction fuel.
-  iInduction fuel as [? IH] using lt_wf_ind forall (t0 t1 h t0' t1' h' depth).
-  iIntros "#Hreln %Hput0 %Hput1 #Hhash_t0'".
-  rewrite pure_put_unfold in Hput0.
-
-  destruct t0; try done.
-  - iDestruct (cut_cut_reln_Empty with "Hreln [%]") as %->.
-    { by eapply put_impl_non_cut. }
-    rewrite pure_put_unfold in Hput1.
-    simplify_eq/=.
-    iFrame "#".
-  - iDestruct (cut_cut_reln_Leaf with "Hreln [%]") as %->.
-    { by eapply put_impl_non_cut. }
-    rewrite pure_put_unfold in Hput1.
-    case_decide.
-    { simplify_eq/=. iFrame "#". }
-    case_match; try done.
+  revert t0 t1 h t0' t1' h' depth.
+  induction fuel; [done|].
+  intros * Hput0 Hput1 **.
+  opose proof (put_impl_non_cut t0 _) as ?; [done|].
+  opose proof (put_impl_non_cut t1 _) as ?; [done|].
+  destruct t0; intros; try done.
+  - tree_reln. by simplify_eq/=.
+  - tree_reln. by simplify_eq/=.
+  - tree_reln.
+    simplify_option_eq.
+    Transparent is_cut_tree.
     simpl in *.
-    case_match; try done.
-    simplify_eq/=.
-    iFrame "#".
-  - iDestruct (cut_cut_reln_Inner with "Hreln [%]") as "(%&%&%&%&->&#Hreln0&#Hreln1)".
-    { by eapply put_impl_non_cut. }
-    rewrite pure_put_unfold in Hput1.
-    case_match; try done.
-    simpl in *.
-    destruct (pure_put' _ _ _ _ _) eqn:? in Hput0; try done.
-    destruct (pure_put' _ _ _ _ _) eqn:? in Hput1; try done.
-    simplify_eq/=.
-    iSpecialize ("IH" $! n with "[]"); [word|].
-    iNamed "Hhash_t0'".
-    case_match.
-    + iDestruct ("IH" with "Hreln1 [//][//][$]") as "$".
-      iNamed "Hreln0".
-      iDestruct (is_cut_tree_det with "Hchild0 Ht0") as %->.
-      iFrame "#".
-    + iDestruct ("IH" with "Hreln0 [//][//][$]") as "$".
-      iNamed "Hreln1".
-      iDestruct (is_cut_tree_det with "Hchild1 Ht0") as %->.
-      iFrame "#".
+    destruct_exis. destruct_and?.
+    pose proof Hchild as [].
+    pose proof Hchild0 as [].
+    case_match; tree_det.
+    + eapply IHfuel in Hchild0 as ?; cycle 1; [done..|].
+      naive_solver.
+    + eapply IHfuel in Hchild as ?; cycle 1; [done..|].
+      naive_solver.
 Qed.
 
 Tactic Notation "rw_pure_put" := repeat
