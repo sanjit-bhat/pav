@@ -459,40 +459,43 @@ Local Tactic Notation "rw_hash" := repeat
     apply cryptoffi.hash_bij_l in H1; rewrite {}H1
   end.
 
-Lemma cut_full_reln_Empty ft fuel h :
-  cut_full_reln' Empty ft (S fuel) h → ft = Empty.
+Lemma cut_to_full_Empty fuel h :
+  is_cut_tree Empty h →
+  tree_inv_fn' h (S fuel) = Empty.
 Proof.
-  intros (Hc&Hf). simpl in *.
+  simpl. intros.
   rw_hash.
-  by rewrite decode_empty_det in Hf.
+  by rewrite decode_empty_det.
 Qed.
 
-Lemma cut_full_reln_Leaf {label val} ft fuel h :
-  cut_full_reln' (Leaf label val) ft (S fuel) h → ft = Leaf label val.
+Lemma cut_to_full_Leaf {label val} fuel h :
+  is_cut_tree (Leaf label val) h →
+  tree_inv_fn' h (S fuel) = Leaf label val.
 Proof.
-  intros (Hc&Hf). simpl in *. destruct_and?.
+  simpl. intros. destruct_and?.
   rw_hash.
-  by rewrite decode_leaf_det in Hf.
+  by rewrite decode_leaf_det.
 Qed.
 
-Lemma cut_full_reln_Inner ft t0 t1 fuel h :
-  cut_full_reln' (Inner t0 t1) ft (S fuel) h →
+Lemma cut_to_full_Inner t0 t1 fuel h :
+  is_cut_tree (Inner t0 t1) h →
   ∃ t2 t3 h0 h1,
-    ft = Inner t2 t3 ∧
+    tree_inv_fn' h (S fuel) = Inner t2 t3 ∧
     is_cut_tree t0 h0 ∧
     is_cut_tree t1 h1 ∧
     tree_inv_fn' h0 fuel = t2 ∧
     tree_inv_fn' h1 fuel = t3.
 Proof.
-  intros (Hc&Hf). simpl in *.
+  simpl. intros.
   destruct_exis. destruct_and?.
   rw_hash.
+  apply is_cut_tree_len in H0 as ?.
   apply is_cut_tree_len in H as ?.
-  apply is_cut_tree_len in H1 as ?.
-  rewrite decode_inner_det in Hf; [|done..].
+  rewrite decode_inner_det; [|done..].
   naive_solver.
 Qed.
 
+(* TODO: not sure if needed. *)
 Lemma init_to_reln_Empty fuel :
   is_pkg_init (PROP:=iProp Σ) merkle -∗
   ⌜∃ h, cut_full_reln' Empty Empty (S fuel) h⌝.
@@ -506,41 +509,24 @@ Proof.
   by rewrite decode_empty_det.
 Qed.
 
-Lemma cut_to_full_Empty fuel h :
-  is_cut_tree Empty h →
-  tree_inv_fn' h (S fuel) = Empty.
-Proof.
-  simpl. intros.
-  rw_hash.
-  by rewrite decode_empty_det.
-Qed.
-
-Lemma cut_to_full_Leaf fuel l v h :
-  is_cut_tree (Leaf l v) h →
-  tree_inv_fn' h (S fuel) = Leaf l v.
-Proof.
-  simpl. intros. destruct_and?.
-  rw_hash.
-  by rewrite decode_leaf_det.
-Qed.
-
-Lemma full_entry_txfer t0 t1 h label oval :
+Lemma full_entry_txfer t0 h label oval :
   is_entry t0 label oval →
   is_cutless_path t0 label →
   is_fuel t0 →
-  cut_full_reln t0 t1 h →
-  is_entry t1 label oval.
+  is_cut_tree t0 h →
+  is_entry (tree_inv_fn h) label oval.
 Proof.
   autounfold with merkle.
   remember (S max_depth) as fuel. clear Heqfuel.
   remember 0%nat as depth. clear Heqdepth.
-  revert t1 h fuel depth.
-  induction t0; simpl; intros * ??? Hreln;
+  revert h fuel depth.
+  induction t0; simpl; intros * ??? Hc;
     destruct fuel; try done.
-  - apply cut_full_reln_Empty in Hreln as ->. naive_solver.
-  - apply cut_full_reln_Leaf in Hreln as ->. naive_solver.
-  - apply cut_full_reln_Inner in Hreln as (?&?&?&?&?).
+  - eapply cut_to_full_Empty in Hc as ->. naive_solver.
+  - eapply cut_to_full_Leaf in Hc as ->. naive_solver.
+  - eapply cut_to_full_Inner in Hc as (?&?&?&?&?).
     destruct_and?. subst.
+    erewrite H3.
     simpl. case_match.
     + by eapply IHt0_2.
     + by eapply IHt0_1.
@@ -555,17 +541,16 @@ Proof.
   autounfold with merkle.
   remember (S max_depth) as fuel. clear Heqfuel.
   revert h fuel.
-  induction t; simpl; intros; destruct_and?;
-    destruct fuel; try done; simpl.
-  - rw_hash. by rewrite decode_empty_det.
-  - rw_hash. by rewrite decode_leaf_det.
-  - destruct_exis. destruct_and?.
-    rw_hash.
-    apply is_cut_tree_len in H1 as ?.
-    apply is_cut_tree_len in H as ?.
-    rewrite decode_inner_det; [|done..].
+  induction t; simpl; intros * ?? Hc;
+    destruct fuel; try done.
+  - by eapply cut_to_full_Empty in Hc as ->.
+  - by eapply cut_to_full_Leaf in Hc as ->.
+  - eapply cut_to_full_Inner in Hc.
+    destruct_exis. destruct_and?.
+    erewrite H1.
     erewrite <-IHt1; [|done..].
-    by erewrite <-IHt2; [|done..].
+    erewrite <-IHt2; [|done..].
+    by subst.
 Qed.
 
 (** const label len -- needed for put op termination. *)
@@ -866,33 +851,35 @@ Proof.
     by apply entry_eq_lookup.
 Qed.
 
-Lemma cut_full_over_put t0 t0' t1 h0 h1 label val :
-  cut_full_reln t0 t0' h0 →
+Lemma cut_full_over_put t0 t1 h0 h1 label val :
   pure_put t0 label val = Some t1 →
+  is_cut_tree t0 h0 →
   is_cut_tree t1 h1 →
-  pure_put t0' label val = Some $ tree_inv_fn h1.
+  pure_put (tree_inv_fn h0) label val = Some $ tree_inv_fn h1.
 Proof.
   autounfold with merkle.
   remember (S max_depth) as fuel. clear Heqfuel.
   remember 0%nat as depth. clear Heqdepth.
-  revert t0 t0' t1 h0 h1 depth.
+  revert t0 t1 h0 h1 depth.
   induction fuel; [done|].
-  destruct t0; intros; simplify_eq/=; destruct_and?.
-  - apply cut_full_reln_Empty in H. subst.
-    rw_hash. by rewrite decode_leaf_det.
-  - apply cut_full_reln_Leaf in H. subst.
+  Opaque is_cut_tree tree_inv_fn'.
+  destruct t0; intros * ? Hc0 Hc1; simplify_eq/=.
+  - eapply cut_to_full_Empty in Hc0 as ->.
+    by eapply cut_to_full_Leaf in Hc1 as ->.
+  - eapply cut_to_full_Leaf in Hc0 as ->.
     case_decide.
-    { simplify_eq/=. destruct_and?.
-      rw_hash. by rewrite decode_leaf_det. }
+    { simplify_eq/=. by eapply cut_to_full_Leaf in Hc1 as ->. }
     case_match; try done.
     simplify_eq/=.
+    eapply cut_to_full_Inner in Hc1.
     destruct_exis. destruct_and?.
-    apply is_cut_tree_len in H0 as ?.
-    apply is_cut_tree_len in H1 as ?.
-    rw_hash.
-    rewrite decode_inner_det; [|done..].
+    erewrite H. clear H.
+    simplify_eq/=.
     f_equal.
-    repeat case_match.
+    (*
+    - learn that put output is Inner0.
+    - learn that inv_fn h1 is Inner1 with same hashes as Inner0.
+    *)
 Admitted.
 
 (* note: [pure_put] doesn't compute hash, so this lemma can't give [cut_full_reln].
