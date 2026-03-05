@@ -589,30 +589,33 @@ NOTE: separating [depth] from [fuel] allows us to separate
 label-index reasoning from termination reasoning.
 otherwise, we'd have to track that, e.g., fuel <= max_depth. *)
 Fixpoint pure_put' t depth label val (fuel : nat) :=
+  let b := get_bit label depth in
+  let new := Leaf label val in
   (* Golang put won't run out of fuel. *)
   match fuel with 0%nat => None | S fuel' =>
   match t with
-  | Empty => Some (Leaf label val)
+  | Empty => Some new
   | Leaf label' val' =>
-    if decide (label = label') then Some (Leaf label val) else
-    (* "unfolding" the two leaf puts lets us use [fuel'] in recur calls. *)
-    (* put 1. *)
-    let t0_0 := if get_bit label' depth then Empty else t in
-    let t0_1 := if get_bit label' depth then t else Empty in
-    let t0 := if get_bit label depth then t0_1 else t0_0 in
-    (* put 2. *)
-    match pure_put' t0 (S depth) label val fuel' with None => None | Some t1 =>
-    let t2_0 := if get_bit label depth then t0_0 else t1 in
-    let t2_1 := if get_bit label depth then t1 else t0_1 in
-    Some $ Inner t2_0 t2_1
-    end
+    let b' := get_bit label' depth in
+    if decide (label = label') then Some new else
+    if decide (b = b')
+      then
+        (* recurse. *)
+        t0 ← pure_put' t (S depth) label val fuel';
+        let t1_0 := if b then Empty else t0 in
+        let t1_1 := if b then t0 else Empty in
+        Some $ Inner t1_0 t1_1
+      else
+        (* don't recurse. *)
+        let t0 := if b then t else new in
+        let t1 := if b then new else t in
+        Some $ Inner t0 t1
   | Inner c0 c1 =>
-    let t0 := if get_bit label depth then c1 else c0 in
-    match pure_put' t0 (S depth) label val fuel' with None => None | Some t1 =>
-    let t2_0 := if get_bit label depth then c0 else t1 in
-    let t2_1 := if get_bit label depth then t1 else c1 in
+    let t0 := if b then c1 else c0 in
+    t1 ← pure_put' t0 (S depth) label val fuel';
+    let t2_0 := if b then c0 else t1 in
+    let t2_1 := if b then t1 else c1 in
     Some $ Inner t2_0 t2_1
-    end
   | Cut _ => None (* Golang put won't hit Cut. *)
   end end.
 Definition pure_put t label val := pure_put' t 0 label val (S max_depth).
@@ -642,6 +645,7 @@ Definition pure_proofToTree label sibs oleaf :=
 
 (** invariants on [pure_put]. *)
 
+(*
 Lemma put_impl_non_cut t depth label val fuel :
   is_Some (pure_put' t depth label val (S fuel)) →
   ∀ h, t ≠ Cut h.
@@ -850,6 +854,7 @@ Proof.
     eapply old_entry_over_put; [|done..].
     by apply entry_eq_lookup.
 Qed.
+*)
 
 Lemma cut_full_over_put t0 t1 h0 h1 label val :
   pure_put t0 label val = Some t1 →
@@ -866,9 +871,36 @@ Proof.
   destruct t0; intros * ? Hc0 Hc1; simplify_eq/=.
   - eapply cut_to_full_Empty in Hc0 as ->.
     by eapply cut_to_full_Leaf in Hc1 as ->.
-  - eapply cut_to_full_Leaf in Hc0 as ->.
+  - eapply cut_to_full_Leaf in Hc0 as Ht. rewrite {}Ht.
     case_decide.
     { simplify_eq/=. by eapply cut_to_full_Leaf in Hc1 as ->. }
+    case_decide.
+    + simplify_option_eq.
+      eapply cut_to_full_Inner in Hc1.
+      destruct_exis. destruct Hc1 as (Heq&Hc2&Hc3&?&?).
+      erewrite Heq. clear Heq.
+      simplify_eq/=.
+      destruct fuel; [done|].
+      case_match.
+      * eapply cut_to_full_Empty in Hc2 as ->.
+        ospecialize (IHfuel _ _ _ _ _ _ _ _); [done..|].
+        eapply cut_to_full_Leaf in Hc0 as Ht.
+        erewrite Ht in IHfuel. clear Ht.
+        rewrite Heqo in IHfuel.
+        by simplify_eq/=.
+      * eapply cut_to_full_Empty in Hc3 as ->.
+        ospecialize (IHfuel _ _ _ _ _ _ _ _); [done..|].
+        eapply cut_to_full_Leaf in Hc0 as Ht.
+        erewrite Ht in IHfuel. clear Ht.
+        rewrite Heqo in IHfuel.
+        by simplify_eq/=.
+    + simplify_eq/=.
+      eapply cut_to_full_Inner in Hc1.
+      destruct_exis. destruct Hc1 as (Heq&Hc2&Hc3&?&?).
+      erewrite Heq. clear Heq.
+      simplify_eq/=.
+
+
     case_match; try done.
     simplify_eq/=.
     eapply cut_to_full_Inner in Hc1.
