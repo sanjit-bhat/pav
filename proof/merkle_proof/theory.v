@@ -446,11 +446,6 @@ Fixpoint is_fuel' t fuel :=
 Definition is_fuel t := is_fuel' t (S max_depth).
 #[local] Hint Unfold is_fuel : merkle.
 
-Definition cut_full_reln' ct ft fuel h :=
-  is_cut_tree ct h ∧ tree_inv_fn' h fuel = ft.
-Definition cut_full_reln ct ft h := cut_full_reln' ct ft (S max_depth) h.
-#[local] Hint Unfold cut_full_reln : merkle.
-
 Local Tactic Notation "rw_hash" := repeat
   match goal with
   | H0 : context[cryptoffi.hash_inv_fn ?h], H1 : cryptoffi.hash_fn _ = Some ?h |- _ =>
@@ -479,12 +474,10 @@ Qed.
 
 Lemma cut_to_full_Inner t0 t1 fuel h :
   is_cut_tree (Inner t0 t1) h →
-  ∃ t2 t3 h0 h1,
-    tree_inv_fn' h (S fuel) = Inner t2 t3 ∧
+  ∃ h0 h1,
+    tree_inv_fn' h (S fuel) = Inner (tree_inv_fn' h0 fuel) (tree_inv_fn' h1 fuel) ∧
     is_cut_tree t0 h0 ∧
-    is_cut_tree t1 h1 ∧
-    tree_inv_fn' h0 fuel = t2 ∧
-    tree_inv_fn' h1 fuel = t3.
+    is_cut_tree t1 h1.
 Proof.
   simpl. intros.
   destruct_exis. destruct_and?.
@@ -495,18 +488,36 @@ Proof.
   naive_solver.
 Qed.
 
-(* TODO: not sure if needed. *)
-Lemma init_to_reln_Empty fuel :
+Local Tactic Notation "rw_tree" := repeat
+  match goal with
+  | H0 : is_cut_tree Empty ?h, H1 : context[tree_inv_fn' ?h (S _)] |- _ =>
+    eapply cut_to_full_Empty in H0 as Ht; erewrite Ht in H1; clear Ht
+  | H0 : is_cut_tree Empty ?h |- context[tree_inv_fn' ?h (S _)] =>
+    eapply cut_to_full_Empty in H0 as Ht; erewrite Ht; clear Ht
+  | H0 : is_cut_tree (Leaf _ _) ?h, H1 : context[tree_inv_fn' ?h (S _)] |- _ =>
+    eapply cut_to_full_Leaf in H0 as Ht; erewrite Ht in H1; clear Ht
+  | H0 : is_cut_tree (Leaf _ _) ?h |- context[tree_inv_fn' ?h (S _)] =>
+    eapply cut_to_full_Leaf in H0 as Ht; erewrite Ht; clear Ht
+  | H0 : is_cut_tree (Inner _ _) ?h, H1 : context[tree_inv_fn' ?h (S _)] |- _ =>
+    let Hchild0 := fresh "Hchild" in
+    let Hchild1 := fresh "Hchild" in
+    eapply cut_to_full_Inner in H0 as (?&?&Ht&Hchild0&Hchild1);
+      erewrite Ht in H1; clear Ht
+  | H0 : is_cut_tree (Inner _ _) ?h |- context[tree_inv_fn' ?h (S _)] =>
+    let Hchild0 := fresh "Hchild" in
+    let Hchild1 := fresh "Hchild" in
+    eapply cut_to_full_Inner in H0 as (?&?&Ht&Hchild0&Hchild1);
+      erewrite Ht; clear Ht
+  end.
+
+Lemma init_to_Empty :
   is_pkg_init (PROP:=iProp Σ) merkle -∗
-  ⌜∃ h, cut_full_reln' Empty Empty (S fuel) h⌝.
+  ⌜∃ h, is_cut_tree Empty h⌝.
 Proof.
   iIntros "#Hpkg".
   iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
   rewrite /is_initialized. iNamed "Hinit".
-  iPureIntro.
-  eexists. split; try done. simpl.
-  rw_hash.
-  by rewrite decode_empty_det.
+  naive_solver.
 Qed.
 
 Lemma full_entry_txfer t0 h label oval :
@@ -520,13 +531,13 @@ Proof.
   remember (S max_depth) as fuel. clear Heqfuel.
   remember 0%nat as depth. clear Heqdepth.
   revert h fuel depth.
+  Opaque is_cut_tree.
   induction t0; simpl; intros * ??? Hc;
     destruct fuel; try done.
-  - eapply cut_to_full_Empty in Hc as ->. naive_solver.
-  - eapply cut_to_full_Leaf in Hc as ->. naive_solver.
-  - eapply cut_to_full_Inner in Hc as (?&?&?&?&?).
-    destruct_and?. subst.
-    erewrite H3.
+  - rw_tree. naive_solver.
+  - rw_tree. naive_solver.
+  - rw_tree.
+    destruct_and?.
     simpl. case_match.
     + by eapply IHt0_2.
     + by eapply IHt0_1.
@@ -541,13 +552,13 @@ Proof.
   autounfold with merkle.
   remember (S max_depth) as fuel. clear Heqfuel.
   revert h fuel.
+  Opaque is_cut_tree.
   induction t; simpl; intros * ?? Hc;
     destruct fuel; try done.
-  - by eapply cut_to_full_Empty in Hc as ->.
-  - by eapply cut_to_full_Leaf in Hc as ->.
-  - eapply cut_to_full_Inner in Hc.
-    destruct_exis. destruct_and?.
-    erewrite H1.
+  - by rw_tree.
+  - by rw_tree.
+  - rw_tree.
+    destruct_and?.
     erewrite <-IHt1; [|done..].
     erewrite <-IHt2; [|done..].
     by subst.
@@ -596,20 +607,19 @@ Fixpoint pure_put' t depth label val (fuel : nat) :=
   match t with
   | Empty => Some new
   | Leaf label' val' =>
-    let b' := get_bit label' depth in
     if decide (label = label') then Some new else
-    if decide (b = b')
-      then
-        (* recurse. *)
-        t0 ← pure_put' t (S depth) label val fuel';
-        let t1_0 := if b then Empty else t0 in
-        let t1_1 := if b then t0 else Empty in
-        Some $ Inner t1_0 t1_1
-      else
-        (* don't recurse. *)
-        Some $ Inner
-          (Leaf (if b then label' else label) (if b then val' else val))
-          (Leaf (if b then label else label') (if b then val else val'))
+    let b' := get_bit label' depth in
+    (* for rocq fixpoint checker,
+    structure so we only make recursive calls with fuel'. *)
+    (* put 1. into Inner Empty Empty. *)
+    let t0_0 := if b' then Empty else t in
+    let t0_1 := if b' then t else Empty in
+    let t0 := if b then t0_1 else t0_0 in
+    (* put 2. into Inner with one Leaf. *)
+    t1 ← pure_put' t0 (S depth) label val fuel';
+    let t2_0 := if b then t0_0 else t1 in
+    let t2_1 := if b then t1 else t0_1 in
+    Some $ Inner t2_0 t2_1
   | Inner c0 c1 =>
     let t0 := if b then c1 else c0 in
     t1 ← pure_put' t0 (S depth) label val fuel';
@@ -856,7 +866,20 @@ Proof.
 Qed.
 *)
 
+Lemma rw_bit0 (b0 b1 : bool) {A} (x0 x1 : A) :
+  (if b0
+    then
+      if b1 then x0 else x1
+    else
+      if b1 then x1 else x0)
+  =
+  if decide (b0 = b1) then x0 else x1.
+Proof. by repeat case_match. Qed.
+
 Lemma cut_full_over_put t0 t1 h0 h1 label val :
+  (* for "generating" Empty hashes.
+  this applies when parent spawns new Empty node that it doesn't itself have. *)
+  (∃ h, is_cut_tree Empty h) →
   pure_put t0 label val = Some t1 →
   is_cut_tree t0 h0 →
   is_cut_tree t1 h1 →
@@ -865,58 +888,34 @@ Proof.
   autounfold with merkle.
   remember (S max_depth) as fuel. clear Heqfuel.
   remember 0%nat as depth. clear Heqdepth.
-  revert t0 t1 h0 h1 depth.
+  intros (?&Hempty).
+  revert h0 h1 t0 t1 depth.
   induction fuel; [done|].
   Opaque is_cut_tree tree_inv_fn'.
   destruct t0; intros * ? Hc0 Hc1; simplify_eq/=.
-  - eapply cut_to_full_Empty in Hc0 as ->.
-    by eapply cut_to_full_Leaf in Hc1 as ->.
-  - eapply cut_to_full_Leaf in Hc0 as Ht. rewrite {}Ht.
+  - by rw_tree.
+  - rw_tree.
     case_decide.
-    { simplify_eq/=. by eapply cut_to_full_Leaf in Hc1 as ->. }
-    case_decide.
-    + simplify_option_eq.
-      eapply cut_to_full_Inner in Hc1.
-      destruct_exis. destruct Hc1 as (Heq&Hc2&Hc3&?&?).
-      erewrite Heq. clear Heq.
-      simplify_eq/=.
-      destruct fuel; [done|].
-      case_match.
-      * eapply cut_to_full_Empty in Hc2 as ->.
-        ospecialize (IHfuel _ _ _ _ _ _ _ _); [done..|].
-        eapply cut_to_full_Leaf in Hc0 as Ht.
-        erewrite Ht in IHfuel. clear Ht.
-        rewrite Heqo in IHfuel.
-        by simplify_eq/=.
-      * eapply cut_to_full_Empty in Hc3 as ->.
-        ospecialize (IHfuel _ _ _ _ _ _ _ _); [done..|].
-        eapply cut_to_full_Leaf in Hc0 as Ht.
-        erewrite Ht in IHfuel. clear Ht.
-        rewrite Heqo in IHfuel.
-        by simplify_eq/=.
-    + simplify_eq/=.
-      eapply cut_to_full_Inner in Hc1.
-      destruct_exis. destruct Hc1 as (Heq&Hc2&Hc3&?&?).
-      erewrite Heq. clear Heq.
-      simplify_eq/=.
-      destruct fuel.
-      { Transparent tree_inv_fn'.
-        simpl in *.
-        exfalso.
-        (* run out of fuel to compute Leaf.
-        need to use IH. *)
-
-    case_match; try done.
-    simplify_eq/=.
-    eapply cut_to_full_Inner in Hc1.
-    destruct_exis. destruct_and?.
-    erewrite H. clear H.
-    simplify_eq/=.
+    { simplify_eq/=. by rw_tree. }
+    simplify_option_eq.
+    rename Heqo into Hput.
+    rw_tree.
+    eremember (get_bit label _) as b. clear Heqb.
+    eremember (get_bit label0 _) as b'. clear Heqb'.
+    rewrite rw_bit0 in Hput.
     f_equal.
-    (*
-    - learn that put output is Inner0.
-    - learn that inv_fn h1 is Inner1 with same hashes as Inner0.
-    *)
+    ospecialize (IHfuel
+      (* control flow that determines what the input hash is. *)
+      (if decide (b = b') then _ else _)
+      (* control flow that determines what the output hash is. *)
+      (if b then _ else _)).
+    eapply IHfuel in Hput as Hput_inv; cycle 1.
+    { by case_decide. }
+    { by destruct b. }
+    clear IHfuel.
+    destruct fuel; [done|].
+    destruct b, b'; case_decide; try done;
+      rw_tree; congruence.
 Admitted.
 
 (* note: [pure_put] doesn't compute hash, so this lemma can't give [cut_full_reln].
