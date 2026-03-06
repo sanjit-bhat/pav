@@ -451,7 +451,7 @@ Local Tactic Notation "tree_reln" := repeat
 
 (** inv <-> cut tree reln. *)
 
-Fixpoint is_fuel' t fuel :=
+Fixpoint is_fuel' t fuel {struct fuel} :=
   match fuel with 0%nat => False | S fuel' =>
   match t with
   | Inner c0 c1 => is_fuel' c0 fuel' ∧ is_fuel' c1 fuel'
@@ -541,6 +541,8 @@ Proof.
   naive_solver.
 Qed.
 
+#[local] Opaque is_cut_tree tree_inv_fn'.
+
 Lemma full_entry_txfer t0 h label oval :
   is_entry t0 label oval →
   is_cutless_path t0 label →
@@ -552,10 +554,8 @@ Proof.
   remember (S max_depth) as fuel. clear Heqfuel.
   remember 0%nat as depth. clear Heqdepth.
   revert h fuel depth.
-  (* TODO: can prob globalize this. *)
-  Opaque is_cut_tree.
   induction t0; simpl; intros * ??? Hc;
-    destruct fuel; try done.
+    destruct fuel; try done; simpl in *.
   - tree_inv. naive_solver.
   - tree_inv. naive_solver.
   - tree_inv.
@@ -574,9 +574,8 @@ Proof.
   autounfold with merkle.
   remember (S max_depth) as fuel. clear Heqfuel.
   revert h fuel.
-  Opaque is_cut_tree.
   induction t; simpl; intros * ?? Hc;
-    destruct fuel; try done.
+    destruct fuel; try done; simpl in *.
   - by tree_inv.
   - by tree_inv.
   - tree_inv.
@@ -779,9 +778,8 @@ Proof.
   - by simplify_eq/=.
   - case_decide. { by simplify_eq/=. }
     simplify_option_eq.
-    repeat case_match; simpl;
-      repeat case_match; try done; intuition;
-      by eapply IHfuel.
+    destruct fuel; [done|].
+    repeat case_match; intuition; by eapply IHfuel.
   - simplify_option_eq.
     intuition; repeat case_match; try done; naive_solver.
 Qed.
@@ -835,7 +833,6 @@ Proof.
   eexists. intuition.
   generalize dependent depth.
   revert t t'.
-
   induction fuel; [done|].
   intros *.
   destruct t; simpl; intros; try done;
@@ -854,7 +851,6 @@ Proof.
   intros.
   generalize dependent depth.
   revert t t'.
-
   induction fuel; [done|].
   intros *.
   destruct t; simpl; intros ? (?&?&?); try done;
@@ -900,7 +896,6 @@ Proof.
   intros (?&Hempty).
   revert h0 h1 t0 t1 depth.
   induction fuel; [done|].
-  Opaque is_cut_tree tree_inv_fn'.
   destruct t0; intros * ? Hc0 Hc1; simplify_eq/=.
   - by tree_inv.
   - tree_inv.
@@ -992,20 +987,21 @@ Lemma put_Some t label val :
   is_Some (pure_put t label val).
 Proof.
   autounfold with merkle.
-  assert (∃ x, x = max_depth) as [fuel Heq]; [by eexists|].
+  assert (∃ x, x = S max_depth) as [fuel Heq]; [by eexists|].
   rewrite -[in is_fuel' _ _]Heq.
   rewrite -[in pure_put' _ _ _ _ _]Heq.
   remember [] as pref.
   assert (prefix_total pref (bytes_to_bits label)).
   { subst. apply prefix_total_nil. }
   replace 0%nat with (length pref); [|by subst].
-  assert (length pref + fuel = max_depth)%nat.
+  assert (length pref + fuel = S max_depth)%nat.
   { subst. simpl. lia. }
   clear Heq Heqpref.
   intros.
   generalize dependent t.
   generalize dependent pref.
 
+  induction fuel; [done|].
   induction fuel as [? IH] using lt_wf_ind.
   intros. rewrite pure_put_unfold.
   destruct t; simpl in *; try done.
