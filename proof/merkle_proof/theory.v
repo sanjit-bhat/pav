@@ -971,10 +971,10 @@ Proof.
       naive_solver.
 Qed.
 
-Tactic Notation "rw_pure_put" := repeat
-  match goal with
-  | H : pure_put' _ _ _ _ _ = None |- _ => rewrite -{}H
-  end.
+(* TODO: upstream smth like this. *)
+Lemma bind_is_Some {A B} (f : A → option B) (mx : option A) :
+  is_Some (mx ≫= f) ↔ is_Some mx ∧ (∀ x, mx = Some x → is_Some (f x)).
+Proof. destruct mx; naive_solver. Qed.
 
 Lemma put_Some t label val :
   (* for max depth. *)
@@ -1002,8 +1002,7 @@ Proof.
   generalize dependent pref.
 
   induction fuel; [done|].
-  induction fuel as [? IH] using lt_wf_ind.
-  intros. rewrite pure_put_unfold.
+  intros.
   destruct t; simpl in *; try done.
 
   - case_decide; [done|].
@@ -1015,17 +1014,17 @@ Proof.
         [|done|]; [by len|].
       simplify_eq/=. }
 
-    ospecialize (IH fuel _); [lia|].
-    destruct (pure_put' _ _ _ _ _) eqn:?; [done|]. rw_pure_put.
+    apply bind_is_Some.
+    split; try done.
     replace (S _) with (length $ pref_ext pref label) in * by len.
-    eapply IH; repeat case_match; try done; [|len|..];
+    eapply IHfuel; repeat case_match; try done; [|len|..];
       by eapply prefix_total_snoc.
-  - destruct fuel; [done|].
-    ospecialize (IH fuel _); [lia|].
-    intuition.
-    destruct (pure_put' _ _ _ _ _) eqn:?; [done|]. rw_pure_put.
+  - destruct_and?.
+    destruct fuel; [done|].
+    apply bind_is_Some.
+    split; try done.
     replace (S _) with (length $ pref_ext pref label) in * by len.
-    eapply IH; repeat case_match; try done; [..|len|len];
+    eapply IHfuel; repeat case_match; try done; [..|len|len];
       by eapply prefix_total_snoc.
 Qed.
 
