@@ -1035,7 +1035,7 @@ Lemma fuel_on_newShell label sibs :
   is_fuel (pure_newShell label sibs).
 Proof.
   autounfold with merkle.
-  remember (S max_depth) as fuel.
+  remember (max_depth) as fuel.
   remember 0%nat as depth.
   assert (depth + fuel ≤ max_depth) by lia.
   clear Heqfuel Heqdepth.
@@ -1101,7 +1101,6 @@ End proof.
 End merkle.
 
 #[export] Hint Unfold merkle.find merkle.is_entry merkle.to_map merkle.is_sorted
-  merkle.is_full_tree merkle.is_map merkle.is_cutless_path
-  merkle.is_fuel merkle.cut_full_reln
+  merkle.tree_inv_fn merkle.inv_fn merkle.is_cutless_path merkle.is_fuel
   merkle.pure_put merkle.pure_newShell merkle.pure_proofToTree
   : merkle.
