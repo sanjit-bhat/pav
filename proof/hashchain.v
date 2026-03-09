@@ -15,6 +15,9 @@ Collection W := sem + package_sem.
 #[global] Instance : IsPkgInit (iProp Σ) hashchain := define_is_pkg_init True%I.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) hashchain := build_get_is_pkg_init_wf.
 
+(* hashchain is special bc same party both inverts
+and hashes on more vals to compute future links. *)
+
 (** impl / spec requirements for hashchain:
 - allow for "bootstrapping", where a user starts following the hashchain
 only after some epoch.

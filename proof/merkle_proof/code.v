@@ -21,7 +21,7 @@ Collection W := sem + package_sem.
 
 Fixpoint own_tree ptr t d : iProp Σ :=
   ∃ hash,
-  "#Htree_hash" ∷ is_cut_tree t hash ∗
+  "%Htree_hash" ∷ ⌜is_cut_tree t hash⌝ ∗
   match t with
   | Empty =>
     "%Heq_ptr" ∷ ⌜ptr = null⌝
@@ -48,8 +48,13 @@ Fixpoint own_tree ptr t d : iProp Σ :=
 
 Lemma own_tree_to_hash ptr t d :
   own_tree ptr t d -∗
-  ∃ hash, is_cut_tree t hash.
-Proof. destruct t; iNamed 1; iFrame "#". Qed.
+  ⌜∃ hash, is_cut_tree t hash⌝.
+Proof. destruct t; iNamed 1; iPureIntro; naive_solver. Qed.
+
+(* TODO: maybe unsound in goose v4. *)
+Lemma typed_pointsto_not_null `{!TypedPointsto V} l dq (v : V) :
+  typed_pointsto (Σ:=Σ) l v dq -∗ ⌜l ≠ null⌝.
+Proof. Admitted.
 
 Lemma own_empty_tree t d :
   own_tree null t d -∗
@@ -57,7 +62,7 @@ Lemma own_empty_tree t d :
 Proof.
   iIntros "H". destruct t; [done|..];
     iNamed "H"; iNamed "H";
-    (by iDestruct (typed_pointsto_not_null with "Hnode") as %?; [done|]).
+    by iDestruct (typed_pointsto_not_null with "Hnode") as %?.
 Qed.
 
 #[global] Instance own_tree_dfrac ptr t :
@@ -67,38 +72,38 @@ Proof.
   - intros ??. iSplit.
     + iInduction t as [] forall (ptr);
         iIntros "H"; iNamed "H"; try iNamed "H"; fold own_tree.
-      * by iFrame "#".
+      * by iFrame "%".
       * iDestruct "Hnode" as "[? ?]".
-        iFrame "∗#".
+        iFrame "∗#%".
       * iDestruct "Hnode" as "[? ?]".
         iDestruct ("IHt1" with "Hown_child0") as "[? ?]".
         iDestruct ("IHt2" with "Hown_child1") as "[? ?]".
-        iFrame "∗#".
+        iFrame "∗#%".
       * iDestruct "Hnode" as "[? ?]".
-        iFrame "∗#".
+        iFrame "∗#%".
     + iInduction t as [] forall (ptr);
         iIntros "[H0 H1]";
         iNamedSuffix "H0" "0"; iNamedSuffix "H1" "1";
         try iNamedSuffix "H0" "0"; try iNamedSuffix "H1" "1";
         fold own_tree.
-      * by iFrame "#".
-      * iCombine "Hnode0 Hnode1" as "Hnode" gives %[_ ?].
+      * by iFrame "%".
+      * iCombine "Hnode0 Hnode1" as "Hnode" gives %?.
         simplify_eq/=.
-        iFrame "∗#".
-      * iCombine "Hnode0 Hnode1" as "Hnode" gives %[_ ?].
+        iFrame "∗#%".
+      * iCombine "Hnode0 Hnode1" as "Hnode" gives %?.
         simplify_eq/=.
         iDestruct ("IHt1" with "[$Hown_child00 $Hown_child01]") as "?".
         iDestruct ("IHt2" with "[$Hown_child10 $Hown_child11]") as "?".
-        iFrame "∗#".
-      * iCombine "Hnode0 Hnode1" as "Hnode" gives %[_ ?].
+        iFrame "∗#%".
+      * iCombine "Hnode0 Hnode1" as "Hnode" gives %?.
         simplify_eq/=.
-        iFrame "∗#".
+        iFrame "∗#%".
   - revert ptr. induction t; apply _.
   - iIntros "* H".
     iInduction t as [] forall (ptr);
       iNamed "H"; try iNamed "H"; fold own_tree.
-    + by iFrame "#".
-    + iPersist "Hnode". by iFrame "#".
+    + by iFrame "%".
+    + iPersist "Hnode". by iFrame "#%".
     + iPersist "Hnode".
       iMod ("IHt1" with "Hown_child0") as "?".
       iMod ("IHt2" with "Hown_child1") as "?".
@@ -124,36 +129,36 @@ Proof.
   - by iDestruct (typed_pointsto_not_null with "Hnode1") as %?.
   - by iDestruct (typed_pointsto_not_null with "Hnode1") as %?.
   - by iDestruct (typed_pointsto_not_null with "Hnode0") as %?.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
     iCombine "Hsl_label0 Hsl_label1" gives %->.
     iCombine "Hsl_val0 Hsl_val1" gives %->.
     by iModIntro.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
   - by iDestruct (typed_pointsto_not_null with "Hnode0") as %?.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
     iDestruct ("IHt0_1" with "Hown_child00 Hown_child01") as %->.
     iDestruct ("IHt0_2" with "Hown_child10 Hown_child11") as %->.
     by iModIntro.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
   - by iDestruct (typed_pointsto_not_null with "Hnode0") as %?.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
-  - iCombine "Hnode0 Hnode1" gives %[_ ?].
+  - iCombine "Hnode0 Hnode1" gives %?.
     simplify_eq/=.
     iCombine "Hsl_hash0 Hsl_hash1" gives %->.
-    iNamedSuffix "Htree_hash0" "0".
-    iNamedSuffix "Htree_hash1" "1".
-    simplify_eq/=.
+    opose proof (cut_cut_reln_Cut _ _ _ _) as ?.
+    { split; [exact Htree_hash0|exact Htree_hash1]. }
+    destruct_and?. simplify_eq/=.
     by iModIntro.
 Qed.
 
@@ -178,16 +183,19 @@ Lemma wp_compLeafHash sl_label sl_val (label val : list w8) :
   {{{
     sl_hash hash, RET #sl_hash;
     "Hsl_hash" ∷ sl_hash ↦* hash ∗
-    "#His_hash" ∷ cryptoffi.is_hash
-      (Some $ leafNodeTag ::
-      (u64_le $ length label) ++ label ++
-      (u64_le $ length val) ++ val)
-      hash
+    "%His_hash" ∷ ⌜cryptoffi.hash_fn
+      (leafNodeTag ::
+        (u64_le $ W64 $ length label) ++ label ++
+        (u64_le $ W64 $ length val) ++ val)
+      = Some hash⌝
   }}}.
 Proof.
   wp_start as "@". wp_auto.
   wp_apply cryptoffi.wp_NewHasher as "* @".
-  wp_apply wp_slice_literal as "* [Hsl_b _]".
+  (* TODO: hide things like [go_instruction_ind].
+  for some reason, they come earlier than [wp_slice_literal]. *)
+  wp_apply wp_slice_literal as "* Hsl_b".
+  { iIntros "**". by wp_auto. }
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_b]") as "@".
   iClear "Hsl_b".
   wp_apply wp_WriteInt as "* [Hsl_b _]".
@@ -210,9 +218,8 @@ Proof.
   list_simplifier.
   iDestruct (own_slice_len with "Hsl_label") as %[-> ?].
   iDestruct (own_slice_len with "Hsl_val") as %[-> ?].
-  iApply "HΦ". iFrame.
-  iExactEq "His_hash".
-  rewrite /named. repeat f_equal; word.
+  iApply "HΦ". iFrame. iPureIntro.
+  exact_eq His_hash. repeat f_equal; word.
 Qed.
 
 Lemma wp_compInnerHash sl_child0 sl_child1 (child0 child1 : list w8) :
@@ -225,14 +232,15 @@ Lemma wp_compInnerHash sl_child0 sl_child1 (child0 child1 : list w8) :
   {{{
     sl_hash hash, RET #sl_hash;
     "Hsl_hash" ∷ sl_hash ↦* hash ∗
-    "#His_hash" ∷ cryptoffi.is_hash
-      (Some $ innerNodeTag :: child0 ++ child1)
-      hash
+    "%His_hash" ∷ ⌜cryptoffi.hash_fn
+      (innerNodeTag :: child0 ++ child1)
+       = Some hash⌝
   }}}.
 Proof.
   wp_start as "@". wp_auto.
   wp_apply cryptoffi.wp_NewHasher as "* @".
-  wp_apply wp_slice_literal as "* [Hsl_b _]".
+  wp_apply wp_slice_literal as "* Hsl_b".
+  { iIntros "**". by wp_auto. }
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_b]") as "@".
   iClear "Hsl_b".
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_child0]") as "@".
@@ -242,7 +250,7 @@ Proof.
   wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr]") as "* @".
   { iDestruct own_slice_nil as "$". }
   list_simplifier.
-  iApply "HΦ". iFrame "∗#".
+  iApply "HΦ". iFrame "∗#%".
 Qed.
 
 Lemma wp_getBit sl_bs d0 bs (n : w64) :
@@ -279,8 +287,8 @@ Proof.
 
   (* in golang, extract byte. *)
   wp_if_destruct; [|word].
-  wp_pure; [ word | ].
-  wp_apply (wp_load_slice_elem with "[$Hsl_bs]") as "Hsl_bs".
+  case_decide; [|word].
+  wp_apply (wp_load_slice_index with "[$Hsl_bs]") as "Hsl_bs".
   { word. }
   { replace (sint.nat (word.divu _ _)) with (uint.nat n `div` 8)%nat; eauto.
     rewrite -> sint_eq_uint by word.
@@ -330,17 +338,17 @@ Proof.
   wp_apply (wp_getBit with "[$Hsl_label]") as "* @".
   destruct (get_bit _ _).
   - wp_auto. iApply "HΦ".
-    iDestruct (struct_fields_split with "Hnode") as "H".
-    iNamed "H". simpl. iFrame.
+    iStructNamed "Hnode". simpl.
+    iFrame.
     iIntros (??) "@ @".
-    iDestruct (struct_fields_combine (v:=merkle.node.mk _ _ _ _ _ _)
-      with "[$HnodeTy $Hhash $Hlabel $Hval $Hab $Hanb]") as "$".
+    iDestruct (typed_pointsto_combine with "[-]") as "$".
+    iFrame.
   - wp_auto. iApply "HΦ".
-    iDestruct (struct_fields_split with "Hnode") as "H".
-    iNamed "H". simpl. iFrame.
+    iStructNamed "Hnode". simpl.
+    iFrame.
     iIntros (??) "@ @".
-    iDestruct (struct_fields_combine (v:=merkle.node.mk _ _ _ _ _ _)
-      with "[$HnodeTy $Hhash $Hlabel $Hval $Hab $Hanb]") as "$".
+    iDestruct (typed_pointsto_combine with "[-]") as "$".
+    iFrame.
 Qed.
 
 Lemma wp_node_getHash t n d :
@@ -353,7 +361,7 @@ Lemma wp_node_getHash t n d :
     sl_hash hash, RET #sl_hash;
     "Hown_tree" ∷ own_tree n t d ∗
     "#Hsl_hash" ∷ sl_hash ↦*□ hash ∗
-    "#His_hash" ∷ is_cut_tree t hash
+    "%His_hash" ∷ ⌜is_cut_tree t hash⌝
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -361,10 +369,10 @@ Proof.
   { iDestruct (own_empty_tree with "Hown_tree") as %->.
     iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
     rewrite /is_initialized. iNamed "Hinit".
-    wp_apply wp_globals_get.
-    iApply "HΦ". iFrame "∗#". }
+    wp_auto.
+    iApply "HΦ". iFrame "∗#%". }
   destruct t; iNamed "Hown_tree"; try done; iNamed "Hown_tree";
-    wp_auto; iApply "HΦ"; iFrame "∗#".
+    wp_auto; iApply "HΦ"; iFrame "∗#%".
 Qed.
 
 Notation pref_ext p l := (p ++ [get_bit l (length p)]) (only parsing).
@@ -383,7 +391,7 @@ Proof. wp_start as "@". wp_auto. iApply "HΦ". word. Qed.
 
 Lemma wp_put n0 n t sl_label sl_val label val :
   (* for max depth. *)
-  is_limit t →
+  is_fuel t →
   Z.of_nat (length label) = cryptoffi.hash_len →
   is_const_label_len t →
   is_sorted t →
@@ -409,8 +417,8 @@ Lemma wp_put n0 n t sl_label sl_val label val :
   }}}.
 Proof.
   autounfold with merkle.
-  assert (∃ x, x = max_depth) as [limit Heq]; [by eexists|].
-  rewrite -[in is_limit' _ _]Heq.
+  assert (∃ x, x = S max_depth) as [fuel Heq]; [by eexists|].
+  rewrite -[in is_fuel' _ _]Heq.
   rewrite -[in pure_put' _ _ _ _ _]Heq.
   remember [] as pref.
   assert (prefix_total pref (bytes_to_bits label)).
@@ -418,14 +426,15 @@ Proof.
   replace 0%nat with (length pref) by (by subst).
   replace (W64 0) with (W64 $ length pref).
   2: { subst. simpl. word. }
-  assert (length pref + limit = max_depth)%nat.
+  assert (length pref + fuel = S max_depth)%nat.
   { subst. simpl. lia. }
   clear Heq Heqpref.
   intros.
   generalize dependent pref.
   generalize dependent t.
 
-  iInduction limit as [? IH] using lt_wf_ind forall (n0 n Φ).
+  iInduction fuel as [] forall (n0 n Φ).
+  { by iIntros "**". }
   iIntros (t ?? pref).
   iIntros "* (#?&@) HΦ".
   wp_func_call. wp_call. wp_auto.
@@ -433,21 +442,21 @@ Proof.
   { iPureIntro. case_bool_decide; [done|]. word. }
   iDestruct (own_slice_len with "Hsl_label_in") as %?.
   iDestruct (own_slice_len with "Hsl_val_in") as %?.
-  iEval (rewrite pure_put_unfold) in "HΦ".
 
   wp_if_destruct.
   (* empty. *)
   { iDestruct (own_empty_tree with "Hown_tree") as %->.
-    iClear "IH".
+    iClear "IHfuel".
     wp_apply wp_alloc as "* Hnode".
     iApply wp_fupd.
     wp_apply wp_compLeafHash as "* @".
     { iFrame "#". }
     iPersist "Hsl_hash". iModIntro.
     iApply "HΦ".
-    iFrame. iExists _. iSplit; [done|].
+    iFrame "Hn0_in".
+    iExists _. iSplit; [done|].
     iFrame "∗#".
-    iPureIntro. split; word. }
+    iPureIntro. repeat split; [..|done]; word. }
 
   destruct t; simpl in *; iNamed "Hown_tree"; try done;
     iNamedSuffix "Hown_tree" "_old".
@@ -458,7 +467,7 @@ Proof.
     wp_if_destruct.
     (* same label. *)
     { case_decide; [|done].
-      iClear "IH".
+      iClear "IHfuel".
       iApply wp_fupd.
       wp_apply wp_compLeafHash as "* @".
       { iFrame "#". }
@@ -466,10 +475,10 @@ Proof.
       iApply "HΦ".
       iFrame. iExists _. iSplit; [done|].
       iFrame "∗#".
-      iPureIntro. split; word. }
+      iPureIntro. repeat split; [..|done]; word. }
     case_decide; [done|].
-    destruct limit.
-    (* limit=0. show labels actually equal. *)
+    destruct fuel.
+    (* fuel=0. show labels actually equal. *)
     { exfalso.
       opose proof (prefix_total_full _ (bytes_to_bits label) _ _);
         [|done|]; [by len|].
@@ -498,10 +507,9 @@ Proof.
     replace (word.add _ _) with (W64 (length (pref_ext pref label))) by len.
     replace (S (length _)) with (length (pref_ext pref label)) by len.
 
-    iSpecialize ("IH" $! limit with "[]"); [word|].
     iDestruct (condition_prop cond with "[Hnode_old] []")
       as "[Hown_n_left Hown_n_right]"; [iAccu..|].
-    wp_apply ("IH" $! _ _ _ (if cond then (Leaf label0 val0) else Empty)
+    wp_apply ("IHfuel" $! _ _ _ (if cond then (Leaf label0 val0) else Empty)
       with "[][][][][][Hcb Hown_n_left]") as "* @"; try iPureIntro.
     { by repeat case_match. }
     { by repeat case_match. }
@@ -511,15 +519,15 @@ Proof.
         by eapply prefix_total_snoc. }
     { iFrame "∗#".
       case_match.
-      - iFrame "∗#".
+      - iFrame "∗#%".
       - iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
         rewrite /is_initialized. iNamed "Hinit".
-        by iFrame "#". }
+        by iFrame "#%". }
     destruct err; iNamed "Hgenie".
     { iExFalso. iApply "Hgenie". iPureIntro. by case_match. }
     wp_apply std.wp_Assert; [done|].
     rewrite Hcode.
-    iClear "IH".
+    iClear "IHfuel".
     iDestruct ("Hclose" with "Hn0 Hcnb") as "@".
     wp_auto.
 
@@ -537,8 +545,8 @@ Proof.
       case_match.
       - iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
         rewrite /is_initialized. iNamed "Hinit".
-        by iFrame "#".
-      - iFrame "∗#". }
+        by iFrame "#%".
+      - iFrame "∗#%". }
     iIntros "*". iNamedSuffix 1 "0". wp_auto.
     wp_apply (wp_node_getHash
       (if get_bit label (length pref)
@@ -549,8 +557,8 @@ Proof.
       case_match.
       - iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
         rewrite /is_initialized. iNamed "Hinit".
-        by iFrame "#".
-      - iFrame "∗#". }
+        by iFrame "#%".
+      - iFrame "∗#%". }
     iIntros "*". iNamedSuffix 1 "1". wp_auto.
     iPersist "Hsl_hash0 Hsl_hash1".
 
@@ -573,10 +581,12 @@ Proof.
       with (if get_bit label (length pref) then t' else if cond then Empty else Leaf label0 val0).
     2: { clear. by repeat case_match. }
     iFrame "∗#".
+    iPureIntro.
+    Local Transparent is_cut_tree.
+    simpl. naive_solver.
 
   (* inner. *)
-  - destruct limit; [done|].
-    intuition.
+  - destruct_and?. destruct fuel; [done|].
     wp_auto.
     wp_apply (wp_node_getChild with "[$Hnode_old]") as "*".
     { iFrame "#". }
@@ -585,11 +595,10 @@ Proof.
     replace (word.add _ _) with (W64 (length (pref_ext pref label))) by len.
     replace (S (length _)) with (length (pref_ext pref label)) in * by len.
 
-    iSpecialize ("IH" $! limit with "[]"); [word|].
     iDestruct (condition_bool (get_bit label (length pref))
       with "[Hown_child1_old] [Hown_child0_old]")
       as "[Hown_child_left Hown_child_right]"; [iAccu..|].
-    wp_apply ("IH" $! _ _ _ (if get_bit label (length pref) then t2 else t1)
+    wp_apply ("IHfuel" $! _ _ _ (if get_bit label (length pref) then t2 else t1)
       with "[][][][][][Hcb Hown_child_left]") as "* @"; try iPureIntro.
     { by repeat case_match. }
     { by repeat case_match. }
@@ -601,7 +610,7 @@ Proof.
     destruct err; iNamed "Hgenie"; wp_auto.
     { iApply "HΦ".  by iFrame. }
     rewrite Hcode.
-    iClear "IH".
+    iClear "IHfuel".
     iDestruct ("Hclose" with "Hn0 Hcnb") as "@".
     wp_auto.
 
@@ -642,7 +651,8 @@ Proof.
     iExists _. iSplit; [done|].
     simpl.
     iFrame "Hnode".
-    iFrame "∗#".
+    iFrame "∗#%".
+    iPureIntro. naive_solver.
 
   (* cut. *)
   - wp_auto.
@@ -783,14 +793,14 @@ Lemma proofToTree_post label proof_enc t :
   wish_proofToTree label proof_enc t -∗
   ("%Hlabel_None" ∷ ⌜is_entry t label None⌝ ∗
   "%Hcutless" ∷ ⌜is_cutless_path t label⌝ ∗
-  "%Hlimit" ∷ ⌜is_limit t⌝ ∗
+  "%Hfuel" ∷ ⌜is_fuel t⌝ ∗
   "%Hsorted" ∷ ⌜is_sorted t⌝ ∗
   "%Hconst_label_len" ∷ ⌜is_const_label_len t⌝).
 Proof.
   iIntros "@".
   opose proof (newShell_None label sibs).
   opose proof (cutless_on_newShell label sibs).
-  opose proof (limit_on_newShell label sibs _); [word|].
+  opose proof (fuel_on_newShell label sibs _); [word|].
   opose proof (sorted_on_newShell label sibs).
   opose proof (const_label_on_newShell label sibs).
   destruct oleaf as [[]|]; simplify_eq/=; [|done].
@@ -798,7 +808,7 @@ Proof.
 
   eapply old_entry_over_put in Hcode as ?; [|done..].
   eapply cutless_path_over_put in Hcode as ?; [|done].
-  eapply is_limit_over_put in Hcode as ?; [|done].
+  eapply is_fuel_over_put in Hcode as ?; [|done].
   eapply is_sorted_over_put in Hcode as ?; [|done].
   eapply const_label_len_over_put in Hcode as ?; [|done|word].
   by opose proof (put_impl_cutless_pre _ _ _ _).
@@ -889,7 +899,7 @@ Proof.
 
   wp_apply (wp_put with "[$tr $Hown_tree]") as "* @".
   5: { iFrame "#". }
-  { apply limit_on_newShell. word. }
+  { apply fuel_on_newShell. word. }
   { word. }
   { apply const_label_on_newShell. }
   { apply sorted_on_newShell. }
@@ -919,8 +929,8 @@ Definition w64_len := 8%nat.
 Hint Unfold w64_len : word.
 
 Lemma wp_node_find n t d0 sl_label d1 label (getProof : bool) :
-  (* limit needed to prevent depth overflow. *)
-  is_limit t →
+  (* fuel needed to prevent depth overflow. *)
+  is_fuel t →
   is_cutless_path t label →
   {{{
     is_pkg_init merkle ∗
@@ -962,15 +972,15 @@ Lemma wp_node_find n t d0 sl_label d1 label (getProof : bool) :
   }}}.
 Proof.
   autounfold with merkle.
-  intros Hlimit Hcutless.
-  remember max_depth as limit.
+  intros Hfuel Hcutless.
+  remember max_depth as fuel.
   remember [] as pref.
   replace (0%nat) with (length pref) in * |-* by (by subst).
   replace (W64 0) with (W64 (length pref)) by (by subst).
-  assert ((length pref) + limit = max_depth) as Heq_depth.
+  assert ((length pref) + fuel = max_depth) as Heq_depth.
   { subst. simpl. word. }
-  clear Heqlimit Heqpref.
-  iLöb as "IH" forall (t limit pref n Hcutless Hlimit Heq_depth).
+  clear Heqfuel Heqpref.
+  iLöb as "IH" forall (t fuel pref n Hcutless Hfuel Heq_depth).
   iIntros (Φ) "(#?&@) HΦ".
   wp_method_call. wp_call. wp_auto.
   wp_if_destruct.
@@ -1010,7 +1020,7 @@ Proof.
       iDestruct own_slice_nil as "$".
       by iDestruct own_slice_cap_nil as "$".
 
-  - destruct limit; [done|]. intuition.
+  - destruct fuel; [done|]. intuition.
     wp_apply (wp_node_getChild with "[$Hnode $Hsl_label_in]") as "*".
     iIntros "[Hsl_label_in H]". iNamed "H". wp_auto.
     remember (length pref) as depth.
@@ -1220,7 +1230,7 @@ Proof.
   iDestruct (full_entry_txfer with "[$]") as %?.
   { by eapply put_new_entry. }
   { by eapply cutless_new_put. }
-  { by eapply is_limit_over_put. }
+  { by eapply is_fuel_over_put. }
   subst. iPureIntro.
   by rewrite -entry_eq_lookup.
 Qed.
@@ -1310,7 +1320,7 @@ Proof.
       iApply full_entry_txfer; [..|by iFrame "#"].
       { by eapply put_new_entry. }
       { by eapply cutless_new_put. }
-      { by eapply is_limit_over_put. }
+      { by eapply is_fuel_over_put. }
     + remember (to_map t0 !! label') as e. symmetry in Heqe.
       rewrite -!entry_eq_lookup in Heqe |-*.
       iDestruct (cut_full_over_put _ t0 _ t1 with "[$][][//][]") as %?.
@@ -1328,7 +1338,7 @@ Lemma wp_node_prove n t d0 sl_label d1 label getProof :
     "Hown_tree" ∷ own_tree n t d0 ∗
     "Hsl_label" ∷ sl_label ↦*{d1} label ∗
 
-    "%His_limit" ∷ ⌜is_limit t⌝ ∗
+    "%His_fuel" ∷ ⌜is_fuel t⌝ ∗
     "%His_cutless" ∷ ⌜is_cutless_path t label⌝ ∗
     "%Hsorted" ∷ ⌜is_sorted t⌝ ∗
     "%Hlen_label" ∷ ⌜Z.of_nat $ length label = cryptoffi.hash_len⌝ ∗
@@ -1488,7 +1498,7 @@ Definition own_Map ptr m hash d : iProp Σ :=
   "#His_hash" ∷ is_cut_tree t hash ∗
 
   "%His_cutless" ∷ ⌜is_cutless t⌝ ∗
-  "%His_limit" ∷ ⌜is_limit t⌝ ∗
+  "%His_fuel" ∷ ⌜is_fuel t⌝ ∗
   "%His_const_label" ∷ ⌜is_const_label_len t⌝ ∗
   "%His_sorted" ∷ ⌜is_sorted t⌝.
 
@@ -1679,7 +1689,7 @@ Proof.
   - iFrame "#". iPureIntro. repeat split.
     + symmetry. by eapply to_map_over_put.
     + by eapply cutless_over_put.
-    + by eapply is_limit_over_put.
+    + by eapply is_fuel_over_put.
     + eapply const_label_len_over_put; try done. word.
     + by eapply is_sorted_over_put.
   - iFrame "Hwish_toTree_wish".

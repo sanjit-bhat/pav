@@ -368,6 +368,11 @@ Qed.
 Definition cut_cut_reln t0 t1 h :=
   is_cut_tree t0 h ∧ is_cut_tree t1 h.
 
+Lemma cut_cut_reln_Cut h h0 h1 :
+  cut_cut_reln (Cut h0) (Cut h1) h →
+  h = h0 ∧ h = h1.
+Proof. intros (?&?); simpl in *; destruct_and?; by subst. Qed.
+
 Lemma cut_cut_reln_Empty t h :
   cut_cut_reln Empty t h →
   (∀ h, t ≠ Cut h) →
@@ -541,7 +546,7 @@ Proof.
   naive_solver.
 Qed.
 
-#[local] Opaque is_cut_tree tree_inv_fn'.
+#[global] Opaque is_cut_tree tree_inv_fn'.
 
 Lemma full_entry_txfer t0 h label oval :
   is_entry t0 label oval →
