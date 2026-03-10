@@ -1105,10 +1105,11 @@ Proof.
       destruct bit; by iFrame.
 Qed.
 
+(* TODO: maybe these wish preds should be pure. *)
 Definition wish_NonMemb label proof hash : iProp Σ :=
   ∃ t,
   "Hwish_toTree" ∷ wish_proofToTree label proof t ∗
-  "#His_hash" ∷ is_cut_tree t hash.
+  "%His_hash" ∷ ⌜is_cut_tree t hash⌝.
 
 Lemma wish_NonMemb_det l p h0 h1 :
   wish_NonMemb l p h0 -∗
@@ -1117,10 +1118,8 @@ Lemma wish_NonMemb_det l p h0 h1 :
 Proof.
   iNamedSuffix 1 "0".
   iNamedSuffix 1 "1".
-  iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %[].
-  simplify_eq/=.
-  iDestruct (is_cut_tree_det with "His_hash0 His_hash1") as %->.
-  done.
+  iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
+  by tree_det.
 Qed.
 
 Lemma wp_VerifyNonMemb sl_label label sl_proof proof :
@@ -1137,10 +1136,8 @@ Lemma wp_VerifyNonMemb sl_label label sl_proof proof :
       match err with
       | true => ¬ ∃ hash, wish_NonMemb label proof hash
       | false =>
-        ∃ m,
         "#His_proof" ∷ wish_NonMemb label proof hash ∗
-        "#His_map" ∷ is_map m hash ∗
-        "%Hlook" ∷ ⌜m !! label = None⌝
+        "%Hlook" ∷ ⌜inv_fn hash !! label = None⌝
       end
   }}}.
 Proof.
@@ -1155,21 +1152,18 @@ Proof.
   iDestruct (proofToTree_post with "[$]") as "#@".
   wp_apply (wp_node_getHash with "[$Hown_tree]") as "* @".
   iApply "HΦ".
-  iDestruct (is_cut_tree_len with "His_hash") as %?.
-  iDestruct (is_map_invert hash) as "[% #His_map]"; [done|].
+  apply is_cut_tree_len in His_hash as ?.
   iFrame "∗#%".
-
-  iNamed "His_map".
-  iDestruct (full_entry_txfer with "[$]") as %?; [done..|].
-  subst. iPureIntro.
-  by rewrite -entry_eq_lookup.
+  iPureIntro.
+  rewrite -entry_eq_lookup.
+  by eapply full_entry_txfer.
 Qed.
 
 Definition wish_Memb label val proof hash : iProp Σ :=
   ∃ t0 t1,
   "Hwish_toTree" ∷ wish_proofToTree label proof t0 ∗
   "%Hcode" ∷ ⌜pure_put t0 label val = Some t1⌝ ∗
-  "#His_hash" ∷ is_cut_tree t1 hash.
+  "%His_hash" ∷ ⌜is_cut_tree t1 hash⌝.
 
 Lemma wish_Memb_det l v p h0 h1 :
   wish_Memb l v p h0 -∗
@@ -1180,8 +1174,7 @@ Proof.
   iNamedSuffix 1 "1".
   iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
   simplify_eq/=.
-  iDestruct (is_cut_tree_det with "His_hash0 His_hash1") as %->.
-  done.
+  by tree_det.
 Qed.
 
 Lemma wp_VerifyMemb sl_label label sl_val val sl_proof proof :
@@ -1199,10 +1192,8 @@ Lemma wp_VerifyMemb sl_label label sl_val val sl_proof proof :
       match err with
       | true => ¬ ∃ hash, wish_Memb label val proof hash
       | false =>
-        ∃ m,
         "#His_proof" ∷ wish_Memb label val proof hash ∗
-        "#His_map" ∷ is_map m hash ∗
-        "%Hlook" ∷ ⌜m !! label = Some val⌝
+        "%Hlook" ∷ ⌜inv_fn hash !! label = Some val⌝
       end
   }}}.
 Proof.
@@ -1225,25 +1216,22 @@ Proof.
 
   wp_apply (wp_node_getHash with "[$Hown_tree]") as "* @".
   iApply "HΦ".
-  iDestruct (is_cut_tree_len with "His_hash") as %?.
-  iDestruct (is_map_invert hash) as "[% #His_map]"; [done|].
+  apply is_cut_tree_len in His_hash as ?.
   iFrame "∗#%".
-
-  iNamed "His_map".
-  iDestruct (full_entry_txfer with "[$]") as %?.
-  { by eapply put_new_entry. }
-  { by eapply cutless_new_put. }
-  { by eapply is_fuel_over_put. }
-  subst. iPureIntro.
-  by rewrite -entry_eq_lookup.
+  iPureIntro.
+  rewrite -entry_eq_lookup.
+  eapply full_entry_txfer; [..|done].
+  - by eapply put_new_entry.
+  - by eapply cutless_new_put.
+  - by eapply is_fuel_over_put.
 Qed.
 
 Definition wish_Update label val proof hashOld hashNew : iProp Σ :=
   ∃ tOld tNew,
   "Hwish_toTree" ∷ wish_proofToTree label proof tOld ∗
   "%Hcode" ∷ ⌜pure_put tOld label val = Some tNew⌝ ∗
-  "#His_hash_old" ∷ is_cut_tree tOld hashOld ∗
-  "#His_hash_new" ∷ is_cut_tree tNew hashNew.
+  "%His_hash_old" ∷ ⌜is_cut_tree tOld hashOld⌝ ∗
+  "%His_hash_new" ∷ ⌜is_cut_tree tNew hashNew⌝.
 
 Lemma wish_Update_det l v p hO0 hO1 hN0 hN1 :
   wish_Update l v p hO0 hN0 -∗
@@ -1254,9 +1242,7 @@ Proof.
   iNamedSuffix 1 "1".
   iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
   simplify_eq/=.
-  iDestruct (is_cut_tree_det with "His_hash_old0 His_hash_old1") as %->.
-  iDestruct (is_cut_tree_det with "His_hash_new0 His_hash_new1") as %->.
-  done.
+  by tree_det.
 Qed.
 
 Lemma wp_VerifyUpdate sl_label label sl_val val sl_proof proof :
@@ -1276,12 +1262,11 @@ Lemma wp_VerifyUpdate sl_label label sl_val val sl_proof proof :
       match err with
       | true => ¬ ∃ hO hN, wish_Update label val proof hO hN
       | false =>
-        ∃ mOld mNew,
+        let oldM := inv_fn oldHash in
+        let newM := inv_fn newHash in
         "#His_proof" ∷ wish_Update label val proof oldHash newHash ∗
-        "#His_map_old" ∷ is_map mOld oldHash ∗
-        "#His_map_new" ∷ is_map mNew newHash ∗
-        "->" ∷ ⌜mNew = <[label:=val]>mOld⌝ ∗
-        "%Hlook" ∷ ⌜mOld !! label = None⌝
+        "%Hupd" ∷ ⌜newM = <[label:=val]>oldM⌝ ∗
+        "%Hlook" ∷ ⌜oldM !! label = None⌝
       end
   }}}.
 Proof.
@@ -1307,32 +1292,28 @@ Proof.
   iNamedSuffix 1 "_new". wp_auto.
 
   iApply "HΦ".
-  iDestruct (is_cut_tree_len with "His_hash_old") as %?.
-  iDestruct (is_cut_tree_len with "His_hash_new") as %?.
-  iDestruct (is_map_invert hash) as "[% #His_map_old]"; [done|].
-  iDestruct (is_map_invert hash0) as "[% #His_map_new]"; [done|].
+  apply is_cut_tree_len in His_hash_old as ?.
+  apply is_cut_tree_len in His_hash_new as ?.
   iFrame "Hsl_hash_old Hsl_hash_new".
   iFrame "∗#%".
 
-  iNamedSuffix "His_map_old" "_old".
-  iNamedSuffix "His_map_new" "_new".
-  simplify_eq/=. iSplit.
-  - rewrite map_eq_iff. iIntros (label').
+  iDestruct (init_to_Empty with "[$]") as %?.
+  iPureIntro. split.
+  - rewrite map_eq_iff. intros label'.
     destruct (decide (label = label')); subst; simpl_map.
     + rewrite -entry_eq_lookup.
-      iApply full_entry_txfer; [..|by iFrame "#"].
-      { by eapply put_new_entry. }
-      { by eapply cutless_new_put. }
-      { by eapply is_fuel_over_put. }
-    + remember (to_map t0 !! label') as e. symmetry in Heqe.
-      rewrite -!entry_eq_lookup in Heqe |-*.
-      iDestruct (cut_full_over_put _ t0 _ t1 with "[$][][//][]") as %?.
-      { iFrame "#". }
-      { iFrame "#". }
-      iPureIntro.
-      by eapply old_entry_over_put.
+      eapply full_entry_txfer; [..|done].
+      * by eapply put_new_entry.
+      * by eapply cutless_new_put.
+      * by eapply is_fuel_over_put.
+    +
+      rewrite -entry_eq_lookup.
+      eapply old_entry_over_put.
+      * by eapply cut_inv_put.
+      * done.
+      * by rewrite entry_eq_lookup.
   - rewrite -entry_eq_lookup.
-    by iApply full_entry_txfer; [..|by iFrame "#"].
+    by eapply full_entry_txfer.
 Qed.
 
 Lemma wp_node_prove n t d0 sl_label d1 label getProof :
