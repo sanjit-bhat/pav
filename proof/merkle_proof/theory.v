@@ -8,6 +8,27 @@ From New.proof.github_com.sanjit_bhat.pav.merkle_proof Require Import base serde
 (* TODO: should prob make this Opaque def. *)
 Notation get_bit l n := (bytes_to_bits l !!! n : bool).
 
+#[global] Tactic Notation "solve_bool" :=
+  match goal with
+  | H : ?x = negb ?x |- _ => by destruct x
+  | H : negb ?x = ?x |- _ => by destruct x
+  | |- ?x ≠ negb ?x => by destruct x
+  | |- negb ?x ≠ ?x => by destruct x
+  end.
+
+#[global] Tactic Notation "destruct_exis" := repeat
+  match goal with
+  | H : ∃ _, _ |- _ => destruct H as (?&H)
+  end.
+
+#[global] Tactic Notation "rw_hash" := repeat
+  match goal with
+  | H0 : context[cryptoffi.hash_inv_fn ?h], H1 : cryptoffi.hash_fn _ = Some ?h |- _ =>
+    apply cryptoffi.hash_bij_l in H1; rewrite {}H1 in H0
+  | H1 : cryptoffi.hash_fn _ = Some ?h |- context[cryptoffi.hash_inv_fn ?h] =>
+    apply cryptoffi.hash_bij_l in H1; rewrite {}H1
+  end.
+
 Module merkle.
 Import base.merkle serde.merkle.
 Section proof.
@@ -79,14 +100,6 @@ Fixpoint to_map' t pref : gmap (list w8) (list w8) :=
   end.
 Definition to_map t := to_map' t [].
 #[local] Hint Unfold to_map : merkle.
-
-Tactic Notation "solve_bool" :=
-  match goal with
-  | H : ?x = negb ?x |- _ => by destruct x
-  | H : negb ?x = ?x |- _ => by destruct x
-  | |- ?x ≠ negb ?x => by destruct x
-  | |- negb ?x ≠ ?x => by destruct x
-  end.
 
 Lemma to_map_Some t pref label :
   is_Some (to_map' t pref !! label) →
@@ -333,11 +346,6 @@ Proof.
   case_match; naive_solver.
 Qed.
 
-Local Tactic Notation "destruct_exis" := repeat
-  match goal with
-  | H : ∃ _, _ |- _ => destruct H as (?&H)
-  end.
-
 Lemma is_cut_tree_len t h:
   is_cut_tree t h →
   Z.of_nat $ length h = cryptoffi.hash_len.
@@ -441,7 +449,7 @@ Proof.
     by repeat eexists.
 Qed.
 
-Local Tactic Notation "tree_reln" := repeat
+#[local] Tactic Notation "tree_reln" := repeat
   match goal with
   | H : cut_cut_reln Empty _ _ |- _ =>
     eapply cut_cut_reln_Empty in H as ->; [|done]; clear H
@@ -464,14 +472,6 @@ Fixpoint is_fuel' t fuel {struct fuel} :=
   end end.
 Definition is_fuel t := is_fuel' t (S max_depth).
 #[local] Hint Unfold is_fuel : merkle.
-
-Local Tactic Notation "rw_hash" := repeat
-  match goal with
-  | H0 : context[cryptoffi.hash_inv_fn ?h], H1 : cryptoffi.hash_fn _ = Some ?h |- _ =>
-    apply cryptoffi.hash_bij_l in H1; rewrite {}H1 in H0
-  | H1 : cryptoffi.hash_fn _ = Some ?h |- context[cryptoffi.hash_inv_fn ?h] =>
-    apply cryptoffi.hash_bij_l in H1; rewrite {}H1
-  end.
 
 Lemma cut_inv_Empty fuel h :
   is_cut_tree Empty h →
@@ -507,7 +507,7 @@ Proof.
   naive_solver.
 Qed.
 
-Local Tactic Notation "tree_inv" := repeat
+#[local] Tactic Notation "tree_inv" := repeat
   match goal with
   | H0 : is_cut_tree Empty ?h, H1 : context[tree_inv_fn' ?h (S _)] |- _ =>
     eapply cut_inv_Empty in H0 as Ht; erewrite Ht in H1; clear Ht
@@ -529,7 +529,7 @@ Local Tactic Notation "tree_inv" := repeat
       erewrite Ht; clear Ht
   end.
 
-Local Tactic Notation "tree_det" := repeat
+#[local] Tactic Notation "tree_det" := repeat
   match goal with
   | H0 : is_cut_tree ?t _, H1 : is_cut_tree ?t _ |- _ =>
       tryif constr_eq H0 H1 then fail 1 else
@@ -657,7 +657,7 @@ Fixpoint pure_put' t depth label val (fuel : nat) :=
 Definition pure_put t label val := pure_put' t 0 label val (S max_depth).
 #[local] Hint Unfold pure_put : merkle.
 
-Tactic Notation "destruct_put" :=
+#[local] Tactic Notation "destruct_put" :=
   repeat (progress (try case_decide; simplify_option_eq; try case_match)).
 
 (* [sibs] order reversed from code for easier fixpoint. *)
@@ -964,8 +964,7 @@ Proof.
   - tree_reln. by simplify_eq/=.
   - tree_reln.
     simplify_option_eq.
-    Transparent is_cut_tree.
-    simpl in *.
+    with_strategy transparent [is_cut_tree] simpl in *.
     destruct_exis. destruct_and?.
     pose proof Hchild as [].
     pose proof Hchild0 as [].
@@ -1104,6 +1103,13 @@ Qed.
 
 End proof.
 End merkle.
+
+#[global] Tactic Notation "tree_det" := repeat
+  match goal with
+  | H0 : merkle.is_cut_tree ?t _, H1 : merkle.is_cut_tree ?t _ |- _ =>
+      tryif constr_eq H0 H1 then fail 1 else
+      pose proof (merkle.is_cut_tree_det _ _ _ H0 H1) as ->; clear H1
+  end.
 
 #[export] Hint Unfold merkle.find merkle.is_entry merkle.to_map merkle.is_sorted
   merkle.tree_inv_fn merkle.inv_fn merkle.is_cutless_path merkle.is_fuel

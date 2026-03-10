@@ -582,8 +582,7 @@ Proof.
     2: { clear. by repeat case_match. }
     iFrame "∗#".
     iPureIntro.
-    Local Transparent is_cut_tree.
-    simpl. naive_solver.
+    with_strategy transparent [is_cut_tree] naive_solver.
 
   (* inner. *)
   - destruct_and?. destruct fuel; [done|].
@@ -652,7 +651,8 @@ Proof.
     simpl.
     iFrame "Hnode".
     iFrame "∗#%".
-    iPureIntro. naive_solver.
+    iPureIntro.
+    with_strategy transparent [is_cut_tree] naive_solver.
 
   (* cut. *)
   - wp_auto.
@@ -687,23 +687,25 @@ Proof.
     repeat iSplit; try done.
     iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
     rewrite /is_initialized. iNamed "Hinit".
-    by iFrame "#". }
+    by iFrame "#%". }
   destruct depth_rem; [word|].
 
   replace (Z.to_nat 32) with (32%nat) in * by lia.
   iDestruct (own_slice_wf with "Hsl_sibs") as %?.
-  wp_apply (wp_slice_slice with "[$Hsl_sibs]")
-    as "{Hsl_sibs} (_&#Hsplit_l&#Hsplit_r)"; [word|].
-  wp_pure; [word|].
+  case_decide; [|word].
   wp_auto.
+  case_decide; [|word].
+  wp_auto.
+  remember (word.sub _ _) as split.
+  iDestruct (own_slice_slice split split with "Hsl_sibs") as
+    "{Hsl_sibs} (Hsplit_l&_&Hsplit_r)"; [word|].
+  subst.
   wp_apply wp_alloc as "* Hcut".
   wp_apply wp_alloc as "* Hinner".
   wp_apply (wp_node_getChild with "[$Hinner]").
   { iFrame "#". }
   iIntros "* [_ @]". wp_auto.
 
-  replace (sint.nat (W64 0)) with 0%nat by word.
-  rewrite subslice_from_start.
   replace (sint.nat (word.sub _ _)) with (depth_rem * 32)%nat.
   2: { simpl in *. word. }
   replace (word.add _ _) with (W64 (S depth)) by word.
@@ -724,7 +726,7 @@ Proof.
   { iFrame "#". case_match; [|iFrame].
     iFrame "∗#".
     iPureIntro. intuition.
-    rewrite length_drop. word. }
+    split; [done|len]. }
   iIntros "*". iNamedSuffix 1 "0". wp_auto.
   wp_apply (wp_node_getHash
     (if get_bit label depth then _ else Cut _)
@@ -732,7 +734,7 @@ Proof.
   { iFrame "#". case_match; [iFrame|].
     iFrame "∗#".
     iPureIntro. intuition.
-    rewrite length_drop. word. }
+    split; [done|len]. }
   iIntros "*". iNamedSuffix 1 "1". wp_auto.
 
   wp_apply wp_compInnerHash. { iFrame "#". }
@@ -743,7 +745,8 @@ Proof.
   repeat iSplit; try iPureIntro.
   - rewrite reverse_cons join_app join_singleton -Henc_sibs take_drop //.
   - apply Forall_cons; split; [|done]. rewrite length_drop. word.
-  - iFrame "∗#".
+  - iFrame "∗#". iPureIntro.
+    with_strategy transparent [is_cut_tree] naive_solver.
 Qed.
 
 Definition wish_proofToTree label proof_enc t : iProp Σ :=
@@ -967,8 +970,8 @@ Lemma wp_node_find n t d0 sl_label d1 label (getProof : bool) :
 
       "%Henc_sibs" ∷ ⌜sibs_enc = sibsLen ++ mjoin (reverse sibs)⌝ ∗
       "%Hlen_sibsLen" ∷ ⌜length sibsLen = w64_len⌝ ∗
-      "#His_hash_orig" ∷ is_cut_tree t hash ∗
-      "#His_hash_tape" ∷ is_cut_tree t' hash)
+      "%His_hash_orig" ∷ ⌜is_cut_tree t hash⌝ ∗
+      "%His_hash_tape" ∷ ⌜is_cut_tree t' hash⌝)
   }}}.
 Proof.
   autounfold with merkle.
@@ -982,7 +985,7 @@ Proof.
   clear Heqfuel Heqpref.
   iLöb as "IH" forall (t fuel pref n Hcutless Hfuel Heq_depth).
   iIntros (Φ) "(#?&@) HΦ".
-  wp_method_call. wp_call. wp_auto.
+  wp_method_call. wp_call. wp_call. wp_auto.
   wp_if_destruct.
 
   { iClear "IH".
@@ -1010,17 +1013,17 @@ Proof.
     wp_if_destruct.
     + wp_apply wp_getProofCap as "* %"; [word|].
       wp_apply wp_slice_make3 as "* (Hsl_sibs&Hcap_sibs&_)"; [word|].
-      iApply "HΦ". iFrame "∗#".
+      iApply "HΦ". iFrame "∗#%".
       iSplit; [done|].
       iSplit; [done|].
-      iExists []. simpl. rewrite pure_put_unfold.
+      iExists []. simpl.
       repeat (iSplit || iExists _); try done;
         [word|by list_simplifier|len].
     + iApply "HΦ". iFrame "∗#".
       iDestruct own_slice_nil as "$".
       by iDestruct own_slice_cap_nil as "$".
 
-  - destruct fuel; [done|]. intuition.
+  - destruct_and?. destruct fuel; [done|].
     wp_apply (wp_node_getChild with "[$Hnode $Hsl_label_in]") as "*".
     iIntros "[Hsl_label_in H]". iNamed "H". wp_auto.
     remember (length pref) as depth.
@@ -1052,24 +1055,23 @@ Proof.
       wp_apply (wp_slice_append with "[$Hsl_sibs $Hcap_sibs]")
         as "* (Hsl_sibs & Hcap_sibs & _)".
       { iFrame "#". }
-      iApply "HΦ". iFrame "Htree_hash ∗#".
-      iSplitL. { destruct bit; iFrame. }
-      iSplit; [done|].
-      iSplit; [done|].
-
+      iApply "HΦ".
+      (* below iFrame is too eager. split (isolate) it. *)
+      rewrite !(assoc _).
+      iSplitL.
+      { iFrame (Htree_hash) "∗#%".
+        case_match; iFrame. }
       iExists (hash1 :: sibs).
       iExists (Inner (if bit then Cut hash1 else t') (if bit then t' else Cut hash1)).
+      iFrame "%".
       simpl.
-      iNamed "Htree_hash".
+      with_strategy transparent [is_cut_tree] simpl in Htree_hash.
+      destruct Htree_hash as (h0&h1&Hchild0&Hchild1&?).
       iAssert (⌜hash0 = (if bit then h1 else h0) ∧
         hash1 = (if bit then h0 else h1)⌝)%I as %[-> ->].
-      { clear. case_match.
-        - iDestruct (is_cut_tree_det with "Hchild0 His_hash0") as %->.
-          by iDestruct (is_cut_tree_det with "Hchild1 His_hash_orig") as %->.
-        - iDestruct (is_cut_tree_det with "Hchild0 His_hash_orig") as %->.
-          by iDestruct (is_cut_tree_det with "Hchild1 His_hash0") as %->. }
-      iDestruct (is_cut_tree_len with "Hchild0") as %?.
-      iDestruct (is_cut_tree_len with "Hchild1") as %?.
+      { case_match; by tree_det. }
+      apply is_cut_tree_len in Hchild0 as ?.
+      apply is_cut_tree_len in Hchild1 as ?.
       repeat (iSplit || iExists _); try done; try iPureIntro.
       * apply Forall_cons; split; [|done].
         destruct bit; word.
@@ -1083,6 +1085,7 @@ Proof.
         rewrite -{}Ht.
         rewrite Hif.
         rewrite Hcode.
+        simpl. f_equal.
         assert (∀ (b : bool) T (x0 x1 x2 : T),
           (if b then if b then x0 else x1 else x2) = if b then x0 else x2) as ->.
         { intros. by repeat case_match. }
@@ -1093,13 +1096,13 @@ Proof.
       * list_simplifier. f_equal.
         rewrite reverse_cons join_app.
         by list_simplifier.
-      * by destruct bit.
-      * by destruct bit.
+      * destruct bit;
+          with_strategy transparent [is_cut_tree] naive_solver.
     + iDestruct ("Hclose" with "Hcb Hcnb") as "@".
       rewrite !{}Hif.
       iApply "HΦ". iFrame "∗#".
       iSplit; [|done].
-      destruct bit; iFrame.
+      destruct bit; by iFrame.
 Qed.
 
 Definition wish_NonMemb label proof hash : iProp Σ :=
