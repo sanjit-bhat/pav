@@ -536,16 +536,6 @@ Qed.
       pose proof (is_cut_tree_det _ _ _ H0 H1) as ->; clear H1
   end.
 
-Lemma init_to_Empty :
-  is_pkg_init (PROP:=iProp Σ) merkle -∗
-  ⌜∃ h, is_cut_tree Empty h⌝.
-Proof.
-  iIntros "#Hpkg".
-  iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
-  rewrite /is_initialized. iNamed "Hinit".
-  naive_solver.
-Qed.
-
 #[global] Opaque is_cut_tree tree_inv_fn'.
 
 Lemma full_entry_txfer t0 h label oval :

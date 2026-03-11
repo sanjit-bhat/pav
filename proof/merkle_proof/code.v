@@ -3,7 +3,8 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 From Stdlib.micromega Require Import ZifyNat.
 
 From New.proof Require Import bytes.
-From New.proof.github_com.goose_lang Require Import primitive std.
+From New.proof.encoding Require Import binary.
+From New.proof.github_com.goose_lang Require Import std.
 From New.proof.github_com.sanjit_bhat.pav Require Import cryptoffi cryptoutil safemarshal.
 From New.proof.github_com.tchajed Require Import marshal.
 
@@ -985,7 +986,7 @@ Proof.
   clear Heqfuel Heqpref.
   iLöb as "IH" forall (t fuel pref n Hcutless Hfuel Heq_depth).
   iIntros (Φ) "(#?&@) HΦ".
-  wp_method_call. wp_call. wp_call. wp_auto.
+  wp_method_call. wp_auto. wp_call. wp_auto.
   wp_if_destruct.
 
   { iClear "IH".
@@ -1245,6 +1246,16 @@ Proof.
   by tree_det.
 Qed.
 
+Lemma init_to_Empty :
+  is_pkg_init (PROP:=iProp Σ) merkle -∗
+  ⌜∃ h, is_cut_tree Empty h⌝.
+Proof.
+  iIntros "#Hpkg".
+  iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
+  rewrite /is_initialized. iNamed "Hinit".
+  with_strategy transparent [is_cut_tree] naive_solver.
+Qed.
+
 Lemma wp_VerifyUpdate sl_label label sl_val val sl_proof proof :
   {{{
     is_pkg_init merkle ∗
@@ -1316,6 +1327,13 @@ Proof.
     by eapply full_entry_txfer.
 Qed.
 
+Lemma get_init_binary : is_pkg_init merkle -∗ binary.is_init.
+Proof.
+  iIntros "#?".
+  iDestruct (is_pkg_init_unfold_deps with "[$]") as "/= (?&#H&?)".
+  iDestruct (is_pkg_init_access with "[$H]") as "/= $".
+Qed.
+
 Lemma wp_node_prove n t d0 sl_label d1 label getProof :
   {{{
     is_pkg_init merkle ∗
@@ -1350,7 +1368,7 @@ Lemma wp_node_prove n t d0 sl_label d1 label getProof :
         | None => wish_NonMemb label proof hash
         | Some v => wish_Memb label v proof hash
         end ∗
-      "#His_hash" ∷ is_cut_tree t hash)
+      "%His_hash" ∷ ⌜is_cut_tree t hash⌝)
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -1369,9 +1387,9 @@ Proof.
       "%Heq_depth" ∷ ⌜length sibs ≤ max_depth⌝ ∗
       "%Hcode" ∷ ⌜pure_proofToTree label sibs oleaf = Some t'⌝ ∗
 
-      "%Henc_sibs" ∷ ⌜sibs_enc' = u64_le (length (mjoin (reverse sibs))) ++ mjoin (reverse sibs)⌝ ∗
-      "#His_hash_orig" ∷ is_cut_tree t hash ∗
-      "#His_hash_tape" ∷ is_cut_tree t' hash)
+      "%Henc_sibs" ∷ ⌜sibs_enc' = (u64_le $ W64 $ length (mjoin (reverse sibs))) ++ mjoin (reverse sibs)⌝ ∗
+      "%His_hash_orig" ∷ ⌜is_cut_tree t hash⌝ ∗
+      "%His_hash_tape" ∷ ⌜is_cut_tree t' hash⌝)
     )%I
     with "[proof Hsl_sibs Hproof]"
   ) as "* @".
@@ -1381,7 +1399,10 @@ Proof.
     subst.
     iDestruct (own_slice_len with "Hsl_sibs") as %[Hlen_sibs_enc ?].
     rewrite app_length Hlen_sibsLen in Hlen_sibs_enc.
-    wp_apply (primitive.wp_UInt64Put with "[$Hsl_sibs]") as "Hsl_sibs"; [word|].
+    iDestruct (get_init_binary with "[$]") as "#?".
+    rewrite /binary.is_init.
+    wp_method_call. wp_auto.
+    wp_apply (binary.wp_littleEndian_PutUint64 with "[$Hsl_sibs]") as "Hsl_sibs"; [word|].
     iFrame "∗#".
     iSplit; [done|]. iFrame "%".
     iPureIntro. repeat f_equal. word. }
