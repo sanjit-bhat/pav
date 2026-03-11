@@ -1417,10 +1417,10 @@ Proof.
     wp_apply (marshal.wp_WriteInt with "[$Hsl $Hcap]") as "* [Hsl Hcap]".
     wp_apply (marshal.wp_WriteInt with "[$Hsl $Hcap]") as "* [Hsl Hcap]".
     iApply ("HΦ" $! None).
-    iFrame "∗#".
+    iFrame "∗#%".
     iSplit. { by iExists _. }
     iSplit; [done|].
-    iExists sibs, None.
+    iExists None.
     iFrame "%".
 
     iExists [], [], [].
@@ -1447,10 +1447,10 @@ Proof.
     wp_apply (marshal.wp_WriteBytes with "[$Hsl $Hcap]") as "* (Hsl&Hcap&_)".
     { iFrame "#". }
     iApply ("HΦ" $! None).
-    iFrame "∗#".
+    iFrame "∗#%".
     iSplit. { by iExists _. }
     iSplit; [done|].
-    iExists sibs, (Some (_, _)).
+    iExists (Some (_, _)).
     eapply find_on_const_label_len in Hconst_len as ?; [|done].
     iFrame (Hcode) "%".
 
@@ -1472,12 +1472,10 @@ Proof.
   wp_apply (marshal.wp_WriteInt with "[$Hsl $Hcap]") as "* [Hsl Hcap]".
   wp_apply (marshal.wp_WriteInt with "[$Hsl $Hcap]") as "* [Hsl Hcap]".
   iApply ("HΦ" $! (Some _)).
-  iFrame "∗#".
+  iFrame "∗#%".
   iSplit. { by iExists _. }
   iSplit; [done|].
-  iFrame (Hcode).
-  iExists sibs, None.
-  iFrame "%".
+  iExists None.
 
   iExists [], [], []. repeat iSplit; [|done..].
   rewrite /Proof.wish /Proof.encodes /=.
@@ -1500,7 +1498,7 @@ Definition own_Map ptr m hash d : iProp Σ :=
   "Hstruct" ∷ ptr ↦{d} (merkle.Map.mk ptr_root) ∗
   "Hown_tree" ∷ own_tree ptr_root t d ∗
   "%Heq_map" ∷ ⌜m = to_map t⌝ ∗
-  "#His_hash" ∷ is_cut_tree t hash ∗
+  "%His_hash" ∷ ⌜is_cut_tree t hash⌝ ∗
 
   "%His_cutless" ∷ ⌜is_cutless t⌝ ∗
   "%His_fuel" ∷ ⌜is_fuel t⌝ ∗
@@ -1509,11 +1507,11 @@ Definition own_Map ptr m hash d : iProp Σ :=
 
 Lemma own_Map_to_is_map ptr m hash d :
   own_Map ptr m hash d -∗
-  is_map m hash.
+  ⌜inv_fn hash = m⌝.
 Proof.
-  iNamed 1.
-  iFrame (Heq_map).
-  by iDestruct (cut_to_full with "His_hash") as "$".
+  iNamed 1. iPureIntro.
+  subst. rewrite /inv_fn. f_equal.
+  by eapply cut_inv.
 Qed.
 
 Lemma own_Map_init ptr d0 :
@@ -1525,8 +1523,9 @@ Proof.
   iDestruct (is_pkg_init_access with "[$]") as "/= #Hinit".
   rewrite /is_initialized. iNamed "Hinit".
   iExists _, null, Empty.
-  iFrame "∗#".
-  by repeat iSplit.
+  iFrame.
+  repeat iSplit; try done;
+    with_strategy transparent [is_cut_tree] naive_solver.
 Qed.
 
 #[global] Instance own_Map_dfrac ptr m h :
@@ -1540,7 +1539,7 @@ Proof.
       by iFrame "∗#".
     + iIntros "[H0 H1]".
       iNamedSuffix "H0" "0". iNamedSuffix "H1" "1".
-      iCombine "Hstruct0 Hstruct1" as "?" gives %[_ ?].
+      iCombine "Hstruct0 Hstruct1" as "?" gives %?.
       simplify_eq/=.
       iCombine "Hown_tree0 Hown_tree1" as "?" gives %->.
       by iFrame "∗#".
@@ -1560,10 +1559,10 @@ Proof. auto. Qed.
 Proof.
   rewrite /CombineSepGives. iIntros "[H0 H1]".
   iNamedSuffix "H0" "0". iNamedSuffix "H1" "1".
-  iCombine "Hstruct0 Hstruct1" gives %[_ ?].
+  iCombine "Hstruct0 Hstruct1" gives %?.
   simplify_eq/=.
   iCombine "Hown_tree0 Hown_tree1" gives %->.
-  iDestruct (is_cut_tree_det with "His_hash0 His_hash1") as %->.
+  tree_det.
   by iModIntro.
 Qed.
 
@@ -1595,9 +1594,8 @@ Proof.
   wp_start as "@". wp_auto.
   iNamed "Hown_Map".
   wp_auto.
-  iRename "His_hash" into "His_hash'".
   wp_apply (wp_node_getHash with "[$Hown_tree]") as "* @".
-  iDestruct (is_cut_tree_det with "His_hash His_hash'") as %->.
+  tree_det.
   iApply "HΦ".
   iFrame "∗#%".
 Qed.
@@ -1638,7 +1636,7 @@ Proof.
   wp_apply (wp_node_prove with "[$Hown_tree $Hsl_label]") as "* @".
   { iFrame "#%". iPureIntro. by eapply is_cutless_to_path. }
   iNamedSuffix "Hproof" "'".
-  iDestruct (is_cut_tree_det with "His_hash His_hash'") as %<-.
+  tree_det.
   apply entry_eq_lookup in His_entry.
   subst.
   iApply "HΦ".
@@ -1671,37 +1669,36 @@ Proof.
   wp_apply (wp_node_prove with "[$Hown_tree $Hsl_label]") as "{Hsl_label} * @".
   { iFrame "#%". iPureIntro. by eapply is_cutless_to_path. }
   iNamedSuffix "Hproof" "'".
-  iDestruct (is_cut_tree_det with "His_hash His_hash'") as %<-.
+  tree_det.
   apply entry_eq_lookup in His_entry. subst.
   rewrite Hmono in Hoval |-*. subst.
   iNamedSuffix "His_proof'" "_wish".
   wp_apply std.wp_Assert; [done|].
-  iDestruct (struct_fields_split with "Hstruct") as "H".
-  iNamed "H". simpl.
-  wp_apply (wp_put with "[$Hown_tree $Hsl_label $Hroot]") as "* @"; try done.
+  iStructNamed "Hstruct". simpl.
+  wp_apply (wp_put with "[$Hown_tree $Hsl_label $root]") as "* @"; try done.
   destruct err.
   { iExFalso. iApply "Hgenie". iPureIntro. by eapply is_cutless_to_path. }
   wp_apply std.wp_Assert; [done|].
   iNamed "Hgenie".
-  iDestruct (struct_fields_combine (v:=merkle.Map.mk _) with "[$Hn0]") as "Hstruct".
-  iDestruct (own_tree_to_hash with "Hown_tree") as "[% #His_hash_new]".
+  iDestruct (typed_pointsto_combine _ (merkle.Map.mk _) with "[Hn0]") as "Hstruct"; [iFrame|].
+  iDestruct (own_tree_to_hash with "Hown_tree") as "[%new_hash %His_hash_new]".
   iApply "HΦ".
 
-  instantiate (1:=hash0).
-  instantiate (1:=proof).
-  rewrite /wish_Update.
-  iFrame. iSplit.
-  - iFrame "#". iPureIntro. repeat split.
+  instantiate (1:=new_hash).
+  iFrame "∗#".
+  iSplit.
+  - iFrame "%". iPureIntro. repeat split.
     + symmetry. by eapply to_map_over_put.
     + by eapply cutless_over_put.
     + by eapply is_fuel_over_put.
     + eapply const_label_len_over_put; try done. word.
     + by eapply is_sorted_over_put.
-  - iFrame "Hwish_toTree_wish".
+  - iFrame (His_hash_wish).
     iDestruct (proofToTree_post with "[$]") as "#@".
+    iPureIntro.
     opose proof (put_Some _ _ val _ _ _ _ _) as [? ?]; try done.
-    iDestruct (cut_cut_hash_over_put t t0 with "[$][//][//][$]") as "#?".
-    iFrame "#%".
+    eexists. split; [done|].
+    by eapply (cut_cut_hash_over_put t t0).
 Qed.
 
 (* NOTE: i don't know why these instances are so brittle.

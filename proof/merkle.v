@@ -11,5 +11,5 @@ Module Import merkle.
 End merkle.
 
 (* external defs. *)
-#[global] Opaque is_initialized own_Map is_map
+#[global] Opaque is_initialized own_Map inv_fn
   wish_NonMemb wish_Memb wish_Update.
