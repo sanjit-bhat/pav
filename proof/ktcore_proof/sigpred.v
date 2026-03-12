@@ -1,24 +1,44 @@
-From New.proof Require Import proof_prelude.
+From New.generatedproof.github_com.sanjit_bhat.pav Require Import ktcore.
 From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 From New.proof.github_com.sanjit_bhat.pav Require Import
   cryptoffi hashchain merkle safemarshal.
 
+About merkle.inv_fn.
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   key_map serde.
 
 Module ktcore.
 Import key_map.ktcore serde.ktcore.
 
+(*
+to refresh, structure of digs pred:
+- there's a mono_list of digs.
+mono is important. means that two sigs at diff epochs overlap.
+- auditor gets starting link at some StartEpoch.
+invert with fuel:=StartEpoch to get some digs.
+when inverting, could fewer digs than StartEpoch.
+could invert to cut.
+
+reqs:
+- need to state that maps are mono.
+but which maps? hidden or plain?
+- from hidden mono, can derive plain mono.
+so let's do that.
+*)
+
 Module sigpred_cfg.
 Record t :=
   mk {
     vrf : gname;
-    (* the epoch of the first hist idx.
-    the auditor has no way of knowing if the server's digs start from epoch 0. *)
+
+    digs : gname;
+    (* below are "metadata" about digs. *)
+    (* epoch of first dig. *)
     start_ep : gname;
-    (* the len offset after which auditor started monitoring. *)
+    (* the hashchain cut. *)
+    cut : gname;
+    (* the offset in digs after which auditor started monitoring. *)
     audit_offset : gname;
-    hist : gname;
   }.
 End sigpred_cfg.
 
@@ -37,39 +57,29 @@ Definition sigpred_vrf_aux γ enc : iProp Σ :=
   "%Hvalid" ∷ ⌜safemarshal.Slice1D.valid vrfPk⌝ ∗
   "#Hsigpred" ∷ sigpred_vrf γ vrfPk.
 
-Definition sigpred_links_inv (start_ep : w64) links digs cut maps : iProp Σ :=
-  (* [offset] is the number of [digs] prior to [links] starting.
-  we leave [digs] un-tied to [start_ep], even tho it's implicitly
-  constrained by [is_chain]. *)
-  let offset := (length digs - length links)%nat in
-  "%Hlt_digs_links" ∷ ⌜length links ≤ length digs⌝ ∗
-  "#Hlinks" ∷ ([∗ list] idx ↦ link ∈ links,
-    let n_digs := (offset + idx + 1)%nat in
-    let ep := (uint.nat start_ep + idx)%nat in
-    "#His_link" ∷ hashchain.is_chain (take n_digs digs) cut link (S ep)) ∗
-  "#Hmaps" ∷ ([∗ list] idx ↦ _;m ∈ links;maps,
-    ∃ dig,
-    "%Hlook_dig" ∷ ⌜digs !! (offset + idx)%nat = Some dig⌝ ∗
-    "#His_map" ∷ merkle.is_map m dig) ∗
-  "%Hmono" ∷ ⌜list_reln maps (⊆)⌝.
+Definition digs_mono digs audit_offset :=
+  let hidden_maps := merkle.inv_fn <$> digs in
+  (* ⊆ on hidden maps is stronger than on plain maps. *)
+  list_reln (drop audit_offset hidden_maps) (⊆).
 
-Definition sigpred_links γ (ep : w64) link : iProp Σ :=
-  (* [links] are all audited. they start from [start_ep]. *)
-  ∃ start_ep links digs cut maps,
-  (* externalize start_ep so that users agree on the epochs associated with links. *)
-  "#Hshot" ∷ dghost_var γ.(sigpred_cfg.start_ep) (□) start_ep ∗
-  "#Hlb" ∷ mono_list_lb_own γ.(sigpred_cfg.links) links ∗
-  "%Hlook" ∷ ⌜links !! (uint.nat ep - uint.nat start_ep)%nat = Some link⌝ ∗
-  "#Hinv" ∷ sigpred_links_inv start_ep links digs cut maps.
+Definition sigpred_link γ (ep : w64) link : iProp Σ :=
+  ∃ start_ep audit_offset,
+  let '(digs, cut) := hashchain.inv_fn link (S $ S $ uint.nat ep) in
+  "#Hlb_digs" ∷ mono_list_lb_own γ.(sigpred_cfg.digs) digs ∗
+  "#His_start" ∷ dghost_var γ.(sigpred_cfg.start_ep) (□) start_ep ∗
+  "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (start_ep + length digs)%nat⌝ ∗
+  "#His_cut" ∷ dghost_var γ.(sigpred_cfg.cut) (□) cut ∗
+  "#His_offset" ∷ dghost_var γ.(sigpred_cfg.audit_offset) (□) audit_offset ∗
+  "%Hmono" ∷ ⌜digs_mono digs audit_offset⌝.
 
-Definition sigpred_links_aux γ enc : iProp Σ :=
+Definition sigpred_link_aux γ enc : iProp Σ :=
   ∃ ep link,
   "%Henc" ∷ ⌜enc = ktcore.LinkSig.pure_enc (ktcore.LinkSig.mk' (W8 ktcore.LinkSigTag) ep link)⌝ ∗
   "%Hvalid" ∷ ⌜safemarshal.Slice1D.valid link⌝ ∗
-  "#Hsigpred" ∷ sigpred_links γ ep link.
+  "#Hsigpred" ∷ sigpred_link γ ep link.
 
 Definition sigpred γ enc : iProp Σ :=
-  sigpred_vrf_aux γ enc ∨ sigpred_links_aux γ enc.
+  sigpred_vrf_aux γ enc ∨ sigpred_link_aux γ enc.
 
 #[global] Instance sigpred_pers γ e : Persistent (sigpred γ e).
 Proof. apply _. Qed.
