@@ -12,13 +12,12 @@ From New.proof.github_com.sanjit_bhat.pav.merkle_proof Require Import base serde
 
 Module merkle.
 Import base.merkle serde.merkle theory.merkle.
-Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
-Collection W := sem + package_sem.
-#[local] Set Default Proof Using "W".
 
-(** tree predicates. *)
+Section defs.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics}.
+Collection W := sem.
+#[local] Set Default Proof Using "W".
 
 Fixpoint own_tree ptr t d : iProp Σ :=
   ∃ hash,
@@ -172,7 +171,135 @@ Proof.
   iCombine "H0 H1" as "$".
 Qed.
 
-(** tree / Verify program proofs. *)
+Definition wish_proofToTree label proof_enc t : iProp Σ :=
+  ∃ sibs oleaf LeafLabel LeafVal tail,
+  let IsOtherLeaf := match oleaf with None => false | _ => true end in
+  let proof := Proof.mk' (mjoin (reverse sibs)) IsOtherLeaf LeafLabel LeafVal in
+
+  "%Hlen_label" ∷ ⌜Z.of_nat $ length label = cryptoffi.hash_len⌝ ∗
+  "Henc_proof" ∷ Proof.wish proof_enc proof tail ∗
+  "%Hlen_sibs" ∷ ⌜Forall (λ x, length x = Z.to_nat $ cryptoffi.hash_len) sibs⌝ ∗
+  "%Heq_depth" ∷ ⌜length sibs ≤ max_depth⌝ ∗
+  "Holeaf" ∷ match oleaf with None => True | Some (l, v) =>
+    "%Hlen_olabel" ∷ ⌜Z.of_nat $ length l = cryptoffi.hash_len⌝ ∗
+    "%Heq_olabel" ∷ ⌜label ≠ l⌝ ∗
+    "->" ∷ ⌜LeafLabel = l⌝ ∗
+    "->" ∷ ⌜LeafVal = v⌝
+    end ∗
+
+  "%Hcode" ∷ ⌜pure_proofToTree label sibs oleaf = Some t⌝.
+
+Lemma wish_proofToTree_det l p t0 t1 :
+  wish_proofToTree l p t0 -∗
+  wish_proofToTree l p t1 -∗
+  ⌜t0 = t1⌝.
+Proof.
+  iNamedSuffix 1 "0".
+  iNamedSuffix 1 "1".
+  iDestruct (Proof.wish_det with "Henc_proof0 Henc_proof1") as %[[=] ->].
+  opose proof (join_same_len_inj _ (reverse _) (reverse _) _ _ _ _)
+    as Heq_s; try done.
+  2: { by apply Forall_reverse. }
+  2: { by apply Forall_reverse. }
+  { word. }
+  apply (inj _) in Heq_s.
+  destruct oleaf as [[]|].
+  2: { destruct oleaf0; try done. by simplify_eq/=. }
+  iNamedSuffix "Holeaf0" "0".
+  destruct oleaf0 as [[]|]; try done.
+  iNamedSuffix "Holeaf1" "1".
+  by simplify_eq/=.
+Qed.
+
+(* invariants on proofToTree tree that allow subsequent puts.
+some invs established with additional info in wish,
+which is why we make it the precond. *)
+Lemma proofToTree_post label proof_enc t :
+  wish_proofToTree label proof_enc t -∗
+  ("%Hlabel_None" ∷ ⌜is_entry t label None⌝ ∗
+  "%Hcutless" ∷ ⌜is_cutless_path t label⌝ ∗
+  "%Hfuel" ∷ ⌜is_fuel t⌝ ∗
+  "%Hsorted" ∷ ⌜is_sorted t⌝ ∗
+  "%Hconst_label_len" ∷ ⌜is_const_label_len t⌝).
+Proof.
+  iIntros "@".
+  opose proof (newShell_None label sibs).
+  opose proof (cutless_on_newShell label sibs).
+  opose proof (fuel_on_newShell label sibs _); [word|].
+  opose proof (sorted_on_newShell label sibs).
+  opose proof (const_label_on_newShell label sibs).
+  destruct oleaf as [[]|]; simplify_eq/=; [|done].
+  iNamed "Holeaf".
+
+  eapply old_entry_over_put in Hcode as ?; [|done..].
+  eapply cutless_path_over_put in Hcode as ?; [|done].
+  eapply is_fuel_over_put in Hcode as ?; [|done].
+  eapply is_sorted_over_put in Hcode as ?; [|done].
+  eapply const_label_len_over_put in Hcode as ?; [|done|word].
+  by opose proof (put_impl_cutless_pre _ _ _ _).
+Qed.
+
+(* TODO: maybe these wish preds should be pure. *)
+Definition wish_NonMemb label proof hash : iProp Σ :=
+  ∃ t,
+  "Hwish_toTree" ∷ wish_proofToTree label proof t ∗
+  "%His_hash" ∷ ⌜is_cut_tree t hash⌝.
+
+Lemma wish_NonMemb_det l p h0 h1 :
+  wish_NonMemb l p h0 -∗
+  wish_NonMemb l p h1 -∗
+  ⌜h0 = h1⌝.
+Proof.
+  iNamedSuffix 1 "0".
+  iNamedSuffix 1 "1".
+  iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
+  by tree_det.
+Qed.
+
+Definition wish_Memb label val proof hash : iProp Σ :=
+  ∃ t0 t1,
+  "Hwish_toTree" ∷ wish_proofToTree label proof t0 ∗
+  "%Hcode" ∷ ⌜pure_put t0 label val = Some t1⌝ ∗
+  "%His_hash" ∷ ⌜is_cut_tree t1 hash⌝.
+
+Lemma wish_Memb_det l v p h0 h1 :
+  wish_Memb l v p h0 -∗
+  wish_Memb l v p h1 -∗
+  ⌜h0 = h1⌝.
+Proof.
+  iNamedSuffix 1 "0".
+  iNamedSuffix 1 "1".
+  iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
+  simplify_eq/=.
+  by tree_det.
+Qed.
+
+Definition wish_Update label val proof hashOld hashNew : iProp Σ :=
+  ∃ tOld tNew,
+  "Hwish_toTree" ∷ wish_proofToTree label proof tOld ∗
+  "%Hcode" ∷ ⌜pure_put tOld label val = Some tNew⌝ ∗
+  "%His_hash_old" ∷ ⌜is_cut_tree tOld hashOld⌝ ∗
+  "%His_hash_new" ∷ ⌜is_cut_tree tNew hashNew⌝.
+
+Lemma wish_Update_det l v p hO0 hO1 hN0 hN1 :
+  wish_Update l v p hO0 hN0 -∗
+  wish_Update l v p hO1 hN1 -∗
+  ⌜hO0 = hO1 ∧ hN0 = hN1⌝.
+Proof.
+  iNamedSuffix 1 "0".
+  iNamedSuffix 1 "1".
+  iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
+  simplify_eq/=.
+  by tree_det.
+Qed.
+
+End defs.
+
+Section wps.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Lemma wp_compLeafHash sl_label sl_val (label val : list w8) :
   {{{
@@ -193,8 +320,8 @@ Lemma wp_compLeafHash sl_label sl_val (label val : list w8) :
 Proof.
   wp_start as "@". wp_auto.
   wp_apply cryptoffi.wp_NewHasher as "* @".
-  (* TODO: hide things like [go_instruction_ind].
-  for some reason, they come earlier than [wp_slice_literal]. *)
+  (* TODO: in Search output, [go_instruction_ind] comes earlier than
+  [wp_slice_literal]. maybe hide it from Search. *)
   wp_apply wp_slice_literal as "* Hsl_b".
   { iIntros "**". by wp_auto. }
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_b]") as "@".
@@ -750,74 +877,6 @@ Proof.
     with_strategy transparent [is_cut_tree] naive_solver.
 Qed.
 
-Definition wish_proofToTree label proof_enc t : iProp Σ :=
-  ∃ sibs oleaf LeafLabel LeafVal tail,
-  let IsOtherLeaf := match oleaf with None => false | _ => true end in
-  let proof := Proof.mk' (mjoin (reverse sibs)) IsOtherLeaf LeafLabel LeafVal in
-
-  "%Hlen_label" ∷ ⌜Z.of_nat $ length label = cryptoffi.hash_len⌝ ∗
-  "Henc_proof" ∷ Proof.wish proof_enc proof tail ∗
-  "%Hlen_sibs" ∷ ⌜Forall (λ x, length x = Z.to_nat $ cryptoffi.hash_len) sibs⌝ ∗
-  "%Heq_depth" ∷ ⌜length sibs ≤ max_depth⌝ ∗
-  "Holeaf" ∷ match oleaf with None => True | Some (l, v) =>
-    "%Hlen_olabel" ∷ ⌜Z.of_nat $ length l = cryptoffi.hash_len⌝ ∗
-    "%Heq_olabel" ∷ ⌜label ≠ l⌝ ∗
-    "->" ∷ ⌜LeafLabel = l⌝ ∗
-    "->" ∷ ⌜LeafVal = v⌝
-    end ∗
-
-  "%Hcode" ∷ ⌜pure_proofToTree label sibs oleaf = Some t⌝.
-
-Lemma wish_proofToTree_det l p t0 t1 :
-  wish_proofToTree l p t0 -∗
-  wish_proofToTree l p t1 -∗
-  ⌜t0 = t1⌝.
-Proof.
-  iNamedSuffix 1 "0".
-  iNamedSuffix 1 "1".
-  iDestruct (Proof.wish_det with "Henc_proof0 Henc_proof1") as %[[=] ->].
-  opose proof (join_same_len_inj _ (reverse _) (reverse _) _ _ _ _)
-    as Heq_s; try done.
-  2: { by apply Forall_reverse. }
-  2: { by apply Forall_reverse. }
-  { word. }
-  apply (inj _) in Heq_s.
-  destruct oleaf as [[]|].
-  2: { destruct oleaf0; try done. by simplify_eq/=. }
-  iNamedSuffix "Holeaf0" "0".
-  destruct oleaf0 as [[]|]; try done.
-  iNamedSuffix "Holeaf1" "1".
-  by simplify_eq/=.
-Qed.
-
-(* invariants on proofToTree tree that allow subsequent puts.
-some invs established with additional info in wish,
-which is why we make it the precond. *)
-Lemma proofToTree_post label proof_enc t :
-  wish_proofToTree label proof_enc t -∗
-  ("%Hlabel_None" ∷ ⌜is_entry t label None⌝ ∗
-  "%Hcutless" ∷ ⌜is_cutless_path t label⌝ ∗
-  "%Hfuel" ∷ ⌜is_fuel t⌝ ∗
-  "%Hsorted" ∷ ⌜is_sorted t⌝ ∗
-  "%Hconst_label_len" ∷ ⌜is_const_label_len t⌝).
-Proof.
-  iIntros "@".
-  opose proof (newShell_None label sibs).
-  opose proof (cutless_on_newShell label sibs).
-  opose proof (fuel_on_newShell label sibs _); [word|].
-  opose proof (sorted_on_newShell label sibs).
-  opose proof (const_label_on_newShell label sibs).
-  destruct oleaf as [[]|]; simplify_eq/=; [|done].
-  iNamed "Holeaf".
-
-  eapply old_entry_over_put in Hcode as ?; [|done..].
-  eapply cutless_path_over_put in Hcode as ?; [|done].
-  eapply is_fuel_over_put in Hcode as ?; [|done].
-  eapply is_sorted_over_put in Hcode as ?; [|done].
-  eapply const_label_len_over_put in Hcode as ?; [|done|word].
-  by opose proof (put_impl_cutless_pre _ _ _ _).
-Qed.
-
 Tactic Notation "intro_wish" := iIntros "(%&%&@)".
 
 Lemma wp_proofToTree sl_label label sl_proof proof :
@@ -1106,23 +1165,6 @@ Proof.
       destruct bit; by iFrame.
 Qed.
 
-(* TODO: maybe these wish preds should be pure. *)
-Definition wish_NonMemb label proof hash : iProp Σ :=
-  ∃ t,
-  "Hwish_toTree" ∷ wish_proofToTree label proof t ∗
-  "%His_hash" ∷ ⌜is_cut_tree t hash⌝.
-
-Lemma wish_NonMemb_det l p h0 h1 :
-  wish_NonMemb l p h0 -∗
-  wish_NonMemb l p h1 -∗
-  ⌜h0 = h1⌝.
-Proof.
-  iNamedSuffix 1 "0".
-  iNamedSuffix 1 "1".
-  iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
-  by tree_det.
-Qed.
-
 Lemma wp_VerifyNonMemb sl_label label sl_proof proof :
   {{{
     is_pkg_init merkle ∗
@@ -1158,24 +1200,6 @@ Proof.
   iPureIntro.
   rewrite -entry_eq_lookup.
   by eapply full_entry_txfer.
-Qed.
-
-Definition wish_Memb label val proof hash : iProp Σ :=
-  ∃ t0 t1,
-  "Hwish_toTree" ∷ wish_proofToTree label proof t0 ∗
-  "%Hcode" ∷ ⌜pure_put t0 label val = Some t1⌝ ∗
-  "%His_hash" ∷ ⌜is_cut_tree t1 hash⌝.
-
-Lemma wish_Memb_det l v p h0 h1 :
-  wish_Memb l v p h0 -∗
-  wish_Memb l v p h1 -∗
-  ⌜h0 = h1⌝.
-Proof.
-  iNamedSuffix 1 "0".
-  iNamedSuffix 1 "1".
-  iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
-  simplify_eq/=.
-  by tree_det.
 Qed.
 
 Lemma wp_VerifyMemb sl_label label sl_val val sl_proof proof :
@@ -1225,25 +1249,6 @@ Proof.
   - by eapply put_new_entry.
   - by eapply cutless_new_put.
   - by eapply is_fuel_over_put.
-Qed.
-
-Definition wish_Update label val proof hashOld hashNew : iProp Σ :=
-  ∃ tOld tNew,
-  "Hwish_toTree" ∷ wish_proofToTree label proof tOld ∗
-  "%Hcode" ∷ ⌜pure_put tOld label val = Some tNew⌝ ∗
-  "%His_hash_old" ∷ ⌜is_cut_tree tOld hashOld⌝ ∗
-  "%His_hash_new" ∷ ⌜is_cut_tree tNew hashNew⌝.
-
-Lemma wish_Update_det l v p hO0 hO1 hN0 hN1 :
-  wish_Update l v p hO0 hN0 -∗
-  wish_Update l v p hO1 hN1 -∗
-  ⌜hO0 = hO1 ∧ hN0 = hN1⌝.
-Proof.
-  iNamedSuffix 1 "0".
-  iNamedSuffix 1 "1".
-  iDestruct (wish_proofToTree_det with "Hwish_toTree0 Hwish_toTree1") as %->.
-  simplify_eq/=.
-  by tree_det.
 Qed.
 
 Lemma init_to_Empty :
@@ -1701,6 +1706,14 @@ Proof.
     by eapply (cut_cut_hash_over_put t t0).
 Qed.
 
+End wps.
+
+Section misc.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics}.
+Collection W := sem.
+#[local] Set Default Proof Using "W".
+
 (* NOTE: i don't know why these instances are so brittle.
 even re-ordering VerifyNonMemb before VerifyMemb causes TC search to spin.
 i prove these instances at the end to remove internal brittleness.
@@ -1717,5 +1730,5 @@ Proof. apply _. Qed.
   Persistent (wish_NonMemb l p h).
 Proof. apply _. Qed.
 
-End proof.
+End misc.
 End merkle.

@@ -6,14 +6,12 @@ From New.proof.github_com.goose_lang Require Import std.
 From New.proof.github_com.sanjit_bhat.pav Require Import cryptoffi cryptoutil.
 
 Module hashchain.
-Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : hashchain.Assumptions}.
-Collection W := sem + package_sem.
-#[local] Set Default Proof Using "W".
 
-#[global] Instance : IsPkgInit (iProp Σ) hashchain := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf (iProp Σ) hashchain := build_get_is_pkg_init_wf.
+Section defs.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics}.
+Collection W := sem.
+#[local] Set Default Proof Using "W".
 
 (* hashchain is special bc same party both inverts
 and hashes on more vals to compute future links. *)
@@ -141,8 +139,6 @@ Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
     (x.1 ++ [v], x.2)
   | DecInvalid => ([], Some hash)
   end end.
-#[global] Opaque inv_fn.
-#[local] Transparent inv_fn.
 
 (* for now, intentionally left transp.
 callers should use valid vs. inv_fn when needed. *)
@@ -207,6 +203,17 @@ Proof.
   rewrite dec_link_det; [|done].
   by rewrite Hfn.
 Qed.
+
+End defs.
+
+Section wps.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : hashchain.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
+
+#[global] Instance : IsPkgInit (iProp Σ) hashchain := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) hashchain := build_get_is_pkg_init_wf.
 
 Lemma wp_GetEmptyLink :
   {{{ is_pkg_init hashchain }}}
@@ -275,8 +282,6 @@ Definition own (ptr : loc) (vs : list $ list w8) (d : dfrac) : iProp Σ :=
   "Hsl_enc_cap" ∷ own_slice_cap w8 sl_enc d ∗
   "%" ∷ ⌜enc = mjoin vs⌝ ∗
   "%Hsame_len" ∷ ⌜Forall (λ x, length x = Z.to_nat cryptoffi.hash_len) vs⌝.
-#[global] Opaque own.
-#[local] Transparent own.
 
 #[global] Instance own_dfractional ptr vs :
   DFractional (λ d, own ptr vs d).
@@ -372,8 +377,6 @@ because they deterministically derive from [prevLink] and [newVals]. *)
 Definition wish_Proof (proof : list w8) newVals :=
   Forall (λ x, length x = Z.to_nat cryptoffi.hash_len) newVals ∧
   proof = mjoin newVals.
-#[global] Opaque wish_Proof.
-#[local] Transparent wish_Proof.
 
 Lemma wish_Proof_det proof newVals0 newVals1 :
   wish_Proof proof newVals0 →
@@ -596,5 +599,7 @@ Proof.
     by rewrite drop_app_length.
 Qed.
 
-End proof.
+End wps.
+
+#[global] Opaque inv_fn own wish_Proof.
 End hashchain.

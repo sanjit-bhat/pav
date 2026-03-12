@@ -70,8 +70,8 @@ Definition keys_sub : relation keys_ty := map_included (λ _, prefix).
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 (** [plain_inv_fn] definition. *)
