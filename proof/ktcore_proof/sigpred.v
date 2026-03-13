@@ -16,17 +16,22 @@ Module cfg.
 Record t :=
   mk {
     vrf : gname;
-
     digs : gname;
-    (* below are "metadata" about digs. *)
-    (* epoch of first dig. *)
-    start_ep : gname;
-    (* the hashchain cut. *)
-    cut : gname;
-    (* the offset in digs after which auditor started monitoring. *)
-    audit_offset : gname;
+    digs_info : gname;
   }.
 End cfg.
+
+Module digs_info.
+Record t :=
+  mk {
+    (* epoch of first dig. *)
+    start_ep : nat;
+    (* the hashchain cut. *)
+    cut : option $ list w8;
+    (* the offset in digs after which auditor started monitoring. *)
+    audit_offset : nat;
+  }.
+End digs_info.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
@@ -54,7 +59,7 @@ Proof.
   by iCombine "Hshot0 Hshot1" gives %[_ ->].
 Qed.
 
-(** Link sig. *)
+(** link sig. *)
 
 Definition mono digs audit_offset :=
   let hidden_maps := merkle.inv_fn <$> digs in
@@ -62,14 +67,12 @@ Definition mono digs audit_offset :=
   list_reln (drop audit_offset hidden_maps) (⊆).
 
 Definition linkP γ (ep : w64) link : iProp Σ :=
-  ∃ start_ep audit_offset,
-  let '(digs, cut) := hashchain.inv_fn link (S $ S $ uint.nat ep) in
+  ∃ digs info,
+  "%Hinv" ∷ ⌜hashchain.inv_fn link (S $ S $ uint.nat ep) = (digs, info.(digs_info.cut))⌝ ∗
   "#Hlb_digs" ∷ mono_list_lb_own γ.(cfg.digs) digs ∗
-  "#His_start" ∷ dghost_var γ.(cfg.start_ep) (□) start_ep ∗
-  "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (start_ep + length digs)%nat⌝ ∗
-  "#His_cut" ∷ dghost_var γ.(cfg.cut) (□) cut ∗
-  "#His_offset" ∷ dghost_var γ.(cfg.audit_offset) (□) audit_offset ∗
-  "%Hmono" ∷ ⌜mono digs audit_offset⌝.
+  "#His_info" ∷ dghost_var γ.(cfg.digs_info) (□) info ∗
+  "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (info.(digs_info.start_ep) + length digs)%nat⌝ ∗
+  "%Hmono" ∷ ⌜mono digs info.(digs_info.audit_offset)⌝.
 
 Definition linkP_aux γ enc : iProp Σ :=
   ∃ ep link,
@@ -89,15 +92,11 @@ Lemma linkP_evid γ ep link0 link1 :
   ⌜link0 = link1⌝.
 Proof.
   rewrite /linkP. iIntros "H0 H1".
-  iNamed "H0". iNamed "H1".
-  case_match eqn:Hinv0.
-  case_match eqn:Hinv1.
   iNamedSuffix "H0" "0". iNamedSuffix "H1" "1".
-  iCombine "His_start0 His_start1" gives %[_ ->].
-  iCombine "His_cut0 His_cut1" gives %[_ ->].
+  iCombine "His_info0 His_info1" gives %[_ ->].
   iDestruct (mono_list_lb_valid with "Hlb_digs0 Hlb_digs1") as %Hpref.
-  assert (l = l0) as ->.
-  { assert (length l = length l0) by word.
+  assert (digs = digs0) as ->.
+  { assert (length digs = length digs0) by word.
     destruct Hpref as [Ht|Ht];
       (apply prefix_length_eq in Ht; [done|lia]). }
   opose proof (hashchain.det link0 link1 _ _ _) as ->; [|done].
