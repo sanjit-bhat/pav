@@ -61,10 +61,10 @@ Qed.
 
 (** link sig. *)
 
-Definition mono digs audit_offset :=
+Definition mono_maps digs :=
   let hidden_maps := merkle.inv_fn <$> digs in
   (* ⊆ on hidden maps is stronger than on plain maps. *)
-  list_reln (drop audit_offset hidden_maps) (⊆).
+  list_reln hidden_maps (⊆).
 
 Definition linkP γ (ep : w64) link : iProp Σ :=
   ∃ digs info,
@@ -72,7 +72,7 @@ Definition linkP γ (ep : w64) link : iProp Σ :=
   "#Hlb_digs" ∷ mono_list_lb_own γ.(cfg.digs) digs ∗
   "#His_info" ∷ dghost_var γ.(cfg.digs_info) (□) info ∗
   "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (info.(digs_info.start_ep) + length digs)%nat⌝ ∗
-  "%Hmono" ∷ ⌜mono digs info.(digs_info.audit_offset)⌝.
+  "%Hmono_maps" ∷ ⌜mono_maps (drop info.(digs_info.audit_offset) digs)⌝.
 
 Definition linkP_aux γ enc : iProp Σ :=
   ∃ ep link,
@@ -102,6 +102,41 @@ Proof.
   opose proof (hashchain.det link0 link1 _ _ _) as ->; [|done].
   erewrite Hinv0. by erewrite Hinv1.
 Qed.
+
+(** staged / committed keys. *)
+
+Definition is_staged_keys vrf_pk digs uid keys next_ver :=
+  let hidden_maps := merkle.inv_fn <$> digs in
+  let plain_maps := plain_inv_fn vrf_pk <$> hidden_maps in
+  ( match last plain_maps with
+    | None => next_ver = 0%nat
+    | Some plain => length $ plain !!! uid = next_ver
+    end ) ∧
+  ( mono_maps digs →
+    Forall2 (λ plain opt_key, last $ plain !!! uid = opt_key) plain_maps keys ).
+
+(* TODO: generalize opt_pk from key_map defn. *)
+Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid (ver : nat) opt_pk :=
+  ∃ map_label,
+  map_label_fn vrf_pk uid (W64 ver) map_label ∧
+  match opt_pk with
+  | None =>
+    hidden !! map_label = None
+  | Some pk =>
+    ∃ rand map_val,
+    map_val_fn pk rand map_val ∧
+    hidden !! map_label = Some map_val
+  end.
+
+Lemma is_staged_keys_grow_same vrf_pk digs new_digs last_dig uid keys next_ver :
+  let digs' := digs ++ new_digs in
+  let keys' := keys ++ replicate (length new_digs) (default None (last keys)) in
+  let m := merkle.inv_fn last_dig in
+  is_staged_keys vrf_pk digs uid keys next_ver →
+  last digs' = Some last_dig →
+  in_hidden vrf_pk m uid next_ver None →
+  is_staged_keys vrf_pk digs' uid keys' next_ver.
+Proof. Admitted.
 
 (*
 Lemma sigpred_links_inv_grow start_ep links link digs dig cut maps m :
@@ -148,3 +183,6 @@ Qed.
 End proof.
 End sigpred.
 End ktcore.
+
+(* TODO: stitch together sigs from multiple auditors,
+who each have audited overlapping epoch ranges. *)
