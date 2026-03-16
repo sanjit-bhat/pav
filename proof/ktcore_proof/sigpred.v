@@ -108,10 +108,10 @@ Qed.
 Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   let hidden_maps := merkle.inv_fn <$> digs in
   let plain_maps := plain_inv_fn vrf_pk <$> hidden_maps in
-  ( match last plain_maps with
-    | None => next_ver = 0%nat
-    | Some plain => length $ plain !!! uid = next_ver
-    end ) ∧
+  match last plain_maps with
+  | None => next_ver = 0%nat
+  | Some plain => length $ plain !!! uid = next_ver
+  end ∧
   ( mono_maps digs →
     Forall2 (λ plain opt_key, last $ plain !!! uid = opt_key) plain_maps keys ).
 
@@ -128,14 +128,30 @@ Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid (ver : nat) 
     hidden !! map_label = Some map_val
   end.
 
-Lemma is_staged_keys_grow_same vrf_pk digs new_digs last_dig uid keys next_ver :
+Lemma is_staged_keys_grow_last vrf_pk digs new_digs last_dig uid keys next_ver :
   let digs' := digs ++ new_digs in
   let keys' := keys ++ replicate (length new_digs) (default None (last keys)) in
-  let m := merkle.inv_fn last_dig in
+  let last_m := merkle.inv_fn last_dig in
   is_staged_keys vrf_pk digs uid keys next_ver →
   last digs' = Some last_dig →
-  in_hidden vrf_pk m uid next_ver None →
+  in_hidden vrf_pk last_m uid next_ver None →
   is_staged_keys vrf_pk digs' uid keys' next_ver.
+Proof. Admitted.
+
+Lemma is_staged_keys_grow_new vrf_pk digs new_digs last_dig uid keys new_key next_ver :
+  let digs' := digs ++ new_digs in
+  let last_m := merkle.inv_fn last_dig in
+  is_staged_keys vrf_pk digs uid keys next_ver →
+  last digs' = Some last_dig →
+  in_hidden vrf_pk last_m uid next_ver (Some new_key) →
+  in_hidden vrf_pk last_m uid (S next_ver) None →
+  ∃ (num_old num_new : nat),
+    let keys' :=
+      keys ++
+      replicate num_old (default None (last keys)) ++
+      replicate (S num_new) (Some new_key) in
+    num_old + S num_new = length new_digs ∧
+    is_staged_keys vrf_pk digs' uid keys' (S next_ver).
 Proof. Admitted.
 
 (*
