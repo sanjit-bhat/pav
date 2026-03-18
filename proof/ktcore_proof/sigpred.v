@@ -105,17 +105,29 @@ Qed.
 
 (** staged / committed keys. *)
 
+(* after auditing, learn that client digs equal auditor digs.
+also learn [mono_maps], so "apply" that in [is_staged_keys]. *)
+Definition is_committed_keys vrf_pk digs uid keys :=
+  let hidden_maps := merkle.inv_fn <$> digs in
+  let plain_maps := plain_inv_fn vrf_pk <$> hidden_maps in
+  Forall2 (λ plain opt_key, last $ plain !!! uid = opt_key) plain_maps keys.
+
 Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   let hidden_maps := merkle.inv_fn <$> digs in
   let plain_maps := plain_inv_fn vrf_pk <$> hidden_maps in
-  match last plain_maps with
-  | None => next_ver = 0%nat
-  | Some plain => length $ plain !!! uid = next_ver
-  end ∧
-  ( mono_maps digs →
-    Forall2 (λ plain opt_key, last $ plain !!! uid = opt_key) plain_maps keys ).
+  mono_maps digs →
+  (* next_ver doesn't have meaning without digs. *)
+  match last plain_maps with None => False | Some plain =>
+    length $ plain !!! uid = next_ver end ∧
+  is_committed_keys vrf_pk digs uid keys.
 
-(* TODO: generalize opt_pk from key_map defn. *)
+Lemma commit_staged vrf_pk digs uid keys next_ver :
+  is_staged_keys vrf_pk digs uid keys next_ver →
+  mono_maps digs →
+  is_committed_keys vrf_pk digs uid keys.
+Proof. rewrite /is_staged_keys. naive_solver. Qed.
+
+(* TODO: generalize opt_pk from same defn in key_map lib. *)
 Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid (ver : nat) opt_pk :=
   ∃ map_label,
   map_label_fn vrf_pk uid (W64 ver) map_label ∧
@@ -128,6 +140,40 @@ Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid (ver : nat) 
     hidden !! map_label = Some map_val
   end.
 
+(* TODO: maybe could be iff. *)
+Lemma list_reln_app {A} R (l0 l1 : list A) :
+  list_reln (l0 ++ l1) R →
+  list_reln l0 R ∧ list_reln l1 R.
+Proof. Admitted.
+
+Lemma is_staged_init vrf_pk digs uid :
+  length digs > 0%nat →
+  ∃ keys next_ver, is_staged_keys vrf_pk digs uid keys next_ver.
+Proof.
+  rewrite /is_staged_keys. intros.
+  exists
+    (last <$>
+    ((.!!! uid) <$>
+    (plain_inv_fn vrf_pk <$>
+    (merkle.inv_fn <$> digs)))).
+  rewrite !fmap_last.
+  assert (∃ x, last digs = Some x) as [last_dig ->].
+  { list_elem digs (pred $ length digs) as x.
+    rewrite -last_lookup in Hx_lookup.
+    naive_solver. }
+  eexists. intros _.
+  split; [done|].
+  rewrite /is_committed_keys.
+  apply Forall2_same_length_lookup.
+  split; [len|].
+  intros *? Ht.
+  apply list_lookup_fmap_Some in Ht as (?&?&Ht).
+  subst.
+  apply list_lookup_fmap_Some in Ht as (?&?&Ht).
+  by simplify_eq/=.
+Qed.
+
+(* grow staged keys by replicating the last existing key. *)
 Lemma is_staged_keys_grow_last vrf_pk digs new_digs last_dig uid keys next_ver :
   let digs' := digs ++ new_digs in
   let keys' := keys ++ replicate (length new_digs) (default None (last keys)) in
@@ -136,8 +182,20 @@ Lemma is_staged_keys_grow_last vrf_pk digs new_digs last_dig uid keys next_ver :
   last digs' = Some last_dig →
   in_hidden vrf_pk last_m uid next_ver None →
   is_staged_keys vrf_pk digs' uid keys' next_ver.
-Proof. Admitted.
+Proof.
+  rewrite /is_staged_keys. intros Hstage ?? Hmono.
+  odestruct (Hstage _) as [Hver Hkeys].
+  { unfold mono_maps in *.
+    rewrite fmap_app in Hmono.
+    apply list_reln_app in Hmono.
+    naive_solver. }
+  clear Hstage.
+  split.
+  - rewrite !fmap_app.
+    destruct (last (fmap _ _ ++ fmap _ _)) eqn:Hlast.
+Admitted.
 
+(* grow staged keys by adding a new key. *)
 Lemma is_staged_keys_grow_new vrf_pk digs new_digs last_dig uid keys new_key next_ver :
   let digs' := digs ++ new_digs in
   let last_m := merkle.inv_fn last_dig in
