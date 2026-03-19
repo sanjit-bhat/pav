@@ -168,10 +168,39 @@ Proof.
   split; [len|].
   intros *? Ht.
   apply list_lookup_fmap_Some in Ht as (?&?&Ht).
-  subst.
   apply list_lookup_fmap_Some in Ht as (?&?&Ht).
   by simplify_eq/=.
 Qed.
+
+Lemma list_reln_box {A B} R0 R1 (f : A → B) (l0 : list A) :
+  list_reln l0 R0 →
+  (∀ x0 x1, R0 x0 x1 → R1 (f x0) (f x1)) →
+  list_reln (f <$> l0) R1.
+Proof. Admitted.
+
+Lemma plain_mono_lookup vrf_pk digs uid i j xi xj :
+  let hidden_maps := merkle.inv_fn <$> digs in
+  let plain_maps := plain_inv_fn vrf_pk <$> hidden_maps in
+  mono_maps digs →
+  plain_maps !! i = Some xi →
+  plain_maps !! j = Some xj →
+  (i ≤ j)%nat →
+  xi !!! uid `prefix_of` xj !!! uid.
+Proof.
+  rewrite /mono_maps. intros Hmono Hlook0 Hlook1 **.
+  apply (list_reln_box _ keys_sub (plain_inv_fn vrf_pk)) in Hmono.
+  2: { eapply plain_inv_mono. }
+  opose proof (list_reln_trans_refl _ _ Hmono _ _ _ _ Hlook0 Hlook1 _) as Hsub; [done|].
+  specialize (Hsub uid).
+  rewrite !lookup_total_alt.
+  destruct (xi !! _), (xj !! _); try done.
+  simpl in *. apply prefix_nil.
+Qed.
+
+Lemma hidden_None_length vrf_pk m uid ver None :
+  in_hidden vrf_pk m uid ver None →
+  length $ plain_inv_fn vrf_pk m !!! uid ≤ ver.
+Proof.
 
 (* grow staged keys by replicating the last existing key. *)
 Lemma is_staged_keys_grow_last vrf_pk digs new_digs last_dig uid keys next_ver :
@@ -183,16 +212,16 @@ Lemma is_staged_keys_grow_last vrf_pk digs new_digs last_dig uid keys next_ver :
   in_hidden vrf_pk last_m uid next_ver None →
   is_staged_keys vrf_pk digs' uid keys' next_ver.
 Proof.
-  rewrite /is_staged_keys. intros Hstage ?? Hmono.
+  rewrite /is_staged_keys. intros Hstage Hlast_dig ? Hmono.
   odestruct (Hstage _) as [Hver Hkeys].
   { unfold mono_maps in *.
     rewrite fmap_app in Hmono.
     apply list_reln_app in Hmono.
     naive_solver. }
   clear Hstage.
+  case_match; try done.
   split.
-  - rewrite !fmap_app.
-    destruct (last (fmap _ _ ++ fmap _ _)) eqn:Hlast.
+  - rewrite !fmap_last Hlast_dig /=.
 Admitted.
 
 (* grow staged keys by adding a new key. *)
