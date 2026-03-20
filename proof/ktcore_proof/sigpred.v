@@ -127,19 +127,6 @@ Lemma commit_staged vrf_pk digs uid keys next_ver :
   is_committed_keys vrf_pk digs uid keys.
 Proof. rewrite /is_staged_keys. naive_solver. Qed.
 
-(* TODO: generalize opt_pk from same defn in key_map lib. *)
-Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid (ver : nat) opt_pk :=
-  ∃ map_label,
-  map_label_fn vrf_pk uid (W64 ver) map_label ∧
-  match opt_pk with
-  | None =>
-    hidden !! map_label = None
-  | Some pk =>
-    ∃ rand map_val,
-    map_val_fn pk rand map_val ∧
-    hidden !! map_label = Some map_val
-  end.
-
 (* TODO: maybe could be iff. *)
 Lemma list_reln_app {A} R (l0 l1 : list A) :
   list_reln (l0 ++ l1) R →
@@ -196,11 +183,6 @@ Proof.
   destruct (xi !! _), (xj !! _); try done.
   simpl in *. apply prefix_nil.
 Qed.
-
-Lemma hidden_None_length vrf_pk m uid ver None :
-  in_hidden vrf_pk m uid ver None →
-  length $ plain_inv_fn vrf_pk m !!! uid ≤ ver.
-Proof.
 
 (* grow staged keys by replicating the last existing key. *)
 Lemma is_staged_keys_grow_last vrf_pk digs new_digs last_dig uid keys next_ver :

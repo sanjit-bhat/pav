@@ -135,14 +135,22 @@ Definition plain_inv_fn vrf_pk hidden :=
 
 (** [is_plain] definition. *)
 
-Local Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver pk :=
-  ∃ map_label map_val,
+Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver opt_pk :=
+  ∃ map_label,
   map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
-  map_val_inv_fn map_val = Some pk ∧
-  hidden !! map_label = Some map_val.
+  match opt_pk with
+  | None =>
+    hidden !! map_label = None
+  | Some pk =>
+    ∃ map_val,
+    map_val_inv_fn map_val = Some pk ∧
+    hidden !! map_label = Some map_val
+  end.
+#[global] Opaque in_hidden.
+#[local] Transparent in_hidden.
 
 Local Definition pks_in_hidden vrf_pk hidden uid (pks : list _) :=
-  ∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver pk.
+  ∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver (Some pk).
 
 Local Definition in_plain vrf_pk (plain : gmap w64 (list $ list w8)) map_label map_val :=
   ∃ uid ver pk pks,
@@ -209,11 +217,11 @@ Proof.
   eapply IHfuel; [done..|lia].
 Qed.
 
-Local Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
+Lemma inv_fn_out_lookup {vrf_pk plain hidden uid pks} ver pk :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
   pks !! ver = Some pk →
-  in_hidden vrf_pk hidden uid ver pk.
+  in_hidden vrf_pk hidden uid ver (Some pk).
 Proof.
   rewrite /plain_inv_fn. intros Hfn Hlook_plain Hlook_pks.
   rewrite /filter_contig in Hfn.
@@ -237,7 +245,7 @@ Proof.
   naive_solver.
 Qed.
 
-Lemma inv_fn_out_pks {vrf_pk plain hidden} uid pks :
+Local Lemma inv_fn_out_pks {vrf_pk plain hidden} uid pks :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
   pks_in_hidden vrf_pk hidden uid pks.
@@ -303,7 +311,7 @@ Qed.
 
 Local Lemma to_contig_inp_lookup {vrf_pk m0 m1} uid ver pk :
   map_curry $ dec_map_vals $ dec_map_labels vrf_pk m0 = m1 →
-  in_hidden vrf_pk m0 uid ver pk →
+  in_hidden vrf_pk m0 uid ver (Some pk) →
   m1 !! uid ≫= (!!) ver = Some pk.
 Proof.
   rewrite /in_hidden. intros <- (?&?&?&?&Hfn).
@@ -429,13 +437,32 @@ Proof.
   destruct Hpref as ([]&Hpref).
   { by list_simplifier. }
   exfalso.
-  opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?); [done|done|..].
+  opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?&?); [done|done|..].
   { rewrite Hpref. by apply list_lookup_middle. }
   destruct_and!.
   odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks); [done|].
   simplify_eq/=.
   apply lookup_lt_Some in Hlook_pks.
   lia.
+Qed.
+
+Lemma inv_fn_None_bound vrf_pk m uid ver :
+  in_hidden vrf_pk m uid ver None →
+  length $ plain_inv_fn vrf_pk m !!! uid ≤ ver.
+Proof.
+  intros Hnone.
+  eremember (_ !!! uid) as pks.
+  destruct (decide (length $ pks > ver)); try done.
+  exfalso.
+  list_elem pks ver as x.
+  rewrite lookup_total_alt in Heqpks.
+  destruct (_ !! uid) eqn:Hinv; simplify_eq/=.
+  eapply inv_fn_out_lookup in Hinv; [|done..].
+  destruct Hnone as (?&Hl0&?).
+  destruct Hinv as (?&Hl1&?&?).
+  destruct_and!.
+  opose proof (map_label_inv_fn_inj Hl0 Hl1) as ->.
+  simplify_eq/=.
 Qed.
 
 (** monotonicity. *)
@@ -463,7 +490,7 @@ Proof.
   assert (pks_in_hidden vrf_pk m0 uid pks) as Hin.
   { by eapply inv_fn_out_pks. }
   intros ?**.
-  opose proof (Hin _ _ _) as (?&?&?); [done|].
+  opose proof (Hin _ _ _) as (?&?&?&?); [done|].
   destruct_and!.
   repeat eexists; [done..|].
   by eapply lookup_weaken.
@@ -482,7 +509,7 @@ Proof.
   { by erewrite inv_fn_inp_pks_weak. }
   destruct (plain1 !! uid) as [[]|] eqn:Hlook1; try done; exfalso.
   { by opose proof (inv_fn_non_empty_pks _ _ _ _) as ?. }
-  opose proof (inv_fn_out_lookup 0 _ _ _ _) as (?&?&?); [done..|].
+  opose proof (inv_fn_out_lookup 0 _ _ _ _) as (?&?&?&?); [done..|].
   destruct_and!.
   odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&?); [done|].
   simplify_eq/=.
@@ -542,7 +569,7 @@ Local Lemma pks_in_hidden_insert {vrf_pk hidden uid pks} map_label map_val :
   pks_in_hidden vrf_pk (<[map_label:=map_val]>hidden) uid pks.
 Proof.
   intros Hrel Hnone ?? Hlook.
-  opose proof (Hrel _ _ _) as (?&?&?); [done|].
+  opose proof (Hrel _ _ _) as (?&?&?&?); [done|].
   destruct_and!.
   rewrite /in_hidden.
   repeat eexists; [done..|].
@@ -552,7 +579,7 @@ Qed.
 
 Local Lemma pks_in_hidden_snoc {vrf_pk hidden uid pks} pk :
   pks_in_hidden vrf_pk hidden uid pks →
-  in_hidden vrf_pk hidden uid (length pks) pk →
+  in_hidden vrf_pk hidden uid (length pks) (Some pk) →
   pks_in_hidden vrf_pk hidden uid (pks ++ [pk]).
 Proof.
   rewrite /pks_in_hidden. intros Hrel Hin ver ? Hlook.
