@@ -236,7 +236,8 @@ Proof.
   eassert (old_plain !!! uid = new_plain !!! uid) as Heq_pks.
   { eapply prefix_length_eq; [done|lia]. }
 
-  (* easier to do reasoning in plain maps layer. *)
+  (* approach: bring all facts to plain maps layer,
+  then do the core reasoning there. *)
   split; [by f_equal|].
   rewrite /is_committed_keys in Hkeys |-*.
   rewrite !fmap_app.
@@ -255,21 +256,28 @@ Proof.
 Qed.
 
 (* grow staged keys by adding a new key. *)
-Lemma is_staged_keys_grow_new vrf_pk digs new_digs last_dig uid keys new_key next_ver :
+Lemma is_staged_keys_grow_new vrf_pk digs new_digs new_dig uid keys old_key new_key next_ver :
   let digs' := digs ++ new_digs in
-  let last_m := merkle.inv_fn last_dig in
+  let new_m := merkle.inv_fn new_dig in
   is_staged_keys vrf_pk digs uid keys next_ver →
-  last digs' = Some last_dig →
-  in_hidden vrf_pk last_m uid next_ver (Some new_key) →
-  in_hidden vrf_pk last_m uid (S next_ver) None →
+  last digs' = Some new_dig →
+  last keys = Some old_key →
+  in_hidden vrf_pk new_m uid next_ver (Some new_key) →
+  in_hidden vrf_pk new_m uid (S next_ver) None →
   ∃ (num_old num_new : nat),
     let keys' :=
       keys ++
-      replicate num_old (default None (last keys)) ++
+      replicate num_old old_key ++
       replicate (S num_new) (Some new_key) in
     num_old + S num_new = length new_digs ∧
     is_staged_keys vrf_pk digs' uid keys' (S next_ver).
 Proof. Admitted.
+(*
+- need to [decide] ep s.t. ep !! next_ver = None and S ep !! next_ver = Some.
+then, after we get mono_maps, can use prefix on plain
+reasoning to prove the goal.
+- but: currently, is_staged_keys (w/o mono_maps) tells us nothing about old_dig.
+need to strengthen it to mention next_ver, even w/o mono_maps. *)
 
 (*
 Lemma sigpred_links_inv_grow start_ep links link digs dig cut maps m :
