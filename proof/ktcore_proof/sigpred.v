@@ -165,7 +165,7 @@ Lemma list_reln_box {A B} R0 R1 (f : A → B) (l0 : list A) :
   list_reln (f <$> l0) R1.
 Proof. Admitted.
 
-Lemma plain_mono_lookup vrf_pk digs uid i j xi xj :
+Lemma plain_mono_lookup uid {vrf_pk digs i j xi xj} :
   let hidden_maps := merkle.inv_fn <$> digs in
   let plain_maps := plain_inv_fn vrf_pk <$> hidden_maps in
   mono_maps digs →
@@ -184,27 +184,75 @@ Proof.
   simpl in *. apply prefix_nil.
 Qed.
 
+Lemma lookup_app_r' {A} (l1 l2 : list A) i :
+  l2 !! i = (l1 ++ l2) !! (i + length l1)%nat.
+Proof. rewrite lookup_app_r; [|lia]. f_equal. lia. Qed.
+
+Lemma prefix_eq {A} (l1 l2 : list A) :
+  l1 `prefix_of` l2 →
+  l2 `prefix_of` l1 →
+  l1 = l2.
+Proof. intros ? ?%prefix_length. by apply prefix_length_eq. Qed.
+
 (* grow staged keys by replicating the last existing key. *)
-Lemma is_staged_keys_grow_last vrf_pk digs new_digs last_dig uid keys next_ver :
+Lemma is_staged_keys_grow_last vrf_pk digs new_digs new_dig uid keys old_key next_ver :
   let digs' := digs ++ new_digs in
-  let keys' := keys ++ replicate (length new_digs) (default None (last keys)) in
-  let last_m := merkle.inv_fn last_dig in
+  let keys' := keys ++ replicate (length new_digs) old_key in
+  let new_m := merkle.inv_fn new_dig in
   is_staged_keys vrf_pk digs uid keys next_ver →
-  last digs' = Some last_dig →
-  in_hidden vrf_pk last_m uid next_ver None →
+  last digs' = Some new_dig →
+  last keys = Some old_key →
+  in_hidden vrf_pk new_m uid next_ver None →
   is_staged_keys vrf_pk digs' uid keys' next_ver.
 Proof.
-  rewrite /is_staged_keys. intros Hstage Hlast_dig ? Hmono.
+  rewrite /is_staged_keys. intros Hstage Hnew_dig Hold_key Hnone Hmono.
   odestruct (Hstage _) as [Hver Hkeys].
   { unfold mono_maps in *.
     rewrite fmap_app in Hmono.
     apply list_reln_app in Hmono.
     naive_solver. }
   clear Hstage.
-  case_match; try done.
-  split.
-  - rewrite !fmap_last Hlast_dig /=.
-Admitted.
+  destruct (last (fmap _ (fmap _ digs))) as [old_plain|] eqn:Hold_plain; try done.
+  eremember (fmap _ (fmap _ (_ ++ _))) as plains.
+  eassert (plains !! _ = Some _) as Hlook_old.
+  { subst. rewrite !fmap_app.
+    apply lookup_app_l_Some.
+    rewrite last_lookup in Hold_plain.
+    eexact Hold_plain. }
+  eassert (plains !! _ = Some _) as Hlook_new.
+  { subst. erewrite <-last_lookup.
+    by rewrite !fmap_last Hnew_dig. }
+  assert (last $ old_plain !!! uid = old_key).
+  { rewrite /is_committed_keys in Hkeys.
+    apply Forall2_last in Hkeys.
+    rewrite Hold_plain Hold_key in Hkeys.
+    by inv Hkeys. }
+  subst. rewrite !fmap_last Hnew_dig /=.
+  clear Hold_key Hold_plain Hnew_dig.
+  autorewrite with len in *.
+  opose proof (plain_mono_lookup uid Hmono Hlook_old Hlook_new _) as Hpref_all; [len|].
+  eapply inv_fn_None_bound in Hnone.
+  eremember (_ _ (_ new_dig)) as new_plain. clear Heqnew_plain.
+  eassert (old_plain !!! uid = new_plain !!! uid) as Heq_pks.
+  { eapply prefix_length_eq; [done|lia]. }
+
+  (* easier to do reasoning in plain maps layer. *)
+  split; [by f_equal|].
+  rewrite /is_committed_keys in Hkeys |-*.
+  rewrite !fmap_app.
+  eapply Forall2_app; [done|].
+  clear Hkeys.
+  eapply Forall2_same_length_lookup.
+  split; [len|].
+  intros ? mid_plain * Hlook_mid Hrepl.
+  apply lookup_replicate in Hrepl as [-> ?].
+  erewrite (lookup_app_r' (fmap _ (fmap _ _))) in Hlook_mid.
+  repeat erewrite <-fmap_app in Hlook_mid.
+  opose proof (plain_mono_lookup uid Hmono Hlook_old Hlook_mid _) as Hpref_reg0; [len|].
+  opose proof (plain_mono_lookup uid Hmono Hlook_mid Hlook_new _) as Hpref_reg1; [len|].
+  f_equal. rewrite -Heq_pks in Hpref_reg1.
+  by apply prefix_eq.
+Qed.
 
 (* grow staged keys by adding a new key. *)
 Lemma is_staged_keys_grow_new vrf_pk digs new_digs last_dig uid keys new_key next_ver :
