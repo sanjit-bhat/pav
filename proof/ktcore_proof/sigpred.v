@@ -118,12 +118,12 @@ Definition is_committed_keys vrf_pk digs uid keys :=
     last $ to_pks vrf_pk uid dig = opt_key) digs keys.
 
 Definition is_staged_keys vrf_pk digs uid keys next_ver :=
-  (* next_ver doesn't have meaning without digs. *)
-  match last digs with None => False | Some last_dig =>
-    in_hidden vrf_pk (merkle.inv_fn last_dig) uid next_ver None end ∧
+  ∃ last_dig,
+  (* [next_ver] only has meaning with some digs. *)
+  last digs = Some last_dig ∧
+  in_hidden vrf_pk (merkle.inv_fn last_dig) uid next_ver None ∧
   ( mono_maps digs →
-    match last digs with None => False | Some last_dig =>
-      length $ to_pks vrf_pk uid last_dig = next_ver end ∧
+    length $ to_pks vrf_pk uid last_dig = next_ver ∧
     is_committed_keys vrf_pk digs uid keys ).
 
 Lemma commit_staged vrf_pk digs uid keys next_ver :
@@ -174,12 +174,11 @@ Lemma is_staged_init vrf_pk digs last_dig uid :
   is_staged_keys vrf_pk digs uid keys 0.
 Proof.
   rewrite /is_staged_keys. intros Hlast_dig Hnone.
-  rewrite Hlast_dig.
+  eexists. repeat (split; [done|]).
+  intros Hmono.
   assert (to_pks vrf_pk uid last_dig = []) as Hnil.
   { eapply inv_fn_None_bound in Hnone as ?.
     simpl. by destruct (plain_inv_fn _ _ !!! _). }
-  split; try done.
-  intros Hmono.
   split. { by rewrite Hnil. }
   clear Hnone.
 
@@ -215,23 +214,20 @@ Lemma is_staged_keys_grow_last vrf_pk digs new_digs new_dig uid keys old_key nex
   in_hidden vrf_pk new_m uid next_ver None →
   is_staged_keys vrf_pk digs' uid keys' next_ver.
 Proof.
-  rewrite /is_staged_keys. intros [_ Hstage] Hnew_dig Hold_key Hnone.
-  rewrite Hnew_dig.
-  split; try done.
+  rewrite /is_staged_keys. intros (old_dig&Hold_dig&_&Hstage) Hnew_dig Hold_key Hnone.
+  eexists. repeat (split; [done|]).
   intros Hmono.
-  odestruct (Hstage _) as [Hver Hkeys].
+  odestruct (Hstage _) as (Hver&Hkeys).
   { unfold mono_maps in *.
     rewrite fmap_app in Hmono.
     apply list_reln_app in Hmono.
     naive_solver. }
   clear Hstage.
-  destruct (last digs) as [old_dig|] eqn:Hold_dig; try done.
-  assert (last $ to_pks vrf_pk uid old_dig = old_key).
+  assert (old_key = last $ to_pks vrf_pk uid old_dig) as ->.
   { rewrite /is_committed_keys in Hkeys.
     apply Forall2_last in Hkeys.
     rewrite Hold_dig Hold_key in Hkeys.
     by inv Hkeys. }
-  subst.
   rewrite !last_lookup in Hold_dig Hnew_dig.
   eapply lookup_app_l_Some in Hold_dig.
   eassert (to_pks vrf_pk uid old_dig = to_pks vrf_pk uid new_dig) as Heq_pks.
@@ -272,15 +268,17 @@ Lemma is_staged_keys_grow_new vrf_pk digs new_digs new_dig uid keys old_key new_
       keys ++
       replicate num_old old_key ++
       replicate (S num_new) (Some new_key) in
+    (* [S num_new] implicitly says there's at least one [new_digs]
+    that has [new_key]. *)
     num_old + S num_new = length new_digs ∧
     is_staged_keys vrf_pk digs' uid keys' (S next_ver).
-Proof. Admitted.
-(*
-- need to [decide] ep s.t. ep !! next_ver = None and S ep !! next_ver = Some.
-then, after we get mono_maps, can use prefix on plain
-reasoning to prove the goal.
-- but: currently, is_staged_keys (w/o mono_maps) tells us nothing about old_dig.
-need to strengthen it to mention next_ver, even w/o mono_maps. *)
+Proof.
+  rewrite /is_staged_keys.
+  intros (old_dig&Hold_dig&Hnone'&Hstage) Hnew_dig Hold_key Hsome Hnone.
+  destruct (decide (new_digs = [])).
+  { exfalso. list_simplifier.
+    by opose proof (in_hidden_det Hnone' Hsome) as ?. }
+Admitted.
 
 (*
 Lemma sigpred_links_inv_grow start_ep links link digs dig cut maps m :

@@ -179,6 +179,59 @@ Definition is_plain vrf_pk plain hidden :=
 #[global] Opaque is_plain.
 #[local] Transparent is_plain.
 
+(** misc. *)
+
+(* TODO: other way of writing this (like hash lib):
+state bij with map_label_fn, which structurally has det. *)
+Local Lemma map_label_inv_fn_inj {vrf_pk label0 label1 dec} :
+  map_label_inv_fn vrf_pk label0 = Some dec →
+  map_label_inv_fn vrf_pk label1 = Some dec →
+  label0 = label1.
+Proof.
+  rewrite /map_label_inv_fn. intros **.
+  simplify_option_eq.
+  autorewrite with len in *.
+  rename H0 into d0. rename H1 into d1.
+  rename Heqo3 into Hvrf0. rename Heqo into Hvrf1.
+  rename H into Heq_uid. rename H8 into Heq_ver.
+
+  assert (d0 = d1) as <-.
+  2: {
+    apply cryptoffi.vrf_bij_r in Hvrf0, Hvrf1.
+    by simplify_eq/=. }
+  apply (f_equal u64_le) in Heq_uid.
+  rewrite !le_to_u64_le in Heq_uid; [|len..].
+  apply uint_nat_inj in Heq_ver.
+  apply (f_equal u64_le) in Heq_ver.
+  rewrite !le_to_u64_le in Heq_ver; [|len..].
+
+  rewrite -(take_drop 8 d0).
+  rewrite -(take_drop 8 d1).
+  rewrite -(take_drop 8 (drop 8 d0)).
+  rewrite -(take_drop 8 (drop 8 d1)).
+  f_equal; [done|].
+  f_equal; [done|].
+  rewrite !drop_drop.
+  rewrite !drop_ge; [done|word..].
+Qed.
+
+Lemma in_hidden_det {vrf_pk hidden uid ver opt_pk0 opt_pk1} :
+  in_hidden vrf_pk hidden uid ver opt_pk0 →
+  in_hidden vrf_pk hidden uid ver opt_pk1 →
+  opt_pk0 = opt_pk1.
+Proof.
+  intros (?&Hlab0&H0)(?&Hlab1&H1).
+  opose proof (map_label_inv_fn_inj Hlab0 Hlab1) as ->.
+  case_match eqn:Ht1; case_match eqn:Ht0; try done; simplify_eq/=.
+  - destruct H0 as (?&?&?).
+    destruct H1 as (?&?&?).
+    by simplify_eq/=.
+  - destruct H1 as (?&?&?).
+    by simplify_eq/=.
+  - destruct H0 as (?&?&?).
+    by simplify_eq/=.
+Qed.
+
 (** out->in reasoning for [plain_inv_fn]. *)
 
 Local Lemma dec_map_labels_out_lookup {vrf_pk m_prev m_next dec val} :
@@ -252,38 +305,6 @@ Local Lemma inv_fn_out_pks {vrf_pk plain hidden} uid pks :
 Proof. intros **?**. by eapply inv_fn_out_lookup. Qed.
 
 (** in->out reasoning for [plain_inv_fn]. *)
-
-Local Lemma map_label_inv_fn_inj {vrf_pk label0 label1 dec} :
-  map_label_inv_fn vrf_pk label0 = Some dec →
-  map_label_inv_fn vrf_pk label1 = Some dec →
-  label0 = label1.
-Proof.
-  rewrite /map_label_inv_fn. intros **.
-  simplify_option_eq.
-  autorewrite with len in *.
-  rename H0 into d0. rename H1 into d1.
-  rename Heqo3 into Hvrf0. rename Heqo into Hvrf1.
-  rename H into Heq_uid. rename H8 into Heq_ver.
-
-  assert (d0 = d1) as <-.
-  2: {
-    apply cryptoffi.vrf_bij_r in Hvrf0, Hvrf1.
-    by simplify_eq/=. }
-  apply (f_equal u64_le) in Heq_uid.
-  rewrite !le_to_u64_le in Heq_uid; [|len..].
-  apply uint_nat_inj in Heq_ver.
-  apply (f_equal u64_le) in Heq_ver.
-  rewrite !le_to_u64_le in Heq_ver; [|len..].
-
-  rewrite -(take_drop 8 d0).
-  rewrite -(take_drop 8 d1).
-  rewrite -(take_drop 8 (drop 8 d0)).
-  rewrite -(take_drop 8 (drop 8 d1)).
-  f_equal; [done|].
-  f_equal; [done|].
-  rewrite !drop_drop.
-  rewrite !drop_ge; [done|word..].
-Qed.
 
 Local Lemma dec_map_labels_unique vrf_pk m_prev m_next :
   dec_map_labels_aux vrf_pk m_prev = m_next →
