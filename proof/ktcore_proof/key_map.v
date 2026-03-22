@@ -83,7 +83,7 @@ Definition map_label_fn vrf_pk uid (ver : nat) map_label :=
 #[global] Opaque map_label_fn.
 #[local] Transparent map_label_fn.
 
-Local Definition map_label_inv_fn vrf_pk map_label :=
+Definition map_label_inv_fn vrf_pk map_label :=
   rem0 ← cryptoffi.vrf_inv_fn vrf_pk map_label;
   guard (length rem0 ≥ 8);;
   let uid := le_to_u64 (take 8 rem0) in
@@ -150,7 +150,7 @@ Definition map_val_fn kt_pk rand map_val :=
 #[global] Opaque map_val_fn.
 #[local] Transparent map_val_fn.
 
-Local Definition map_val_inv_fn map_val :=
+Definition map_val_inv_fn map_val :=
   rem0 ← cryptoffi.hash_inv_fn map_val;
   guard (length rem0 ≥ 8);;
   let pk_len := sint.nat (le_to_u64 (take 8 rem0)) in
@@ -220,8 +220,6 @@ Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver opt_pk :
     map_val_inv_fn map_val = Some (pk, rand) ∧
     hidden !! map_label = Some map_val
   end.
-#[global] Opaque in_hidden.
-#[local] Transparent in_hidden.
 
 Local Definition pks_in_hidden vrf_pk hidden uid (pks : list _) :=
   ∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver (Some pk).
@@ -266,55 +264,6 @@ Proof.
     destruct_exis; destruct_and?;
     by simplify_eq/=.
 Qed.
-
-Local Definition in_hidden_alt vrf_pk (hidden : gmap (list w8) (list w8)) uid (ver : nat) opt_pk :=
-  let enc := MapLabel.pure_enc (MapLabel.mk' uid (W64 ver)) in
-  match cryptoffi.vrf_fn vrf_pk enc with None => False | Some map_label =>
-  match decide (ver = uint.nat (W64 ver)) with right _ => False | left _ =>
-  match hidden !! map_label with
-  | None => opt_pk = None
-  | Some map_val =>
-    match map_val_inv_fn map_val with None => False | Some x =>
-    opt_pk = Some x.1 end
-  end end end.
-
-Local Instance in_hidden_alt_dec vrf_pk hidden uid ver opt_pk :
-  Decision (in_hidden_alt vrf_pk hidden uid ver opt_pk).
-Proof.
-  rewrite /in_hidden_alt.
-  (* TODO: [solve_decision] should do this once [vrf_fn] is defined. *)
-  case_match; try solve_decision.
-  case_decide; try solve_decision.
-  case_match; try solve_decision.
-  case_match; try solve_decision.
-Qed.
-
-Local Lemma in_hidden_iff vrf_pk hidden uid ver opt_pk :
-  in_hidden vrf_pk hidden uid ver opt_pk ↔
-  in_hidden_alt vrf_pk hidden uid ver opt_pk.
-Proof.
-  rewrite /in_hidden /in_hidden_alt.
-  split.
-  - intros (?&[->?]%map_label_iff&Hfun).
-    case_decide; try done.
-    case_match. 2: { by rewrite Hfun. }
-    destruct_exis.
-    destruct Hfun as (Ht&->).
-    by rewrite Ht.
-  - intros.
-    case_match; try done.
-    case_decide; try done.
-    eexists. split. { by apply map_label_iff. }
-    case_match; [|by subst].
-    destruct (map_val_inv_fn _) as [[]|] eqn:?; try done.
-    naive_solver.
-Qed.
-
-Global Program Instance in_hidden_dec vrf_pk hidden uid ver opt_pk :
-  Decision (in_hidden vrf_pk hidden uid ver opt_pk) :=
-    cast_if (decide (in_hidden_alt vrf_pk hidden uid ver opt_pk)).
-Next Obligation. intros. by rewrite in_hidden_iff. Qed.
-Next Obligation. intros. by rewrite in_hidden_iff. Qed.
 
 (** out->in reasoning for [plain_inv_fn]. *)
 

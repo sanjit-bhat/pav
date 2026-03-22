@@ -275,9 +275,57 @@ Lemma is_staged_keys_grow_new vrf_pk digs new_digs new_dig uid keys old_key new_
 Proof.
   rewrite /is_staged_keys.
   intros (old_dig&Hold_dig&Hnone'&Hstage) Hnew_dig Hold_key Hsome Hnone.
-  destruct (decide (new_digs = [])).
-  { exfalso. list_simplifier.
-    by opose proof (in_hidden_det Hnone' Hsome) as ?. }
+  assert (last new_digs = Some new_dig) as Hnew_dig'.
+  { destruct (last new_digs) eqn:Ht.
+    { by rewrite last_app Ht in Hnew_dig. }
+    exfalso.
+    apply last_None in Ht.
+    list_simplifier.
+    by opose proof (in_hidden_det Hnone' Hsome). }
+  clear Hnone'.
+
+  assert (∃ grow_idx grow_dig,
+    mono_maps new_digs →
+    new_digs !! grow_idx = Some grow_dig ∧
+    in_hidden vrf_pk (merkle.inv_fn grow_dig) uid next_ver (Some new_key) ∧
+    (∀ j y,
+      new_digs !! j = Some y →
+      (j < grow_idx)%nat →
+      in_hidden vrf_pk (merkle.inv_fn y) uid next_ver None))
+    as (grow_idx&grow_dig&Ht).
+  { clear -Hsome Hnew_dig'.
+    destruct Hsome as (map_label&?&map_val&?).
+    destruct_exis. destruct_and?.
+    opose proof (list_find_elem_of
+      (λ x, merkle.inv_fn x !! map_label = Some map_val)
+      new_digs
+      _ _ _) as ([grow_idx ?]&Hfind).
+    { by apply last_Some_elem_of. }
+    { done. }
+    apply list_find_Some in Hfind as (Hlook_grow&?&Hfind).
+    do 2 eexists.
+    intros Hmono.
+    split; try done.
+    split. { rewrite /in_hidden. naive_solver. }
+    intros * Hlook_prior **.
+    ospecialize (Hfind _ _ _ _); [done..|].
+    eremember (merkle.inv_fn y !! _) as foo.
+    assert (foo = None ∨ (∃ map_val', foo = Some map_val' ∧ map_val ≠ map_val')) as Hdec.
+    { destruct foo; naive_solver. }
+    subst. clear Hfind.
+    rewrite /in_hidden.
+    destruct Hdec; [naive_solver|].
+    exfalso. destruct_exis. destruct_and?.
+    eapply list_reln_trans_refl in Hmono; cycle 1.
+    1-2: apply _.
+    { rewrite list_lookup_fmap. by erewrite Hlook_prior. }
+    { rewrite list_lookup_fmap. by erewrite Hlook_grow. }
+    { lia. }
+    eapply lookup_weaken in Hmono; [|done].
+    by simplify_eq/=. }
+
+  exists grow_idx, (length new_digs - grow_idx)%nat.
+  split.
 Admitted.
 
 (*
