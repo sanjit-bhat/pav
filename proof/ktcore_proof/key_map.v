@@ -94,12 +94,6 @@ Local Definition map_label_inv_fn vrf_pk map_label :=
   guard (length rem2 = 0%nat);;
   Some (uid, uint.nat ver).
 
-Lemma map_label_det {vrf_pk uid ver map_label0 map_label1} :
-  map_label_fn vrf_pk uid ver map_label0 →
-  map_label_fn vrf_pk uid ver map_label1 →
-  map_label0 = map_label1.
-Proof. rewrite /map_label_fn. intros. destruct_and?. by simplify_eq/=. Qed.
-
 Lemma map_label_iff {vrf_pk uid ver map_label} :
   map_label_fn vrf_pk uid ver map_label ↔
   map_label_inv_fn vrf_pk map_label = Some (uid, ver).
@@ -130,6 +124,22 @@ Proof.
       2: { rewrite length_drop in H2. lia. }
       apply take_drop.
     + word.
+Qed.
+
+Lemma map_label_det {vrf_pk uid ver map_label0 map_label1} :
+  map_label_fn vrf_pk uid ver map_label0 →
+  map_label_fn vrf_pk uid ver map_label1 →
+  map_label0 = map_label1.
+Proof. rewrite /map_label_fn. intros. destruct_and?. by simplify_eq/=. Qed.
+
+Lemma map_label_inv_inj {vrf_pk dec map_label0 map_label1} :
+  map_label_inv_fn vrf_pk map_label0 = Some dec →
+  map_label_inv_fn vrf_pk map_label1 = Some dec →
+  map_label0 = map_label1.
+Proof.
+  destruct dec. intros H0 H1.
+  apply map_label_iff in H0, H1.
+  by eapply map_label_det.
 Qed.
 
 Definition map_val_fn kt_pk rand map_val :=
@@ -250,8 +260,8 @@ Lemma in_hidden_det {vrf_pk hidden uid ver opt_pk0 opt_pk1} :
   in_hidden vrf_pk hidden uid ver opt_pk1 →
   opt_pk0 = opt_pk1.
 Proof.
-  intros (?&Hlab0%map_label_iff&H0)(?&Hlab1%map_label_iff&H1).
-  opose proof (map_label_det Hlab0 Hlab1) as ->.
+  intros (?&Hlab0&H0)(?&Hlab1&H1).
+  opose proof (map_label_inv_inj Hlab0 Hlab1) as ->.
   repeat case_match; try done;
     destruct_exis; destruct_and?;
     by simplify_eq/=.
@@ -362,7 +372,8 @@ Proof.
   setoid_rewrite Hfn' in Hfn. simpl in *.
   rewrite Hlook_uid in Hfn. symmetry in Hfn. clear Hfn'.
   rewrite /dec_map_vals in Hfn.
-  apply lookup_omap_Some in Hfn as (?&?&Hfn).
+  apply lookup_omap_Some in Hfn as (?&[[]]%fmap_Some&Hfn).
+  destruct_and?.
   rewrite /dec_map_labels in Hfn.
   apply elem_of_list_to_map_2 in Hfn.
   rename Hfn into Hfn'.
@@ -384,10 +395,10 @@ Local Lemma dec_map_labels_unique vrf_pk m_prev m_next :
   dec_map_labels_aux vrf_pk m_prev = m_next →
   (∀ label val0 val1, (label, val0) ∈ m_next → (label, val1) ∈ m_next → val0 = val1).
 Proof.
-  intros Hcomp ??? Helem0 Helem1.
+  intros Hcomp * Helem0 Helem1.
   opose proof (dec_map_labels_out_lookup Hcomp Helem0) as (?&Hdec0&?).
   opose proof (dec_map_labels_out_lookup Hcomp Helem1) as (?&Hdec1&?).
-  opose proof (map_label_inv_fn_inj Hdec0 Hdec1) as ->.
+  opose proof (map_label_inv_inj Hdec0 Hdec1) as ->.
   by simplify_eq/=.
 Qed.
 
@@ -401,7 +412,7 @@ Proof.
   2: { apply NoDup_map_to_list. }
   intros [??][??] **.
   simplify_option_eq.
-  by opose proof (map_label_inv_fn_inj Heqo0 Heqo) as ->.
+  by opose proof (map_label_inv_inj Heqo0 Heqo) as ->.
 Qed.
 
 Local Lemma to_contig_inp_lookup {vrf_pk m0 m1} uid ver pk :
@@ -409,11 +420,12 @@ Local Lemma to_contig_inp_lookup {vrf_pk m0 m1} uid ver pk :
   in_hidden vrf_pk m0 uid ver (Some pk) →
   m1 !! uid ≫= (!!) ver = Some pk.
 Proof.
-  rewrite /in_hidden. intros <- (?&?&?&?&Hfn).
+  rewrite /in_hidden. intros <- (?&?&?&?&Hval&?).
   rewrite lookup_map_curry.
   rewrite /dec_map_vals.
   rewrite lookup_omap_Some.
-  eexists. split; try done.
+  eexists.
+  split. { by erewrite Hval. }
   rewrite /dec_map_labels.
   apply elem_of_list_to_map_1.
   { apply dec_map_labels_NoDup. }
@@ -532,10 +544,10 @@ Proof.
   destruct Hpref as ([]&Hpref).
   { by list_simplifier. }
   exfalso.
-  opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?&?); [done|done|..].
+  opose proof (inv_fn_out_lookup (length pks) _ _ _ _) as (?&?&?); [done|done|..].
   { rewrite Hpref. by apply list_lookup_middle. }
-  destruct_and!.
-  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&Hlook_pks); [done|].
+  destruct_exis. destruct_and!.
+  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&?&Hlook_pks); [done|].
   simplify_eq/=.
   apply lookup_lt_Some in Hlook_pks.
   lia.
@@ -554,9 +566,9 @@ Proof.
   destruct (_ !! uid) eqn:Hinv; simplify_eq/=.
   eapply inv_fn_out_lookup in Hinv; [|done..].
   destruct Hnone as (?&Hl0&?).
-  destruct Hinv as (?&Hl1&?&?).
+  destruct Hinv as (?&Hl1&?&?&?).
   destruct_and!.
-  opose proof (map_label_inv_fn_inj Hl0 Hl1) as ->.
+  opose proof (map_label_inv_inj Hl0 Hl1) as ->.
   simplify_eq/=.
 Qed.
 
@@ -585,7 +597,7 @@ Proof.
   assert (pks_in_hidden vrf_pk m0 uid pks) as Hin.
   { by eapply inv_fn_out_pks. }
   intros ?**.
-  opose proof (Hin _ _ _) as (?&?&?&?); [done|].
+  opose proof (Hin _ _ _) as (?&?&?&?&?); [done|].
   destruct_and!.
   repeat eexists; [done..|].
   by eapply lookup_weaken.
@@ -604,9 +616,10 @@ Proof.
   { by erewrite inv_fn_inp_pks_weak. }
   destruct (plain1 !! uid) as [[]|] eqn:Hlook1; try done; exfalso.
   { by opose proof (inv_fn_non_empty_pks _ _ _ _) as ?. }
-  opose proof (inv_fn_out_lookup 0 _ _ _ _) as (?&?&?&?); [done..|].
+  opose proof (inv_fn_out_lookup 0 _ _ _ _) as (?&?&?&?&?); [done..|].
   destruct_and!.
-  odestruct (proj2 Hbij _ _ _) as (?&?&?&?&?&?&?&?); [done|].
+  odestruct (proj2 Hbij _ _ _) as (?&?); [done|].
+  destruct_exis. destruct_and?.
   simplify_eq/=.
 Qed.
 
@@ -618,8 +631,8 @@ Local Lemma pks_in_hidden_insert {vrf_pk hidden uid pks} map_label map_val :
   pks_in_hidden vrf_pk (<[map_label:=map_val]>hidden) uid pks.
 Proof.
   intros Hrel Hnone ?? Hlook.
-  opose proof (Hrel _ _ _) as (?&?&?&?); [done|].
-  destruct_and!.
+  opose proof (Hrel _ _ _) as (?&?&?); [done|].
+  destruct_exis. destruct_and!.
   rewrite /in_hidden.
   repeat eexists; [done..|].
   rewrite insert_union_singleton_l lookup_union.
@@ -638,10 +651,10 @@ Proof.
     by replace ver with (length pks) by lia.
 Qed.
 
-Local Lemma pks_in_hidden_insert_both {vrf_pk hidden uid pks} map_label map_val pk :
+Local Lemma pks_in_hidden_insert_both {vrf_pk hidden uid pks} map_label map_val pk rand :
   pks_in_hidden vrf_pk hidden uid pks →
   map_label_inv_fn vrf_pk map_label = Some (uid, length pks) →
-  map_val_inv_fn map_val = Some pk →
+  map_val_inv_fn map_val = Some (pk, rand) →
   hidden !! map_label = None →
   pks_in_hidden vrf_pk (<[map_label:=map_val]>hidden) uid (pks ++ [pk]).
 Proof.
@@ -658,12 +671,12 @@ Local Lemma in_plain_insert {vrf_pk plain map_label map_val} uid pk :
   in_plain vrf_pk plain map_label map_val →
   in_plain vrf_pk (<[uid:=plain !!! uid ++ [pk]]>plain) map_label map_val.
 Proof.
-  rewrite /in_plain. intros (uid0&ver0&pk0&pks0&?&?&Hlook_plain&Hlook_pks).
+  rewrite /in_plain. intros (uid0&ver0&pk0&?&pks0&?&?&Hlook_plain&Hlook_pks).
   rewrite lookup_total_alt.
   setoid_rewrite insert_union_singleton_l.
   setoid_rewrite lookup_union.
   destruct (decide (uid = uid0)).
-  - subst. do 3 eexists. exists (pks0 ++ [pk]).
+  - subst. do 4 eexists. exists (pks0 ++ [pk]).
     repeat split; try done.
     + rewrite Hlook_plain.
       simplify_map_eq/=.
@@ -684,7 +697,7 @@ Proof.
   destruct (decide (hidden !! map_label = None)) as [|Ht]; [done|].
   exfalso.
   apply not_eq_None_Some in Ht as [? Hsome].
-  opose proof (Hhtop _ _ _) as (?&?&?&pks&?&?&Hlook_plain&Hlook_pks); [done|].
+  opose proof (Hhtop _ _ _) as (?&?&?&?&pks&?&?&Hlook_plain&Hlook_pks); [done|].
   simplify_eq/=.
   rewrite lookup_total_alt Hlook_plain /= in Hlook_pks.
   replace pks with (pks ++ []) in Hlook_pks at 2.
@@ -693,19 +706,16 @@ Proof.
 Qed.
 
 (* used in server update. *)
-Lemma plain_insert vrf_pk plain hidden uid (ver : w64) pk rand map_label map_val :
+Lemma plain_insert vrf_pk plain hidden uid pk rand map_label map_val :
   let pks := plain !!! uid in
   is_plain vrf_pk plain hidden →
-  map_label_fn vrf_pk uid ver map_label →
-  uint.nat ver = length pks →
+  map_label_fn vrf_pk uid (length pks) map_label →
   map_val_fn pk rand map_val →
   let plain' := <[uid:=pks ++ [pk]]>plain in
   let hidden' := <[map_label:=map_val]>hidden in
   is_plain vrf_pk plain' hidden'.
 Proof.
-  simpl. intros Hbij Hlabel Heq_ver Hval.
-  eapply map_label_fn_has_inv in Hlabel.
-  eapply map_val_fn_has_inv in Hval.
+  simpl. intros Hbij Hlabel%map_label_iff Hval%map_val_iff.
   destruct Hbij as [Hptoh Hhtop].
   split.
   - rewrite /plain_to_hidden in Hptoh |-*.
@@ -713,7 +723,6 @@ Proof.
     apply map_Forall_insert_2.
     + split; [len|].
       eapply pks_in_hidden_insert_both; try done.
-      2: { exact_eq Hlabel. repeat f_equal. word. }
       rewrite lookup_total_alt.
       destruct (plain !! uid) eqn:?; [|done].
       by apply Hptoh.
@@ -727,7 +736,7 @@ Proof.
       * rewrite insert_union_singleton_l lookup_union.
         simplify_map_eq/=.
         by rewrite union_Some_l.
-      * by rewrite Heq_ver lookup_snoc.
+      * by rewrite lookup_snoc.
     + eapply map_Forall_impl; [done|].
       simpl. intros **.
       by apply in_plain_insert.
