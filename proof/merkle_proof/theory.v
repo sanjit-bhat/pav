@@ -16,11 +16,6 @@ Notation get_bit l n := (bytes_to_bits l !!! n : bool).
   | |- negb ?x ≠ ?x => by destruct x
   end.
 
-#[global] Tactic Notation "destruct_exis" := repeat
-  match goal with
-  | H : ∃ _, _ |- _ => destruct H as (?&H)
-  end.
-
 #[global] Tactic Notation "rw_hash" := repeat
   match goal with
   | H0 : context[cryptoffi.hash_inv_fn ?h], H1 : cryptoffi.hash_fn _ = Some ?h |- _ =>

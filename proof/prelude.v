@@ -29,6 +29,11 @@ From New.proof Require Import proof_prelude.
 Definition option_bool {A} (mx : option A) :=
   match mx with None => false | _ => true end.
 
+#[global] Tactic Notation "destruct_exis" := repeat
+  match goal with
+  | H : ∃ _, _ |- _ => destruct H as (?&H)
+  end.
+
 Section misc.
 Context {PROP : bi} `{!BiFUpd PROP}.
 
