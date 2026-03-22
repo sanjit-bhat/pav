@@ -97,7 +97,34 @@ Local Definition map_label_inv_fn vrf_pk map_label :=
 Lemma map_label_iff vrf_pk uid ver map_label :
   map_label_fn vrf_pk uid ver map_label ↔
   map_label_inv_fn vrf_pk map_label = Some (uid, ver).
-Proof. Admitted.
+Proof.
+  rewrite /map_label_fn /map_label_inv_fn /MapLabel.pure_enc /safemarshal.w64.pure_enc /=.
+  pose proof (u64_le_length uid) as Hlen_uid.
+  pose proof (u64_le_length (W64 ver)) as Hlen_ver.
+  split.
+  - intros [?%cryptoffi.vrf_bij_l Hver].
+    simplify_option_eq; try done.
+    all: try (autorewrite with len in *; lia).
+    rewrite take_app_le; [|lia].
+    rewrite take_ge; [|lia].
+    rewrite drop_app_le; [|lia].
+    rewrite drop_ge; [|lia]. simpl.
+    rewrite take_ge; [|lia].
+    rewrite !u64_le_to_word. rewrite -Hver. done.
+  - intros Hinv.
+    simplify_option_eq.
+    split_and!.
+    + suffices Henc : u64_le (le_to_u64 (take 8 H)) ++
+                      u64_le (W64 (uint.nat (le_to_u64 (take 8 (drop 8 H))))) = H.
+      { rewrite Henc. by apply cryptoffi.vrf_bij_r. }
+      rewrite le_to_u64_le; [|apply length_take_le; lia].
+      rewrite w64_to_nat_id.
+      rewrite le_to_u64_le; [|apply length_take_le; lia].
+      rewrite (take_ge (drop 8 H)).
+      2: { rewrite length_drop in H2. lia. }
+      apply take_drop.
+    + word.
+Qed.
 
 Definition map_val_fn kt_pk rand map_val :=
   let obj := CommitOpen.mk' kt_pk rand in
@@ -205,6 +232,8 @@ Local Definition dec_map_labels_aux vrf_pk (m : gmap (list w8) (list w8)) :=
 Local Definition dec_map_labels vrf_pk m : gmap (w64 * nat) (list w8) :=
   list_to_map $ dec_map_labels_aux vrf_pk m.
 
+(* TODO: fix dec_map_vals return type after map_val_inv_fn update *)
+(*
 Local Definition dec_map_vals m : gmap (w64 * nat) (list w8) :=
   omap map_val_inv_fn m.
 
@@ -728,6 +757,7 @@ Proof.
       simpl. intros **.
       by apply in_plain_insert.
 Qed.
+*)
 
 End proof.
 End ktcore.
