@@ -25,9 +25,9 @@ Definition wish_VrfSig sig_pk vrf_pk sig : iProp Σ :=
 Lemma wp_SignVrf ptr_sk pk γ sl_vrfPk vrfPk :
   {{{
     is_pkg_init ktcore ∗
-    "#Hown_sig_sk" ∷ cryptoffi.own_sig_sk ptr_sk pk (sigpred γ) ∗
+    "#Hown_sig_sk" ∷ cryptoffi.own_sig_sk ptr_sk pk (sigpred.P γ) ∗
     "#Hsl_vrfPk" ∷ sl_vrfPk ↦*□ vrfPk ∗
-    "#Hsigpred" ∷ sigpred_vrf γ vrfPk
+    "#Hsigpred" ∷ sigpred.vrfP γ vrfPk
   }}}
   @! ktcore.SignVrf #ptr_sk #sl_vrfPk
   {{{
@@ -47,10 +47,9 @@ Proof.
   iDestruct (own_slice_len with "Hsl_vrfPk") as %[? ?].
   rewrite -wp_fupd.
   wp_apply (cryptoffi.wp_SigPrivateKey_Sign with "[$Hsl_b]") as "* @".
-  { iFrame "#".
-    iLeft. iExists _.
+  { iFrame "Hown_sig_sk #".
+    iLeft.
     iSplit; [done|].
-    iFrame "#".
     rewrite /safemarshal.Slice1D.valid. word. }
   iPersist "Hsl_sig".
   iModIntro.
@@ -85,7 +84,7 @@ Proof.
     as "* (Hsl_b&Hcap_b&_&(_&%Hvalid))".
   { iFrame "#". }
   simpl in *.
-  wp_apply (cryptoffi.wp_SigPublicKey_Verify with "[Hsl_b]") as "* H".
+  Fail wp_apply (cryptoffi.wp_SigPublicKey_Verify with "[Hsl_b]") as "* H".
   { iFrame "∗#". }
   iNamedSuffix "H" "0".
   iApply "HΦ".

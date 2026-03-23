@@ -3,7 +3,6 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 From New.proof.github_com.sanjit_bhat.pav Require Import
   cryptoffi hashchain merkle safemarshal.
 
-About merkle.inv_fn.
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   key_map serde.
 
