@@ -9,6 +9,18 @@ From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
 Module ktcore.
 Import key_map.ktcore serde.ktcore.
 
+Section proof.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics}.
+Collection W := sem.
+#[local] Set Default Proof Using "W".
+
+Definition mono_maps digs :=
+  let hidden_maps := merkle.inv_fn <$> digs in
+  (* ⊆ on hidden maps is stronger than on plain maps. *)
+  list_reln hidden_maps (⊆).
+End proof.
+
 Module sigpred.
 
 Module digs_info.
@@ -60,11 +72,6 @@ Qed.
 
 (** link sig. *)
 
-Definition mono_maps digs :=
-  let hidden_maps := merkle.inv_fn <$> digs in
-  (* ⊆ on hidden maps is stronger than on plain maps. *)
-  list_reln hidden_maps (⊆).
-
 Definition linkP γ (ep : w64) link : iProp Σ :=
   ∃ digs,
   "%Hinv" ∷ ⌜hashchain.inv_fn link (S $ S $ uint.nat ep) =
@@ -100,6 +107,15 @@ Proof.
   opose proof (hashchain.det link0 link1 _ _ _) as ->; [|done].
   erewrite Hinv0. by erewrite Hinv1.
 Qed.
+
+End proof.
+End sigpred.
+
+Section proof.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics}.
+Collection W := sem.
+#[local] Set Default Proof Using "W".
 
 (** staged / committed keys. *)
 
@@ -430,51 +446,5 @@ Proof.
     by rewrite -Heq_old_grow last_snoc.
 Qed.
 
-(*
-Lemma sigpred_links_inv_grow start_ep links link digs dig cut maps m :
-  (∀ prev_map, last maps = Some prev_map → prev_map ⊆ m) →
-  sigpred_links_inv start_ep links digs cut maps -∗
-  merkle.is_map m dig -∗
-  hashchain.is_chain (digs ++ [dig]) cut link
-    (uint.nat start_ep + length links + 1)%nat -∗
-  sigpred_links_inv start_ep (links ++ [link]) (digs ++ [dig]) cut (maps ++ [m]).
-Proof.
-  iIntros (Hsub) "@ #His_map #His_link".
-  rewrite /sigpred_links_inv.
-  autorewrite with len in *.
-  iSplit; [word|].
-  iSplit.
-  { rewrite big_sepL_snoc.
-    iSplit.
-    - iApply (big_sepL_impl with "Hlinks").
-      iIntros "!> *". iIntros (?%lookup_lt_Some). iNamedSuffix 1 "0".
-      iExactEq "His_link0". rewrite /named. f_equal.
-      rewrite take_app_le; [|word].
-      f_equal. word.
-    - simpl. iExactEq "His_link". rewrite /named.
-      f_equal; [|word].
-      rewrite take_ge; [done|len]. }
-  iSplit.
-  { rewrite big_sepL2_snoc.
-    iSplit.
-    - iApply (big_sepL2_impl with "Hmaps").
-      iIntros "!> *". iIntros (?%lookup_lt_Some ?). iNamedSuffix 1 "0".
-      iExists _. iSplit.
-      + rewrite lookup_app_l; [|word].
-        iPureIntro. exact_eq Hlook_dig0. f_equal. word.
-      + done.
-    - iExists _. iSplit.
-      + rewrite lookup_app_r; [|word].
-        rewrite list_lookup_singleton_Some.
-        iPureIntro. split; [|done]. word.
-      + done. }
-  { iPureIntro. by apply list_reln_snoc. }
-Qed.
-*)
-
 End proof.
-End sigpred.
 End ktcore.
-
-(* TODO: stitch together sigs from multiple auditors,
-who each have audited overlapping epoch ranges. *)
