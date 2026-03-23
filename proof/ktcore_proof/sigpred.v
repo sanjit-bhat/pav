@@ -12,15 +12,6 @@ Import key_map.ktcore serde.ktcore.
 
 Module sigpred.
 
-Module cfg.
-Record t :=
-  mk {
-    vrf : gname;
-    digs : gname;
-    digs_info : gname;
-  }.
-End cfg.
-
 Module digs_info.
 Record t :=
   mk {
@@ -33,6 +24,15 @@ Record t :=
   }.
 End digs_info.
 
+Module cfg.
+Record t :=
+  mk {
+    vrf_pk : list w8;
+    digs : gname;
+    info : digs_info.t;
+  }.
+End cfg.
+
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context {sem : go.Semantics}.
@@ -42,7 +42,7 @@ Collection W := sem.
 (** VRF sig. *)
 
 Definition vrfP γ (vrfPk : list w8) : iProp Σ :=
-  "#Hshot" ∷ dghost_var γ.(cfg.vrf) (□) vrfPk.
+  "%Heq_vrfPk" ∷ ⌜vrfPk = γ.(cfg.vrf_pk)⌝.
 
 Definition vrfP_aux γ enc : iProp Σ :=
   ∃ vrfPk,
@@ -56,7 +56,7 @@ Lemma vrfP_evid γ vrfPk0 vrfPk1 :
   ⌜vrfPk0 = vrfPk1⌝.
 Proof.
   rewrite /vrfP. iNamedSuffix 1 "0". iNamedSuffix 1 "1".
-  by iCombine "Hshot0 Hshot1" gives %[_ ->].
+  by simplify_eq/=.
 Qed.
 
 (** link sig. *)
@@ -67,12 +67,12 @@ Definition mono_maps digs :=
   list_reln hidden_maps (⊆).
 
 Definition linkP γ (ep : w64) link : iProp Σ :=
-  ∃ digs info,
-  "%Hinv" ∷ ⌜hashchain.inv_fn link (S $ S $ uint.nat ep) = (digs, info.(digs_info.cut))⌝ ∗
+  ∃ digs,
+  "%Hinv" ∷ ⌜hashchain.inv_fn link (S $ S $ uint.nat ep) =
+    (digs, γ.(cfg.info).(digs_info.cut))⌝ ∗
   "#Hlb_digs" ∷ mono_list_lb_own γ.(cfg.digs) digs ∗
-  "#His_info" ∷ dghost_var γ.(cfg.digs_info) (□) info ∗
-  "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (info.(digs_info.start_ep) + length digs)%nat⌝ ∗
-  "%Hmono_maps" ∷ ⌜mono_maps (drop info.(digs_info.audit_offset) digs)⌝.
+  "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (γ.(cfg.info).(digs_info.start_ep) + length digs)%nat⌝ ∗
+  "%Hmono_maps" ∷ ⌜mono_maps (drop γ.(cfg.info).(digs_info.audit_offset) digs)⌝.
 
 Definition linkP_aux γ enc : iProp Σ :=
   ∃ ep link,
@@ -93,7 +93,6 @@ Lemma linkP_evid γ ep link0 link1 :
 Proof.
   rewrite /linkP. iIntros "H0 H1".
   iNamedSuffix "H0" "0". iNamedSuffix "H1" "1".
-  iCombine "His_info0 His_info1" gives %[_ ->].
   iDestruct (mono_list_lb_valid with "Hlb_digs0 Hlb_digs1") as %Hpref.
   assert (digs = digs0) as ->.
   { assert (length digs = length digs0) by word.
@@ -106,6 +105,7 @@ Qed.
 (** staged / committed keys. *)
 
 Local Definition to_plain vrf_pk dig := plain_inv_fn vrf_pk (merkle.inv_fn dig).
+(* treat [to_plain] almost like Notation. unfold with [simpl]. *)
 Arguments to_plain /.
 
 Local Definition to_pks vrf_pk uid dig := to_plain vrf_pk dig !!! uid.
