@@ -16,6 +16,12 @@
       "~/src/stdpp"
     ]
   },
+  "sandbox": {
+    "enabled": true,
+    "filesystem": {
+      "allowRead": ["~/.opam", "~/src/pav", "~/src/peren", "~/src/iris", "~/src/stdpp"]
+    }
+  },
   "enabledMcpjsonServers": [
     "rocq"
   ]
