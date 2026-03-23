@@ -401,25 +401,35 @@ Proof.
     autorewrite with len in *.
     simpl in *. lia. }
   clear Hsome Hnone Hgrow_some.
-Admitted.
 
-(*
-approach in grow_last:
-- show that to_pks old_dig = to_pks new_dig.
-- for any dig in the middle,
-get prefix (old, mid) and (mid, new).
-therefore, must be sandwiched bw equality.
-
-approach in grow_new:
-- instead of one region, there are now two regions to consider.
-before grow and after grow.
-- for <grow:
-prefix (old, i).
-use Hgrow_none to UB.
-- for ≥grow:
-prefix (grow, i) and (i, new).
-grow = new, so have sandwiched equality.
-*)
+  split. { rewrite -Heq_grow_new -Heq_old_grow. len. }
+  apply lookup_lt_Some in Hgrow_dig as ?.
+  autorewrite with len in *.
+  replace (S (_ - _)) with (length new_digs - grow_idx)%nat; [|lia].
+  rewrite /is_committed_keys in Hkeys |-*.
+  eapply Forall2_app; [done|].
+  clear Hkeys.
+  eapply Forall2_same_length_lookup.
+  split; [len|].
+  intros ? mid_dig * Hmid_dig Hrepl.
+  rewrite (lookup_app_r' digs) in Hmid_dig.
+  apply lookup_app_Some in Hrepl as [Hrepl|[? Hrepl]].
+  - apply lookup_replicate in Hrepl as [-> ?].
+    opose proof (Hgrow_none _ _ _ _) as Hnone; [done..|].
+    clear Hgrow_none.
+    eapply inv_fn_None_bound in Hnone.
+    opose proof (plain_mono_lookup vrf_pk uid Hmono Hold_dig Hmid_dig _) as Hpref_reg0; [len|].
+    f_equal. symmetry.
+    eapply prefix_length_eq; [done|].
+    simpl in *. lia.
+  - apply lookup_replicate in Hrepl as [-> ?].
+    autorewrite with len in *.
+    opose proof (plain_mono_lookup vrf_pk uid Hmono Hgrow_dig Hmid_dig _) as Hpref_reg0; [len|].
+    opose proof (plain_mono_lookup vrf_pk uid Hmono Hmid_dig Hnew_dig _) as Hpref_reg1; [len|].
+    rewrite -Heq_grow_new in Hpref_reg1.
+    opose proof (prefix_eq _ _ Hpref_reg0 Hpref_reg1) as <-.
+    by rewrite -Heq_old_grow last_snoc.
+Qed.
 
 (*
 Lemma sigpred_links_inv_grow start_ep links link digs dig cut maps m :
