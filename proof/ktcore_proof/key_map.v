@@ -221,7 +221,7 @@ Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver opt_pk :
     hidden !! map_label = Some map_val
   end.
 
-Local Definition pks_in_hidden vrf_pk hidden uid (pks : list _) :=
+Definition pks_in_hidden vrf_pk hidden uid (pks : list _) :=
   ∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver (Some pk).
 
 Local Definition in_plain vrf_pk (plain : gmap w64 (list $ list w8)) map_label map_val :=
@@ -332,7 +332,7 @@ Proof.
   naive_solver.
 Qed.
 
-Local Lemma inv_fn_out_pks {vrf_pk plain hidden} uid pks :
+Lemma inv_fn_out_pks {vrf_pk plain hidden} uid pks :
   plain_inv_fn vrf_pk hidden = plain →
   plain !! uid = Some pks →
   pks_in_hidden vrf_pk hidden uid pks.
@@ -438,7 +438,7 @@ Proof.
   by apply map_seq_approx_len.
 Qed.
 
-Local Lemma inv_fn_inp_pks {vrf_pk plain hidden} uid pks0 :
+Lemma inv_fn_inp_pks {vrf_pk plain hidden} uid pks0 :
   plain_inv_fn vrf_pk hidden = plain →
   pks_in_hidden vrf_pk hidden uid pks0 →
   length pks0 ≠ 0%nat →
@@ -588,14 +588,14 @@ Proof.
   by simplify_map_eq/=.
 Qed.
 
-Local Lemma pks_in_hidden_snoc {vrf_pk hidden uid pks} pk :
+Lemma pks_in_hidden_snoc {vrf_pk hidden uid pks pk} :
   pks_in_hidden vrf_pk hidden uid pks →
   in_hidden vrf_pk hidden uid (length pks) (Some pk) →
   pks_in_hidden vrf_pk hidden uid (pks ++ [pk]).
 Proof.
-  rewrite /pks_in_hidden. intros Hrel Hin ver ? Hlook.
-  apply lookup_app_Some in Hlook as [?|[? Hlook]].
-  - by eapply Hrel.
+  rewrite /pks_in_hidden.
+  intros Hpks Hsome * [Hlook|[? Hlook]]%lookup_app_Some.
+  - naive_solver.
   - apply list_lookup_singleton_Some in Hlook as [? ->].
     by replace ver with (length pks) by lia.
 Qed.

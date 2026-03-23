@@ -285,14 +285,14 @@ Proof.
   clear Hnone'.
 
   assert (∃ grow_idx grow_dig,
-    mono_maps new_digs →
     new_digs !! grow_idx = Some grow_dig ∧
     in_hidden vrf_pk (merkle.inv_fn grow_dig) uid next_ver (Some new_key) ∧
-    (∀ j y,
-      new_digs !! j = Some y →
-      (j < grow_idx)%nat →
-      in_hidden vrf_pk (merkle.inv_fn y) uid next_ver None))
-    as (grow_idx&grow_dig&Ht).
+    ( mono_maps new_digs →
+      ∀ j y,
+        new_digs !! j = Some y →
+        (j < grow_idx)%nat →
+        in_hidden vrf_pk (merkle.inv_fn y) uid next_ver None ))
+    as (grow_idx&grow_dig&Hgrow_dig&Hgrow_some&Hgrow_none).
   { clear -Hsome Hnew_dig'.
     destruct Hsome as (map_label&?&map_val&?).
     destruct_exis. destruct_and?.
@@ -304,10 +304,9 @@ Proof.
     { done. }
     apply list_find_Some in Hfind as (Hlook_grow&?&Hfind).
     do 2 eexists.
-    intros Hmono.
     split; try done.
     split. { rewrite /in_hidden. naive_solver. }
-    intros * Hlook_prior **.
+    intros Hmono * Hlook_prior **.
     ospecialize (Hfind _ _ _ _); [done..|].
     eremember (merkle.inv_fn y !! _) as foo.
     assert (foo = None ∨ (∃ map_val', foo = Some map_val' ∧ map_val ≠ map_val')) as Hdec.
@@ -323,10 +322,90 @@ Proof.
     { lia. }
     eapply lookup_weaken in Hmono; [|done].
     by simplify_eq/=. }
+  clear Hnew_dig'.
 
-  exists grow_idx, (length new_digs - grow_idx)%nat.
-  split.
+  exists grow_idx, (length new_digs - S grow_idx)%nat.
+  split. { apply lookup_lt_Some in Hgrow_dig. lia. }
+  eexists. do 2 (split; [done|]).
+  intros Hmono.
+  pose proof Hmono as Ht.
+  rewrite /mono_maps fmap_app in Ht.
+  apply list_reln_app in Ht as [Ht0 Ht1].
+  odestruct (Hstage _) as (Hver&Hkeys); [done|].
+  clear Hstage.
+  ospecialize (Hgrow_none _); [done|].
+  clear Ht0 Ht1.
+
+  assert (old_key = last $ to_pks vrf_pk uid old_dig) as ->.
+  { rewrite /is_committed_keys in Hkeys.
+    apply Forall2_last in Hkeys.
+    rewrite Hold_dig Hold_key in Hkeys.
+    by inv Hkeys. }
+  clear Hold_key.
+  rewrite !last_lookup in Hold_dig Hnew_dig.
+  eapply (lookup_app_l_Some _ new_digs) in Hold_dig.
+  erewrite (lookup_app_r' digs) in Hgrow_dig.
+  setoid_rewrite (lookup_app_r' digs) in Hgrow_none.
+
+  assert (to_pks vrf_pk uid old_dig ++ [new_key] = to_pks vrf_pk uid new_dig).
+  { eapply inv_fn_None_bound in Hnone.
+    opose proof (plain_mono_lookup vrf_pk uid Hmono Hold_dig Hnew_dig _)
+      as [ext_pks Hnew_pks]; [len|].
+    rewrite Hnew_pks. f_equal.
+    destruct ext_pks.
+    - exfalso.
+      list_simplifier.
+      rewrite -Hnew_pks in Hsome.
+      clear -Hsome.
+      rewrite lookup_total_alt in Hsome.
+      destruct (_ !! uid) eqn:Hlook_uid; simpl in *.
+      + opose proof (inv_fn_out_pks _ _ _ Hlook_uid) as Hpks; [done|].
+        opose proof (pks_in_hidden_snoc Hpks Hsome) as Hpks'.
+        opose proof (inv_fn_inp_pks _ _ _ Hpks' _) as (?&?&Hpref); [done|..].
+        { len. }
+        list_simplifier.
+        by eapply prefix_snoc_not.
+      + opose proof (inv_fn_inp_pks _ [new_key] _ _ _).
+        2: { by intros ?* [-> ->]%list_lookup_singleton_Some. }
+        1-2: done.
+        destruct_exis. destruct_and?.
+        simplify_eq/=.
+    - destruct ext_pks.
+      2: {
+        exfalso.
+        apply (f_equal length) in Hnew_pks.
+        autorewrite with len in *.
+        simpl in *. lia. }
+      f_equal.
+      apply (f_equal (.!! next_ver)) in Hnew_pks.
+      rewrite -Hver lookup_snoc Hver in Hnew_pks.
+      rewrite /= lookup_total_alt in Hnew_pks.
+      destruct (_ !! uid) eqn:Hlook_uid; simpl in *; try done.
+      opose proof (inv_fn_out_lookup _ _ _ Hlook_uid Hnew_pks) as Hsome'; [done|].
+      opose proof (in_hidden_det Hsome Hsome').
+      by simplify_eq/=. }
+
+  assert (to_pks vrf_pk uid grow_dig = to_pks vrf_pk uid new_dig).
+  { admit. }
 Admitted.
+
+(*
+approach in grow_last:
+- show that to_pks old_dig = to_pks new_dig.
+- for any dig in the middle,
+get prefix (old, mid) and (mid, new).
+therefore, must be sandwiched bw equality.
+
+approach in grow_new:
+- instead of one region, there are now two regions to consider.
+before grow and after grow.
+- for <grow:
+prefix (old, i).
+use Hgrow_none to UB.
+- for ≥grow:
+prefix (grow, i) and (i, new).
+grow = new, so have sandwiched equality.
+*)
 
 (*
 Lemma sigpred_links_inv_grow start_ep links link digs dig cut maps m :
