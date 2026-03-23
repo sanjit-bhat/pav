@@ -413,17 +413,19 @@ Lemma wp_SigPrivateKey_Sign ptr_sk pk P sl_msg msg d0 :
   }}}.
 Proof. Admitted.
 
-Lemma wp_SigPublicKey_Verify (sl_pk : cryptoffi.SigPublicKey.t) pk
+Lemma wp_SigPublicKey_Verify ptr_pk (sl_pk : cryptoffi.SigPublicKey.t) pk
     sl_msg msg sl_sig sig d0 d1 d2 :
   {{{
     is_pkg_init cryptoffi ∗
+    "Hptr_pk" ∷ ptr_pk ↦ sl_pk ∗
     "Hsl_sig_pk" ∷ sl_pk ↦*{d0} pk ∗
     "Hsl_msg" ∷ sl_msg ↦*{d1} msg ∗
     "Hsl_sig" ∷ sl_sig ↦*{d2} sig
   }}}
-  sl_pk @! cryptoffi.SigPublicKey @! "Verify" #sl_msg #sl_sig
+  ptr_pk @! (go.PointerType cryptoffi.SigPublicKey) @! "Verify" #sl_msg #sl_sig
   {{{
     (err : bool), RET #err;
+    "Hptr_pk" ∷ ptr_pk ↦ sl_pk ∗
     "Hsl_sig_pk" ∷ sl_pk ↦*{d0} pk ∗
     "Hsl_msg" ∷ sl_msg ↦*{d1} msg ∗
     "Hsl_sig" ∷ sl_sig ↦*{d2} sig ∗
