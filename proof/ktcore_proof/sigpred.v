@@ -347,20 +347,24 @@ Proof.
   erewrite (lookup_app_r' digs) in Hgrow_dig.
   setoid_rewrite (lookup_app_r' digs) in Hgrow_none.
 
-  assert (to_pks vrf_pk uid old_dig ++ [new_key] = to_pks vrf_pk uid new_dig).
+  assert (to_pks vrf_pk uid old_dig ++ [new_key] = to_pks vrf_pk uid grow_dig)
+    as Heq_old_grow.
   { eapply inv_fn_None_bound in Hnone.
-    opose proof (plain_mono_lookup vrf_pk uid Hmono Hold_dig Hnew_dig _)
-      as [ext_pks Hnew_pks]; [len|].
-    rewrite Hnew_pks. f_equal.
+    opose proof (plain_mono_lookup vrf_pk uid Hmono Hold_dig Hgrow_dig _)
+      as [ext_pks Hgrow_pks]; [len|].
+    opose proof (plain_mono_lookup vrf_pk uid Hmono Hgrow_dig Hnew_dig _)
+      as ?%prefix_length.
+    { apply lookup_lt_Some in Hgrow_dig. lia. }
+    rewrite Hgrow_pks. f_equal.
     destruct ext_pks.
     - exfalso.
       list_simplifier.
-      rewrite -Hnew_pks in Hsome.
-      clear -Hsome.
-      rewrite lookup_total_alt in Hsome.
+      rewrite -Hgrow_pks in Hgrow_some.
+      clear -Hgrow_some.
+      rewrite lookup_total_alt in Hgrow_some.
       destruct (_ !! uid) eqn:Hlook_uid; simpl in *.
       + opose proof (inv_fn_out_pks _ _ _ Hlook_uid) as Hpks; [done|].
-        opose proof (pks_in_hidden_snoc Hpks Hsome) as Hpks'.
+        opose proof (pks_in_hidden_snoc Hpks Hgrow_some) as Hpks'.
         opose proof (inv_fn_inp_pks _ _ _ Hpks' _) as (?&?&Hpref); [done|..].
         { len. }
         list_simplifier.
@@ -373,20 +377,30 @@ Proof.
     - destruct ext_pks.
       2: {
         exfalso.
-        apply (f_equal length) in Hnew_pks.
+        apply (f_equal length) in Hgrow_pks.
         autorewrite with len in *.
         simpl in *. lia. }
       f_equal.
-      apply (f_equal (.!! next_ver)) in Hnew_pks.
-      rewrite -Hver lookup_snoc Hver in Hnew_pks.
-      rewrite /= lookup_total_alt in Hnew_pks.
+      apply (f_equal (.!! next_ver)) in Hgrow_pks.
+      rewrite -Hver lookup_snoc Hver in Hgrow_pks.
+      rewrite /= lookup_total_alt in Hgrow_pks.
       destruct (_ !! uid) eqn:Hlook_uid; simpl in *; try done.
-      opose proof (inv_fn_out_lookup _ _ _ Hlook_uid Hnew_pks) as Hsome'; [done|].
-      opose proof (in_hidden_det Hsome Hsome').
+      opose proof (inv_fn_out_lookup _ _ _ Hlook_uid Hgrow_pks) as Hsome'; [done|].
+      opose proof (in_hidden_det Hgrow_some Hsome').
       by simplify_eq/=. }
 
-  assert (to_pks vrf_pk uid grow_dig = to_pks vrf_pk uid new_dig).
-  { admit. }
+  assert (to_pks vrf_pk uid grow_dig = to_pks vrf_pk uid new_dig)
+    as Heq_grow_new.
+  { eapply inv_fn_None_bound in Hnone.
+    opose proof (plain_mono_lookup vrf_pk uid Hmono Hgrow_dig Hnew_dig _)
+      as [ext_pks Hnew_pks].
+    { apply lookup_lt_Some in Hgrow_dig. lia. }
+    destruct ext_pks; [by list_simplifier|].
+    apply (f_equal length) in Hnew_pks.
+    rewrite -Heq_old_grow in Hnew_pks.
+    autorewrite with len in *.
+    simpl in *. lia. }
+  clear Hsome Hnone Hgrow_some.
 Admitted.
 
 (*
