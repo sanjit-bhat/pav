@@ -99,6 +99,7 @@ Module SigPublicKey.
 Section def.
 Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
 Definition t : Type := ed25519.PublicKey.t.
+#[global] Arguments t : clear implicits.
 End def.
 End SigPublicKey.
 

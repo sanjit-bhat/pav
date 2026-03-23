@@ -13,14 +13,14 @@ depends: [
 ]
 
 pin-depends: [
-  ["perennial.dev"             "git+https://github.com/mit-pdos/perennial#b96ab47d46a10ebbc08660adc2c4a89d31732259"]
+  ["perennial.dev"             "git+https://github.com/mit-pdos/perennial#3d84360fc44d0b0aa7252c2cb0dce3df186a2805"]
 
   ## begin indirect
-  ["coq-coqutil.dev"           "git+https://github.com/mit-plv/coqutil#6644c132300a4da5fb1a4ce5c3860f60c135b2fa"]
+  ["coq-coqutil.dev"           "git+https://github.com/mit-plv/coqutil#ef21519589dc5397cfad5466619284fd5d2cc5e0"]
   ["coq-record-update.dev"     "git+https://github.com/tchajed/coq-record-update#7b2645210331c3ec4ed75fa5ad0840a723f25151"]
-  ["iris-named-props.dev"      "git+https://github.com/tchajed/iris-named-props#c388714a93b1c043ed42a3f446280abd5113d26f"]
-  ["rocq-iris.dev"             "git+https://gitlab.mpi-sws.org/iris/iris#b641d1560959d4f3052d84daaac4047c99416c4c"]
-  ["rocq-stdpp.dev"            "git+https://gitlab.mpi-sws.org/iris/stdpp#0989202c46f352854feb5f96b6c3a1f4f91f886a"]
+  ["iris-named-props.dev"      "git+https://github.com/tchajed/iris-named-props#ca663d2709888a789a03edc861b7bde86ddd56e5"]
+  ["rocq-iris.dev"             "git+https://gitlab.mpi-sws.org/iris/iris#55a5f09b0f5e983c434d90ee6f0fd3e1324755d1"]
+  ["rocq-stdpp.dev"            "git+https://gitlab.mpi-sws.org/iris/stdpp#49365266f83529860a416c3152bda47989496f1b"]
   ## end
 ]
 

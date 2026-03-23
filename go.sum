@@ -13,6 +13,8 @@ github.com/goose-lang/goose v0.10.0 h1:MVkfTTwhCHA5GQbwX6lzBLdLyocCpNo6NfP1PYEZu
 github.com/goose-lang/goose v0.10.0/go.mod h1:V/M8PDOPlalluTiOTEeL2n5R6/tmFb741/2El2pZV14=
 github.com/goose-lang/goose v0.10.1-0.20260224162648-279bc2d6db51 h1:E3UYTNHZeD+heili5rUEaFripNtrDl9xBkRhE9yrU+k=
 github.com/goose-lang/goose v0.10.1-0.20260224162648-279bc2d6db51/go.mod h1:jnYONcLhI8GMFgvX4OgAKa8HWa2+raZOHfOIX5rA5n8=
+github.com/goose-lang/goose v0.10.1-0.20260317012625-3a8df2a923f8 h1:5GcPx228Mf5qvLEkRpToAbjiEL89vZxe1ua0RidLh/8=
+github.com/goose-lang/goose v0.10.1-0.20260317012625-3a8df2a923f8/go.mod h1:gETfiUYy+TE8yvMK4SKMMWDhuBTUpt828vY8n9l81VA=
 github.com/goose-lang/goose/testdata/examples v0.0.0-20251125172247-d9c56ef4f4e1 h1:8cbEV92XC7glqmcB1Vbe6XCZ9FJpDYBFRTXjWQPLbOQ=
 github.com/goose-lang/goose/testdata/examples v0.0.0-20251125172247-d9c56ef4f4e1/go.mod h1:UcQmN/A/zKdJsQuIKriLL+zDFoxhHVIimfC+szdqQo0=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=

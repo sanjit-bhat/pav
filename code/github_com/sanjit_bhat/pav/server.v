@@ -1297,37 +1297,41 @@ Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     (for: (λ: <>, #true); (λ: <>, #()) := λ: <>,
       let: "$ch0" := (![go.ChannelType go.recvonly time.Time] (StructFieldRef time.Timer "C"%go (![go.PointerType time.Timer] "timer"))) in
       let: "$ch1" := (![go.ChannelType go.sendrecv (go.PointerType work)] (StructFieldRef Server "workQ"%go (![go.PointerType Server] "s"))) in
-      SelectStmt (SelectStmtClauses None [(CommClause (RecvCase time.Time "$ch0") (return: (![go.SliceType (go.PointerType work)] "work"))); (CommClause (RecvCase (go.PointerType work) "$ch1") (let: "ok" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-      let: "job" := (GoAlloc (go.PointerType work) (GoZeroVal (go.PointerType work) #())) in
-      let: ("$ret0", "$ret1") := "$recvVal" in
-      let: "$r0" := "$ret0" in
-      let: "$r1" := "$ret1" in
-      do:  ("job" <-[go.PointerType work] "$r0");;;
-      do:  ("ok" <-[go.bool] "$r1");;;
-      do:  (let: "$a0" := (![go.bool] "ok") in
-      (FuncResolve std.Assert [] #()) "$a0");;;
-      let: "nextVer" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-      let: "$r0" := (Convert go.int go.uint64 (let: "$a0" := (map.lookup1 go.uint64 (go.SliceType (go.SliceType go.byte)) (![go.MapType go.uint64 (go.SliceType (go.SliceType go.byte))] (StructFieldRef keyStore "plain"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s"))))) (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job")))) in
-      (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")) in
-      do:  ("nextVer" <-[go.uint64] "$r0");;;
-      (if: Convert go.untyped_bool go.bool ((![go.uint64] (StructFieldRef work "ver"%go (![go.PointerType work] "job"))) ≠⟨go.uint64⟩ (![go.uint64] "nextVer"))
-      then continue: #()
-      else do:  #());;;
-      let: ("$ret0", "$ret1") := (map.lookup2 go.uint64 go.bool (![go.MapType go.uint64 go.bool] "uids") (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job")))) in
-      let: "$r0" := "$ret0" in
-      let: "$r1" := "$ret1" in
-      do:  "$r0";;;
-      do:  ("ok" <-[go.bool] "$r1");;;
-      (if: ![go.bool] "ok"
-      then continue: #()
-      else do:  #());;;
-      let: "$r0" := #false in
-      do:  (map.insert go.uint64 (![go.MapType go.uint64 go.bool] "uids") (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job"))) "$r0");;;
-      let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType work)] "work") in
-      let: "$a1" := ((let: "$sl0" := (![go.PointerType work] "job") in
-      CompositeLiteral (go.SliceType (go.PointerType work)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType work) "$sl0")]))) in
-      (FuncResolve go.append [go.SliceType (go.PointerType work)] #()) "$a0" "$a1") in
-      do:  ("work" <-[go.SliceType (go.PointerType work)] "$r0")))]))).
+      SelectStmt (SelectStmtClauses None [(CommClause (RecvCase time.Time "$ch0") (λ: "$recvVal",
+        return: (![go.SliceType (go.PointerType work)] "work")
+        )); (CommClause (RecvCase (go.PointerType work) "$ch1") (λ: "$recvVal",
+        let: "ok" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+        let: "job" := (GoAlloc (go.PointerType work) (GoZeroVal (go.PointerType work) #())) in
+        let: ("$ret0", "$ret1") := "$recvVal" in
+        let: "$r0" := "$ret0" in
+        let: "$r1" := "$ret1" in
+        do:  ("job" <-[go.PointerType work] "$r0");;;
+        do:  ("ok" <-[go.bool] "$r1");;;
+        do:  (let: "$a0" := (![go.bool] "ok") in
+        (FuncResolve std.Assert [] #()) "$a0");;;
+        let: "nextVer" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+        let: "$r0" := (Convert go.int go.uint64 (let: "$a0" := (map.lookup1 go.uint64 (go.SliceType (go.SliceType go.byte)) (![go.MapType go.uint64 (go.SliceType (go.SliceType go.byte))] (StructFieldRef keyStore "plain"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s"))))) (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job")))) in
+        (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")) in
+        do:  ("nextVer" <-[go.uint64] "$r0");;;
+        (if: Convert go.untyped_bool go.bool ((![go.uint64] (StructFieldRef work "ver"%go (![go.PointerType work] "job"))) ≠⟨go.uint64⟩ (![go.uint64] "nextVer"))
+        then continue: #()
+        else do:  #());;;
+        let: ("$ret0", "$ret1") := (map.lookup2 go.uint64 go.bool (![go.MapType go.uint64 go.bool] "uids") (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job")))) in
+        let: "$r0" := "$ret0" in
+        let: "$r1" := "$ret1" in
+        do:  "$r0";;;
+        do:  ("ok" <-[go.bool] "$r1");;;
+        (if: ![go.bool] "ok"
+        then continue: #()
+        else do:  #());;;
+        let: "$r0" := #false in
+        do:  (map.insert go.uint64 (![go.MapType go.uint64 go.bool] "uids") (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job"))) "$r0");;;
+        let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType work)] "work") in
+        let: "$a1" := ((let: "$sl0" := (![go.PointerType work] "job") in
+        CompositeLiteral (go.SliceType (go.PointerType work)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType work) "$sl0")]))) in
+        (FuncResolve go.append [go.SliceType (go.PointerType work)] #()) "$a0" "$a1") in
+        do:  ("work" <-[go.SliceType (go.PointerType work)] "$r0")
+        ))]))).
 
 (* go: server.go:195:18 *)
 Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
@@ -1530,7 +1534,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End StartChain.
 
 Definition StartChain'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1572,7 +1575,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End StartVrf.
 
 Definition StartVrf'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1608,7 +1610,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End StartReply.
 
 Definition StartReply'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1645,7 +1646,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End PutArg.
 
 Definition PutArg'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1685,7 +1685,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End HistoryArg.
 
 Definition HistoryArg'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1727,7 +1726,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End HistoryReply.
 
 Definition HistoryReply'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1771,7 +1769,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End AuditArg.
 
 Definition AuditArg'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1804,7 +1801,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End AuditReply.
 
 Definition AuditReply'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1843,7 +1839,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End Server.
 
 Definition Server'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1898,7 +1893,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End secrets.
 
 Definition secrets'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1937,7 +1931,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End keyStore.
 
 Definition keyStore'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -1974,7 +1967,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End history.
 
 Definition history'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
@@ -2016,7 +2008,6 @@ mk {
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-
 End work.
 
 Definition work'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
