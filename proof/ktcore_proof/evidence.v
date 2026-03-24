@@ -108,9 +108,9 @@ Definition wish_EvidVrf e pk : iProp Σ :=
   "#Hwish1" ∷ wish_VrfSig pk e.(EvidVrf.VrfPk1) e.(EvidVrf.Sig1) ∗
   "%Heq" ∷ ⌜e.(EvidVrf.VrfPk0) ≠ e.(EvidVrf.VrfPk1)⌝.
 
-Lemma wish_EvidVrf_sig_pred e pk γ :
+Lemma wish_EvidVrf_sigpred e pk γ :
   wish_EvidVrf e pk -∗
-  ¬ cryptoffi.is_sig_pk pk (sigpred γ).
+  ¬ cryptoffi.is_sig_pk pk (sigpred.P γ).
 Proof.
   iIntros "@ #His_pk".
   iNamedSuffix "Hwish0" "0".
@@ -137,10 +137,7 @@ Proof.
     list_simplifier.
     intuition.
     by f_equal. }
-  rewrite /sigpred_vrf.
-  iNamedSuffix "Hsigpred0" "0".
-  iNamedSuffix "Hsigpred1" "1".
-  iCombine "Hshot0 Hshot1" gives %[_ <-].
+  iDestruct (sigpred.vrfP_evid with "Hsigpred0 Hsigpred1") as %->.
   simplify_eq/=.
 Qed.
 
@@ -187,9 +184,9 @@ Definition wish_EvidLink e pk : iProp Σ :=
   "#Hwish1" ∷ wish_LinkSig pk e.(EvidLink.Epoch) e.(EvidLink.Link1) e.(EvidLink.Sig1) ∗
   "%Heq" ∷ ⌜e.(EvidLink.Link0) ≠ e.(EvidLink.Link1)⌝.
 
-Lemma wish_EvidLink_sig_pred e pk γ :
+Lemma wish_EvidLink_sigpred e pk γ :
   wish_EvidLink e pk -∗
-  ¬ cryptoffi.is_sig_pk pk (sigpred γ).
+  ¬ cryptoffi.is_sig_pk pk (sigpred.P γ).
 Proof.
   iIntros "@ #His_pk".
   destruct e. simpl in *.
@@ -218,14 +215,8 @@ Proof.
     intuition.
     by f_equal. }
   simplify_eq/=.
-  rewrite /sigpred_links.
-  iNamedSuffix "Hsigpred0" "0".
-  iNamedSuffix "Hsigpred1" "1".
-  iCombine "Hshot0 Hshot1" gives %[_ <-].
-  iDestruct (mono_list_idx_own_get with "Hlb0") as "Hidx0"; [done|].
-  iDestruct (mono_list_idx_own_get with "Hlb1") as "Hidx1"; [done|].
-  iDestruct (mono_list_idx_agree with "Hidx0 Hidx1") as %->.
-  done.
+  iDestruct (sigpred.linkP_evid with "Hsigpred0 Hsigpred1") as %->.
+  simplify_eq/=.
 Qed.
 
 Lemma wp_EvidLink_check ptr_e e sl_pk pk :
@@ -273,18 +264,18 @@ Definition wish_Evid e pk : iProp Σ :=
   | _, _ => False
   end.
 
-Lemma wish_Evid_sig_pred e pk γ :
+Lemma wish_Evid_sigpred e pk γ :
   wish_Evid e pk -∗
-  ¬ cryptoffi.is_sig_pk pk (sigpred γ).
+  ¬ cryptoffi.is_sig_pk pk (sigpred.P γ).
 Proof.
   iIntros "#Hwish #His_pk".
   destruct e.
   destruct Vrf as [Vrf|], Link as [Link|]; try done.
   - iNamed "Hwish".
-    iApply (wish_EvidVrf_sig_pred Vrf); [|done].
+    iApply (wish_EvidVrf_sigpred Vrf); [|done].
     by iFrame "#".
   - iNamed "Hwish".
-    iApply (wish_EvidLink_sig_pred Link); [|done].
+    iApply (wish_EvidLink_sigpred Link); [|done].
     by iFrame "#".
 Qed.
 
