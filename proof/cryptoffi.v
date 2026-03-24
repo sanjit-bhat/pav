@@ -169,6 +169,8 @@ Proof. Admitted.
 (* is_vrf_proof helps model correctness.
 i.e., a caller gets this from Prove / Verify,
 and uses it to prove that Verify should not return an error. *)
+(* NOTE: could make [is_vrf_proof] a pure func.
+after all, it models a real-world determ procedure. *)
 Definition is_vrf_proof (pk data proof : list w8) : iProp Σ.
 Proof. Admitted.
 
