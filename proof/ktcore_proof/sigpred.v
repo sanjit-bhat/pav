@@ -6,22 +6,8 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   key_map serde.
 
-Module ktcore.
-Import key_map.ktcore serde.ktcore.
-
-Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics}.
-Collection W := sem.
-#[local] Set Default Proof Using "W".
-
-Definition mono_maps digs :=
-  let hidden_maps := merkle.inv_fn <$> digs in
-  (* ⊆ on hidden maps is stronger than on plain maps. *)
-  list_reln hidden_maps (⊆).
-End proof.
-
 Module sigpred.
+Import key_map.ktcore serde.ktcore.
 
 Module digs_info.
 Record t :=
@@ -49,6 +35,11 @@ Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
+
+Definition mono_maps digs :=
+  let hidden_maps := merkle.inv_fn <$> digs in
+  (* ⊆ on hidden maps is stronger than on plain maps. *)
+  list_reln hidden_maps (⊆).
 
 (** VRF sig. *)
 
@@ -111,6 +102,9 @@ Qed.
 End proof.
 End sigpred.
 
+Module ktcore.
+Import key_map.ktcore serde.ktcore.
+
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context {sem : go.Semantics}.
@@ -137,22 +131,24 @@ Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   (* [next_ver] only has meaning with some digs. *)
   last digs = Some last_dig ∧
   in_hidden vrf_pk (merkle.inv_fn last_dig) uid next_ver None ∧
-  ( mono_maps digs →
+  ( sigpred.mono_maps digs →
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
     is_committed_keys vrf_pk digs uid keys ).
 
 Lemma commit_staged vrf_pk digs uid keys next_ver :
   is_staged_keys vrf_pk digs uid keys next_ver →
-  mono_maps digs →
+  sigpred.mono_maps digs →
   is_committed_keys vrf_pk digs uid keys.
 Proof. rewrite /is_staged_keys. naive_solver. Qed.
 
 (* TODO: maybe could be iff. *)
+(* TODO: upstream. *)
 Lemma list_reln_app {A} R (l0 l1 : list A) :
   list_reln (l0 ++ l1) R →
   list_reln l0 R ∧ list_reln l1 R.
 Proof. Admitted.
 
+(* TODO: upstream. *)
 Lemma list_reln_box {A B} R0 R1 (f : A → B) (l0 : list A) :
   list_reln l0 R0 →
   (∀ x0 x1, R0 x0 x1 → R1 (f x0) (f x1)) →
@@ -160,13 +156,13 @@ Lemma list_reln_box {A B} R0 R1 (f : A → B) (l0 : list A) :
 Proof. Admitted.
 
 Lemma plain_mono_lookup vrf_pk uid {digs i j xi xj} :
-  mono_maps digs →
+  sigpred.mono_maps digs →
   digs !! i = Some xi →
   digs !! j = Some xj →
   (i ≤ j)%nat →
   to_pks vrf_pk uid xi `prefix_of` to_pks vrf_pk uid xj.
 Proof.
-  rewrite /mono_maps. intros Hmono Hlook0 Hlook1 **.
+  rewrite /sigpred.mono_maps. intros Hmono Hlook0 Hlook1 **.
   apply (list_reln_box _ keys_sub (plain_inv_fn vrf_pk)) in Hmono.
   2: { eapply plain_inv_mono. }
   opose proof (list_reln_trans_refl _ _ Hmono _ _ _ _ _ _ _) as Hsub.
@@ -233,7 +229,7 @@ Proof.
   eexists. repeat (split; [done|]).
   intros Hmono.
   odestruct (Hstage _) as (Hver&Hkeys).
-  { unfold mono_maps in *.
+  { unfold sigpred.mono_maps in *.
     rewrite fmap_app in Hmono.
     apply list_reln_app in Hmono.
     naive_solver. }
@@ -302,7 +298,7 @@ Proof.
   assert (∃ grow_idx grow_dig,
     new_digs !! grow_idx = Some grow_dig ∧
     in_hidden vrf_pk (merkle.inv_fn grow_dig) uid next_ver (Some new_key) ∧
-    ( mono_maps new_digs →
+    ( sigpred.mono_maps new_digs →
       ∀ j y,
         new_digs !! j = Some y →
         (j < grow_idx)%nat →
@@ -344,7 +340,7 @@ Proof.
   eexists. do 2 (split; [done|]).
   intros Hmono.
   pose proof Hmono as Ht.
-  rewrite /mono_maps fmap_app in Ht.
+  rewrite /sigpred.mono_maps fmap_app in Ht.
   apply list_reln_app in Ht as [Ht0 Ht1].
   odestruct (Hstage _) as (Hver&Hkeys); [done|].
   clear Hstage.

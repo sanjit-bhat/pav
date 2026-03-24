@@ -20,16 +20,10 @@ Module cfg.
 Record t :=
   mk {
     sig_pk : list w8;
-    vrf_pk : list w8;
     pendγ : gname;
     (* map from uid to gname. *)
     uidγ : gmap w64 gname;
-    histγ : gname;
-    (* TODO: for now, have sigpred GS be diff from serv.hist GS.
-    serv.hist GS talks about keys, whereas auditor (sharing same sigpred),
-    doesn't have the plaintext keys.
-    could bridge this gap by inverting the VRF. *)
-    sigpredγ : ktcore.sigpred_cfg.t;
+    sigγ : sigpred.cfg.t;
   }.
 End cfg.
 
@@ -39,12 +33,10 @@ Record t :=
     (* pending map of all keys.
     client gives server permission to add to this.
     all writable post-conds only reference pending. *)
-    pending : keys_ty;
-    (* history of digs and keys.
-    server can update this by adding dig that corresponds to curr pending.
+    pending : ktcore.keys_ty;
+    (* server can update this by adding dig that corresponds to curr pending.
     all read-only post-conds only reference hist. *)
-    (* TODO: don't need to link dig to keys because... *)
-    hist : list (list w8 * keys_ty);
+    digs : list (list w8);
   }.
 End state.
 
@@ -57,7 +49,7 @@ Collection W := sem + package_sem.
 Definition own_aux γ obj q : iProp Σ :=
   "Hown_pend" ∷ dghost_var γ.(cfg.pendγ) (DfracOwn q) obj.(state.pending) ∗
   (* client remembers lb's of this. *)
-  "Hown_hist" ∷ mono_list_auth_own γ.(cfg.histγ) q obj.(state.hist).
+  "Hown_hist" ∷ mono_list_auth_own γ.(cfg.sigγ).(sigpred.cfg.digs) q obj.(state.digs).
 
 (* other 1/2 in server lock inv. *)
 Definition own γ obj : iProp Σ := own_aux γ obj (1/2).
@@ -87,7 +79,7 @@ Definition is_inv γ := inv nroot (∃ obj, inv_aux γ obj).
 
 (** helpers for inv. *)
 
-Lemma hist_pks_prefix uid γ (i j : nat) (x y : list w8 * keys_ty) :
+Lemma hist_pks_prefix uid γ (i j : nat) (x y : list w8 * ktcore.keys_ty) :
   i ≤ j →
   is_inv γ -∗
   mono_list_idx_own γ.(cfg.histγ) i x -∗
@@ -202,7 +194,7 @@ cli_call takes in curried Q_read, since it's used in both pre and post.
 at currying time, not under good flag, so client doesn't have prev_lb.
 but it does have have prev_idx!
 that's an arg to, e.g., CallHistory, independent of good-ness. *)
-Lemma op_read_idx γ prev_idx (a : list w8 * keys_ty) :
+Lemma op_read_idx γ prev_idx (a : list w8 * ktcore.keys_ty) :
   is_inv γ -∗
   mono_list_idx_own γ.(cfg.histγ) prev_idx a -∗
   (|={⊤,∅}=>
@@ -224,7 +216,7 @@ Proof.
   word.
 Qed.
 
-Definition pure_put uid (ver : w64) pk (pend : keys_ty) :=
+Definition pure_put uid (ver : w64) pk (pend : ktcore.keys_ty) :=
   let pks := pend !!! uid in
   (* drop put if not right version.
   this enforces a "linear" version history. *)
@@ -346,7 +338,7 @@ End secrets.
 
 Module keyStore.
 Record t := mk' {
-  plain : keys_ty;
+  plain : ktcore.keys_ty;
 }.
 
 Section proof.
@@ -355,7 +347,7 @@ Context {sem : go.Semantics} {package_sem : server.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition own_plain ptr_plain (plain : keys_ty) q : iProp Σ :=
+Definition own_plain ptr_plain (plain : ktcore.keys_ty) q : iProp Σ :=
   ∃ ptr0_plain,
   "Hptr_plain" ∷ map.own_map ptr_plain (DfracOwn q) ptr0_plain ∗
   "Hptr0_plain" ∷ ([∗ map] uid ↦ sl_pks;pks ∈ ptr0_plain;plain,
