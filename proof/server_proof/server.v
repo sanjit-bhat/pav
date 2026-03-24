@@ -34,11 +34,15 @@ Record t :=
     client gives server permission to add to this.
     all writable post-conds only reference pending. *)
     pending : ktcore.keys_ty;
-    (* server can update this by adding dig that corresponds to curr pending.
+    (* hist of digs.
+    server can update this by adding dig that corresponds to curr pending.
     all read-only post-conds only reference hist. *)
-    digs : list (list w8);
+    hist : list (list w8);
   }.
 End state.
+
+Notation get_vrf_pk γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
+Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
@@ -49,7 +53,7 @@ Collection W := sem + package_sem.
 Definition own_aux γ obj q : iProp Σ :=
   "Hown_pend" ∷ dghost_var γ.(cfg.pendγ) (DfracOwn q) obj.(state.pending) ∗
   (* client remembers lb's of this. *)
-  "Hown_hist" ∷ mono_list_auth_own γ.(cfg.sigγ).(sigpred.cfg.digs) q obj.(state.digs).
+  "Hown_hist" ∷ mono_list_auth_own (digsγ γ) q obj.(state.hist).
 
 (* other 1/2 in server lock inv. *)
 Definition own γ obj : iProp Σ := own_aux γ obj (1/2).
@@ -63,10 +67,10 @@ Definition valid γ obj : iProp Σ :=
       (* client owns mlist_auth for their uid.
       for adversarial uid, auth in inv. *)
       mono_list_idx_own uidγ i ((W64 ver), pk))) ∗
-  "%Hsub_pend" ∷ ⌜∀ lastKeys,
-    last obj.(state.hist).*2 = Some lastKeys →
-    keys_sub lastKeys obj.(state.pending)⌝ ∗
-  "%Hsub_hist" ∷ ⌜list_reln obj.(state.hist).*2 keys_sub⌝.
+  "%Hsub_pend" ∷ ⌜∀ last_dig,
+    last obj.(state.hist) = Some last_dig →
+    ktcore.keys_sub (ktcore.to_plain (get_vrf_pk γ) last_dig) obj.(state.pending)⌝ ∗
+  "%Hsub_hist" ∷ ⌜sigpred.mono_maps obj.(state.hist)⌝.
 
 Definition inv_aux γ obj : iProp Σ :=
   "Hown_serv" ∷ own γ obj ∗
@@ -79,12 +83,12 @@ Definition is_inv γ := inv nroot (∃ obj, inv_aux γ obj).
 
 (** helpers for inv. *)
 
-Lemma hist_pks_prefix uid γ (i j : nat) (x y : list w8 * ktcore.keys_ty) :
-  i ≤ j →
+Lemma hist_pks_prefix uid γ (i j : nat) (x y : list w8) :
+  (i ≤ j)%nat →
   is_inv γ -∗
-  mono_list_idx_own γ.(cfg.histγ) i x -∗
-  mono_list_idx_own γ.(cfg.histγ) j y ={⊤}=∗
-  ⌜x.2 !!! uid `prefix_of` y.2 !!! uid⌝.
+  mono_list_idx_own (digsγ γ) i x -∗
+  mono_list_idx_own (digsγ γ) j y ={⊤}=∗
+  ⌜ktcore.to_pks (get_vrf_pk γ) uid x `prefix_of` ktcore.to_pks (get_vrf_pk γ) uid y⌝.
 Proof.
   iIntros (?) "#Hinv #Hidx0 #Hidx1".
   rewrite /is_inv.
@@ -95,26 +99,14 @@ Proof.
   iMod ("Hclose" with "[-]") as "_"; [iFrame "∗#"|].
   iNamed "His_serv".
   iIntros "!> !%".
-
-  apply (list_lookup_fmap_Some_2 snd) in Hlook0, Hlook1.
-  destruct x as [? keys0], y as [? keys1]. simpl in *.
-  opose proof (list_reln_trans_refl _ _ Hsub_hist
-    _ _ _ _ Hlook0 Hlook1 ltac:(lia)) as Hsub.
-  rewrite /keys_sub /map_included /map_relation in Hsub.
-  specialize (Hsub uid).
-  rewrite !lookup_total_alt.
-  destruct (keys0 !! uid) eqn:Heq0;
-    destruct (keys1 !! uid) eqn:Heq1;
-    rewrite Heq0 Heq1 in Hsub |-*;
-    simpl in *; try done.
-  apply prefix_nil.
+  by eapply ktcore.plain_mono_lookup.
 Qed.
 
 Lemma hist_to_put_perms γ i x :
   is_inv γ -∗
-  mono_list_idx_own γ.(cfg.histγ) i x ={⊤}=∗
+  mono_list_idx_own (digsγ γ) i x ={⊤}=∗
   ∀ uid pks,
-    ⌜x.2 !! uid = Some pks⌝ -∗
+    ⌜ktcore.to_plain (get_vrf_pk γ) x !! uid = Some pks⌝ -∗
     (* if empty pks, might not have uidγ. *)
     ⌜length pks > 0%nat⌝ -∗
     ∃ uidγ,
@@ -133,37 +125,38 @@ Proof.
   iModIntro.
 
   iIntros "* %Hlook_uid %Hlen_pks".
-  apply (list_lookup_fmap_Some_2 snd) in Hlook_hist.
-  destruct x as [? keys]. simpl in *.
   apply lookup_lt_Some in Hlook_hist as ?.
-  list_elem (obj.(state.hist).*2) (pred (length obj.(state.hist).*2)) as lastKeys; [word|].
-  opose proof (list_reln_trans_refl _ _ Hsub_hist
-    _ _ _ _ Hlook_hist HlastKeys_lookup ltac:(lia)) as Hsub0.
-  rewrite -last_lookup in HlastKeys_lookup.
-  apply Hsub_pend in HlastKeys_lookup.
-  assert (keys_sub keys obj.(state.pending)) as Hsub.
-  { by trans lastKeys. }
-  rewrite /keys_sub /map_included /map_relation in Hsub.
-  specialize (Hsub uid).
+  list_elem (obj.(state.hist)) (pred (length obj.(state.hist))) as last_dig.
+  opose proof (ktcore.plain_mono_lookup (get_vrf_pk γ) uid _
+    Hlook_hist Hlast_dig_lookup _) as Hsub0; [done|lia|].
+  rewrite -last_lookup in Hlast_dig_lookup.
+  apply Hsub_pend in Hlast_dig_lookup as Hsub1.
+  specialize (Hsub1 uid).
+  rewrite !lookup_total_alt in Hsub0.
+  rewrite Hlook_uid /= in Hsub0.
+  destruct (ktcore.to_plain _ last_dig !! uid) eqn:?.
+  2: { apply prefix_length in Hsub0. simpl in *. lia. }
+  simpl in *.
+  case_match; try done.
 
-  rewrite Hlook_uid in Hsub.
-  destruct (obj.(state.pending) !! uid) as [pks0|] eqn:Hlook_pend;
-    rewrite Hlook_pend in Hsub;
-    simpl in *; try done.
   iDestruct (big_sepM_lookup with "Hperm_uids") as "@"; [done|].
-  apply prefix_to_take in Hsub as ->.
-  by iDestruct (big_sepL_take with "Hpks") as "$".
+  iFrame "%".
+  iApply big_sepL_intro.
+  iIntros "!> **".
+  iApply (big_sepL_lookup with "Hpks").
+  eapply prefix_lookup_Some; [|done].
+  by eapply prefix_lookup_Some.
 Qed.
 
 (** state transition ops. *)
 
 Definition Q_read_lb prev_lb γ obj : iProp Σ :=
-  mono_list_lb_own γ.(cfg.histγ) obj.(state.hist) ∗
+  mono_list_lb_own (digsγ γ) obj.(state.hist) ∗
   ⌜prev_lb `prefix_of` obj.(state.hist)⌝.
 
 Lemma op_read_lb γ prev_lb :
   is_inv γ -∗
-  mono_list_lb_own γ.(cfg.histγ) prev_lb -∗
+  mono_list_lb_own (digsγ γ) prev_lb -∗
   (|={⊤,∅}=>
     ∃ obj, own γ obj ∗
       (own γ obj
@@ -186,7 +179,7 @@ Proof.
 Qed.
 
 Definition Q_read_idx prev_idx γ obj : iProp Σ :=
-  mono_list_lb_own γ.(cfg.histγ) obj.(state.hist) ∗
+  mono_list_lb_own (digsγ γ) obj.(state.hist) ∗
   ⌜prev_idx < length obj.(state.hist)⌝.
 
 (* op_read_idx necessary, even tho weaker than op_read_lb.
@@ -194,9 +187,9 @@ cli_call takes in curried Q_read, since it's used in both pre and post.
 at currying time, not under good flag, so client doesn't have prev_lb.
 but it does have have prev_idx!
 that's an arg to, e.g., CallHistory, independent of good-ness. *)
-Lemma op_read_idx γ prev_idx (a : list w8 * ktcore.keys_ty) :
+Lemma op_read_idx γ prev_idx (a : list w8) :
   is_inv γ -∗
-  mono_list_idx_own γ.(cfg.histγ) prev_idx a -∗
+  mono_list_idx_own (digsγ γ) prev_idx a -∗
   (|={⊤,∅}=>
     ∃ obj, own γ obj ∗
       (own γ obj
@@ -224,11 +217,11 @@ Definition pure_put uid (ver : w64) pk (pend : ktcore.keys_ty) :=
   <[uid:=pks ++ [pk]]>pend.
 
 Lemma sub_over_put pend uid ver pk :
-  keys_sub pend (pure_put uid ver pk pend).
+  ktcore.keys_sub pend (pure_put uid ver pk pend).
 Proof.
   rewrite /pure_put.
   case_bool_decide; [done|].
-  rewrite /keys_sub.
+  rewrite /ktcore.keys_sub.
   apply insert_included; [apply _|].
   rewrite lookup_total_alt.
   intros ? ->. simpl.
@@ -281,7 +274,8 @@ Lemma op_add_hist γ :
   is_inv γ -∗
   □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
     ∀ dig,
-    let obj' := set (state.hist) (.++ [(dig, obj.(state.pending))]) obj in
+    ⌜ktcore.to_plain (get_vrf_pk γ) dig = obj.(state.pending)⌝ -∗
+    let obj' := set (state.hist) (.++ [dig]) obj in
     (own γ obj' ={∅,⊤}=∗ True)).
 Proof.
   iIntros "#Hinv".
@@ -292,7 +286,7 @@ Proof.
   { set_solver. }
   iIntros "Hmask".
   iFrame.
-  iIntros "* Hown_serv".
+  iIntros "* %Hdig Hown_serv".
   iMod "Hmask" as "_".
   iMod ("Hclose" with "[-]"); [|done].
   iModIntro.
@@ -303,11 +297,26 @@ Proof.
   destruct obj. simpl in *.
   iSplit; iPureIntro; simpl.
   - intros ? Hlast.
-    rewrite fmap_app last_snoc in Hlast.
+    rewrite last_snoc in Hlast.
     by simplify_eq/=.
-  - rewrite fmap_app.
-    by apply list_reln_snoc.
-Qed.
+  - unfold sigpred.mono_maps in *.
+    rewrite fmap_app /=.
+    apply list_reln_snoc; [done|].
+    intros * Hlast.
+    rewrite fmap_last in Hlast.
+    apply fmap_Some in Hlast as (?&Hlast&?).
+    apply Hsub_pend in Hlast.
+    simplify_eq/=.
+    (* TODO: know keys_sub (last hist) pend,
+    but ¬ (keys_sub → hidden_sub), so we're stuck.
+    could:
+    1) turn pending into dig. but that adds unnecessary complexity.
+    2) make hist be list of plains.
+    but that's not good loses info needed for Server specs.
+    3) weaken hist reln to keys_sub.
+    sigpred still needs to be over hidden_sub,
+    but we can track that separately. *)
+Admitted.
 
 End proof.
 

@@ -105,6 +105,9 @@ End sigpred.
 Module ktcore.
 Import key_map.ktcore serde.ktcore.
 
+Global Notation to_plain vrf_pk dig := (plain_inv_fn vrf_pk (merkle.inv_fn dig)).
+Global Notation to_pks vrf_pk uid dig := (to_plain vrf_pk dig !!! uid).
+
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context {sem : go.Semantics}.
@@ -112,13 +115,6 @@ Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 (** staged / committed keys. *)
-
-Local Definition to_plain vrf_pk dig := plain_inv_fn vrf_pk (merkle.inv_fn dig).
-(* treat [to_plain] almost like Notation. unfold with [simpl]. *)
-Arguments to_plain /.
-
-Local Definition to_pks vrf_pk uid dig := to_plain vrf_pk dig !!! uid.
-Arguments to_pks /.
 
 (* after auditing, learn that client digs equal auditor digs.
 also learn [mono_maps], so "apply" that in [is_staged_keys]. *)
@@ -141,7 +137,6 @@ Lemma commit_staged vrf_pk digs uid keys next_ver :
   is_committed_keys vrf_pk digs uid keys.
 Proof. rewrite /is_staged_keys. naive_solver. Qed.
 
-(* TODO: maybe could be iff. *)
 (* TODO: upstream. *)
 Lemma list_reln_app {A} R (l0 l1 : list A) :
   list_reln (l0 ++ l1) R →
