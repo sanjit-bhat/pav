@@ -36,11 +36,6 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Definition mono_maps digs :=
-  let hidden_maps := merkle.inv_fn <$> digs in
-  (* ⊆ on hidden maps is stronger than on plain maps. *)
-  list_reln hidden_maps (⊆).
-
 (** VRF sig. *)
 
 Definition vrfP γ (vrfPk : list w8) : iProp Σ :=
@@ -69,7 +64,7 @@ Definition linkP γ (ep : w64) link : iProp Σ :=
     (digs, γ.(cfg.info).(digs_info.cut))⌝ ∗
   "#Hlb_digs" ∷ mono_list_lb_own γ.(cfg.digs) digs ∗
   "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (γ.(cfg.info).(digs_info.start_ep) + length digs)%nat⌝ ∗
-  "%Hmono_maps" ∷ ⌜mono_maps (drop γ.(cfg.info).(digs_info.audit_offset) digs)⌝.
+  "%Hmono_hidden" ∷ ⌜mono_hidden (drop γ.(cfg.info).(digs_info.audit_offset) digs)⌝.
 
 Definition linkP_aux γ enc : iProp Σ :=
   ∃ ep link,
@@ -105,8 +100,21 @@ End sigpred.
 Module ktcore.
 Import key_map.ktcore serde.ktcore.
 
-Global Notation to_plain vrf_pk dig := (plain_inv_fn vrf_pk (merkle.inv_fn dig)).
-Global Notation to_pks vrf_pk uid dig := (to_plain vrf_pk dig !!! uid).
+(* TODO: upstream. *)
+Lemma list_reln_app {A} R (l0 l1 : list A) :
+  list_reln (l0 ++ l1) R →
+  list_reln l0 R ∧ list_reln l1 R.
+Proof. Admitted.
+
+Lemma lookup_app_r' {A} (l1 l2 : list A) i :
+  l2 !! i = (l1 ++ l2) !! (i + length l1)%nat.
+Proof. rewrite lookup_app_r; [|lia]. f_equal. lia. Qed.
+
+Lemma prefix_eq {A} (l1 l2 : list A) :
+  l1 `prefix_of` l2 →
+  l2 `prefix_of` l1 →
+  l1 = l2.
+Proof. intros ? ?%prefix_length. by apply prefix_length_eq. Qed.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
@@ -117,7 +125,7 @@ Collection W := sem.
 (** staged / committed keys. *)
 
 (* after auditing, learn that client digs equal auditor digs.
-also learn [mono_maps], so "apply" that in [is_staged_keys]. *)
+also learn [mono_hidden], so "apply" that in [is_staged_keys]. *)
 Definition is_committed_keys vrf_pk digs uid keys :=
   Forall2 (λ dig opt_key,
     last $ to_pks vrf_pk uid dig = opt_key) digs keys.
@@ -127,51 +135,15 @@ Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   (* [next_ver] only has meaning with some digs. *)
   last digs = Some last_dig ∧
   in_hidden vrf_pk (merkle.inv_fn last_dig) uid next_ver None ∧
-  ( sigpred.mono_maps digs →
+  ( mono_hidden digs →
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
     is_committed_keys vrf_pk digs uid keys ).
 
 Lemma commit_staged vrf_pk digs uid keys next_ver :
   is_staged_keys vrf_pk digs uid keys next_ver →
-  sigpred.mono_maps digs →
+  mono_hidden digs →
   is_committed_keys vrf_pk digs uid keys.
 Proof. rewrite /is_staged_keys. naive_solver. Qed.
-
-(* TODO: upstream. *)
-Lemma list_reln_app {A} R (l0 l1 : list A) :
-  list_reln (l0 ++ l1) R →
-  list_reln l0 R ∧ list_reln l1 R.
-Proof. Admitted.
-
-(* TODO: upstream. *)
-Lemma list_reln_box {A B} R0 R1 (f : A → B) (l0 : list A) :
-  list_reln l0 R0 →
-  (∀ x0 x1, R0 x0 x1 → R1 (f x0) (f x1)) →
-  list_reln (f <$> l0) R1.
-Proof. Admitted.
-
-Lemma plain_mono_lookup vrf_pk uid {digs i j xi xj} :
-  sigpred.mono_maps digs →
-  digs !! i = Some xi →
-  digs !! j = Some xj →
-  (i ≤ j)%nat →
-  to_pks vrf_pk uid xi `prefix_of` to_pks vrf_pk uid xj.
-Proof.
-  rewrite /sigpred.mono_maps. intros Hmono Hlook0 Hlook1 **.
-  apply (list_reln_box _ keys_sub (plain_inv_fn vrf_pk)) in Hmono.
-  2: { eapply plain_inv_mono. }
-  opose proof (list_reln_trans_refl _ _ Hmono _ _ _ _ _ _ _) as Hsub.
-  { rewrite !list_lookup_fmap.
-    by erewrite Hlook0. }
-  { rewrite !list_lookup_fmap.
-    by erewrite Hlook1. }
-  { done. }
-  specialize (Hsub uid).
-  simpl.
-  rewrite !lookup_total_alt.
-  destruct (_ !! uid), (_ !! uid); try done.
-  simpl in *. apply prefix_nil.
-Qed.
 
 Lemma is_staged_init vrf_pk digs last_dig uid :
   let keys := replicate (length digs) None in
@@ -194,20 +166,10 @@ Proof.
   intros * Hlook Hrepl.
   rewrite last_lookup in Hlast_dig.
   apply lookup_replicate in Hrepl as [-> ?].
-  opose proof (plain_mono_lookup vrf_pk uid Hmono Hlook Hlast_dig _) as Hpref; [len|].
+  opose proof (mono_hidden_lookup vrf_pk uid Hmono Hlook Hlast_dig _) as Hpref; [len|].
   rewrite Hnil in Hpref.
   by apply prefix_nil_inv in Hpref as ->.
 Qed.
-
-Lemma lookup_app_r' {A} (l1 l2 : list A) i :
-  l2 !! i = (l1 ++ l2) !! (i + length l1)%nat.
-Proof. rewrite lookup_app_r; [|lia]. f_equal. lia. Qed.
-
-Lemma prefix_eq {A} (l1 l2 : list A) :
-  l1 `prefix_of` l2 →
-  l2 `prefix_of` l1 →
-  l1 = l2.
-Proof. intros ? ?%prefix_length. by apply prefix_length_eq. Qed.
 
 (* grow staged keys by replicating the last existing key. *)
 Lemma is_staged_keys_grow_last vrf_pk digs new_digs new_dig uid keys old_key next_ver :
@@ -224,7 +186,7 @@ Proof.
   eexists. repeat (split; [done|]).
   intros Hmono.
   odestruct (Hstage _) as (Hver&Hkeys).
-  { unfold sigpred.mono_maps in *.
+  { unfold mono_hidden in *.
     rewrite fmap_app in Hmono.
     apply list_reln_app in Hmono.
     naive_solver. }
@@ -237,7 +199,7 @@ Proof.
   rewrite !last_lookup in Hold_dig Hnew_dig.
   eapply lookup_app_l_Some in Hold_dig.
   eassert (to_pks vrf_pk uid old_dig = to_pks vrf_pk uid new_dig) as Heq_pks.
-  { opose proof (plain_mono_lookup vrf_pk uid Hmono Hold_dig Hnew_dig _) as ?; [len|].
+  { opose proof (mono_hidden_lookup vrf_pk uid Hmono Hold_dig Hnew_dig _) as ?; [len|].
     eapply inv_fn_None_bound in Hnone.
     eapply prefix_length_eq; [done|].
     simpl in *. lia. }
@@ -254,8 +216,8 @@ Proof.
   intros ? mid_dig * Hlook_mid Hrepl.
   apply lookup_replicate in Hrepl as [-> ?].
   rewrite (lookup_app_r' digs) in Hlook_mid.
-  opose proof (plain_mono_lookup vrf_pk uid Hmono Hold_dig Hlook_mid _) as Hpref_reg0; [len|].
-  opose proof (plain_mono_lookup vrf_pk uid Hmono Hlook_mid Hnew_dig _) as Hpref_reg1; [len|].
+  opose proof (mono_hidden_lookup vrf_pk uid Hmono Hold_dig Hlook_mid _) as Hpref_reg0; [len|].
+  opose proof (mono_hidden_lookup vrf_pk uid Hmono Hlook_mid Hnew_dig _) as Hpref_reg1; [len|].
   f_equal. rewrite -Heq_pks in Hpref_reg1.
   by eapply prefix_eq.
 Qed.
@@ -293,7 +255,7 @@ Proof.
   assert (∃ grow_idx grow_dig,
     new_digs !! grow_idx = Some grow_dig ∧
     in_hidden vrf_pk (merkle.inv_fn grow_dig) uid next_ver (Some new_key) ∧
-    ( sigpred.mono_maps new_digs →
+    ( mono_hidden new_digs →
       ∀ j y,
         new_digs !! j = Some y →
         (j < grow_idx)%nat →
@@ -335,7 +297,7 @@ Proof.
   eexists. do 2 (split; [done|]).
   intros Hmono.
   pose proof Hmono as Ht.
-  rewrite /sigpred.mono_maps fmap_app in Ht.
+  rewrite /mono_hidden fmap_app in Ht.
   apply list_reln_app in Ht as [Ht0 Ht1].
   odestruct (Hstage _) as (Hver&Hkeys); [done|].
   clear Hstage.
@@ -356,9 +318,9 @@ Proof.
   assert (to_pks vrf_pk uid old_dig ++ [new_key] = to_pks vrf_pk uid grow_dig)
     as Heq_old_grow.
   { eapply inv_fn_None_bound in Hnone.
-    opose proof (plain_mono_lookup vrf_pk uid Hmono Hold_dig Hgrow_dig _)
+    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hold_dig Hgrow_dig _)
       as [ext_pks Hgrow_pks]; [len|].
-    opose proof (plain_mono_lookup vrf_pk uid Hmono Hgrow_dig Hnew_dig _)
+    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hgrow_dig Hnew_dig _)
       as ?%prefix_length.
     { apply lookup_lt_Some in Hgrow_dig. lia. }
     rewrite Hgrow_pks. f_equal.
@@ -398,7 +360,7 @@ Proof.
   assert (to_pks vrf_pk uid grow_dig = to_pks vrf_pk uid new_dig)
     as Heq_grow_new.
   { eapply inv_fn_None_bound in Hnone.
-    opose proof (plain_mono_lookup vrf_pk uid Hmono Hgrow_dig Hnew_dig _)
+    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hgrow_dig Hnew_dig _)
       as [ext_pks Hnew_pks].
     { apply lookup_lt_Some in Hgrow_dig. lia. }
     destruct ext_pks; [by list_simplifier|].
@@ -424,14 +386,14 @@ Proof.
     opose proof (Hgrow_none _ _ _ _) as Hnone; [done..|].
     clear Hgrow_none.
     eapply inv_fn_None_bound in Hnone.
-    opose proof (plain_mono_lookup vrf_pk uid Hmono Hold_dig Hmid_dig _) as Hpref_reg0; [len|].
+    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hold_dig Hmid_dig _) as Hpref_reg0; [len|].
     f_equal. symmetry.
     eapply prefix_length_eq; [done|].
     simpl in *. lia.
   - apply lookup_replicate in Hrepl as [-> ?].
     autorewrite with len in *.
-    opose proof (plain_mono_lookup vrf_pk uid Hmono Hgrow_dig Hmid_dig _) as Hpref_reg0; [len|].
-    opose proof (plain_mono_lookup vrf_pk uid Hmono Hmid_dig Hnew_dig _) as Hpref_reg1; [len|].
+    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hgrow_dig Hmid_dig _) as Hpref_reg0; [len|].
+    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hmid_dig Hnew_dig _) as Hpref_reg1; [len|].
     rewrite -Heq_grow_new in Hpref_reg1.
     opose proof (prefix_eq _ _ Hpref_reg0 Hpref_reg1) as <-.
     by rewrite -Heq_old_grow last_snoc.

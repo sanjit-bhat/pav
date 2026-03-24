@@ -2,7 +2,7 @@ From New.generatedproof.github_com.sanjit_bhat.pav Require Import ktcore.
 From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 From New.proof.github_com.sanjit_bhat.pav Require Import
-  cryptoffi safemarshal.
+  cryptoffi merkle safemarshal.
 
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   serde.
@@ -60,13 +60,13 @@ Module ktcore.
 Import serde.ktcore.
 
 (* gmap from uid's to list of pks (indexed by version). *)
-Definition keys_ty := gmap w64 (list $ list w8).
+Definition plain_ty := gmap w64 (list $ list w8).
 
-(* FIXME: needed for lia to unify [length digs] terms where one has keys_ty and
+(* FIXME: needed for lia to unify [length digs] terms where one has plain_ty and
 the other has its unfolding *)
-#[global] Hint Unfold keys_ty : word.
+#[global] Hint Unfold plain_ty : word.
 
-Definition keys_sub : relation keys_ty := map_included (λ _, prefix).
+Definition plain_sub : relation plain_ty := map_included (λ _, prefix).
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
@@ -532,9 +532,9 @@ Qed.
 (* used by auditor. *)
 Lemma plain_inv_mono vrf_pk m0 m1 :
   m0 ⊆ m1 →
-  keys_sub (plain_inv_fn vrf_pk m0) (plain_inv_fn vrf_pk m1).
+  plain_sub (plain_inv_fn vrf_pk m0) (plain_inv_fn vrf_pk m1).
 Proof.
-  rewrite /keys_sub. intros Hsub.
+  rewrite /plain_sub. intros Hsub.
   apply map_included_alt.
   intros uid pks Hfn.
   eapply inv_fn_inp_pks; [done|..].
@@ -685,6 +685,69 @@ Proof.
     + eapply map_Forall_impl; [done|].
       simpl. intros **.
       by apply in_plain_insert.
+Qed.
+
+End proof.
+
+Global Notation to_plain vrf_pk dig := (plain_inv_fn vrf_pk (merkle.inv_fn dig)).
+Global Notation to_pks vrf_pk uid dig := (to_plain vrf_pk dig !!! uid).
+
+(* TODO: upstream. *)
+Lemma list_reln_box {A B} R0 R1 (f : A → B) (l0 : list A) :
+  list_reln l0 R0 →
+  (∀ x0 x1, R0 x0 x1 → R1 (f x0) (f x1)) →
+  list_reln (f <$> l0) R1.
+Proof. Admitted.
+
+Section proof.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics}.
+Collection W := sem.
+#[local] Set Default Proof Using "W".
+
+(* TODO: maybe stick this elsewhere. *)
+
+Definition mono_hidden digs :=
+  let hidden_maps := merkle.inv_fn <$> digs in
+  (* ⊆ on hidden maps is stronger than on plain maps. *)
+  list_reln hidden_maps (⊆).
+
+Definition mono_plain vrf_pk digs :=
+  let plain_maps := plain_inv_fn vrf_pk <$> (merkle.inv_fn <$> digs) in
+  list_reln plain_maps ktcore.plain_sub.
+
+Lemma mono_plain_lookup vrf_pk uid {digs i j xi xj} :
+  mono_plain vrf_pk digs →
+  digs !! i = Some xi →
+  digs !! j = Some xj →
+  (i ≤ j)%nat →
+  to_pks vrf_pk uid xi `prefix_of` to_pks vrf_pk uid xj.
+Proof.
+  rewrite /mono_plain. intros Hmono Hlook0 Hlook1 **.
+  opose proof (list_reln_trans_refl _ _ Hmono _ _ _ _ _ _ _) as Hsub.
+  { rewrite !list_lookup_fmap.
+    by erewrite Hlook0. }
+  { rewrite !list_lookup_fmap.
+    by erewrite Hlook1. }
+  { done. }
+  specialize (Hsub uid).
+  simpl.
+  rewrite !lookup_total_alt.
+  destruct (_ !! uid), (_ !! uid); try done.
+  simpl in *. apply prefix_nil.
+Qed.
+
+Lemma mono_hidden_lookup vrf_pk uid {digs i j xi xj} :
+  mono_hidden digs →
+  digs !! i = Some xi →
+  digs !! j = Some xj →
+  (i ≤ j)%nat →
+  to_pks vrf_pk uid xi `prefix_of` to_pks vrf_pk uid xj.
+Proof.
+  rewrite /mono_hidden. intros Hmono Hlook0 Hlook1 **.
+  eapply mono_plain_lookup; try done.
+  eapply list_reln_box; [done|].
+  intros. by eapply plain_inv_mono.
 Qed.
 
 End proof.

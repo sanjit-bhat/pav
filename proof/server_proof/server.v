@@ -33,7 +33,7 @@ Record t :=
     (* pending map of all keys.
     client gives server permission to add to this.
     all writable post-conds only reference pending. *)
-    pending : ktcore.keys_ty;
+    pending : ktcore.plain_ty;
     (* hist of digs.
     server can update this by adding dig that corresponds to curr pending.
     all read-only post-conds only reference hist. *)
@@ -69,8 +69,8 @@ Definition valid γ obj : iProp Σ :=
       mono_list_idx_own uidγ i ((W64 ver), pk))) ∗
   "%Hsub_pend" ∷ ⌜∀ last_dig,
     last obj.(state.hist) = Some last_dig →
-    ktcore.keys_sub (ktcore.to_plain (get_vrf_pk γ) last_dig) obj.(state.pending)⌝ ∗
-  "%Hsub_hist" ∷ ⌜sigpred.mono_maps obj.(state.hist)⌝.
+    ktcore.plain_sub (ktcore.to_plain (get_vrf_pk γ) last_dig) obj.(state.pending)⌝ ∗
+  "%Hsub_hist" ∷ ⌜ktcore.mono_plain (get_vrf_pk γ) obj.(state.hist)⌝.
 
 Definition inv_aux γ obj : iProp Σ :=
   "Hown_serv" ∷ own γ obj ∗
@@ -99,7 +99,7 @@ Proof.
   iMod ("Hclose" with "[-]") as "_"; [iFrame "∗#"|].
   iNamed "His_serv".
   iIntros "!> !%".
-  by eapply ktcore.plain_mono_lookup.
+  by eapply ktcore.mono_plain_lookup.
 Qed.
 
 Lemma hist_to_put_perms γ i x :
@@ -127,7 +127,7 @@ Proof.
   iIntros "* %Hlook_uid %Hlen_pks".
   apply lookup_lt_Some in Hlook_hist as ?.
   list_elem (obj.(state.hist)) (pred (length obj.(state.hist))) as last_dig.
-  opose proof (ktcore.plain_mono_lookup (get_vrf_pk γ) uid _
+  opose proof (ktcore.mono_plain_lookup (get_vrf_pk γ) uid _
     Hlook_hist Hlast_dig_lookup _) as Hsub0; [done|lia|].
   rewrite -last_lookup in Hlast_dig_lookup.
   apply Hsub_pend in Hlast_dig_lookup as Hsub1.
@@ -209,7 +209,7 @@ Proof.
   word.
 Qed.
 
-Definition pure_put uid (ver : w64) pk (pend : ktcore.keys_ty) :=
+Definition pure_put uid (ver : w64) pk (pend : ktcore.plain_ty) :=
   let pks := pend !!! uid in
   (* drop put if not right version.
   this enforces a "linear" version history. *)
@@ -217,11 +217,11 @@ Definition pure_put uid (ver : w64) pk (pend : ktcore.keys_ty) :=
   <[uid:=pks ++ [pk]]>pend.
 
 Lemma sub_over_put pend uid ver pk :
-  ktcore.keys_sub pend (pure_put uid ver pk pend).
+  ktcore.plain_sub pend (pure_put uid ver pk pend).
 Proof.
   rewrite /pure_put.
   case_bool_decide; [done|].
-  rewrite /ktcore.keys_sub.
+  rewrite /ktcore.plain_sub.
   apply insert_included; [apply _|].
   rewrite lookup_total_alt.
   intros ? ->. simpl.
@@ -299,24 +299,17 @@ Proof.
   - intros ? Hlast.
     rewrite last_snoc in Hlast.
     by simplify_eq/=.
-  - unfold sigpred.mono_maps in *.
-    rewrite fmap_app /=.
-    apply list_reln_snoc; [done|].
+  - unfold ktcore.mono_plain in *.
+    rewrite !fmap_app /=.
+    eapply list_reln_snoc; [done|].
     intros * Hlast.
     rewrite fmap_last in Hlast.
     apply fmap_Some in Hlast as (?&Hlast&?).
+    rewrite fmap_last in Hlast.
+    apply fmap_Some in Hlast as (?&Hlast&?).
     apply Hsub_pend in Hlast.
-    simplify_eq/=.
-    (* TODO: know keys_sub (last hist) pend,
-    but ¬ (keys_sub → hidden_sub), so we're stuck.
-    could:
-    1) turn pending into dig. but that adds unnecessary complexity.
-    2) make hist be list of plains.
-    but that's not good loses info needed for Server specs.
-    3) weaken hist reln to keys_sub.
-    sigpred still needs to be over hidden_sub,
-    but we can track that separately. *)
-Admitted.
+    by simplify_eq/=.
+Qed.
 
 End proof.
 
@@ -347,7 +340,7 @@ End secrets.
 
 Module keyStore.
 Record t := mk' {
-  plain : ktcore.keys_ty;
+  plain : ktcore.plain_ty;
 }.
 
 Section proof.
@@ -356,7 +349,7 @@ Context {sem : go.Semantics} {package_sem : server.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition own_plain ptr_plain (plain : ktcore.keys_ty) q : iProp Σ :=
+Definition own_plain ptr_plain (plain : ktcore.plain_ty) q : iProp Σ :=
   ∃ ptr0_plain,
   "Hptr_plain" ∷ map.own_map ptr_plain (DfracOwn q) ptr0_plain ∗
   "Hptr0_plain" ∷ ([∗ map] uid ↦ sl_pks;pks ∈ ptr0_plain;plain,
