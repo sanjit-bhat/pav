@@ -358,19 +358,19 @@ Qed.
 Definition wish_Memb vrf_pk uid ver dig memb : iProp Σ :=
   ∃ label mapVal,
   let open := memb.(ktcore.Memb.PkOpen) in
-  "#His_Label" ∷ is_MapLabel vrf_pk uid ver label ∗
-  "#His_LabelProof" ∷ is_MapLabelProof vrf_pk uid ver memb.(ktcore.Memb.LabelProof) ∗
-  "#His_MapVal" ∷ is_MapVal open.(CommitOpen.Val) open.(CommitOpen.Rand) mapVal ∗
+  "%His_Label" ∷ ⌜map_label_fn vrf_pk uid ver label⌝ ∗
+  "#His_LabelProof" ∷ is_MapLabelProof vrf_pk uid (W64 ver) memb.(ktcore.Memb.LabelProof) ∗
+  "%His_MapVal" ∷ ⌜map_val_fn open.(CommitOpen.Val) open.(CommitOpen.Rand) mapVal⌝ ∗
   "#Hwish_memb" ∷ merkle.wish_Memb label mapVal memb.(ktcore.Memb.MerkleProof) dig.
 
-Definition wish_ListMemb vrf_pk uid (prefixLen : w64) dig hist : iProp Σ :=
+Definition wish_ListMemb vrf_pk uid (prefixLen : nat) dig hist : iProp Σ :=
   ([∗ list] ver ↦ memb ∈ hist,
-    wish_Memb vrf_pk uid (uint.Z prefixLen + ver) dig memb).
+    wish_Memb vrf_pk uid (prefixLen + ver)%nat dig memb).
 
 Definition wish_NonMemb vrf_pk uid ver dig nonMemb : iProp Σ :=
   ∃ label,
-  "#His_Label" ∷ is_MapLabel vrf_pk uid ver label ∗
-  "#His_LabelProof" ∷ is_MapLabelProof vrf_pk uid ver nonMemb.(ktcore.NonMemb.LabelProof) ∗
+  "%His_Label" ∷ ⌜map_label_fn vrf_pk uid ver label⌝ ∗
+  "#His_LabelProof" ∷ is_MapLabelProof vrf_pk uid (W64 ver) nonMemb.(ktcore.NonMemb.LabelProof) ∗
   "#Hwish_nonMemb" ∷ merkle.wish_NonMemb label nonMemb.(ktcore.NonMemb.MerkleProof) dig.
 
 Definition wish_ListUpdate_aux prevDig updates digs : iProp Σ :=
