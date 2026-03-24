@@ -80,8 +80,6 @@ Definition map_label_fn vrf_pk uid (ver : nat) map_label :=
   let enc := MapLabel.pure_enc (MapLabel.mk' uid (W64 ver)) in
   cryptoffi.vrf_fn vrf_pk enc = Some map_label ∧
   ver = uint.nat (W64 ver).
-#[global] Opaque map_label_fn.
-#[local] Transparent map_label_fn.
 
 Definition map_label_inv_fn vrf_pk map_label :=
   rem0 ← cryptoffi.vrf_inv_fn vrf_pk map_label;
@@ -147,8 +145,6 @@ Definition map_val_fn kt_pk rand map_val :=
   let enc := CommitOpen.pure_enc obj in
   cryptoffi.hash_fn enc = Some map_val ∧
   CommitOpen.valid obj.
-#[global] Opaque map_val_fn.
-#[local] Transparent map_val_fn.
 
 Definition map_val_inv_fn map_val :=
   rem0 ← cryptoffi.hash_inv_fn map_val;

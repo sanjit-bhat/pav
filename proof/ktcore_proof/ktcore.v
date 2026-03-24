@@ -46,8 +46,8 @@ Proof.
   simpl in *.
   iDestruct (own_slice_len with "Hsl_vrfPk") as %[? ?].
   rewrite -wp_fupd.
-  wp_apply (cryptoffi.wp_SigPrivateKey_Sign with "[$Hsl_b]") as "* @".
-  { iFrame "Hown_sig_sk #".
+  wp_apply (cryptoffi.wp_SigPrivateKey_Sign with "[$Hown_sig_sk $Hsl_b]") as "* @".
+  { iFrame "#".
     iLeft.
     iSplit; [done|].
     rewrite /safemarshal.Slice1D.valid. word. }
@@ -84,7 +84,7 @@ Proof.
     as "* (Hsl_b&Hcap_b&_&(_&%Hvalid))".
   { iFrame "#". }
   simpl in *.
-  Fail wp_apply (cryptoffi.wp_SigPublicKey_Verify with "[Hsl_b]") as "* H".
+  wp_apply (cryptoffi.wp_SigPublicKey_Verify with "[$pk Hsl_b]") as "* H".
   { iFrame "∗#". }
   iNamedSuffix "H" "0".
   iApply "HΦ".
@@ -102,15 +102,15 @@ Definition wish_LinkSig sig_pk ep link sig : iProp Σ :=
 Lemma wp_SignLink ptr_sk pk γ epoch sl_link link :
   {{{
     is_pkg_init ktcore ∗
-    "#Hown_sig_sk" ∷ cryptoffi.own_sig_sk ptr_sk pk (sigpred γ) ∗
+    "#Hown_sig_sk" ∷ cryptoffi.own_sig_sk ptr_sk pk (sigpred.P γ) ∗
     "#Hsl_link" ∷ sl_link ↦*□ link ∗
-    "#Hsigpred" ∷ sigpred_links γ epoch link
+    "#Hsigpred" ∷ sigpred.linkP γ epoch link
   }}}
   @! ktcore.SignLink #ptr_sk #epoch #sl_link
   {{{
     sl_linkSig linkSig, RET #sl_linkSig;
     "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
-    "#Hwish_LinkSig" ∷ wish_LinkSig pk epoch link linkSig 
+    "#Hwish_LinkSig" ∷ wish_LinkSig pk epoch link linkSig
   }}}.
 Proof.
   simpl. wp_start as "@". wp_auto.
@@ -123,11 +123,10 @@ Proof.
   simpl in *.
   iDestruct (own_slice_len with "Hsl_link") as %[? ?].
   rewrite -wp_fupd.
-  wp_apply (cryptoffi.wp_SigPrivateKey_Sign with "[$Hsl_b]") as "* @".
+  wp_apply (cryptoffi.wp_SigPrivateKey_Sign with "[$Hown_sig_sk $Hsl_b]") as "* @".
   { iFrame "#".
     iRight. repeat iExists _.
     iSplit; [done|].
-    iFrame "#".
     rewrite /safemarshal.Slice1D.valid. word. }
   iPersist "Hsl_sig".
   iModIntro.
@@ -162,7 +161,7 @@ Proof.
     as "* (Hsl_b&Hcap_b&_&(_&%Hvalid))".
   { iFrame "#". }
   simpl in *.
-  wp_apply (cryptoffi.wp_SigPublicKey_Verify with "[Hsl_b]") as "* H".
+  wp_apply (cryptoffi.wp_SigPublicKey_Verify with "[$pk Hsl_b]") as "* H".
   { iFrame "∗#". }
   iNamedSuffix "H" "0".
   iApply "HΦ".
@@ -185,7 +184,7 @@ Lemma wp_ProveMapLabel ptr_sk pk (uid ver : w64) :
     sl_label label sl_proof proof, RET (#sl_label, #sl_proof);
     "#Hsl_label" ∷ sl_label ↦*□ label ∗
     "#Hsl_proof" ∷ sl_proof ↦*□ proof ∗
-    "#His_Label" ∷ is_MapLabel pk uid ver label ∗
+    "%His_Label" ∷ ⌜map_label_fn pk uid (uint.nat ver) label⌝ ∗
     "#His_LabelProof" ∷ is_MapLabelProof pk uid ver proof
   }}}.
 Proof.
@@ -204,7 +203,9 @@ Proof.
   iPersist "Hsl_out Hsl_proof".
   iModIntro.
   iApply "HΦ".
-  iFrame "∗#".
+  rewrite /map_label_fn.
+  replace (W64 (uint.nat _)) with ver by word.
+  by iFrame "∗#".
 Qed.
 
 Lemma wp_EvalMapLabel ptr_sk pk (uid ver : w64) :
@@ -216,7 +217,7 @@ Lemma wp_EvalMapLabel ptr_sk pk (uid ver : w64) :
   {{{
     sl_label label, RET #sl_label;
     "#Hsl_label" ∷ sl_label ↦*□ label ∗
-    "#His_Label" ∷ is_MapLabel pk uid ver label
+    "%His_Label" ∷ ⌜map_label_fn pk uid (uint.nat ver) label⌝
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -234,7 +235,9 @@ Proof.
   iPersist "Hsl_out".
   iModIntro.
   iApply "HΦ".
-  iFrame "∗#".
+  rewrite /map_label_fn.
+  replace (W64 (uint.nat _)) with ver by word.
+  by iFrame "∗#".
 Qed.
 
 Lemma wp_CheckMapLabel ptr_pk pk (uid ver : w64) sl_proof proof :
@@ -251,7 +254,7 @@ Lemma wp_CheckMapLabel ptr_pk pk (uid ver : w64) sl_proof proof :
       match err with
       | true => ¬ is_MapLabelProof pk uid ver proof
       | false =>
-        "#His_Label" ∷ is_MapLabel pk uid ver label ∗
+        "%His_Label" ∷ ⌜map_label_fn pk uid (uint.nat ver) label⌝ ∗
         "#His_LabelProof" ∷ is_MapLabelProof pk uid ver proof
       end
   }}}.
@@ -273,9 +276,11 @@ Proof.
   iModIntro.
   iApply "HΦ".
   iFrame "#".
-  case_match.
-  - iFrame.
-  - iNamed "Hgenie0". iFrame "#".
+  case_match; [iFrame|].
+  iNamed "Hgenie0".
+  rewrite /map_label_fn.
+  replace (W64 (uint.nat _)) with ver by word.
+  by iFrame "#".
 Qed.
 
 Lemma wp_GetMapVal sl_pk pk sl_rand rand :
@@ -288,7 +293,7 @@ Lemma wp_GetMapVal sl_pk pk sl_rand rand :
   {{{
     sl_mapVal mapVal, RET #sl_mapVal;
     "#Hsl_mapVal" ∷ sl_mapVal ↦*□ mapVal ∗
-    "#His_MapVal" ∷ is_MapVal pk rand mapVal
+    "%His_MapVal" ∷ ⌜map_val_fn pk rand mapVal⌝
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -297,7 +302,7 @@ Proof.
   iPersist "Hstruct".
   replace (sint.nat _) with (0%nat) by word.
   wp_apply (CommitOpen.wp_enc (CommitOpen.mk' _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_)".
+    as "* (Hsl_b&Hcap_b&_&%Hwish)".
   { iFrame "#". }
   simpl in *.
   rewrite -wp_fupd.
@@ -305,22 +310,19 @@ Proof.
   iPersist "Hsl_hash".
   iModIntro.
   iApply "HΦ".
-  iFrame "∗#".
+  destruct Hwish as (_&?).
+  by iFrame "∗#".
 Qed.
 
-Definition is_CommitRand commit_secret label rand : iProp Σ :=
+Definition is_CommitRand commit_secret label rand :=
   let enc := commit_secret ++ label in
-  cryptoffi.is_hash (Some enc) rand.
+  cryptoffi.hash_fn enc = Some rand.
 
-Lemma is_CommitRand_det commit_secret label rand0 rand1 :
-  is_CommitRand commit_secret label rand0 -∗
-  is_CommitRand commit_secret label rand1 -∗
-  ⌜rand0 = rand1⌝.
-Proof.
-  iIntros "#H0 #H1".
-  iDestruct (cryptoffi.is_hash_det with "H0 H1") as %->.
-  done.
-Qed.
+Lemma is_CommitRand_det {commit_secret label rand0 rand1} :
+  is_CommitRand commit_secret label rand0 →
+  is_CommitRand commit_secret label rand1 →
+  rand0 = rand1.
+Proof. rewrite /is_CommitRand. intros. by simplify_eq/=. Qed.
 
 Lemma wp_GetCommitRand sl_commitSecret commitSecret sl_label label :
   {{{
@@ -332,7 +334,7 @@ Lemma wp_GetCommitRand sl_commitSecret commitSecret sl_label label :
   {{{
     sl_rand rand, RET #sl_rand;
     "#Hsl_rand" ∷ sl_rand ↦*□ rand ∗
-    "#His_CommitRand" ∷ is_CommitRand commitSecret label rand
+    "%His_CommitRand" ∷ ⌜is_CommitRand commitSecret label rand⌝
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -350,7 +352,7 @@ Proof.
   iModIntro.
   simpl.
   iApply "HΦ".
-  iFrame "∗#".
+  by iFrame "∗#".
 Qed.
 
 Definition wish_Memb vrf_pk uid ver dig memb : iProp Σ :=
