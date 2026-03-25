@@ -127,11 +127,7 @@ func (s *Server) worker() {
 		if len(w) == 0 {
 			continue
 		}
-		// getWork checks must hold inside doWork CS.
-		// ensure this by having worker be the only Write locker.
-		s.mu.Lock()
 		s.doWork(w)
-		s.mu.Unlock()
 	}
 }
 
@@ -163,37 +159,32 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 
 func (s *Server) getWork() (work []*work) {
 	timer := time.NewTimer(EpochTime)
-	uids := make(map[uint64]bool)
 	// don't care about upper-bounding batch size.
 	// so aggregate as much work as we can within [EpochTime].
 	for {
 		select {
 		case <-timer.C:
 			return
-		case job := <-s.workQ:
-			// for each uid, maintain contiguous seq of versions.
-			nextVer := uint64(len(s.keys.plain[job.uid]))
-			if job.ver != nextVer {
-				continue
-			}
-			// could still have multiple updates for same version.
-			// arbitrarily pick one to succeed.
-			if _, ok := uids[job.uid]; ok {
-				continue
-			}
-
-			uids[job.uid] = false
-			work = append(work, job)
+		case w := <-s.workQ:
+			work = append(work, w)
 		}
 	}
 }
 
 func (s *Server) doWork(work []*work) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	upd := make([]*ktcore.UpdateProof, 0, len(work))
 	for _, w := range work {
+		// check: for each uid, maintain contiguous seq of versions.
+		nextVer := uint64(len(s.keys.plain[w.uid]))
+		if w.ver != nextVer {
+			continue
+		}
+
+		// update.
 		proof := s.keys.hidden.Put(w.mapLabel, w.mapVal)
 		s.keys.plain[w.uid] = append(s.keys.plain[w.uid], w.pk)
-
 		info := &ktcore.UpdateProof{MapLabel: w.mapLabel, MapVal: w.mapVal, NonMembProof: proof}
 		upd = append(upd, info)
 	}
