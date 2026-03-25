@@ -170,10 +170,7 @@ func (s *Server) getWork() (work []*work) {
 		select {
 		case <-timer.C:
 			return
-		case job, ok := <-s.workQ:
-			// never close channel.
-			std.Assert(ok)
-
+		case job := <-s.workQ:
 			// for each uid, maintain contiguous seq of versions.
 			nextVer := uint64(len(s.keys.plain[job.uid]))
 			if job.ver != nextVer {
@@ -181,8 +178,7 @@ func (s *Server) getWork() (work []*work) {
 			}
 			// could still have multiple updates for same version.
 			// arbitrarily pick one to succeed.
-			_, ok = uids[job.uid]
-			if ok {
+			if _, ok := uids[job.uid]; ok {
 				continue
 			}
 
