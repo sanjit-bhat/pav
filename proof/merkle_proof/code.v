@@ -51,11 +51,6 @@ Lemma own_tree_to_hash ptr t d :
   ⌜∃ hash, is_cut_tree t hash⌝.
 Proof. destruct t; iNamed 1; iPureIntro; naive_solver. Qed.
 
-(* TODO: maybe unsound in goose v4. *)
-Lemma typed_pointsto_not_null `{!TypedPointsto V} l dq (v : V) :
-  typed_pointsto (Σ:=Σ) l v dq -∗ ⌜l ≠ null⌝.
-Proof. Admitted.
-
 Lemma own_empty_tree t d :
   own_tree null t d -∗
   ⌜t = Empty⌝.
@@ -464,18 +459,19 @@ Lemma wp_node_getChild n d0 nodeTy sl_hash ptr_child0 ptr_child1 l v sl_label d1
 Proof.
   wp_start as "@". wp_auto.
   wp_apply (wp_getBit with "[$Hsl_label]") as "* @".
+  iDestruct (typed_pointsto_not_null with "Hnode") as %?.
   destruct (get_bit _ _).
   - wp_auto. iApply "HΦ".
     iStructNamed "Hnode". simpl.
     iFrame.
     iIntros (??) "@ @".
-    iDestruct (typed_pointsto_combine with "[-]") as "$".
+    iDestruct (typed_pointsto_combine with "[-]") as "$"; auto.
     iFrame.
   - wp_auto. iApply "HΦ".
     iStructNamed "Hnode". simpl.
     iFrame.
     iIntros (??) "@ @".
-    iDestruct (typed_pointsto_combine with "[-]") as "$".
+    iDestruct (typed_pointsto_combine with "[-]") as "$"; auto.
     iFrame.
 Qed.
 
@@ -1668,6 +1664,7 @@ Lemma wp_Map_Put ptr m hash sl_label label sl_val val :
 Proof.
   wp_start as "@". wp_auto.
   iNamed "Hown_Map".
+  iDestruct (typed_pointsto_not_null with "Hstruct") as %?.
   iDestruct (own_slice_len with "Hsl_label") as %[? _].
   wp_apply std.wp_Assert.
   { case_bool_decide; try done. word. }
@@ -1686,7 +1683,8 @@ Proof.
   { iExFalso. iApply "Hgenie". iPureIntro. by eapply is_cutless_to_path. }
   wp_apply std.wp_Assert; [done|].
   iNamed "Hgenie".
-  iDestruct (typed_pointsto_combine _ (merkle.Map.mk _) with "[Hn0]") as "Hstruct"; [iFrame|].
+  iDestruct (typed_pointsto_combine _ (merkle.Map.mk _) with "[Hn0]") as "Hstruct"; [|iFrame|].
+  { done. }
   iDestruct (own_tree_to_hash with "Hown_tree") as "[%new_hash %His_hash_new]".
   iApply "HΦ".
 
