@@ -46,8 +46,8 @@ Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : server.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_aux γ obj q : iProp Σ :=
@@ -322,16 +322,16 @@ Record t := mk' {
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : server.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own γ ptr obj : iProp Σ :=
   ∃ ptr_sig ptr_vrf sl_commit,
   "#Hstr_secrets" ∷ ptr ↦□ (server.secrets.mk ptr_sig ptr_vrf sl_commit) ∗
   "#Hown_sig" ∷ cryptoffi.own_sig_sk ptr_sig γ.(cfg.sig_pk)
-    (ktcore.sigpred γ.(cfg.sigpredγ)) ∗
-  "#Hown_vrf" ∷ cryptoffi.own_vrf_sk ptr_vrf γ.(cfg.vrf_pk) ∗
+    (sigpred.P γ.(cfg.sigγ)) ∗
+  "#Hown_vrf" ∷ cryptoffi.own_vrf_sk ptr_vrf (get_vrf_pk γ) ∗
   "#Hsl_commit" ∷ sl_commit ↦*□ obj.(commit) ∗
   "%Hlen_commit" ∷ ⌜Z.of_nat (length obj.(commit)) = cryptoffi.hash_len⌝.
 
@@ -345,8 +345,8 @@ Record t := mk' {
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : server.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_plain ptr_plain (plain : ktcore.plain_ty) q : iProp Σ :=
@@ -359,22 +359,21 @@ Definition own_plain ptr_plain (plain : ktcore.plain_ty) q : iProp Σ :=
     "#Hsl0_pks" ∷ ([∗ list] sl_pk;pk ∈ sl0_pks;pks,
       "Hsl_pk" ∷ sl_pk ↦*□ pk)).
 
-Definition is_hidden γ commit_sec plain (hidden : gmap (list w8) (list w8)) : iProp Σ :=
-  [∗ map] uid ↦ kt_pks ∈ plain,
-    [∗ list] ver ↦ kt_pk ∈ kt_pks,
-      ∃ label rand mapVal,
-      "#His_MapLabel" ∷ ktcore.is_MapLabel γ.(cfg.vrf_pk) uid (W64 ver) label ∗
-      "#His_CommitRand" ∷ ktcore.is_CommitRand commit_sec label rand ∗
-      "#His_MapVal" ∷ ktcore.is_MapVal kt_pk rand mapVal ∗
-      "%Hlook" ∷ ⌜hidden !! label = Some mapVal⌝.
+Definition is_commit commit_sec (hidden : gmap (list w8) (list w8)) :=
+  map_Forall
+    (λ map_label map_val,
+      ∃ kt_pk rand,
+      ktcore.map_val_inv_fn map_val = Some (kt_pk, rand) ∧
+      ktcore.is_CommitRand commit_sec map_label rand)
+    hidden.
 
 Definition own γ ptr obj secs dig q : iProp Σ :=
   ∃ ptr_hidden hidden ptr_plain,
   "#Hstr_keyStore" ∷ ptr ↦□ (server.keyStore.mk ptr_hidden ptr_plain) ∗
   "Hown_hidden" ∷ merkle.own_Map ptr_hidden hidden dig (DfracOwn q) ∗
   "Hown_plain" ∷ own_plain ptr_plain obj.(plain) q ∗
-  "#His_hidden" ∷ is_hidden γ secs.(secrets.commit) obj.(plain) hidden ∗
-  "#His_dig" ∷ merkle.is_map hidden dig.
+  "%Hbij_maps" ∷ ⌜ktcore.is_plain (get_vrf_pk γ) obj.(plain) hidden⌝ ∗
+  "%His_commit" ∷ ⌜is_commit secs.(secrets.commit) hidden⌝.
 
 End proof.
 End keyStore.
@@ -386,8 +385,8 @@ Record t := mk' {
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : server.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition is_audits γ digs audits : iProp Σ :=
@@ -395,7 +394,7 @@ Definition is_audits γ digs audits : iProp Σ :=
   "%Hlen_audits" ∷ ⌜length digs = length audits⌝ ∗
   "#His_upds" ∷ ([∗ list] ep ↦ aud ∈ audits,
     (* AuditProof is a transition to an epoch.
-    for AuditProof @! ep0, need init_dig to transition from. *)
+    for AuditProof @ ep0, need init_dig to transition from. *)
     ∃ dig0 dig1,
     "%Hlook0" ∷ ⌜(init_dig :: digs) !! ep = Some dig0⌝ ∗
     "%Hlook1" ∷ ⌜(init_dig :: digs) !! (S ep) = Some dig1⌝ ∗
@@ -468,6 +467,8 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 (* experimenting with diff abstractions to fit the diff use cases. *)
+(* TODO: inv for our server impl: last hist is equal to pend. *)
+(* TODO: maybe structure can be simpl'd now that worker doesn't need own. *)
 
 Definition own_ro_aux γ ptr obj : iProp Σ :=
   ∃ ptr_secs ptr_workQ workQγ,
