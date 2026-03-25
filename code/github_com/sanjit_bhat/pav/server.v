@@ -1192,13 +1192,11 @@ Definition Server__workerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
       (FuncResolve go.len [go.SliceType (go.PointerType work)] #()) "$a0") =⟨go.int⟩ #(W64 0))
       then continue: #()
       else do:  #());;;
-      do:  ((MethodResolve (go.PointerType sync.RWMutex) "Lock"%go (![go.PointerType sync.RWMutex] (StructFieldRef Server "mu"%go (![go.PointerType Server] "s")))) #());;;
       do:  (let: "$a0" := (![go.SliceType (go.PointerType work)] "w") in
-      (MethodResolve (go.PointerType Server) "doWork"%go (![go.PointerType Server] "s")) "$a0");;;
-      do:  ((MethodResolve (go.PointerType sync.RWMutex) "Unlock"%go (![go.PointerType sync.RWMutex] (StructFieldRef Server "mu"%go (![go.PointerType Server] "s")))) #()));;;
+      (MethodResolve (go.PointerType Server) "doWork"%go (![go.PointerType Server] "s")) "$a0"));;;
     return: #()).
 
-(* go: server.go:138:6 *)
+(* go: server.go:134:6 *)
 Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: <>,
     exception_do (let: "mu" := (GoAlloc (go.PointerType sync.RWMutex) (GoZeroVal (go.PointerType sync.RWMutex) #())) in
@@ -1282,7 +1280,7 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     do:  (Fork ("$go" #()));;;
     return: (![go.PointerType Server] "s", ![cryptoffi.SigPublicKey] "sigPk")).
 
-(* go: server.go:164:18 *)
+(* go: server.go:160:18 *)
 Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     exception_do (let: "work" := (GoAlloc (go.SliceType (go.PointerType work)) (GoZeroVal (go.SliceType (go.PointerType work)) #())) in
@@ -1291,53 +1289,34 @@ Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     let: "$r0" := (let: "$a0" := (![time.Duration] (GlobalVarAddr EpochTime #())) in
     (FuncResolve time.NewTimer [] #()) "$a0") in
     do:  ("timer" <-[go.PointerType time.Timer] "$r0");;;
-    let: "uids" := (GoAlloc (go.MapType go.uint64 go.bool) (GoZeroVal (go.MapType go.uint64 go.bool) #())) in
-    let: "$r0" := ((FuncResolve go.make1 [go.MapType go.uint64 go.bool] #()) #()) in
-    do:  ("uids" <-[go.MapType go.uint64 go.bool] "$r0");;;
     (for: (λ: <>, #true); (λ: <>, #()) := λ: <>,
       let: "$ch0" := (![go.ChannelType go.recvonly time.Time] (StructFieldRef time.Timer "C"%go (![go.PointerType time.Timer] "timer"))) in
       let: "$ch1" := (![go.ChannelType go.sendrecv (go.PointerType work)] (StructFieldRef Server "workQ"%go (![go.PointerType Server] "s"))) in
       SelectStmt (SelectStmtClauses None [(CommClause (RecvCase time.Time "$ch0") (λ: "$recvVal",
         return: (![go.SliceType (go.PointerType work)] "work")
         )); (CommClause (RecvCase (go.PointerType work) "$ch1") (λ: "$recvVal",
-        let: "ok" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-        let: "job" := (GoAlloc (go.PointerType work) (GoZeroVal (go.PointerType work) #())) in
-        let: ("$ret0", "$ret1") := "$recvVal" in
-        let: "$r0" := "$ret0" in
-        let: "$r1" := "$ret1" in
-        do:  ("job" <-[go.PointerType work] "$r0");;;
-        do:  ("ok" <-[go.bool] "$r1");;;
-        do:  (let: "$a0" := (![go.bool] "ok") in
-        (FuncResolve std.Assert [] #()) "$a0");;;
-        let: "nextVer" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-        let: "$r0" := (Convert go.int go.uint64 (let: "$a0" := (map.lookup1 go.uint64 (go.SliceType (go.SliceType go.byte)) (![go.MapType go.uint64 (go.SliceType (go.SliceType go.byte))] (StructFieldRef keyStore "plain"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s"))))) (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job")))) in
-        (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")) in
-        do:  ("nextVer" <-[go.uint64] "$r0");;;
-        (if: Convert go.untyped_bool go.bool ((![go.uint64] (StructFieldRef work "ver"%go (![go.PointerType work] "job"))) ≠⟨go.uint64⟩ (![go.uint64] "nextVer"))
-        then continue: #()
-        else do:  #());;;
-        let: ("$ret0", "$ret1") := (map.lookup2 go.uint64 go.bool (![go.MapType go.uint64 go.bool] "uids") (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job")))) in
-        let: "$r0" := "$ret0" in
-        let: "$r1" := "$ret1" in
-        do:  "$r0";;;
-        do:  ("ok" <-[go.bool] "$r1");;;
-        (if: ![go.bool] "ok"
-        then continue: #()
-        else do:  #());;;
-        let: "$r0" := #false in
-        do:  (map.insert go.uint64 (![go.MapType go.uint64 go.bool] "uids") (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "job"))) "$r0");;;
+        let: "w" := (GoAlloc (go.PointerType work) (GoZeroVal (go.PointerType work) #())) in
+        let: "$r0" := (Fst "$recvVal") in
+        do:  ("w" <-[go.PointerType work] "$r0");;;
         let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType work)] "work") in
-        let: "$a1" := ((let: "$sl0" := (![go.PointerType work] "job") in
+        let: "$a1" := ((let: "$sl0" := (![go.PointerType work] "w") in
         CompositeLiteral (go.SliceType (go.PointerType work)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType work) "$sl0")]))) in
         (FuncResolve go.append [go.SliceType (go.PointerType work)] #()) "$a0" "$a1") in
         do:  ("work" <-[go.SliceType (go.PointerType work)] "$r0")
         ))]))).
 
-(* go: server.go:195:18 *)
+(* go: server.go:174:18 *)
 Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "work",
-    exception_do (let: "s" := (GoAlloc (go.PointerType Server) "s") in
+    with_defer: (let: "s" := (GoAlloc (go.PointerType Server) "s") in
     let: "work" := (GoAlloc (go.SliceType (go.PointerType work)) "work") in
+    do:  ((MethodResolve (go.PointerType sync.RWMutex) "Lock"%go (![go.PointerType sync.RWMutex] (StructFieldRef Server "mu"%go (![go.PointerType Server] "s")))) #());;;
+    do:  (let: "$f" := (MethodResolve (go.PointerType sync.RWMutex) "Unlock"%go (![go.PointerType sync.RWMutex] (StructFieldRef Server "mu"%go (![go.PointerType Server] "s")))) in
+    "$defer" <-[deferType] (let: "$oldf" := (![deferType] "$defer") in
+    (λ: <>,
+      "$f" #();;
+      "$oldf" #()
+      )));;;
     let: "upd" := (GoAlloc (go.SliceType (go.PointerType ktcore.UpdateProof)) (GoZeroVal (go.SliceType (go.PointerType ktcore.UpdateProof)) #())) in
     let: "$r0" := ((FuncResolve go.make3 [go.SliceType (go.PointerType ktcore.UpdateProof)] #()) #(W64 0) (let: "$a0" := (![go.SliceType (go.PointerType work)] "work") in
     (FuncResolve go.len [go.SliceType (go.PointerType work)] #()) "$a0")) in
@@ -1347,6 +1326,13 @@ Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     slice.for_range (go.PointerType work) "$range" (λ: "$key" "$value",
       do:  ("w" <-[go.PointerType work] "$value");;;
       do:  "$key";;;
+      let: "nextVer" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+      let: "$r0" := (Convert go.int go.uint64 (let: "$a0" := (map.lookup1 go.uint64 (go.SliceType (go.SliceType go.byte)) (![go.MapType go.uint64 (go.SliceType (go.SliceType go.byte))] (StructFieldRef keyStore "plain"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s"))))) (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "w")))) in
+      (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")) in
+      do:  ("nextVer" <-[go.uint64] "$r0");;;
+      (if: Convert go.untyped_bool go.bool ((![go.uint64] (StructFieldRef work "ver"%go (![go.PointerType work] "w"))) ≠⟨go.uint64⟩ (![go.uint64] "nextVer"))
+      then continue: #()
+      else do:  #());;;
       let: "proof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
       let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef work "mapLabel"%go (![go.PointerType work] "w"))) in
       let: "$a1" := (![go.SliceType go.byte] (StructFieldRef work "mapVal"%go (![go.PointerType work] "w"))) in
@@ -1396,7 +1382,7 @@ Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
 
 (* getHist returns a history of membership proofs for all post-prefix versions.
 
-   go: server.go:213:18 *)
+   go: server.go:200:18 *)
 Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "prefixLen",
     exception_do (let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) (GoZeroVal (go.SliceType (go.PointerType ktcore.Memb)) #())) in
@@ -1461,7 +1447,7 @@ Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
 
 (* getBound returns a non-membership proof for the boundary version.
 
-   go: server.go:229:18 *)
+   go: server.go:216:18 *)
 Definition Server__getBoundⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "numVers",
     exception_do (let: "bound" := (GoAlloc (go.PointerType ktcore.NonMemb) (GoZeroVal (go.PointerType ktcore.NonMemb) #())) in
