@@ -1012,7 +1012,7 @@ Definition AuditReplyDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
 (* Start bootstraps a party with knowledge of the last hash
    in the hashchain and vrf.
 
-   go: server.go:54:18 *)
+   go: server.go:56:18 *)
 Definition Server__Startⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     with_defer: (let: "vrf" := (GoAlloc (go.PointerType StartVrf) (GoZeroVal (go.PointerType StartVrf) #())) in
@@ -1056,7 +1056,7 @@ Definition Server__Startⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
 
 (* Put queues pk (at the specified version) for insertion.
 
-   go: server.go:67:18 *)
+   go: server.go:69:18 *)
 Definition Server__Putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "ver" "pk",
     exception_do (let: "s" := (GoAlloc (go.PointerType Server) "s") in
@@ -1092,7 +1092,7 @@ Definition Server__Putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
 (* History gives key history for uid, excluding first prevVerLen versions.
    the caller already saw prevEpoch.
 
-   go: server.go:76:18 *)
+   go: server.go:78:18 *)
 Definition Server__Historyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "prevEpoch" "prevVerLen",
     with_defer: (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1149,7 +1149,7 @@ Definition Server__Historyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
 
 (* Audit errors if args out of bounds.
 
-   go: server.go:98:18 *)
+   go: server.go:100:18 *)
 Definition Server__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "prevEpoch",
     with_defer: (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1180,7 +1180,7 @@ Definition Server__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  ("proof" <-[go.SliceType (go.PointerType ktcore.AuditProof)] "$r0");;;
     return: (![go.SliceType (go.PointerType ktcore.AuditProof)] "proof", ![go.bool] "err")).
 
-(* go: server.go:121:18 *)
+(* go: server.go:123:18 *)
 Definition Server__workerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     exception_do (let: "s" := (GoAlloc (go.PointerType Server) "s") in
@@ -1196,7 +1196,7 @@ Definition Server__workerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
       (MethodResolve (go.PointerType Server) "doWork"%go (![go.PointerType Server] "s")) "$a0"));;;
     return: #()).
 
-(* go: server.go:134:6 *)
+(* go: server.go:136:6 *)
 Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: <>,
     exception_do (let: "mu" := (GoAlloc (go.PointerType sync.RWMutex) (GoZeroVal (go.PointerType sync.RWMutex) #())) in
@@ -1280,7 +1280,7 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     do:  (Fork ("$go" #()));;;
     return: (![go.PointerType Server] "s", ![cryptoffi.SigPublicKey] "sigPk")).
 
-(* go: server.go:160:18 *)
+(* go: server.go:162:18 *)
 Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     exception_do (let: "work" := (GoAlloc (go.SliceType (go.PointerType work)) (GoZeroVal (go.SliceType (go.PointerType work)) #())) in
@@ -1305,7 +1305,7 @@ Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
         do:  ("work" <-[go.SliceType (go.PointerType work)] "$r0")
         ))]))).
 
-(* go: server.go:174:18 *)
+(* go: server.go:176:18 *)
 Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "work",
     with_defer: (let: "s" := (GoAlloc (go.PointerType Server) "s") in
@@ -1382,7 +1382,7 @@ Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
 
 (* getHist returns a history of membership proofs for all post-prefix versions.
 
-   go: server.go:200:18 *)
+   go: server.go:202:18 *)
 Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "prefixLen",
     exception_do (let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) (GoZeroVal (go.SliceType (go.PointerType ktcore.Memb)) #())) in
@@ -1447,7 +1447,7 @@ Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
 
 (* getBound returns a non-membership proof for the boundary version.
 
-   go: server.go:216:18 *)
+   go: server.go:218:18 *)
 Definition Server__getBoundⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "numVers",
     exception_do (let: "bound" := (GoAlloc (go.PointerType ktcore.NonMemb) (GoZeroVal (go.PointerType ktcore.NonMemb) #())) in

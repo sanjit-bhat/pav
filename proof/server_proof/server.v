@@ -390,20 +390,17 @@ Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition is_audits γ digs audits : iProp Σ :=
-  ∃ init_dig,
   "%Hlen_audits" ∷ ⌜length digs = length audits⌝ ∗
-  "#His_upds" ∷ ([∗ list] ep ↦ aud ∈ audits,
-    (* AuditProof is a transition to an epoch.
-    for AuditProof @ ep0, need init_dig to transition from. *)
+  (* epoch 0 UpdateProof is invalid. *)
+  "#His_upds" ∷ ([∗ list] pred_ep ↦ p ∈ ktcore.AuditProof.Updates <$> drop 1 audits,
     ∃ dig0 dig1,
-    "%Hlook0" ∷ ⌜(init_dig :: digs) !! ep = Some dig0⌝ ∗
-    "%Hlook1" ∷ ⌜(init_dig :: digs) !! (S ep) = Some dig1⌝ ∗
-    "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
-  "#His_sigs" ∷ ([∗ list] ep ↦ aud ∈ audits,
+    "%Hlook0" ∷ ⌜digs !! pred_ep = Some dig0⌝ ∗
+    "%Hlook1" ∷ ⌜digs !! (S pred_ep) = Some dig1⌝ ∗
+    "#His_upd" ∷ ktcore.wish_ListUpdate dig0 p dig1) ∗
+  "#His_sigs" ∷ ([∗ list] ep ↦ sig ∈ ktcore.AuditProof.LinkSig <$> audits,
     ∃ link,
-    "#His_link" ∷ hashchain.is_chain (take (S ep) digs) None link (S ep) ∗
-    "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link
-      aud.(ktcore.AuditProof.LinkSig)).
+    "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) = (take (S ep) digs, None)⌝ ∗
+    "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link sig).
 
 Definition own γ ptr obj q : iProp Σ :=
   ∃ ptr_chain sl_audits sl0_audits audits sl_vrfSig vrfSig,
@@ -417,7 +414,7 @@ Definition own γ ptr obj q : iProp Σ :=
   "#His_audits" ∷ is_audits γ obj.(digs) audits ∗
 
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
-  "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) γ.(cfg.vrf_pk) vrfSig.
+  "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ) vrfSig.
 
 End proof.
 End history.
