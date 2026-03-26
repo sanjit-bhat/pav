@@ -348,7 +348,7 @@ Collection W := sem.
 
 Definition own_plain ptr_plain (plain : ktcore.plain_ty) q : iProp Σ :=
   ∃ ptr0_plain,
-  "Hptr_plain" ∷ map.own_map ptr_plain (DfracOwn q) ptr0_plain ∗
+  "Hptr_plain" ∷ ptr_plain ↦${#q} ptr0_plain ∗
   "Hptr0_plain" ∷ ([∗ map] uid ↦ sl_pks;pks ∈ ptr0_plain;plain,
     ∃ sl0_pks,
     "Hsl_pks" ∷ sl_pks ↦*{#q} sl0_pks ∗
@@ -519,7 +519,47 @@ Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
     "%Heq_hist" ∷ ⌜drop (uint.nat prefixLen) pks =
       ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
   }}}.
-Proof. Admitted.
+Proof.
+  simpl. wp_start as "@".
+  iNamed "Hown_serv_ro". iNamed "Hown_secs".
+  iNamed "Hown_serv". iNamed "Hown_keys".
+  iNamed "Hown_plain".
+  simplify_eq/=. wp_auto.
+  wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
+  (* destruct "uid existence" early to reduce complexity. *)
+  destruct (ktcore.to_plain (get_vrf_pk γ) last_dig !! uid) as [pks|] eqn:Hlook_uid.
+  2: {
+    iDestruct (big_sepM2_lookup_r_none with "Hptr0_plain") as %->; [done|].
+    rewrite lookup_total_alt Hlook_uid in Heq_prefixLen |-*.
+    simpl in *.
+    assert (prefixLen = W64 0) as -> by word.
+    replace (uint.nat (W64 0)) with 0%nat by word.
+    wp_for.
+    iApply ("HΦ" $! _ []).
+    iFrame "∗#%".
+    iDestruct own_slice_nil as "$".
+    simpl. repeat iSplit; try done.
+    rewrite /ktcore.wish_ListMemb. naive_solver. }
+
+  iDestruct (big_sepM2_lookup_r_some with "Hptr0_plain") as %[sl_pks Hlook_uid']; [done|].
+  rewrite Hlook_uid' /=.
+  iDestruct (big_sepM2_lookup_acc with "Hptr0_plain") as "(@&Hclose)"; [done..|].
+  iPersist "s uid pks numVers".
+  iAssert (
+    ∃ ver sl_hist hist,
+    "ver" ∷ ver_ptr ↦ ver ∗
+    "%Hlt_ver" ∷ ⌜uint.nat prefixLen ≤ uint.nat ver < length pks⌝ ∗
+    "hist" ∷ hist_ptr ↦ sl_hist ∗
+    "Hown_hidden" ∷ merkle.own_Map ptr_hidden hidden last_dig (DfracOwn q) ∗
+    "Hsl_pks" ∷ sl_pks ↦*{#q} sl0_pks ∗
+
+    "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
+    "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
+      (uint.nat prefixLen) last_dig hist ∗
+    "%Heq_hist" ∷ ⌜subslice (uint.nat prefixLen) (uint.nat ver) pks =
+      ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
+  )%I as "IH".
+Admitted.
 
 Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
   let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
