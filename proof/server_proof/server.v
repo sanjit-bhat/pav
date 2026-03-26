@@ -521,28 +521,30 @@ Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
   }}}.
 Proof. Admitted.
 
-Lemma wp_Server_getBound s γ obj (uid numVers : w64) q lastDig lastKeys :
+Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
+  let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
   {{{
     is_pkg_init server ∗
-    "Hown_serv" ∷ Server.own γ s obj q ∗
-    "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
-    "%Heq_numVers" ∷ ⌜uint.nat numVers = length (lastKeys !!! uid)⌝
+    "Hown_serv" ∷ Server.own γ s σ obj q ∗
+    "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
+    "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+    "%Heq_numVers" ∷ ⌜uint.nat numVers = length pks⌝
   }}}
   s @! (go.PointerType server.Server) @! "getBound" #uid #numVers
   {{{
     ptr_bound bound, RET #ptr_bound;
-    "Hown_serv" ∷ Server.own γ s obj q ∗
+    "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
-    "#Hwish_bound" ∷ ktcore.wish_NonMemb γ.(cfg.vrf_pk) uid numVers lastDig bound
+    "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid (uint.nat numVers) last_dig bound
   }}}.
 Proof. Admitted.
 
 (** top-level methods. *)
 
-Lemma wp_Server_Put s γ uid sl_pk pk ver :
+Lemma wp_Server_Put s γ obj uid sl_pk pk ver :
   {{{
     is_pkg_init server ∗
-    "#Hown_serv_ro" ∷ Server.own_ro γ s ∗
+    "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
     (* caller doesn't need anything from Put.
     and in fact, Put might logically execute *after* Put returns. *)
@@ -557,19 +559,19 @@ Proof. Admitted.
 Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
   {{{
     is_pkg_init server ∗
-    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
+    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
   s @! (go.PointerType server.Server) @! "History" #uid #prevEpoch #prevVerLen
   {{{
-    sl_chainProof sl_linkSig sl_hist ptr_bound err obj lastDig lastKeys,
+    sl_chainProof sl_linkSig sl_hist ptr_bound err obj last_dig,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #err);
     let numEps := length obj.(state.hist) in
-    let pks := lastKeys !!! uid in
-    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
+    let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
+    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
     "HQ" ∷ Q obj ∗
-    "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
+    "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some last_dig⌝ ∗
     "#Herr" ∷
       match err with
       | true => ⌜uint.nat prevEpoch ≥ numEps ∨
@@ -578,7 +580,7 @@ Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
         ∃ lastLink chainProof linkSig hist bound,
         "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 $ length pks)⌝ ∗
-        "#His_lastLink" ∷ hashchain.is_chain obj.(state.hist).*1 None lastLink numEps ∗
+        "%His_lastLink" ∷ ⌜hashchain.valid obj.(state.hist) None lastLink (S numEps)⌝ ∗
 
         "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
         "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
@@ -586,16 +588,16 @@ Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
         "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
-          (drop (S (uint.nat prevEpoch)) obj.(state.hist).*1)⌝ ∗
+          (drop (S (uint.nat prevEpoch)) obj.(state.hist))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
-        "#Hwish_hist" ∷ ktcore.wish_ListMemb γ.(cfg.vrf_pk) uid prevVerLen
-          lastDig hist ∗
+        "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid (uint.nat prevVerLen)
+          last_dig hist ∗
         "%Heq_hist" ∷ ⌜Forall2
           (λ x y, x = y.(ktcore.Memb.PkOpen).(ktcore.CommitOpen.Val))
           (drop (uint.nat prevVerLen) pks) hist⌝ ∗
-        "#Hwish_bound" ∷ ktcore.wish_NonMemb γ.(cfg.vrf_pk) uid
-          (W64 $ length pks) lastDig bound
+        "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid
+          (length pks) last_dig bound
       end
   }}}.
 Proof. Admitted.
@@ -603,7 +605,7 @@ Proof. Admitted.
 Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
   {{{
     is_pkg_init server ∗
-    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
+    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
@@ -611,7 +613,7 @@ Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
   {{{
     sl_proofs err obj, RET (#sl_proofs, #err);
     let numEps := length obj.(state.hist) in
-    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
+    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
     "HQ" ∷ Q obj ∗
     "Herr" ∷
       match err with
@@ -630,14 +632,14 @@ Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
         "#His_upds" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ dig0 dig1,
           let predEp := (uint.nat prevEpoch + i)%nat in
-          "%Hlook0" ∷ ⌜obj.(state.hist).*1 !! predEp = Some dig0⌝ ∗
-          "%Hlook1" ∷ ⌜obj.(state.hist).*1 !! (S predEp) = Some dig1⌝ ∗
+          "%Hlook0" ∷ ⌜obj.(state.hist) !! predEp = Some dig0⌝ ∗
+          "%Hlook1" ∷ ⌜obj.(state.hist) !! (S predEp) = Some dig1⌝ ∗
           "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
           let ep := (uint.nat prevEpoch + S i)%nat in
-          "#His_link" ∷ hashchain.is_chain (take (S ep) obj.(state.hist).*1)
-            None link (S ep) ∗
+          "%His_link" ∷ ⌜hashchain.valid (take (S ep) obj.(state.hist))
+            None link (S $ S ep)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end
   }}}.
@@ -646,7 +648,7 @@ Proof. Admitted.
 Lemma wp_Server_Start s γ Q :
   {{{
     is_pkg_init server ∗
-    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
+    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
     "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (own γ obj ={∅,⊤}=∗ Q obj))
   }}}
@@ -654,7 +656,7 @@ Lemma wp_Server_Start s γ Q :
   {{{
     ptr_chain chain ptr_vrf vrf obj last_link, RET (#ptr_chain, #ptr_vrf);
     let numEps := length obj.(state.hist) in
-    "Hown_serv_lock" ∷ Server.own_lock γ s ∗
+    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
     "HQ" ∷ Q obj ∗
     "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 
@@ -662,20 +664,20 @@ Lemma wp_Server_Start s γ Q :
     "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
 
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
-    "#His_PrevLink" ∷ hashchain.is_chain
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist).*1)
+    "%His_PrevLink" ∷ ⌜hashchain.valid
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist))
       None chain.(StartChain.PrevLink)
-      (uint.nat chain.(StartChain.PrevEpochLen)) ∗
+      (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
-      (drop (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist).*1)⌝ ∗
-    "#His_last_link" ∷ hashchain.is_chain obj.(state.hist).*1 None
-      last_link numEps ∗
+      (drop (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist))⌝ ∗
+    "%His_last_link" ∷ ⌜hashchain.valid obj.(state.hist) None
+      last_link (S numEps)⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
-    "%Heq_VrfPk" ∷ ⌜γ.(cfg.vrf_pk) = vrf.(StartVrf.VrfPk)⌝ ∗
+    "%Heq_VrfPk" ∷ ⌜get_vrf_pk γ = vrf.(StartVrf.VrfPk)⌝ ∗
     "#His_VrfPk" ∷ cryptoffi.is_vrf_pk vrf.(StartVrf.VrfPk) ∗
-    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) γ.(cfg.vrf_pk)
+    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ)
       vrf.(StartVrf.VrfSig)
   }}}.
 Proof. Admitted.
