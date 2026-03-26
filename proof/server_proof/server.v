@@ -458,6 +458,14 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
+Definition own_ro γ ptr obj : iProp Σ :=
+  ∃ ptr_secs ptr_workQ workQγ,
+  "#Hfld_secs" ∷ ptr.[server.Server.t, "secs"] ↦□ ptr_secs ∗
+  "#Hfld_workQ" ∷ ptr.[server.Server.t, "workQ"] ↦□ ptr_workQ ∗
+
+  "#Hown_secs" ∷ secrets.own γ ptr_secs obj.(secs) ∗
+  "#His_workQ" ∷ bag.is_chan_bag workQγ ptr_workQ (work.own_aux γ obj.(secs)).
+
 Definition own γ ptr σ obj q : iProp Σ :=
   ∃ ptr_keys ptr_hist last_dig,
   "#Hfld_keys" ∷ ptr.[server.Server.t, "keys"] ↦□ ptr_keys ∗
@@ -474,15 +482,12 @@ Definition own γ ptr σ obj q : iProp Σ :=
 
 Definition own_aux γ ptr obj q : iProp Σ := ∃ σ, own γ ptr σ obj q.
 
-Definition own_ro γ ptr : iProp Σ :=
-  ∃ ptr_mu obj ptr_secs ptr_workQ workQγ,
-  "#Hfld_secs" ∷ ptr.[server.Server.t, "secs"] ↦□ ptr_secs ∗
-  "#Hfld_workQ" ∷ ptr.[server.Server.t, "workQ"] ↦□ ptr_workQ ∗
+Definition lock_perm γ ptr : iProp Σ :=
+  ∃ ptr_mu obj,
   "#Hfld_mu" ∷ ptr.[server.Server.t, "mu"] ↦□ ptr_mu ∗
 
-  "#Hown_secs" ∷ secrets.own γ ptr_secs obj.(secs) ∗
-  "#His_workQ" ∷ bag.is_chan_bag workQγ ptr_workQ (work.own_aux γ obj.(secs)) ∗
-  "Hlock" ∷ own_RWMutex ptr_mu (own_aux γ ptr obj).
+  "Hlock" ∷ own_RWMutex ptr_mu (own_aux γ ptr obj) ∗
+  "#Hown_ro" ∷ own_ro γ ptr obj.
 
 End proof.
 End Server.
