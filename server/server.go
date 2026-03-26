@@ -44,7 +44,9 @@ type keyStore struct {
 type history struct {
 	// chain is a hashchain of merkle digests across the epochs.
 	chain *hashchain.HashChain
-	// audits has auditing proofs on prior epochs.
+	// audits has auditing info for all epochs.
+	// for epoch 0, the UpdateProof is invalid (there is no prior epoch),
+	// but [Server.Audit] will never return it.
 	audits   []*ktcore.AuditProof
 	vrfPkSig []byte
 }
