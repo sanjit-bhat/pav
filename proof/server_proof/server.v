@@ -500,23 +500,24 @@ Collection W := sem + package_sem.
 
 (** fetch-side helper funcs. *)
 
-Lemma wp_Server_getHist s γ obj (uid prefixLen : w64) q lastDig lastKeys :
+Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
+  let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
   {{{
     is_pkg_init server ∗
-    "Hown_serv" ∷ Server.own γ s obj q ∗
-    "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
-    "%Heq_prefixLen" ∷ ⌜uint.nat prefixLen ≤ length (lastKeys !!! uid)⌝
+    "Hown_serv" ∷ Server.own γ s σ obj q ∗
+    "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
+    "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+    "%Heq_prefixLen" ∷ ⌜uint.nat prefixLen ≤ length pks⌝
   }}}
   s @! (go.PointerType server.Server) @! "getHist" #uid #prefixLen
   {{{
     sl_hist hist, RET #sl_hist;
-    let pks := lastKeys !!! uid in
-    "Hown_serv" ∷ Server.own γ s obj q ∗
+    "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
-    "#Hwish_hist" ∷ ktcore.wish_ListMemb γ.(cfg.vrf_pk) uid prefixLen lastDig hist ∗
-    "%Heq_hist" ∷ ⌜Forall2
-      (λ x y, x = y.(ktcore.Memb.PkOpen).(ktcore.CommitOpen.Val))
-      (drop (uint.nat prefixLen) pks) hist⌝
+    "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
+      (uint.nat prefixLen) last_dig hist ∗
+    "%Heq_hist" ∷ ⌜drop (uint.nat prefixLen) pks =
+      ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
   }}}.
 Proof. Admitted.
 
