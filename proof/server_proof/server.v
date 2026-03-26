@@ -580,7 +580,7 @@ Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
         ∃ lastLink chainProof linkSig hist bound,
         "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 $ length pks)⌝ ∗
-        "%His_lastLink" ∷ ⌜hashchain.valid obj.(state.hist) None lastLink (S numEps)⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.inv_fn lastLink (S numEps) = (obj.(state.hist), None)⌝ ∗
 
         "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
         "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
@@ -638,8 +638,8 @@ Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
           let ep := (uint.nat prevEpoch + S i)%nat in
-          "%His_link" ∷ ⌜hashchain.valid (take (S ep) obj.(state.hist))
-            None link (S $ S ep)⌝ ∗
+          "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) =
+            (take (S ep) obj.(state.hist), None)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end
   }}}.
@@ -664,14 +664,13 @@ Lemma wp_Server_Start s γ Q :
     "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
 
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
-    "%His_PrevLink" ∷ ⌜hashchain.valid
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist))
-      None chain.(StartChain.PrevLink)
-      (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
+    "%His_PrevLink" ∷ ⌜hashchain.inv_fn chain.(StartChain.PrevLink)
+      (S $ uint.nat chain.(StartChain.PrevEpochLen)) =
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist), None)⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
       (drop (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist))⌝ ∗
-    "%His_last_link" ∷ ⌜hashchain.valid obj.(state.hist) None
-      last_link (S numEps)⌝ ∗
+    "%His_last_link" ∷ ⌜hashchain.inv_fn last_link (S numEps) =
+      (obj.(state.hist), None)⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
