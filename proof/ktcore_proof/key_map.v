@@ -220,20 +220,20 @@ Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver opt_pk :
 Definition pks_in_hidden vrf_pk hidden uid (pks : list _) :=
   ∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver (Some pk).
 
-Local Definition in_plain vrf_pk (plain : gmap w64 (list $ list w8)) map_label map_val :=
+Definition in_plain vrf_pk (plain : gmap w64 (list $ list w8)) map_label map_val :=
   ∃ uid ver pk rand pks,
   map_label_inv_fn vrf_pk map_label = Some (uid, ver) ∧
   map_val_inv_fn map_val = Some (pk, rand) ∧
   plain !! uid = Some pks ∧
   pks !! ver = Some pk.
 
-Local Definition plain_to_hidden vrf_pk (plain : gmap w64 (list $ list w8))
+Definition plain_to_hidden vrf_pk (plain : gmap w64 (list $ list w8))
     (hidden : gmap (list w8) (list w8)) :=
   map_Forall
     (λ uid pks, length pks ≠ 0%nat ∧ pks_in_hidden vrf_pk hidden uid pks)
     plain.
 
-Local Definition hidden_to_plain vrf_pk (hidden : gmap (list w8) (list w8))
+Definition hidden_to_plain vrf_pk (hidden : gmap (list w8) (list w8))
     (plain : gmap w64 (list $ list w8)) :=
   map_Forall
     (λ map_label map_val, in_plain vrf_pk plain map_label map_val)

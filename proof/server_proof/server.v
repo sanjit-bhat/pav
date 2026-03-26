@@ -447,7 +447,7 @@ End proof.
 End work.
 
 Module Server.
-Record t :=
+Record t' :=
   mk' {
     secs : secrets.t;
   }.
@@ -535,9 +535,40 @@ Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
     ptr_bound bound, RET #ptr_bound;
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
-    "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid (uint.nat numVers) last_dig bound
+    "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid
+      (uint.nat numVers) last_dig bound
   }}}.
-Proof. Admitted.
+Proof.
+  simpl. wp_start as "@".
+  iNamed "Hown_serv_ro". iNamed "Hown_secs".
+  iNamed "Hown_serv". iNamed "Hown_keys".
+  simplify_eq/=. wp_auto.
+  wp_apply ktcore.wp_ProveMapLabel as "* @".
+  { iFrame "#". }
+  wp_apply (merkle.wp_Map_Prove with "[$Hown_hidden]") as "{Hsl_label} * @".
+  { iFrame "#".
+    by destruct His_Label as (?%cryptoffi.is_vrf_len&_). }
+  iPersist "Hsl_label Hsl_entryProof".
+  destruct (hidden !! label) eqn:Hlook_hidden.
+  { exfalso. destruct_and?. subst.
+    opose proof ((proj2 Hbij_maps) _ _ Hlook_hidden) as Ht.
+    rewrite /= /ktcore.in_plain in Ht.
+    destruct_exis. destruct Ht as (?&?&?&?%lookup_lt_Some).
+    apply ktcore.map_label_iff in His_Label.
+    simplify_eq/=.
+    erewrite lookup_total_correct in Heq_numVers; [|done].
+    len. }
+  subst.
+  wp_apply wp_Assert; [done|].
+  rewrite -wp_fupd.
+  wp_apply wp_alloc as "* Hown_bound".
+  iPersist "Hown_bound".
+  iApply "HΦ".
+  instantiate (1:=ktcore.NonMemb.mk' _ _).
+  iFrame "∗#%". simpl.
+  replace (W64 _) with numVers by word.
+  by iFrame "#".
+Qed.
 
 (** top-level methods. *)
 
