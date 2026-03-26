@@ -270,15 +270,16 @@ Proof.
     apply sub_over_put.
 Qed.
 
-Lemma op_add_hist γ :
-  is_inv γ -∗
+Definition add_hist γ : iProp Σ :=
   □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
     ∀ dig,
     ⌜ktcore.to_plain (get_vrf_pk γ) dig = obj.(state.pending)⌝ -∗
     let obj' := set (state.hist) (.++ [dig]) obj in
     (own γ obj' ={∅,⊤}=∗ True)).
+
+Lemma op_add_hist γ : is_inv γ -∗ add_hist γ.
 Proof.
-  iIntros "#Hinv".
+  rewrite /add_hist. iIntros "#Hinv".
   iModIntro.
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
@@ -339,10 +340,6 @@ End proof.
 End secrets.
 
 Module keyStore.
-Record t := mk' {
-  plain : ktcore.plain_ty;
-}.
-
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context {sem : go.Semantics}.
@@ -367,22 +364,19 @@ Definition is_commit commit_sec (hidden : gmap (list w8) (list w8)) :=
       ktcore.is_CommitRand commit_sec map_label rand)
     hidden.
 
-Definition own γ ptr obj secs dig q : iProp Σ :=
+Definition own γ ptr secs dig q : iProp Σ :=
   ∃ ptr_hidden hidden ptr_plain,
+  let plain := ktcore.to_plain (get_vrf_pk γ) dig in
   "#Hstr_keyStore" ∷ ptr ↦□ (server.keyStore.mk ptr_hidden ptr_plain) ∗
   "Hown_hidden" ∷ merkle.own_Map ptr_hidden hidden dig (DfracOwn q) ∗
-  "Hown_plain" ∷ own_plain ptr_plain obj.(plain) q ∗
-  "%Hbij_maps" ∷ ⌜ktcore.is_plain (get_vrf_pk γ) obj.(plain) hidden⌝ ∗
+  "Hown_plain" ∷ own_plain ptr_plain plain q ∗
+  "%Hbij_maps" ∷ ⌜ktcore.is_plain (get_vrf_pk γ) plain hidden⌝ ∗
   "%His_commit" ∷ ⌜is_commit secs.(secrets.commit) hidden⌝.
 
 End proof.
 End keyStore.
 
 Module history.
-Record t := mk' {
-  digs : list (list w8);
-}.
-
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
 Context {sem : go.Semantics}.
@@ -402,16 +396,16 @@ Definition is_audits γ digs audits : iProp Σ :=
     "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) = (take (S ep) digs, None)⌝ ∗
     "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link sig).
 
-Definition own γ ptr obj q : iProp Σ :=
+Definition own γ ptr σ q : iProp Σ :=
   ∃ ptr_chain sl_audits sl0_audits audits sl_vrfSig vrfSig,
   "Hstr_history" ∷ ptr ↦{#q} (server.history.mk ptr_chain sl_audits sl_vrfSig) ∗
-  "Hown_chain" ∷ hashchain.own ptr_chain obj.(digs) (DfracOwn q) ∗
+  "Hown_chain" ∷ hashchain.own ptr_chain σ.(state.hist) (DfracOwn q) ∗
 
   "Hsl_audits" ∷ sl_audits ↦*{#q} sl0_audits ∗
   "Hcap_audits" ∷ own_slice_cap loc sl_audits (DfracOwn q) ∗
   "#Hown_audits" ∷ ([∗ list] idx ↦ p; aud ∈ sl0_audits; audits,
     ktcore.AuditProof.own p aud (□)) ∗
-  "#His_audits" ∷ is_audits γ obj.(digs) audits ∗
+  "#His_audits" ∷ is_audits γ σ.(state.hist) audits ∗
 
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
   "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ) vrfSig.
@@ -439,9 +433,10 @@ Definition own γ secs ptr obj : iProp Σ :=
   "#Hsl_mapLabel" ∷ sl_mapLabel ↦*□ mapLabel ∗
   "#Hsl_mapVal" ∷ sl_mapVal ↦*□ mapVal ∗
 
-  "#His_mapLabel" ∷ ktcore.is_MapLabel γ.(cfg.vrf_pk) obj.(uid) obj.(ver) mapLabel ∗
-  "#His_rand" ∷ ktcore.is_CommitRand secs.(secrets.commit) mapLabel rand ∗
-  "#His_mapVal" ∷ ktcore.is_MapVal obj.(pk) rand mapVal ∗
+  "%His_mapLabel" ∷ ⌜ktcore.map_label_fn (get_vrf_pk γ) obj.(uid)
+    (uint.nat obj.(ver)) mapLabel⌝ ∗
+  "%His_rand" ∷ ⌜ktcore.is_CommitRand secs.(secrets.commit) mapLabel rand⌝ ∗
+  "%His_mapVal" ∷ ⌜ktcore.map_val_fn obj.(pk) rand mapVal⌝ ∗
 
   "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! obj.(uid) = Some uidγ⌝ ∗
   "#Hput_perm" ∷ mono_list_idx_own uidγ i (obj.(ver), obj.(pk)).
@@ -459,52 +454,35 @@ Record t :=
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : server.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-(* experimenting with diff abstractions to fit the diff use cases. *)
-(* TODO: inv for our server impl: last hist is equal to pend. *)
-(* TODO: maybe structure can be simpl'd now that worker doesn't need own. *)
-
-Definition own_ro_aux γ ptr obj : iProp Σ :=
-  ∃ ptr_secs ptr_workQ workQγ,
-  "#Hfld_secs" ∷ ptr.[server.Server.t, "secs"] ↦□ ptr_secs ∗
-  "#Hfld_workQ" ∷ ptr.[server.Server.t, "workQ"] ↦□ ptr_workQ ∗
-
-  "#Hown_secs" ∷ secrets.own γ ptr_secs obj.(secs) ∗
-  "#His_workQ" ∷ handoff.is_chan_handoff workQγ ptr_workQ (work.own_aux γ obj.(secs)).
-
-Definition own_ro γ ptr : iProp Σ := ∃ obj, own_ro_aux γ ptr obj.
-
-Definition own_locked γ ptr σ obj q : iProp Σ :=
-  ∃ ptr_keys keys ptr_hist hist lastDig,
+Definition own γ ptr σ obj q : iProp Σ :=
+  ∃ ptr_keys ptr_hist last_dig,
   "#Hfld_keys" ∷ ptr.[server.Server.t, "keys"] ↦□ ptr_keys ∗
   "#Hfld_hist" ∷ ptr.[server.Server.t, "hist"] ↦□ ptr_hist ∗
 
-  "Hown_keys" ∷ keyStore.own γ ptr_keys keys obj.(secs) lastDig q ∗
-  "Hown_hist" ∷ history.own γ ptr_hist hist q ∗
+  "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(secs) last_dig q ∗
+  "Hown_hist" ∷ history.own γ ptr_hist σ q ∗
 
   (* other 1/2 in server inv. *)
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
-  "%Heq_hist" ∷ ⌜σ.(state.hist).*1 = hist.(history.digs)⌝ ∗
-  "%Heq_last_hist" ∷ ⌜last σ.(state.hist) = Some (lastDig, keys.(keyStore.plain))⌝ ∗
-  "#Hop_add_hist" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
-    ∀ dig,
-    let σ' := set (state.hist) (.++ [(dig, σ.(state.pending))]) σ in
-    (own γ σ' ={∅,⊤}=∗ True)).
+  "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+  "%Heq_hist_pend" ∷ ⌜ktcore.to_plain (get_vrf_pk γ) last_dig = σ.(state.pending)⌝ ∗
+  "#Hop_add_hist" ∷ add_hist γ.
 
-Definition own γ ptr σ q : iProp Σ :=
-  ∃ obj,
-  "#Hown_ro" ∷ own_ro_aux γ ptr obj ∗
-  "Hown_locked" ∷ own_locked γ ptr σ obj q.
+Definition own_aux γ ptr obj q : iProp Σ := ∃ σ, own γ ptr σ obj q.
 
-Definition own_aux γ ptr q : iProp Σ := ∃ σ, own γ ptr σ q.
-
-Definition own_lock γ ptr : iProp Σ :=
-  ∃ ptr_mu,
+Definition own_ro γ ptr : iProp Σ :=
+  ∃ ptr_mu obj ptr_secs ptr_workQ workQγ,
+  "#Hfld_secs" ∷ ptr.[server.Server.t, "secs"] ↦□ ptr_secs ∗
+  "#Hfld_workQ" ∷ ptr.[server.Server.t, "workQ"] ↦□ ptr_workQ ∗
   "#Hfld_mu" ∷ ptr.[server.Server.t, "mu"] ↦□ ptr_mu ∗
-  "Hlock" ∷ own_RWMutex ptr_mu (own_aux γ ptr).
+
+  "#Hown_secs" ∷ secrets.own γ ptr_secs obj.(secs) ∗
+  "#His_workQ" ∷ bag.is_chan_bag workQγ ptr_workQ (work.own_aux γ obj.(secs)) ∗
+  "Hlock" ∷ own_RWMutex ptr_mu (own_aux γ ptr obj).
 
 End proof.
 End Server.
