@@ -500,6 +500,18 @@ Collection W := sem + package_sem.
 
 (** fetch-side helper funcs. *)
 
+(* TODO: upstream. *)
+Lemma subslice_snoc {A} n m (l : list A) x :
+  l !! m = Some x →
+  (n ≤ m)%nat →
+  subslice n (S m) l = subslice n m l ++ [x].
+Proof.
+  (* TODO: rm [subslice_split_r], worse version of [subslice_app_contig]. *)
+  intros **.
+  rewrite -(subslice_app_contig _ m); [|lia].
+  by erewrite subslice_singleton; [|done].
+Qed.
+
 Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
   let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
   {{{
@@ -561,14 +573,12 @@ Proof.
     "Hsl_hist" ∷ sl_hist ↦* sl0_hist ∗
     "Hcap_hist" ∷ own_slice_cap loc sl_hist 1 ∗
     "#Hsl0_hist" ∷ ([∗ list] ptr;obj ∈ sl0_hist;hist, ktcore.Memb.own ptr obj (□)) ∗
-    "Hown_hidden" ∷ merkle.own_Map ptr_hidden hidden last_dig (DfracOwn q) ∗
-    "Hsl_pks" ∷ sl_pks ↦*{#q} sl0_pks ∗
 
     "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
       (uint.nat prefixLen) last_dig hist ∗
     "%Heq_hist" ∷ ⌜subslice (uint.nat prefixLen) (uint.nat ver) pks =
       ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
-  )%I with "[Hown_hidden hist Hsl_pks Hsl_hist Hcap_hist ver]" as "IH".
+  )%I with "[hist Hsl_hist Hcap_hist ver]" as "IH".
   { iFrame "∗". iExists [].
     repeat iSplit; try done.
     - naive_solver.
@@ -584,6 +594,53 @@ Proof.
     iDestruct ("Hclose" with "[$Hsl_pks $Hcap_pks //]") as "Hptr0_plain".
     iApply "HΦ".
     by iFrame "∗#%". }
+
+  list_elem pks (uint.nat ver) as pk.
+  iDestruct (big_sepL2_lookup_r with "Hsl0_pks") as (sl_pk) "(%Hpk_lookup'&@)"; [done|].
+  wp_apply ktcore.wp_ProveMapLabel as "* @".
+  { iFrame "#". }
+  wp_apply (merkle.wp_Map_Prove with "[$Hown_hidden]") as "{Hsl_label} * @".
+  { iFrame "#".
+    by destruct His_Label as (?%cryptoffi.is_vrf_len&_). }
+  iPersist "Hsl_label Hsl_entryProof".
+  destruct (hidden !! label) eqn:Hlook_hidden.
+  2: {
+    exfalso. subst.
+    opose proof ((proj1 Hbij_maps) _ _ Hlook_uid) as [_ Ht].
+    odestruct (Ht _ _ Hpk_lookup) as (?&Hlab&?&?&?&?).
+    apply ktcore.map_label_iff in Hlab.
+    opose proof (ktcore.map_label_det His_Label Hlab) as <-.
+    simplify_eq/=. }
+  destruct_and?. subst.
+  wp_apply wp_Assert; [done|].
+  wp_apply ktcore.wp_GetCommitRand as "* @".
+  { iFrame "#". }
+  case_decide; [|word].
+  wp_apply (wp_load_slice_index with "[$Hsl_pks]") as "Hsl_pks"; [word|..].
+  { iPureIntro. exact_eq Hpk_lookup'. f_equal. word. }
+  wp_apply wp_alloc as "%ptr_open Hptr_open".
+  wp_apply wp_alloc as "%ptr_memb Hptr_memb".
+  wp_apply wp_slice_literal as "* Ht".
+  { iIntros "**". by wp_auto. }
+  replace (sint.nat _) with 0%nat by word. simpl.
+  iPersist "Hptr_open Hptr_memb".
+  wp_apply (wp_slice_append with "[$Hsl_hist $Hcap_hist $Ht]")
+    as "%sl_hist' (Hsl_hist&Hcap_hist&_)".
+  wp_for_post.
+  iFrame.
+  iExists (hist ++ [ktcore.Memb.mk' _ (ktcore.CommitOpen.mk' _ _) _]).
+  iSplit; [word|].
+  iSplit. { iApply big_sepL2_snoc. iFrame "#". }
+  iSplit.
+  2: {
+    iPureIntro.
+    rewrite !fmap_snoc /=.
+    replace (uint.nat (word.add _ _)) with (S $ uint.nat ver) by word.
+    erewrite subslice_snoc; [|done|word].
+    by rewrite Heq_hist. }
+  rewrite /ktcore.wish_ListMemb.
+  iApply big_sepL_snoc. iFrame "#". simpl.
+  Fail replace (uint.nat ver) with (uint.nat prefixLen + length hist)%nat in His_Label by word.
 Admitted.
 
 Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
