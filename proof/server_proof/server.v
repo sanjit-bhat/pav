@@ -66,7 +66,7 @@ Definition valid γ obj : iProp Σ :=
       ∃ i,
       (* client owns mlist_auth for their uid.
       for adversarial uid, auth in inv. *)
-      mono_list_idx_own uidγ i ((W64 ver), pk))) ∗
+      mono_list_idx_own uidγ i (ver, pk))) ∗
   "%Hsub_pend" ∷ ⌜∀ last_dig,
     last obj.(state.hist) = Some last_dig →
     ktcore.plain_sub (ktcore.to_plain (get_vrf_pk γ) last_dig) obj.(state.pending)⌝ ∗
@@ -113,7 +113,7 @@ Lemma hist_to_put_perms γ i x :
       ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
       ([∗ list] ver ↦ pk ∈ pks,
         ∃ i,
-        mono_list_idx_own uidγ i ((W64 ver), pk)).
+        mono_list_idx_own uidγ i (ver, pk)).
 Proof.
   iIntros "#Hinv #Hidx".
   rewrite /is_inv.
@@ -209,32 +209,18 @@ Proof.
   word.
 Qed.
 
-Definition pure_put uid (ver : w64) pk (pend : ktcore.plain_ty) :=
-  let pks := pend !!! uid in
-  (* drop put if not right version.
-  this enforces a "linear" version history. *)
-  if bool_decide (uint.nat ver ≠ length pks) then pend else
-  <[uid:=pks ++ [pk]]>pend.
-
-Lemma sub_over_put pend uid ver pk :
-  ktcore.plain_sub pend (pure_put uid ver pk pend).
-Proof.
-  rewrite /pure_put.
-  case_bool_decide; [done|].
-  rewrite /ktcore.plain_sub.
-  apply insert_included; [apply _|].
-  rewrite lookup_total_alt.
-  intros ? ->. simpl.
-  by apply prefix_app_r.
-Qed.
+Definition perm_put γ uid ver pk : iProp Σ :=
+  □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
+      (let pks := obj.(state.pending) !!! uid in
+      let obj' := set state.pending <[uid:=pks ++ [pk]]> obj in
+      ⌜ver = length pks⌝ -∗
+      own γ obj' ={∅,⊤}=∗ True)).
 
 Lemma op_put γ uid uidγ i ver pk :
   is_inv γ -∗
   ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ -∗
   mono_list_idx_own uidγ i (ver, pk) -∗
-  □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
-    (let obj' := set state.pending (pure_put uid ver pk) obj in
-    own γ obj' ={∅,⊤}=∗ True)).
+  perm_put γ uid ver pk.
 Proof.
   iIntros "#Hinv %Hlook_uidγ #Hmono_idx".
   iModIntro.
@@ -244,7 +230,7 @@ Proof.
   { set_solver. }
   iIntros "Hmask".
   iFrame.
-  iIntros "H".
+  iIntros (->) "H".
   iMod "Hmask" as "_".
   iMod ("Hclose" with "[-]"); [|done].
   iModIntro.
@@ -253,13 +239,10 @@ Proof.
   destruct obj. simpl in *.
   iNamed "His_serv".
   iFrame "%". iSplit; try iPureIntro; simpl in *.
-  - rewrite /pure_put.
-    case_bool_decide; [iFrame "#"|].
-    iApply big_sepM_insert_2; [|iFrame "#"].
+  - iApply big_sepM_insert_2; [|iFrame "#"].
     iFrame "%".
     iApply big_sepL_snoc.
-    iSplit.
-    2: { iExists _. iExactEq "Hmono_idx". repeat f_equal. word. }
+    iFrame "#".
     rewrite lookup_total_alt.
     destruct (pending !! uid) eqn:Hlook;
       rewrite Hlook; simpl; [|done].
@@ -267,19 +250,22 @@ Proof.
     by simplify_eq/=.
   - intros.
     trans pending; [naive_solver|].
-    apply sub_over_put.
+    apply insert_included; [apply _|].
+    intros.
+    setoid_rewrite lookup_total_correct; [|done].
+    by apply prefix_app_r.
 Qed.
 
-Definition add_hist γ : iProp Σ :=
+Definition perm_add_hist γ : iProp Σ :=
   □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
     ∀ dig,
     ⌜ktcore.to_plain (get_vrf_pk γ) dig = obj.(state.pending)⌝ -∗
     let obj' := set (state.hist) (.++ [dig]) obj in
     (own γ obj' ={∅,⊤}=∗ True)).
 
-Lemma op_add_hist γ : is_inv γ -∗ add_hist γ.
+Lemma op_add_hist γ : is_inv γ -∗ perm_add_hist γ.
 Proof.
-  rewrite /add_hist. iIntros "#Hinv".
+  rewrite /perm_add_hist. iIntros "#Hinv".
   iModIntro.
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
@@ -427,8 +413,8 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own γ secs ptr obj : iProp Σ :=
-  ∃ sl_pk sl_mapLabel mapLabel sl_mapVal mapVal rand uidγ i,
-  "Hstr_Work" ∷ ptr ↦ (server.work.mk obj.(uid) obj.(ver) sl_pk sl_mapLabel sl_mapVal) ∗
+  ∃ sl_pk sl_mapLabel mapLabel sl_mapVal mapVal rand,
+  "#Hstr_work" ∷ ptr ↦□ (server.work.mk obj.(uid) obj.(ver) sl_pk sl_mapLabel sl_mapVal) ∗
   "#Hsl_pk" ∷ sl_pk ↦*□ obj.(pk) ∗
   "#Hsl_mapLabel" ∷ sl_mapLabel ↦*□ mapLabel ∗
   "#Hsl_mapVal" ∷ sl_mapVal ↦*□ mapVal ∗
@@ -438,8 +424,7 @@ Definition own γ secs ptr obj : iProp Σ :=
   "%His_rand" ∷ ⌜ktcore.is_CommitRand secs.(secrets.commit) mapLabel rand⌝ ∗
   "%His_mapVal" ∷ ⌜ktcore.map_val_fn obj.(pk) rand mapVal⌝ ∗
 
-  "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! obj.(uid) = Some uidγ⌝ ∗
-  "#Hput_perm" ∷ mono_list_idx_own uidγ i (obj.(ver), obj.(pk)).
+  "#Hperm_put" ∷ perm_put γ obj.(uid) (uint.nat obj.(ver)) obj.(pk).
 
 Definition own_aux γ secs (ptr : loc) : iProp Σ := ∃ obj, own γ secs ptr obj.
 
@@ -454,6 +439,8 @@ End work.
 Module Server.
 Record t' :=
   mk' {
+    (* even tho secrets is static param, don't put it in global server γ.
+    clients shouldn't depend on it being visible. *)
     secs : secrets.t;
   }.
 
@@ -483,12 +470,12 @@ Definition own γ ptr σ obj q : iProp Σ :=
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
   "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
   "%Heq_hist_pend" ∷ ⌜ktcore.to_plain (get_vrf_pk γ) last_dig = σ.(state.pending)⌝ ∗
-  "#Hop_add_hist" ∷ add_hist γ.
+  "#Hperm_add_hist" ∷ perm_add_hist γ.
 
 Definition own_aux γ ptr obj q : iProp Σ := ∃ σ, own γ ptr σ obj q.
 
-Definition lock_perm γ ptr : iProp Σ :=
-  ∃ ptr_mu obj,
+Definition lock_perm γ ptr obj : iProp Σ :=
+  ∃ ptr_mu,
   "#Hfld_mu" ∷ ptr.[server.Server.t, "mu"] ↦□ ptr_mu ∗
 
   "Hlock" ∷ own_RWMutex ptr_mu (own_aux γ ptr obj) ∗
@@ -728,8 +715,34 @@ Proof.
   (* TODO: translate/prove [Timer] and [NewTimer], assuming [newTimer]. *)
 Admitted.
 
+Lemma wp_Server_doWork s γ obj sl_work work :
+  {{{
+    is_pkg_init server ∗
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
+    "#Hown_work_sl" ∷ work.own_sl γ obj.(Server.secs) sl_work work
+  }}}
+  s @! (go.PointerType server.Server) @! "doWork" #sl_work
+  {{{
+    RET #();
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj
+  }}}.
+Proof.
+  wp_start as "@".
+  iNamed "Hown_serv_lock".
+  iNamed "Hown_ro".
+  wp_apply wp_with_defer as "* Hdefer". simpl.
+  wp_auto.
+  wp_apply (wp_RWMutex__Lock with "[$Hlock]") as "(Hlocked&H)".
+  iNamed "H".
+  iNamed "Hown_work_sl".
+  iDestruct (own_slice_len with "Hsl_work") as %?.
+  wp_apply wp_slice_make3 as "%sl_upd (Hsl_upd&Hcap_upd&_)"; [word|].
+  replace (sint.nat _) with 0%nat by word. simpl.
+Admitted.
+
 (** top-level methods. *)
 
+(* TODO: instead of duplicating the op perm bodies, should use their defns. *)
 Lemma wp_Server_Put s γ obj uid sl_pk pk ver :
   {{{
     is_pkg_init server ∗
@@ -745,6 +758,8 @@ Lemma wp_Server_Put s γ obj uid sl_pk pk ver :
   {{{ RET #(); True }}}.
 Proof. Admitted.
 
+(* TODO: when adapting below to lock_perm change, obj conflicts with σ.
+need to rename existing obj to σ. *)
 Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
   {{{
     is_pkg_init server ∗
