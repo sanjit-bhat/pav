@@ -443,6 +443,11 @@ Definition own γ secs ptr obj : iProp Σ :=
 
 Definition own_aux γ secs (ptr : loc) : iProp Σ := ∃ obj, own γ secs ptr obj.
 
+Definition own_sl γ secs sl_work work : iProp Σ :=
+  ∃ sl0_work,
+  "#Hsl_work" ∷ sl_work ↦*□ sl0_work ∗
+  "#Hsl0_work" ∷ ([∗ list] ptr;obj ∈ sl0_work;work, own γ secs ptr obj).
+
 End proof.
 End work.
 
@@ -703,6 +708,25 @@ Proof.
   replace (W64 _) with numVers by word.
   by iFrame "#".
 Qed.
+
+(** update-side helper funcs. *)
+
+Lemma wp_Server_getWork s γ obj :
+  {{{
+    is_pkg_init server ∗
+    "#Hown_serv_ro" ∷ Server.own_ro γ s obj
+  }}}
+  s @! (go.PointerType server.Server) @! "getWork" #()
+  {{{
+    sl_work work, RET #sl_work;
+    "#Hown_work_sl" ∷ work.own_sl γ obj.(Server.secs) sl_work work
+  }}}.
+Proof.
+  wp_start as "@".
+  iDestruct (is_pkg_init_access with "[$]") as "@".
+  iNamed "Hown_serv_ro". wp_auto.
+  (* TODO: translate/prove [Timer] and [NewTimer], assuming [newTimer]. *)
+Admitted.
 
 (** top-level methods. *)
 
