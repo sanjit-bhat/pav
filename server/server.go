@@ -202,6 +202,7 @@ func (s *Server) doWork(work []*work) {
 func (s *Server) getHist(uid, prefixLen uint64) (hist []*ktcore.Memb) {
 	pks := s.keys.plain[uid]
 	numVers := uint64(len(pks))
+	hist = make([]*ktcore.Memb, 0, numVers-prefixLen)
 	for ver := prefixLen; ver < numVers; ver++ {
 		label, labelProof := ktcore.ProveMapLabel(s.secs.vrf, uid, ver)
 		inMap, _, mapProof := s.keys.hidden.Prove(label)
