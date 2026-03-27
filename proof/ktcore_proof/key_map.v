@@ -697,7 +697,12 @@ Lemma list_reln_box {A B} R0 R1 (f : A → B) (l0 : list A) :
   list_reln l0 R0 →
   (∀ x0 x1, R0 x0 x1 → R1 (f x0) (f x1)) →
   list_reln (f <$> l0) R1.
-Proof. Admitted.
+Proof.
+  rewrite /list_reln. intros H Hrel i x y.
+  rewrite !list_lookup_fmap.
+  intros [a [Ha ->]]%fmap_Some [b [Hb ->]]%fmap_Some.
+  exact (Hrel _ _ (H _ _ _ Ha Hb)).
+Qed.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.

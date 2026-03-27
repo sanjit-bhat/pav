@@ -104,7 +104,19 @@ Import key_map.ktcore serde.ktcore.
 Lemma list_reln_app {A} R (l0 l1 : list A) :
   list_reln (l0 ++ l1) R →
   list_reln l0 R ∧ list_reln l1 R.
-Proof. Admitted.
+Proof.
+  rewrite /list_reln. intros Happ. split.
+  - intros i x y Hx Hy.
+    apply Happ.
+    + rewrite lookup_app_l; [done|eapply lookup_lt_Some; done].
+    + rewrite lookup_app_l; [done|eapply lookup_lt_Some; done].
+  - intros i x y Hx Hy.
+    apply (Happ (i + length l0)%nat).
+    + rewrite lookup_app_r; last lia.
+      replace (i + length l0 - length l0) with i by lia. done.
+    + rewrite lookup_app_r; last lia.
+      replace (S (i + length l0) - length l0) with (S i) by lia. done.
+Qed.
 
 Lemma lookup_app_r' {A} (l1 l2 : list A) i :
   l2 !! i = (l1 ++ l2) !! (i + length l1)%nat.
