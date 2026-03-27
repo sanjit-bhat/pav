@@ -568,7 +568,8 @@ Proof.
   iAssert (
     ∃ (ver : w64) sl_hist sl0_hist hist,
     "ver" ∷ ver_ptr ↦ ver ∗
-    "%Hlt_ver" ∷ ⌜uint.nat prefixLen ≤ uint.nat ver ≤ length pks⌝ ∗
+    "%Heq_ver" ∷ ⌜uint.nat ver = (uint.nat prefixLen + length hist)%nat⌝ ∗
+    "%Hlt_ver" ∷ ⌜uint.nat ver ≤ length pks⌝ ∗
     "hist" ∷ hist_ptr ↦ sl_hist ∗
     "Hsl_hist" ∷ sl_hist ↦* sl0_hist ∗
     "Hcap_hist" ∷ own_slice_cap loc sl_hist 1 ∗
@@ -603,7 +604,7 @@ Proof.
   { iFrame "#".
     by destruct His_Label as (?%cryptoffi.is_vrf_len&_). }
   iPersist "Hsl_label Hsl_entryProof".
-  destruct (hidden !! label) eqn:Hlook_hidden.
+  destruct (hidden !! label) as [map_val|] eqn:Hlook_hidden.
   2: {
     exfalso. subst.
     opose proof ((proj1 Hbij_maps) _ _ Hlook_uid) as [_ Ht].
@@ -629,6 +630,7 @@ Proof.
   wp_for_post.
   iFrame.
   iExists (hist ++ [ktcore.Memb.mk' _ (ktcore.CommitOpen.mk' _ _) _]).
+  iSplit; [len|].
   iSplit; [word|].
   iSplit. { iApply big_sepL2_snoc. iFrame "#". }
   iSplit.
@@ -639,9 +641,19 @@ Proof.
     erewrite subslice_snoc; [|done|word].
     by rewrite Heq_hist. }
   rewrite /ktcore.wish_ListMemb.
-  iApply big_sepL_snoc. iFrame "#". simpl.
-  Fail replace (uint.nat ver) with (uint.nat prefixLen + length hist)%nat in His_Label by word.
-Admitted.
+  iApply big_sepL_snoc.
+  rewrite -Heq_ver.
+  iFrame "#%". simpl.
+  replace (W64 _) with ver by word. iFrame "#".
+  iPureIntro. rewrite /ktcore.map_val_fn.
+  opose proof ((proj1 Hbij_maps) _ _ Hlook_uid) as [_ Ht].
+  odestruct (Ht _ _ Hpk_lookup) as (?&Hlab%ktcore.map_label_iff&?&?&Hval&?).
+  opose proof (ktcore.map_label_det His_Label Hlab) as <-.
+  opose proof (His_commit _ _ Hlook_hidden) as (?&?&?&Hrand).
+  opose proof (ktcore.is_CommitRand_det His_CommitRand Hrand) as <-.
+  simplify_eq/=.
+  by apply ktcore.map_val_iff in Hval.
+Qed.
 
 Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
   let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
