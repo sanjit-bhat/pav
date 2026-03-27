@@ -529,36 +529,61 @@ Proof.
   (* destruct "uid existence" early to reduce complexity. *)
   destruct (ktcore.to_plain (get_vrf_pk γ) last_dig !! uid) as [pks|] eqn:Hlook_uid.
   2: {
+    rewrite lookup_total_alt Hlook_uid /= in Heq_prefixLen |-*.
     iDestruct (big_sepM2_lookup_r_none with "Hptr0_plain") as %->; [done|].
-    rewrite lookup_total_alt Hlook_uid in Heq_prefixLen |-*.
-    simpl in *.
     assert (prefixLen = W64 0) as -> by word.
     replace (uint.nat (W64 0)) with 0%nat by word.
+    simpl in *.
+    wp_apply wp_slice_make3 as "* (Hsl_hist&_)"; [word|].
+    iPersist "Hsl_hist".
+    replace (sint.nat _) with 0%nat by word.
     wp_for.
     iApply ("HΦ" $! _ []).
     iFrame "∗#%".
-    iDestruct own_slice_nil as "$".
     simpl. repeat iSplit; try done.
     rewrite /ktcore.wish_ListMemb. naive_solver. }
 
+  rewrite lookup_total_alt Hlook_uid /= in Heq_prefixLen |-*.
   iDestruct (big_sepM2_lookup_r_some with "Hptr0_plain") as %[sl_pks Hlook_uid']; [done|].
-  rewrite Hlook_uid' /=.
   iDestruct (big_sepM2_lookup_acc with "Hptr0_plain") as "(@&Hclose)"; [done..|].
+  iDestruct (own_slice_len with "Hsl_pks") as %?.
+  iDestruct (big_sepL2_length with "Hsl0_pks") as %?.
+  rewrite Hlook_uid' /=.
+  wp_apply wp_slice_make3 as "* (Hsl_hist&Hcap_hist&_)"; [word|].
+  replace (sint.nat _) with 0%nat by word.
+  simpl.
   iPersist "s uid pks numVers".
   iAssert (
-    ∃ ver sl_hist hist,
+    ∃ (ver : w64) sl_hist sl0_hist hist,
     "ver" ∷ ver_ptr ↦ ver ∗
-    "%Hlt_ver" ∷ ⌜uint.nat prefixLen ≤ uint.nat ver < length pks⌝ ∗
+    "%Hlt_ver" ∷ ⌜uint.nat prefixLen ≤ uint.nat ver ≤ length pks⌝ ∗
     "hist" ∷ hist_ptr ↦ sl_hist ∗
+    "Hsl_hist" ∷ sl_hist ↦* sl0_hist ∗
+    "Hcap_hist" ∷ own_slice_cap loc sl_hist 1 ∗
+    "#Hsl0_hist" ∷ ([∗ list] ptr;obj ∈ sl0_hist;hist, ktcore.Memb.own ptr obj (□)) ∗
     "Hown_hidden" ∷ merkle.own_Map ptr_hidden hidden last_dig (DfracOwn q) ∗
     "Hsl_pks" ∷ sl_pks ↦*{#q} sl0_pks ∗
 
-    "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
     "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
       (uint.nat prefixLen) last_dig hist ∗
     "%Heq_hist" ∷ ⌜subslice (uint.nat prefixLen) (uint.nat ver) pks =
       ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
-  )%I as "IH".
+  )%I with "[Hown_hidden hist Hsl_pks Hsl_hist Hcap_hist ver]" as "IH".
+  { iFrame "∗". iExists [].
+    repeat iSplit; try done.
+    - naive_solver.
+    - rewrite /ktcore.wish_ListMemb. naive_solver.
+    - by rewrite subslice_zero_length. }
+  rewrite -wp_fupd.
+  wp_for "IH".
+  wp_if_destruct.
+  2: {
+    replace (uint.nat ver) with (length pks) in Heq_hist by word.
+    rewrite subslice_to_end in Heq_hist; [|lia].
+    iPersist "Hsl_hist".
+    iDestruct ("Hclose" with "[$Hsl_pks $Hcap_pks //]") as "Hptr0_plain".
+    iApply "HΦ".
+    by iFrame "∗#%". }
 Admitted.
 
 Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :

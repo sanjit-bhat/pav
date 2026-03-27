@@ -1396,6 +1396,8 @@ Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     let: "$r0" := (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "pks") in
     (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")) in
     do:  ("numVers" <-[go.uint64] "$r0");;;
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType (go.PointerType ktcore.Memb)] #()) #(W64 0) ((![go.uint64] "numVers") -⟨go.uint64⟩ (![go.uint64] "prefixLen"))) in
+    do:  ("hist" <-[go.SliceType (go.PointerType ktcore.Memb)] "$r0");;;
     (let: "ver" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: "$r0" := (![go.uint64] "prefixLen") in
     do:  ("ver" <-[go.uint64] "$r0");;;
@@ -1447,7 +1449,7 @@ Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
 
 (* getBound returns a non-membership proof for the boundary version.
 
-   go: server.go:218:18 *)
+   go: server.go:232:18 *)
 Definition Server__getBoundⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "numVers",
     exception_do (let: "bound" := (GoAlloc (go.PointerType ktcore.NonMemb) (GoZeroVal (go.PointerType ktcore.NonMemb) #())) in
