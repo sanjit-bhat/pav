@@ -303,7 +303,7 @@ End proof.
 (** golang server state. *)
 
 Module secrets.
-Record t := mk' {
+Record t' := mk' {
   commit : list w8;
 }.
 
@@ -382,16 +382,16 @@ Definition is_audits γ digs audits : iProp Σ :=
     "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) = (take (S ep) digs, None)⌝ ∗
     "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link sig).
 
-Definition own γ ptr σ q : iProp Σ :=
+Definition own γ ptr digs q : iProp Σ :=
   ∃ ptr_chain sl_audits sl0_audits audits sl_vrfSig vrfSig,
   "Hstr_history" ∷ ptr ↦{#q} (server.history.mk ptr_chain sl_audits sl_vrfSig) ∗
-  "Hown_chain" ∷ hashchain.own ptr_chain σ.(state.hist) (DfracOwn q) ∗
+  "Hown_chain" ∷ hashchain.own ptr_chain digs (DfracOwn q) ∗
 
   "Hsl_audits" ∷ sl_audits ↦*{#q} sl0_audits ∗
   "Hcap_audits" ∷ own_slice_cap loc sl_audits (DfracOwn q) ∗
   "#Hown_audits" ∷ ([∗ list] idx ↦ p; aud ∈ sl0_audits; audits,
     ktcore.AuditProof.own p aud (□)) ∗
-  "#His_audits" ∷ is_audits γ σ.(state.hist) audits ∗
+  "#His_audits" ∷ is_audits γ digs audits ∗
 
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
   "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ) vrfSig.
@@ -400,7 +400,7 @@ End proof.
 End history.
 
 Module work.
-Record t := mk' {
+Record t' := mk' {
   uid : w64;
   ver : w64;
   pk : list w8;
@@ -441,7 +441,7 @@ Record t' :=
   mk' {
     (* even tho secrets is static param, don't put it in global server γ.
     clients shouldn't depend on it being visible. *)
-    secs : secrets.t;
+    secs : secrets.t';
   }.
 
 Section proof.
@@ -464,7 +464,7 @@ Definition own γ ptr σ obj q : iProp Σ :=
   "#Hfld_hist" ∷ ptr.[server.Server.t, "hist"] ↦□ ptr_hist ∗
 
   "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(secs) last_dig q ∗
-  "Hown_hist" ∷ history.own γ ptr_hist σ q ∗
+  "Hown_hist" ∷ history.own γ ptr_hist σ.(state.hist) q ∗
 
   (* other 1/2 in server inv. *)
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
@@ -738,7 +738,66 @@ Proof.
   iDestruct (own_slice_len with "Hsl_work") as %?.
   wp_apply wp_slice_make3 as "%sl_upd (Hsl_upd&Hcap_upd&_)"; [word|].
   replace (sint.nat _) with 0%nat by word. simpl.
+  destruct σ. simpl in *.
+  subst.
+  iAssert (
+    ∃ (i : w64) (t0 : loc) sl_upd upd next_dig,
+    let next_pend := ktcore.to_plain (get_vrf_pk γ) next_dig in
+    "i" ∷ i_ptr ↦ i ∗
+    "%Hlt_i" ∷ ⌜0 ≤ sint.Z i ≤ length work⌝ ∗
+    "w" ∷ w_ptr ↦ t0 ∗
+    "upd" ∷ upd_ptr ↦ sl_upd ∗
+    "Hown_upd" ∷ ktcore.UpdateProofSlice1D.own sl_upd upd 1 ∗
+    "Hcap_upd" ∷ own_slice_cap loc sl_upd 1 ∗
+    "#His_upd" ∷ ktcore.wish_ListUpdate last_dig upd next_dig ∗
+    "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(Server.secs) next_dig 1 ∗
+    "Hown_gs" ∷ own_aux γ {| state.pending := next_pend; state.hist := hist |} (1/2)
+  )%I with "[Hown_keys Hown_gs upd Hsl_upd Hcap_upd w i]" as "IH".
+  { iFrame "∗". iExists [].
+    iSplit; [word|].
+    iSplit; [done|].
+    iApply ktcore.wish_ListUpdate_nil. }
+  wp_for "IH".
+  case_bool_decide.
+  { iDestruct (own_slice_len with "Hsl_work") as %?.
+    iDestruct (big_sepL2_length with "Hsl0_work") as %?.
+    list_elem work (sint.nat i) as w.
+    iDestruct (big_sepL2_lookup_r with "Hsl0_work") as (ptr_w) "(%&@)"; [done|].
+    iNamed "Hown_keys". iNamed "Hown_plain".
+    (* TODO: code ordering screwed up here. *)
+    wp_auto.
+    case_decide; [|word].
+    (* TODO: for some reason, [as "_"] is slow as hell here. *)
+    wp_apply wp_load_slice_index; [word|by iFrame "#"|].
+    iIntros "_".
+    wp_auto. simpl.
+    wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
+    wp_if_destruct.
+    2: {
+      wp_for_post.
 Admitted.
+
+(*
+what's this code doing?
+- iterate thru work, check that (uid, ver) is latest.
+- execute keyStore update. hidden, plain, UpdProof.
+- after loop, execute history update. hashchain, audits.
+
+how should the GS update?
+- we have a good design, where history separate from pending.
+- in beginning, Server inv says keyStore (last hist) equals pending.
+- in loop, as update keyStore, update pending.
+- after loop, snoc pending onto hist.
+this re-establishes that last hist equals pending.
+
+now onto the details:
+- need to say that keyStore matches last hist.
+- last hist is a dig.
+- at least keyStore.hidden needs to have that dig.
+- get put perm for (uid, ver, pk).
+run ver check against keyStore.plain.
+must have: keyStore.plain = pending to do GS update.
+*)
 
 (** top-level methods. *)
 

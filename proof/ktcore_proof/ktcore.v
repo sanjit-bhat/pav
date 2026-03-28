@@ -443,6 +443,15 @@ Proof.
   by simplify_eq/=.
 Qed.
 
+Lemma wish_ListUpdate_nil dig :
+  ⊢ wish_ListUpdate dig [] dig.
+Proof.
+  rewrite /wish_ListUpdate /wish_ListUpdate_aux.
+  iIntros. iExists [dig].
+  iSplit; [|done].
+  naive_solver.
+Qed.
+
 Lemma wish_ListUpdate_grow dig0 updates dig1 upd dig2 :
   wish_ListUpdate dig0 updates dig1 -∗
   merkle.wish_Update
