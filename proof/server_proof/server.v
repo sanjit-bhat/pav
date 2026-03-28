@@ -332,9 +332,7 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Definition own_plain ptr_plain (plain : ktcore.plain_ty) q : iProp Σ :=
-  ∃ ptr0_plain,
-  "Hptr_plain" ∷ ptr_plain ↦${#q} ptr0_plain ∗
+Definition own_plain ptr0_plain (plain : ktcore.plain_ty) q : iProp Σ :=
   "Hptr0_plain" ∷ ([∗ map] uid ↦ sl_pks;pks ∈ ptr0_plain;plain,
     ∃ sl0_pks,
     "Hsl_pks" ∷ sl_pks ↦*{#q} sl0_pks ∗
@@ -351,11 +349,12 @@ Definition is_commit commit_sec (hidden : gmap (list w8) (list w8)) :=
     hidden.
 
 Definition own γ ptr secs dig q : iProp Σ :=
-  ∃ ptr_hidden hidden ptr_plain,
+  ∃ ptr_hidden hidden ptr_plain ptr0_plain,
   let plain := ktcore.to_plain (get_vrf_pk γ) dig in
   "#Hstr_keyStore" ∷ ptr ↦□ (server.keyStore.mk ptr_hidden ptr_plain) ∗
   "Hown_hidden" ∷ merkle.own_Map ptr_hidden hidden dig (DfracOwn q) ∗
-  "Hown_plain" ∷ own_plain ptr_plain plain q ∗
+  "Hptr_plain" ∷ ptr_plain ↦${#q} ptr0_plain ∗
+  "Hown_plain" ∷ own_plain ptr0_plain plain q ∗
   "%Hbij_maps" ∷ ⌜ktcore.is_plain (get_vrf_pk γ) plain hidden⌝ ∗
   "%His_commit" ∷ ⌜is_commit secs.(secrets.commit) hidden⌝.
 
@@ -740,6 +739,7 @@ Proof.
   replace (sint.nat _) with 0%nat by word. simpl.
   destruct σ. simpl in *.
   subst.
+
   iAssert (
     ∃ (i : w64) (t0 : loc) sl_upd upd next_dig,
     let next_pend := ktcore.to_plain (get_vrf_pk γ) next_dig in
@@ -759,22 +759,72 @@ Proof.
     iApply ktcore.wish_ListUpdate_nil. }
   wp_for "IH".
   case_bool_decide.
-  { iDestruct (own_slice_len with "Hsl_work") as %?.
+  { iNamed "Hown_keys".
+    iDestruct (own_slice_len with "Hsl_work") as %?.
     iDestruct (big_sepL2_length with "Hsl0_work") as %?.
     list_elem work (sint.nat i) as w.
     iDestruct (big_sepL2_lookup_r with "Hsl0_work") as (ptr_w) "(%&@)"; [done|].
-    iNamed "Hown_keys". iNamed "Hown_plain".
-    (* TODO: code ordering screwed up here. *)
+    (* TODO: code ordering display inside for-loop is screwed up. *)
     wp_auto.
-    case_decide; [|word].
+    case_decide as Ht; [|word]. clear Ht.
     (* TODO: for some reason, [as "_"] is slow as hell here. *)
     wp_apply wp_load_slice_index; [word|by iFrame "#"|].
     iIntros "_".
     wp_auto. simpl.
     wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
-    wp_if_destruct.
-    2: {
-      wp_for_post.
+    case_bool_decide as Ht; wp_auto.
+    2: { wp_for_post. iFrame "Hown_hist ∗#%". word. }
+
+    iAssert (
+      ∃ sl0_pks,
+      let sl_pks := default slice.nil (ptr0_plain !! w.(work.uid)) in
+      "Hsl_pks" ∷ sl_pks ↦* sl0_pks ∗
+      "Hcap_pks" ∷ own_slice_cap slice.t sl_pks 1 ∗
+      "#Hsl0_pks" ∷ ([∗ list] sl_pk;pk ∈
+        sl0_pks;ktcore.to_pks (get_vrf_pk γ) w.(work.uid) next_dig,
+        "Hsl_pk" ∷ sl_pk ↦*□ pk) ∗
+      "Hown_plain" ∷ keyStore.own_plain (delete w.(work.uid) ptr0_plain)
+        (delete w.(work.uid) (ktcore.to_plain (get_vrf_pk γ) next_dig)) 1
+    )%I with "[Hown_plain]" as "@".
+    { destruct (ptr0_plain !! _) eqn:?; simpl in *.
+      - iDestruct (big_sepM2_delete_l with "Hown_plain") as "(%&%&@&Hown_plain)"; [done|].
+        erewrite lookup_total_correct; [|done].
+        iFrame "∗#".
+      - iDestruct (big_sepM2_lookup_l_none with "Hown_plain") as %Ht0; [done|].
+        iDestruct own_slice_nil as "$".
+        iDestruct own_slice_cap_nil as "$".
+        rewrite lookup_total_alt Ht0 /=.
+        iSplit; [done|].
+        rewrite !delete_id; [|done..].
+        iFrame. }
+    iDestruct (own_slice_len with "Hsl_pks") as %?.
+    iDestruct (big_sepL2_length with "Hsl0_pks") as %?.
+
+    iAssert (⌜uint.nat w.(work.ver) =
+      length $ ktcore.to_pks (get_vrf_pk γ) w.(work.uid) next_dig⌝)%I
+      as %Heq_ver; [word|].
+    clear Ht.
+    destruct (hidden !! mapLabel) eqn:Hlook_hid.
+    { exfalso.
+      opose proof ((proj2 Hbij_maps) _ _ Hlook_hid) as Ht.
+      rewrite /= /ktcore.in_plain in Ht.
+      destruct_exis. destruct Ht as (?&?&?&?%lookup_lt_Some).
+      apply ktcore.map_label_iff in His_mapLabel.
+      simplify_eq/=.
+      erewrite lookup_total_correct in Heq_ver; [|done].
+      word. }
+
+    wp_apply (merkle.wp_Map_Put with "[$Hown_hidden]") as "* @".
+    { iFrame "#%".
+      destruct His_mapLabel as (Ht&_).
+      by apply cryptoffi.is_vrf_len in Ht. }
+    simpl.
+    wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
+    wp_apply wp_slice_literal as "* Ht".
+    { iIntros "**". by wp_auto. }
+    replace (sint.nat _) with 0%nat by word. simpl.
+    wp_apply (wp_slice_append _ with "[$Hsl_pks $Hcap_pks $Ht]")
+      as "%sl_pks (Hsl_pks&Hcap_pks&_)".
 Admitted.
 
 (*
