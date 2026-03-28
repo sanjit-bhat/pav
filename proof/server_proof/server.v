@@ -58,6 +58,23 @@ Definition own_aux γ obj q : iProp Σ :=
 (* other 1/2 in server lock inv. *)
 Definition own γ obj : iProp Σ := own_aux γ obj (1/2).
 
+(* TODO: prove below admits using auditor.v as reference. *)
+#[global] Instance own_aux_frac γ obj :
+  fractional.Fractional (λ q, own_aux γ obj q).
+Proof. Admitted.
+
+#[global] Instance own_aux_as_frac γ obj q :
+  fractional.AsFractional (own_aux γ obj q) (λ q, own_aux γ obj q) q.
+Proof. auto. Qed.
+
+#[global] Instance own_aux_combine_sep_gives γ obj0 obj1 q0 q1 :
+  CombineSepGives (own_aux γ obj0 q0) (own_aux γ obj1 q1) (⌜obj0 = obj1⌝).
+Proof. Admitted.
+
+#[global] Instance own_aux_combine_sep_as γ obj0 obj1 q0 q1 :
+  CombineSepAs (own_aux γ obj0 q0) (own_aux γ obj1 q1) (own_aux γ obj0 (q0 + q1)) | 60.
+Proof. Admitted.
+
 Definition valid γ obj : iProp Σ :=
   "#Hperm_uids" ∷ ([∗ map] uid ↦ pks ∈ obj.(state.pending),
     ∃ uidγ,
@@ -814,6 +831,22 @@ Proof.
       erewrite lookup_total_correct in Heq_ver; [|done].
       word. }
 
+    iApply ncfupd_wp.
+    rewrite /own.
+    iMod "Hperm_put" as "(%obj'&Hown_gs'&Hperm)".
+    destruct obj'.
+    iCombine "Hown_gs Hown_gs'" as "Hown_gs" gives %?.
+    (* TODO: 1/2 + 1/2 not getting reduced. *)
+    rewrite Qp.half_half.
+    simplify_eq/=.
+    iSpecialize ("Hperm" with "[]"); [word|].
+    iNamedSuffix "Hown_gs" "_gs".
+    simpl.
+    iMod (dghost_var_update with "Hown_pend_gs") as "Hpend".
+    iAssert (own_aux γ (state.mk _ _) 1)%I with "[$Hpend $Hown_hist_gs]" as "Hown_gs".
+    (* TODO: failing prob for same reason as 1/2 + 1/2. *)
+    iDestruct "Hown_gs" as "[H0 H1]".
+
     wp_apply (merkle.wp_Map_Put with "[$Hown_hidden]") as "* @".
     { iFrame "#%".
       destruct His_mapLabel as (Ht&_).
@@ -823,8 +856,18 @@ Proof.
     wp_apply wp_slice_literal as "* Ht".
     { iIntros "**". by wp_auto. }
     replace (sint.nat _) with 0%nat by word. simpl.
-    wp_apply (wp_slice_append _ with "[$Hsl_pks $Hcap_pks $Ht]")
+    wp_apply (wp_slice_append with "[$Hsl_pks $Hcap_pks $Ht]")
       as "%sl_pks (Hsl_pks&Hcap_pks&_)".
+    simpl. wp_apply (wp_map_insert with "[$Hptr_plain]") as "Hptr_plain".
+    wp_apply wp_alloc as "%ptr_info Hptr_info".
+    wp_apply wp_slice_literal as "* Ht".
+    { iIntros "**". by wp_auto. }
+    replace (sint.nat _) with 0%nat by word. simpl.
+    iDestruct "Hown_upd" as (?) "(Hsl_upd&Hsl0_upd)".
+    wp_apply (wp_slice_append with "[$Hsl_upd $Hcap_upd $Ht]")
+      as "%sl_upd' (Hsl_upd&Hcap_upd&_)".
+    wp_for_post.
+    iFrame.
 Admitted.
 
 (*
