@@ -1,4 +1,4 @@
--Q src Perennial
+-Q crypto_ffi Cryptoffi
 -Q code New.code
 -Q generatedproof New.generatedproof
 -Q proof New.proof.github_com.sanjit_bhat.pav

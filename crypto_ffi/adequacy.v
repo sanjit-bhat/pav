@@ -1,7 +1,7 @@
 From Perennial.algebra Require Import gen_heap_names.
 From Perennial.program_logic Require Import dist_lang.
 From Perennial.goose_lang Require Import lang lifting.
-From Perennial.goose_lang Require Import ffi.crypto_ffi.crypto_ffi.
+From Cryptoffi Require Import crypto_ffi.
 
 From Perennial.goose_lang Require Import adequacy recovery_adequacy dist_adequacy.
 

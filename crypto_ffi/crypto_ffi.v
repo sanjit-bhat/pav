@@ -11,7 +11,7 @@ From Perennial.program_logic Require Import ectx_lifting atomic.
 From Perennial.Helpers Require Import CountableTactics Transitions Integers.
 From Perennial.goose_lang Require Import lang lifting.
 From Perennial.goose_lang Require Import crash_modality.
-From Perennial.goose_lang.ffi.crypto_ffi Require Export impl.
+From Cryptoffi Require Export impl.
 
 Set Default Proof Using "Type".
 Set Printing Projections.
