@@ -48,7 +48,10 @@ Proof. Admitted.
 Definition hash_inv_fn (hash : list w8) : option $ list w8.
 Proof. Admitted.
 
-(* [hash_fn] and [hash_inv_fn] are partial bijections. *)
+(* [hash_fn] and [hash_inv_fn] are partial bijections.
+in particular, we make the forward fn ([hash_fn]) partial
+(even tho it's total in the real-world)
+so that it exhibits an inverse. *)
 Lemma hash_bij_l data hash :
   hash_fn data = Some hash →
   hash_inv_fn hash = Some data.
