@@ -5,21 +5,14 @@ package cryptoffi
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 
 	"github.com/sanjit-bhat/pav/cryptoffi/vrf"
+	"github.com/sanjit-bhat/pav/cryptoffi/ffi"
 )
 
 const (
 	HashLen uint64 = 32
 )
-
-// # Hash
-
-func trustedHash(data string) string {
-	h := sha256.Sum256([]byte(data))
-	return string(h[:])
-}
 
 type Hasher struct {
 	b []byte
@@ -34,7 +27,7 @@ func (hr *Hasher) Write(b []byte) {
 }
 
 func (hr *Hasher) Sum(b []byte) (hash []byte) {
-	return append(b, []byte(trustedHash(string(hr.b)))...)
+	return append(b, []byte(ffi.TrustedHash(string(hr.b)))...)
 }
 
 // # Signature
