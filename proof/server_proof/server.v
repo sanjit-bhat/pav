@@ -50,6 +50,9 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
+(* TODO: [iDestruct own_aux as "[H0 H1]"] uses [into_sep_sep] (high priority)
+instead of [into_sep_fractional_half] (priority 100).
+not sure if this is a bug in instance priority. *)
 Definition own_aux γ obj q : iProp Σ :=
   "Hown_pend" ∷ dghost_var γ.(cfg.pendγ) (DfracOwn q) obj.(state.pending) ∗
   (* client remembers lb's of this. *)
@@ -758,19 +761,20 @@ Proof.
   subst.
 
   iAssert (
-    ∃ (i : w64) (t0 : loc) sl_upd upd next_dig,
-    let next_pend := ktcore.to_plain (get_vrf_pk γ) next_dig in
+    ∃ (i : w64) (t0 : loc) sl_upd sl0_upd upd old_dig,
+    let old_pend := ktcore.to_plain (get_vrf_pk γ) old_dig in
     "i" ∷ i_ptr ↦ i ∗
     "%Hlt_i" ∷ ⌜0 ≤ sint.Z i ≤ length work⌝ ∗
     "w" ∷ w_ptr ↦ t0 ∗
     "upd" ∷ upd_ptr ↦ sl_upd ∗
-    "Hown_upd" ∷ ktcore.UpdateProofSlice1D.own sl_upd upd 1 ∗
+    "Hsl_upd" ∷ sl_upd ↦* sl0_upd ∗
     "Hcap_upd" ∷ own_slice_cap loc sl_upd 1 ∗
-    "#His_upd" ∷ ktcore.wish_ListUpdate last_dig upd next_dig ∗
-    "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(Server.secs) next_dig 1 ∗
-    "Hown_gs" ∷ own_aux γ {| state.pending := next_pend; state.hist := hist |} (1/2)
+    "#Hsl0_upd" ∷ ([∗ list] ptr;obj ∈ sl0_upd;upd, ktcore.UpdateProof.own ptr obj (□)) ∗
+    "#His_upd" ∷ ktcore.wish_ListUpdate last_dig upd old_dig ∗
+    "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(Server.secs) old_dig 1 ∗
+    "Hown_gs" ∷ own_aux γ {| state.pending := old_pend; state.hist := hist |} (1/2)
   )%I with "[Hown_keys Hown_gs upd Hsl_upd Hcap_upd w i]" as "IH".
-  { iFrame "∗". iExists [].
+  { iFrame "∗". iExists []. simpl.
     iSplit; [word|].
     iSplit; [done|].
     iApply ktcore.wish_ListUpdate_nil. }
@@ -792,16 +796,17 @@ Proof.
     case_bool_decide as Ht; wp_auto.
     2: { wp_for_post. iFrame "Hown_hist ∗#%". word. }
 
+    (* unify cases of uid in or not in golang map. *)
     iAssert (
       ∃ sl0_pks,
       let sl_pks := default slice.nil (ptr0_plain !! w.(work.uid)) in
       "Hsl_pks" ∷ sl_pks ↦* sl0_pks ∗
       "Hcap_pks" ∷ own_slice_cap slice.t sl_pks 1 ∗
       "#Hsl0_pks" ∷ ([∗ list] sl_pk;pk ∈
-        sl0_pks;ktcore.to_pks (get_vrf_pk γ) w.(work.uid) next_dig,
+        sl0_pks;ktcore.to_pks (get_vrf_pk γ) w.(work.uid) old_dig,
         "Hsl_pk" ∷ sl_pk ↦*□ pk) ∗
       "Hown_plain" ∷ keyStore.own_plain (delete w.(work.uid) ptr0_plain)
-        (delete w.(work.uid) (ktcore.to_plain (get_vrf_pk γ) next_dig)) 1
+        (delete w.(work.uid) (ktcore.to_plain (get_vrf_pk γ) old_dig)) 1
     )%I with "[Hown_plain]" as "@".
     { destruct (ptr0_plain !! _) eqn:?; simpl in *.
       - iDestruct (big_sepM2_delete_l with "Hown_plain") as "(%&%&@&Hown_plain)"; [done|].
@@ -818,7 +823,7 @@ Proof.
     iDestruct (big_sepL2_length with "Hsl0_pks") as %?.
 
     iAssert (⌜uint.nat w.(work.ver) =
-      length $ ktcore.to_pks (get_vrf_pk γ) w.(work.uid) next_dig⌝)%I
+      length $ ktcore.to_pks (get_vrf_pk γ) w.(work.uid) old_dig⌝)%I
       as %Heq_ver; [word|].
     clear Ht.
     destruct (hidden !! mapLabel) eqn:Hlook_hid.
@@ -842,16 +847,17 @@ Proof.
     iSpecialize ("Hperm" with "[]"); [word|].
     iNamedSuffix "Hown_gs" "_gs".
     simpl.
-    iMod (dghost_var_update with "Hown_pend_gs") as "Hpend".
-    iAssert (own_aux γ (state.mk _ _) 1)%I with "[$Hpend $Hown_hist_gs]" as "Hown_gs".
-    (* TODO: failing prob for same reason as 1/2 + 1/2. *)
-    iDestruct "Hown_gs" as "[H0 H1]".
+    iMod (dghost_var_update with "Hown_pend_gs") as "[Hpend Hpend']".
+    iDestruct "Hown_hist_gs" as "[Hhist Hhist']".
+    iMod ("Hperm" with "[$Hpend' $Hhist']") as "_".
+    iAssert (own_aux _ _ (1/2))%I with "[$Hpend $Hhist]" as "Hown_gs".
+    iModIntro.
 
-    wp_apply (merkle.wp_Map_Put with "[$Hown_hidden]") as "* @".
+    wp_apply (merkle.wp_Map_Put with "[$Hown_hidden]") as "%%%new_dig @".
     { iFrame "#%".
       destruct His_mapLabel as (Ht&_).
       by apply cryptoffi.is_vrf_len in Ht. }
-    simpl.
+    iPersist "Hsl_updProof". simpl.
     wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
     wp_apply wp_slice_literal as "* Ht".
     { iIntros "**". by wp_auto. }
@@ -860,37 +866,35 @@ Proof.
       as "%sl_pks (Hsl_pks&Hcap_pks&_)".
     simpl. wp_apply (wp_map_insert with "[$Hptr_plain]") as "Hptr_plain".
     wp_apply wp_alloc as "%ptr_info Hptr_info".
+    iPersist "Hptr_info".
     wp_apply wp_slice_literal as "* Ht".
     { iIntros "**". by wp_auto. }
     replace (sint.nat _) with 0%nat by word. simpl.
-    iDestruct "Hown_upd" as (?) "(Hsl_upd&Hsl0_upd)".
     wp_apply (wp_slice_append with "[$Hsl_upd $Hcap_upd $Ht]")
       as "%sl_upd' (Hsl_upd&Hcap_upd&_)".
+
     wp_for_post.
-    iFrame.
+    iDestruct (merkle.own_Map_to_is_map with "Hown_Map") as %Hnew_dig.
+    iFrame "Hown_hist ∗#".
+    eapply ktcore.plain_insert in Hbij_maps; cycle 1.
+    { exact_eq His_mapLabel. word. }
+    { done. }
+    apply ktcore.is_plain_has_inv in Hbij_maps as Hnew_inv_plain.
+    rewrite Hnew_dig Hnew_inv_plain.
+    iDestruct (big_sepL2_snoc with "[$Hsl0_pks $Hsl_pk]") as "{Hsl0_pks} Hsl0_pks".
+    iDestruct (big_sepM2_insert_delete with "[$Hown_plain $Hsl_pks $Hcap_pks //]") as "Hown_plain".
+    iFrame "∗%".
+    iExists (_ ++ [_]). repeat iSplit; try iPureIntro.
+    - word.
+    - word.
+    - iFrame "#".
+    - instantiate (1:=ktcore.UpdateProof.mk' _ _ _). iFrame "#".
+    - done.
+    - by iApply ktcore.wish_ListUpdate_grow.
+    - apply map_Forall_insert_2; [|done].
+      apply ktcore.map_val_iff in His_mapVal.
+      naive_solver. }
 Admitted.
-
-(*
-what's this code doing?
-- iterate thru work, check that (uid, ver) is latest.
-- execute keyStore update. hidden, plain, UpdProof.
-- after loop, execute history update. hashchain, audits.
-
-how should the GS update?
-- we have a good design, where history separate from pending.
-- in beginning, Server inv says keyStore (last hist) equals pending.
-- in loop, as update keyStore, update pending.
-- after loop, snoc pending onto hist.
-this re-establishes that last hist equals pending.
-
-now onto the details:
-- need to say that keyStore matches last hist.
-- last hist is a dig.
-- at least keyStore.hidden needs to have that dig.
-- get put perm for (uid, ver, pk).
-run ver check against keyStore.plain.
-must have: keyStore.plain = pending to do GS update.
-*)
 
 (** top-level methods. *)
 

@@ -452,14 +452,10 @@ Proof.
   naive_solver.
 Qed.
 
-Lemma wish_ListUpdate_grow dig0 updates dig1 upd dig2 :
+Lemma wish_ListUpdate_grow dig0 dig1 dig2 updates map_label map_val proof :
   wish_ListUpdate dig0 updates dig1 -∗
-  merkle.wish_Update
-    upd.(UpdateProof.MapLabel)
-    upd.(UpdateProof.MapVal)
-    upd.(UpdateProof.NonMembProof)
-    dig1 dig2 -∗
-  wish_ListUpdate dig0 (updates ++ [upd]) dig2.
+  merkle.wish_Update map_label map_val proof dig1 dig2 -∗
+  wish_ListUpdate dig0 (updates ++ [UpdateProof.mk' map_label map_val proof]) dig2.
 Proof.
   iIntros "@ #Hupd". iNamed "Hwish_aux".
   iExists (digs ++ [dig2]).
