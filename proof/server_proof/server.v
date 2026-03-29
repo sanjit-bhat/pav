@@ -411,9 +411,53 @@ Definition own γ ptr digs q : iProp Σ :=
   "#Hown_audits" ∷ ([∗ list] idx ↦ p; aud ∈ sl0_audits; audits,
     ktcore.AuditProof.own p aud (□)) ∗
   "#His_audits" ∷ is_audits γ digs audits ∗
+  "%Hmono_plain" ∷ ⌜ktcore.mono_plain (get_vrf_pk γ) digs⌝ ∗
 
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
   "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ) vrfSig.
+
+Lemma is_audits_grow new_dig upd_proof sig link γ digs last_dig audits :
+  let ep := length digs in
+  last digs = Some last_dig →
+  is_audits γ digs audits -∗
+  ktcore.wish_ListUpdate last_dig upd_proof new_dig -∗
+  ⌜hashchain.inv_fn link (S $ S $ ep) = (digs ++ [new_dig], None)⌝ -∗
+  ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link sig -∗
+  is_audits γ (digs ++ [new_dig]) (audits ++ [ktcore.AuditProof.mk' upd_proof sig]).
+Proof.
+  simpl. iIntros (Hlast_dig) "#@ #Hupd %Hchain #Hsig".
+  pose proof Hlast_dig as Hsome_eps.
+  rewrite last_lookup in Hsome_eps.
+  apply lookup_lt_Some in Hsome_eps.
+  repeat iSplit.
+  - len.
+  - rewrite drop_app_le; [|lia].
+    rewrite fmap_app.
+    iSplit.
+    + iApply big_sepL_impl; [done|].
+      iIntros "!>*%@".
+      iFrame "#". iPureIntro.
+      by eapply lookup_app_l_Some in Hlook0, Hlook1.
+    + simpl. iSplit; [|done]. iFrame "#".
+      iPureIntro. len.
+      split.
+      * rewrite last_lookup in Hlast_dig.
+        eapply lookup_app_l_Some in Hlast_dig.
+        exact_eq Hlast_dig. f_equal. lia.
+      * replace (S _) with (pred $ length (digs ++ [new_dig])); [|len].
+        by rewrite -last_lookup last_snoc.
+  - rewrite fmap_app. simpl. iSplit.
+    * simpl. iApply big_sepL_impl; [done|].
+      iIntros "!>*%Hlook@".
+      apply lookup_lt_Some in Hlook.
+      autorewrite with len in *.
+      iFrame "#". iPureIntro.
+      by rewrite take_app_le; [|lia].
+    * simpl. len.
+      replace (length _ + 0)%nat with (length digs) by lia.
+      iFrame "#". iPureIntro.
+      by rewrite take_ge; [|len].
+Qed.
 
 End proof.
 End history.
@@ -489,7 +533,9 @@ Definition own γ ptr σ obj q : iProp Σ :=
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
   "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
   "%Heq_hist_pend" ∷ ⌜ktcore.to_plain (get_vrf_pk γ) last_dig = σ.(state.pending)⌝ ∗
-  "#Hperm_add_hist" ∷ perm_add_hist γ.
+  "#Hperm_add_hist" ∷ perm_add_hist γ ∗
+  "%Heq_digs_info" ∷ ⌜γ.(cfg.sigγ).(sigpred.cfg.info) =
+    sigpred.digs_info.mk 0 None 0⌝.
 
 Definition own_aux γ ptr obj q : iProp Σ := ∃ σ, own γ ptr σ obj q.
 
@@ -761,8 +807,8 @@ Proof.
   subst.
 
   iAssert (
-    ∃ (i : w64) (t0 : loc) sl_upd sl0_upd upd old_dig,
-    let old_pend := ktcore.to_plain (get_vrf_pk γ) old_dig in
+    ∃ (i : w64) (t0 : loc) sl_upd sl0_upd upd new_dig,
+    let new_pend := ktcore.to_plain (get_vrf_pk γ) new_dig in
     "i" ∷ i_ptr ↦ i ∗
     "%Hlt_i" ∷ ⌜0 ≤ sint.Z i ≤ length work⌝ ∗
     "w" ∷ w_ptr ↦ t0 ∗
@@ -770,17 +816,21 @@ Proof.
     "Hsl_upd" ∷ sl_upd ↦* sl0_upd ∗
     "Hcap_upd" ∷ own_slice_cap loc sl_upd 1 ∗
     "#Hsl0_upd" ∷ ([∗ list] ptr;obj ∈ sl0_upd;upd, ktcore.UpdateProof.own ptr obj (□)) ∗
-    "#His_upd" ∷ ktcore.wish_ListUpdate last_dig upd old_dig ∗
-    "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(Server.secs) old_dig 1 ∗
-    "Hown_gs" ∷ own_aux γ {| state.pending := old_pend; state.hist := hist |} (1/2)
+    "#His_upd" ∷ ktcore.wish_ListUpdate last_dig upd new_dig ∗
+    "%Hmono" ∷ ⌜ktcore.plain_sub (ktcore.to_plain (get_vrf_pk γ) last_dig)
+      (ktcore.to_plain (get_vrf_pk γ) new_dig)⌝ ∗
+    "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(Server.secs) new_dig 1 ∗
+    "Hown_gs" ∷ own_aux γ {| state.pending := new_pend; state.hist := hist |} (1/2)
   )%I with "[Hown_keys Hown_gs upd Hsl_upd Hcap_upd w i]" as "IH".
   { iFrame "∗". iExists []. simpl.
     iSplit; [word|].
     iSplit; [done|].
-    iApply ktcore.wish_ListUpdate_nil. }
+    iSplit. { by iApply ktcore.wish_ListUpdate_nil. }
+    done. }
   wp_for "IH".
   case_bool_decide.
-  { iNamed "Hown_keys".
+  { rename new_dig into old_dig.
+    iNamed "Hown_keys".
     iDestruct (own_slice_len with "Hsl_work") as %?.
     iDestruct (big_sepL2_length with "Hsl0_work") as %?.
     list_elem work (sint.nat i) as w.
@@ -874,7 +924,7 @@ Proof.
       as "%sl_upd' (Hsl_upd&Hcap_upd&_)".
 
     wp_for_post.
-    iDestruct (merkle.own_Map_to_is_map with "Hown_Map") as %Hnew_dig.
+    iDestruct (merkle.own_Map_to_is_map with "Hown_Map") as %[Hnew_dig _].
     iFrame "Hown_hist ∗#".
     eapply ktcore.plain_insert in Hbij_maps; cycle 1.
     { exact_eq His_mapLabel. word. }
@@ -891,10 +941,77 @@ Proof.
     - instantiate (1:=ktcore.UpdateProof.mk' _ _ _). iFrame "#".
     - done.
     - by iApply ktcore.wish_ListUpdate_grow.
+    - trans (ktcore.to_plain (get_vrf_pk γ) old_dig); [done|].
+      apply insert_included; [apply _|].
+      intros.
+      setoid_rewrite lookup_total_correct; [|done].
+      by apply prefix_app_r.
     - apply map_Forall_insert_2; [|done].
       apply ktcore.map_val_iff in His_mapVal.
       naive_solver. }
-Admitted.
+
+  iNamed "Hown_secs". iNamed "Hown_keys".
+  iNamed "Hown_hist". iNamed "His_audits".
+  wp_auto.
+  iDestruct (merkle.own_Map_to_is_map with "Hown_hidden") as %[_ ?].
+  wp_apply (merkle.wp_Map_Hash with "[$Hown_hidden]") as "* @".
+  wp_apply (hashchain.wp_HashChain_Append with "[$Hown_chain]") as "* @ {Hsl_val}".
+  { by iFrame "#". }
+  destruct His_chain as (His_chain&_).
+
+  iApply ncfupd_wp.
+  rewrite /own.
+  iPoseProof "Hperm_add_hist" as "Hperm".
+  iMod "Hperm" as "(%obj'&Hown_gs'&Hperm)".
+  destruct obj'.
+  iCombine "Hown_gs Hown_gs'" as "Hown_gs" gives %?.
+  (* TODO: 1/2 + 1/2 not getting reduced. *)
+  rewrite Qp.half_half.
+  simplify_eq/=.
+  iSpecialize ("Hperm" with "[]"); [done|].
+  iNamedSuffix "Hown_gs" "_gs".
+  simpl.
+  iMod (mono_list_auth_own_update_app [new_dig] with "Hown_hist_gs") as "[[Hhist Hhist'] #Hlb_hist]".
+  iDestruct "Hown_pend_gs" as "[Hpend Hpend']".
+  iMod ("Hperm" with "[$Hpend' $Hhist']") as "_".
+  iAssert (own_aux _ (state.mk _ _) (1/2))%I with "[$Hpend $Hhist]" as "Hown_gs".
+  iModIntro.
+
+  iDestruct (own_slice_len with "Hsl_audits") as %?.
+  iDestruct (big_sepL2_length with "Hown_audits") as %?.
+  eassert (ktcore.mono_plain (get_vrf_pk γ) (_ ++ [_])) as Hmono_plain'.
+  { rewrite /ktcore.mono_plain in Hmono_plain |-*.
+    rewrite !fmap_app.
+    eapply list_reln_snoc; [done|].
+    intros * Hlast_hist.
+    rewrite !fmap_last Hlast_dig /= in Hlast_hist.
+    by simplify_eq/=. }
+  clear Hmono_plain.
+  wp_apply ktcore.wp_SignLink as "* @".
+  { iFrame "#". iPureIntro.
+    destruct γ.(cfg.sigγ).(cfg.info). simplify_eq/=.
+    repeat split.
+    - exact_eq His_chain. f_equal. word.
+    - len.
+    - by rewrite drop_0. }
+
+  wp_apply wp_alloc as "%ptr_audit Hptr_audit".
+  iPersist "Hptr_audit".
+  wp_apply wp_slice_literal as "* Ht".
+  { iIntros "**". by wp_auto. }
+  replace (sint.nat _) with 0%nat by word. simpl.
+  wp_apply (wp_slice_append with "[$Hsl_audits $Hcap_audits $Ht]")
+    as "%sl_audits' (Hsl_audits&Hcap_audits&_)".
+  iPersist "Hsl_upd". iClear "Hcap_upd".
+  wp_apply (wp_RWMutex__Unlock with "[-HΦ $Hlocked]") as "Hlock".
+  2: { iApply "HΦ". iFrame "∗#%". }
+  iDestruct (history.is_audits_grow with "[][//][//][]") as "His_audits"; [done|..].
+  { by iFrame "#". }
+  { iExactEq "Hwish_LinkSig". f_equal. word. }
+  iFrame "∗#%".
+  simpl. repeat iSplit; try done.
+  iPureIntro. by rewrite last_snoc.
+Qed.
 
 (** top-level methods. *)
 

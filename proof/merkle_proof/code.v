@@ -1512,9 +1512,10 @@ Definition own_Map ptr m hash d : iProp Σ :=
 
 Lemma own_Map_to_is_map ptr m hash d :
   own_Map ptr m hash d -∗
-  ⌜inv_fn hash = m⌝.
+  ⌜inv_fn hash = m ∧ Z.of_nat $ length hash = cryptoffi.hash_len⌝.
 Proof.
   iNamed 1. iPureIntro.
+  split; [|by eapply is_cut_tree_len].
   subst. rewrite /inv_fn. f_equal.
   by eapply cut_inv.
 Qed.
