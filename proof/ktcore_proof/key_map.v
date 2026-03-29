@@ -712,16 +712,11 @@ Collection W := sem.
 
 (* TODO: maybe stick this elsewhere. *)
 
-Definition mono_hidden digs :=
-  let hidden_maps := merkle.inv_fn <$> digs in
-  (* ⊆ on hidden maps is stronger than on plain maps. *)
-  list_reln hidden_maps (⊆).
-
 Definition mono_plain vrf_pk digs :=
   let plain_maps := plain_inv_fn vrf_pk <$> (merkle.inv_fn <$> digs) in
   list_reln plain_maps ktcore.plain_sub.
 
-Lemma mono_plain_lookup vrf_pk uid {digs i j xi xj} :
+Lemma mono_plain_lookup uid {vrf_pk digs i j xi xj} :
   mono_plain vrf_pk digs →
   digs !! i = Some xi →
   digs !! j = Some xj →
@@ -740,19 +735,6 @@ Proof.
   rewrite !lookup_total_alt.
   destruct (_ !! uid), (_ !! uid); try done.
   simpl in *. apply prefix_nil.
-Qed.
-
-Lemma mono_hidden_lookup vrf_pk uid {digs i j xi xj} :
-  mono_hidden digs →
-  digs !! i = Some xi →
-  digs !! j = Some xj →
-  (i ≤ j)%nat →
-  to_pks vrf_pk uid xi `prefix_of` to_pks vrf_pk uid xj.
-Proof.
-  rewrite /mono_hidden. intros Hmono Hlook0 Hlook1 **.
-  eapply mono_plain_lookup; try done.
-  eapply list_reln_box; [done|].
-  intros. by eapply plain_inv_mono.
 Qed.
 
 End proof.

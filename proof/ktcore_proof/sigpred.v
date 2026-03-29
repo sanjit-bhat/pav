@@ -64,7 +64,7 @@ Definition linkP γ (ep : w64) link : iProp Σ :=
     (digs, γ.(cfg.info).(digs_info.cut))⌝ ∗
   "#Hlb_digs" ∷ mono_list_lb_own γ.(cfg.digs) digs ∗
   "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (γ.(cfg.info).(digs_info.start_ep) + length digs)%nat⌝ ∗
-  "%Hmono_hidden" ∷ ⌜mono_hidden (drop γ.(cfg.info).(digs_info.audit_offset) digs)⌝.
+  "%Hmono_plain" ∷ ⌜mono_plain γ.(cfg.vrf_pk) (drop γ.(cfg.info).(digs_info.audit_offset) digs)⌝.
 
 Definition linkP_aux γ enc : iProp Σ :=
   ∃ ep link,
@@ -107,15 +107,15 @@ Lemma list_reln_app {A} R (l0 l1 : list A) :
 Proof.
   rewrite /list_reln. intros Happ. split.
   - intros i x y Hx Hy.
-    apply Happ.
+    eapply Happ.
     + rewrite lookup_app_l; [done|eapply lookup_lt_Some; done].
     + rewrite lookup_app_l; [done|eapply lookup_lt_Some; done].
   - intros i x y Hx Hy.
     apply (Happ (i + length l0)%nat).
     + rewrite lookup_app_r; last lia.
-      replace (i + length l0 - length l0) with i by lia. done.
+      replace (i + length l0 - length l0)%nat with i by lia. done.
     + rewrite lookup_app_r; last lia.
-      replace (S (i + length l0) - length l0) with (S i) by lia. done.
+      replace (S (i + length l0) - length l0)%nat with (S i) by lia. done.
 Qed.
 
 Lemma lookup_app_r' {A} (l1 l2 : list A) i :
@@ -137,7 +137,7 @@ Collection W := sem.
 (** staged / committed keys. *)
 
 (* after auditing, learn that client digs equal auditor digs.
-also learn [mono_hidden], so "apply" that in [is_staged_keys]. *)
+also learn [mono_plain], so "apply" that in [is_staged_keys]. *)
 Definition is_committed_keys vrf_pk digs uid keys :=
   Forall2 (λ dig opt_key,
     last $ to_pks vrf_pk uid dig = opt_key) digs keys.
@@ -146,14 +146,16 @@ Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   ∃ last_dig,
   (* [next_ver] only has meaning with some digs. *)
   last digs = Some last_dig ∧
+  (* need unconditional [next_ver] knowledge to prove that
+  [is_staged_keys_grow_new] unconditionally produces [new_dig]. *)
   in_hidden vrf_pk (merkle.inv_fn last_dig) uid next_ver None ∧
-  ( mono_hidden digs →
+  ( mono_plain vrf_pk digs →
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
     is_committed_keys vrf_pk digs uid keys ).
 
 Lemma commit_staged vrf_pk digs uid keys next_ver :
   is_staged_keys vrf_pk digs uid keys next_ver →
-  mono_hidden digs →
+  mono_plain vrf_pk digs →
   is_committed_keys vrf_pk digs uid keys.
 Proof. rewrite /is_staged_keys. naive_solver. Qed.
 
@@ -178,7 +180,7 @@ Proof.
   intros * Hlook Hrepl.
   rewrite last_lookup in Hlast_dig.
   apply lookup_replicate in Hrepl as [-> ?].
-  opose proof (mono_hidden_lookup vrf_pk uid Hmono Hlook Hlast_dig _) as Hpref; [len|].
+  opose proof (mono_plain_lookup vrf_pk uid Hmono Hlook Hlast_dig _) as Hpref; [len|].
   rewrite Hnil in Hpref.
   by apply prefix_nil_inv in Hpref as ->.
 Qed.
@@ -198,8 +200,8 @@ Proof.
   eexists. repeat (split; [done|]).
   intros Hmono.
   odestruct (Hstage _) as (Hver&Hkeys).
-  { unfold mono_hidden in *.
-    rewrite fmap_app in Hmono.
+  { unfold mono_plain in *.
+    rewrite !fmap_app in Hmono.
     apply list_reln_app in Hmono.
     naive_solver. }
   clear Hstage.
@@ -211,7 +213,7 @@ Proof.
   rewrite !last_lookup in Hold_dig Hnew_dig.
   eapply lookup_app_l_Some in Hold_dig.
   eassert (to_pks vrf_pk uid old_dig = to_pks vrf_pk uid new_dig) as Heq_pks.
-  { opose proof (mono_hidden_lookup vrf_pk uid Hmono Hold_dig Hnew_dig _) as ?; [len|].
+  { opose proof (mono_plain_lookup vrf_pk uid Hmono Hold_dig Hnew_dig _) as ?; [len|].
     eapply inv_fn_None_bound in Hnone.
     eapply prefix_length_eq; [done|].
     simpl in *. lia. }
@@ -228,8 +230,8 @@ Proof.
   intros ? mid_dig * Hlook_mid Hrepl.
   apply lookup_replicate in Hrepl as [-> ?].
   rewrite (lookup_app_r' digs) in Hlook_mid.
-  opose proof (mono_hidden_lookup vrf_pk uid Hmono Hold_dig Hlook_mid _) as Hpref_reg0; [len|].
-  opose proof (mono_hidden_lookup vrf_pk uid Hmono Hlook_mid Hnew_dig _) as Hpref_reg1; [len|].
+  opose proof (mono_plain_lookup vrf_pk uid Hmono Hold_dig Hlook_mid _) as Hpref_reg0; [len|].
+  opose proof (mono_plain_lookup vrf_pk uid Hmono Hlook_mid Hnew_dig _) as Hpref_reg1; [len|].
   f_equal. rewrite -Heq_pks in Hpref_reg1.
   by eapply prefix_eq.
 Qed.
@@ -264,57 +266,100 @@ Proof.
     by opose proof (in_hidden_det Hnone' Hsome). }
   clear Hnone'.
 
-  assert (∃ grow_idx grow_dig,
-    new_digs !! grow_idx = Some grow_dig ∧
-    in_hidden vrf_pk (merkle.inv_fn grow_dig) uid next_ver (Some new_key) ∧
-    ( mono_hidden new_digs →
-      ∀ j y,
-        new_digs !! j = Some y →
-        (j < grow_idx)%nat →
-        in_hidden vrf_pk (merkle.inv_fn y) uid next_ver None ))
-    as (grow_idx&grow_dig&Hgrow_dig&Hgrow_some&Hgrow_none).
-  { clear -Hsome Hnew_dig'.
-    destruct Hsome as (map_label&?&map_val&?).
-    destruct_exis. destruct_and?.
-    opose proof (list_find_elem_of
-      (λ x, merkle.inv_fn x !! map_label = Some map_val)
-      new_digs
-      _ _ _) as ([grow_idx ?]&Hfind).
-    { by apply last_Some_elem_of. }
-    { done. }
-    apply list_find_Some in Hfind as (Hlook_grow&?&Hfind).
-    do 2 eexists.
-    split; try done.
-    split. { rewrite /in_hidden. naive_solver. }
-    intros Hmono * Hlook_prior **.
-    ospecialize (Hfind _ _ _ _); [done..|].
-    eremember (merkle.inv_fn y !! _) as foo.
-    assert (foo = None ∨ (∃ map_val', foo = Some map_val' ∧ map_val ≠ map_val')) as Hdec.
-    { destruct foo; naive_solver. }
-    subst. clear Hfind.
-    rewrite /in_hidden.
-    destruct Hdec; [naive_solver|].
-    exfalso. destruct_exis. destruct_and?.
-    eapply list_reln_trans_refl in Hmono; cycle 1.
-    1-2: apply _.
-    { rewrite list_lookup_fmap. by erewrite Hlook_prior. }
-    { rewrite list_lookup_fmap. by erewrite Hlook_grow. }
-    { lia. }
-    eapply lookup_weaken in Hmono; [|done].
-    by simplify_eq/=. }
+  assert (
+    mono_plain vrf_pk (digs ++ new_digs) →
+    to_pks vrf_pk uid old_dig ++ [new_key] = to_pks vrf_pk uid new_dig) as Heq_old_new.
+  { intros Hmono.
+    odestruct (Hstage _) as (Hver&Hkeys).
+    { unfold mono_plain in *.
+      rewrite /mono_plain !fmap_app in Hmono.
+      by apply list_reln_app in Hmono as []. }
+    clear Hstage.
+    rewrite !last_lookup in Hold_dig Hnew_dig.
+    eapply (lookup_app_l_Some _ new_digs) in Hold_dig.
+    opose proof (mono_plain_lookup uid Hmono Hold_dig Hnew_dig _)
+      as [ext_pks Hgrow_pks]; [len|].
+    rewrite Hgrow_pks. f_equal.
+    destruct ext_pks as [|new_key'].
+    - exfalso.
+      list_simplifier.
+      rewrite lookup_total_alt in Hgrow_pks.
+      destruct (_ !! uid) as [pks|] eqn:Heq_pks; simpl in *.
+      + subst.
+        opose proof (inv_fn_inp_pks _ (_ ++ [_]) _ _ _) as (?&?&?%prefix_length).
+        2: {
+          apply pks_in_hidden_snoc; [|done].
+          by eapply inv_fn_out_pks. }
+        { done. }
+        { len. }
+        simplify_eq/=.
+        autorewrite with len in *.
+        lia.
+      + rewrite -Hgrow_pks in Hnone Hsome. simpl in *.
+        opose proof (inv_fn_inp_pks _ [new_key] _ _ _).
+        2: { by intros ?* [-> ->]%list_lookup_singleton_Some. }
+        1-2: done.
+        destruct_exis. destruct_and?.
+        simplify_eq/=.
+    - destruct ext_pks.
+      2: {
+        exfalso.
+        apply (f_equal length) in Hgrow_pks.
+        autorewrite with len in *.
+        eapply inv_fn_None_bound in Hnone.
+        simpl in *. lia. }
+      f_equal.
+      apply (f_equal (.!! next_ver)) in Hgrow_pks.
+      rewrite -Hver lookup_snoc Hver in Hgrow_pks.
+      rewrite /= lookup_total_alt in Hgrow_pks.
+      destruct (_ !! uid) eqn:Hlook_uid; simpl in *; try done.
+      opose proof (inv_fn_out_lookup _ _ _ Hlook_uid Hgrow_pks) as Hsome'; [done|].
+      opose proof (in_hidden_det Hsome Hsome').
+      by simplify_eq/=. }
+
+  destruct (list_find
+    (λ dig, length $ to_pks vrf_pk uid dig = S next_ver)
+    new_digs) as [[grow_idx grow_dig]|] eqn:Hfind.
+  2: {
+    exists (length new_digs - 1)%nat, 0%nat.
+    split.
+    { rewrite last_lookup in Hnew_dig'.
+      apply lookup_lt_Some in Hnew_dig'.
+      lia. }
+    rewrite last_app Hnew_dig'.
+    eexists.
+    do 2 (split; [done|]).
+
+    intros Hmono. exfalso.
+    apply list_find_None in Hfind.
+    eapply Forall_lookup_1 in Hfind as Hnew_len; cycle 1.
+    { by erewrite <-last_lookup. }
+    clear Hnew_dig' Hfind.
+    ospecialize (Heq_old_new _); [done|].
+    odestruct (Hstage _) as (Hver&Hkeys).
+    { unfold mono_plain in *.
+      rewrite /mono_plain !fmap_app in Hmono.
+      by apply list_reln_app in Hmono as []. }
+    clear Hstage.
+    apply (f_equal length) in Heq_old_new.
+    autorewrite with len in *. lia. }
   clear Hnew_dig'.
 
+  apply list_find_Some in Hfind as (Hgrow_dig&Hgrow_len&Hfind).
   exists grow_idx, (length new_digs - S grow_idx)%nat.
   split. { apply lookup_lt_Some in Hgrow_dig. lia. }
   eexists. do 2 (split; [done|]).
+  clear Hsome Hnone.
   intros Hmono.
-  pose proof Hmono as Ht.
-  rewrite /mono_hidden fmap_app in Ht.
-  apply list_reln_app in Ht as [Ht0 Ht1].
-  odestruct (Hstage _) as (Hver&Hkeys); [done|].
+  ospecialize (Heq_old_new _); [done|].
+  odestruct (Hstage _) as (Hver&Hkeys).
+  { unfold mono_plain in *.
+    rewrite /mono_plain !fmap_app in Hmono.
+    by apply list_reln_app in Hmono as []. }
   clear Hstage.
-  ospecialize (Hgrow_none _); [done|].
-  clear Ht0 Ht1.
+  split.
+  { apply (f_equal length) in Heq_old_new.
+    autorewrite with len in *. lia. }
 
   assert (old_key = last $ to_pks vrf_pk uid old_dig) as ->.
   { rewrite /is_committed_keys in Hkeys.
@@ -325,64 +370,8 @@ Proof.
   rewrite !last_lookup in Hold_dig Hnew_dig.
   eapply (lookup_app_l_Some _ new_digs) in Hold_dig.
   erewrite (lookup_app_r' digs) in Hgrow_dig.
-  setoid_rewrite (lookup_app_r' digs) in Hgrow_none.
+  setoid_rewrite (lookup_app_r' digs) in Hfind.
 
-  assert (to_pks vrf_pk uid old_dig ++ [new_key] = to_pks vrf_pk uid grow_dig)
-    as Heq_old_grow.
-  { eapply inv_fn_None_bound in Hnone.
-    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hold_dig Hgrow_dig _)
-      as [ext_pks Hgrow_pks]; [len|].
-    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hgrow_dig Hnew_dig _)
-      as ?%prefix_length.
-    { apply lookup_lt_Some in Hgrow_dig. lia. }
-    rewrite Hgrow_pks. f_equal.
-    destruct ext_pks.
-    - exfalso.
-      list_simplifier.
-      rewrite -Hgrow_pks in Hgrow_some.
-      clear -Hgrow_some.
-      rewrite lookup_total_alt in Hgrow_some.
-      destruct (_ !! uid) eqn:Hlook_uid; simpl in *.
-      + opose proof (inv_fn_out_pks _ _ _ Hlook_uid) as Hpks; [done|].
-        opose proof (pks_in_hidden_snoc Hpks Hgrow_some) as Hpks'.
-        opose proof (inv_fn_inp_pks _ _ _ Hpks' _) as (?&?&Hpref); [done|..].
-        { len. }
-        list_simplifier.
-        by eapply prefix_snoc_not.
-      + opose proof (inv_fn_inp_pks _ [new_key] _ _ _).
-        2: { by intros ?* [-> ->]%list_lookup_singleton_Some. }
-        1-2: done.
-        destruct_exis. destruct_and?.
-        simplify_eq/=.
-    - destruct ext_pks.
-      2: {
-        exfalso.
-        apply (f_equal length) in Hgrow_pks.
-        autorewrite with len in *.
-        simpl in *. lia. }
-      f_equal.
-      apply (f_equal (.!! next_ver)) in Hgrow_pks.
-      rewrite -Hver lookup_snoc Hver in Hgrow_pks.
-      rewrite /= lookup_total_alt in Hgrow_pks.
-      destruct (_ !! uid) eqn:Hlook_uid; simpl in *; try done.
-      opose proof (inv_fn_out_lookup _ _ _ Hlook_uid Hgrow_pks) as Hsome'; [done|].
-      opose proof (in_hidden_det Hgrow_some Hsome').
-      by simplify_eq/=. }
-
-  assert (to_pks vrf_pk uid grow_dig = to_pks vrf_pk uid new_dig)
-    as Heq_grow_new.
-  { eapply inv_fn_None_bound in Hnone.
-    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hgrow_dig Hnew_dig _)
-      as [ext_pks Hnew_pks].
-    { apply lookup_lt_Some in Hgrow_dig. lia. }
-    destruct ext_pks; [by list_simplifier|].
-    apply (f_equal length) in Hnew_pks.
-    rewrite -Heq_old_grow in Hnew_pks.
-    autorewrite with len in *.
-    simpl in *. lia. }
-  clear Hsome Hnone Hgrow_some.
-
-  split. { rewrite -Heq_grow_new -Heq_old_grow. len. }
   apply lookup_lt_Some in Hgrow_dig as ?.
   autorewrite with len in *.
   replace (S (_ - _)) with (length new_digs - grow_idx)%nat; [|lia].
@@ -395,20 +384,24 @@ Proof.
   rewrite (lookup_app_r' digs) in Hmid_dig.
   apply lookup_app_Some in Hrepl as [Hrepl|[? Hrepl]].
   - apply lookup_replicate in Hrepl as [-> ?].
-    opose proof (Hgrow_none _ _ _ _) as Hnone; [done..|].
-    clear Hgrow_none.
-    eapply inv_fn_None_bound in Hnone.
-    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hold_dig Hmid_dig _) as Hpref_reg0; [len|].
-    f_equal. symmetry.
-    eapply prefix_length_eq; [done|].
-    simpl in *. lia.
+    opose proof (Hfind _ _ _ _) as Hnone; [done..|].
+    opose proof (mono_plain_lookup uid Hmono Hold_dig Hmid_dig _) as [ext_pks Hgrow_pks]; [len|].
+    rewrite Hgrow_pks.
+    opose proof (mono_plain_lookup uid Hmono Hmid_dig Hgrow_dig _) as ?%prefix_length; [len|].
+    apply (f_equal length) in Hgrow_pks.
+    autorewrite with len in *.
+    assert (length ext_pks = 0%nat) as ?%nil_length_inv by lia.
+    by list_simplifier.
   - apply lookup_replicate in Hrepl as [-> ?].
     autorewrite with len in *.
-    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hgrow_dig Hmid_dig _) as Hpref_reg0; [len|].
-    opose proof (mono_hidden_lookup vrf_pk uid Hmono Hmid_dig Hnew_dig _) as Hpref_reg1; [len|].
-    rewrite -Heq_grow_new in Hpref_reg1.
-    opose proof (prefix_eq _ _ Hpref_reg0 Hpref_reg1) as <-.
-    by rewrite -Heq_old_grow last_snoc.
+    opose proof (mono_plain_lookup uid Hmono Hgrow_dig Hmid_dig _) as ?%prefix_length; [len|].
+    opose proof (mono_plain_lookup uid Hmono Hmid_dig Hnew_dig _) as [ext_pks Hgrow_pks]; [len|].
+    rewrite {}Hgrow_pks in Heq_old_new.
+    apply (f_equal length) in Heq_old_new as ?.
+    autorewrite with len in *.
+    assert (length ext_pks = 0%nat) as ?%nil_length_inv by lia.
+    list_simplifier.
+    by rewrite -Heq_old_new last_snoc.
 Qed.
 
 End proof.
