@@ -1,4 +1,4 @@
-//go:build !goose
+//go:build goose
 
 package cryptoffi
 
@@ -6,7 +6,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
-	"hash"
 
 	"github.com/sanjit-bhat/pav/cryptoffi/vrf"
 )
@@ -17,23 +16,25 @@ const (
 
 // # Hash
 
+func trustedHash(data string) string {
+	h := sha256.Sum256([]byte(data))
+	return string(h[:])
+}
+
 type Hasher struct {
-	h hash.Hash
+	b []byte
 }
 
 func NewHasher() *Hasher {
-	return &Hasher{sha256.New()}
+	return &Hasher{}
 }
 
 func (hr *Hasher) Write(b []byte) {
-	_, err := hr.h.Write(b)
-	if err != nil {
-		panic("cryptoffi: Hasher.Write err")
-	}
+	hr.b = append(hr.b, b...)
 }
 
 func (hr *Hasher) Sum(b []byte) (hash []byte) {
-	return hr.h.Sum(b)
+	return append(b, []byte(trustedHash(string(hr.b)))...)
 }
 
 // # Signature
