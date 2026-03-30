@@ -53,7 +53,7 @@ Section crypto.
       ffiLocalGS := cryptoNodeGS;
       ffi_local_ctx _ _ σ := True%I;
       ffi_global_ctx _ _ g := (mono_list_auth_own prefix_gn (1/2) g.(crypto_hash_prev_data) ∗
-                               ⌜ g.(crypto_hash_fn) = total_hash_fn ⌝)%I;
+                               ⌜ g.(crypto_total_hash_fn) = total_hash_fn ⌝)%I;
       ffi_local_start _ _ σ := True%I;
       ffi_global_start _ _ g := True%I;
       ffi_restart _ _ _ := True%I;
@@ -64,7 +64,7 @@ End crypto.
 
 Section lifting.
   Existing Instances crypto_op crypto_model crypto_semantics crypto_interp.
-  Context `{!gooseGlobalGS Σ, !gooseLocalGS Σ} {go_gctx : GoGlobalContext}.
+  Context `{!heapGS Σ}.
   Local Instance goose_cryptoGS : cryptoGS Σ := goose_ffiGlobalGS.
   Local Instance goose_cryptoNodeGS : cryptoNodeGS Σ := goose_ffiLocalGS.
 
@@ -140,8 +140,8 @@ Section lifting.
     if (has_hash all_hash_data data) then Some (total_hash_fn data) else None.
 
   Local Definition extract (vs : list val) : list (list w8) :=
-    foldl (λ l v, match v with
-                  | LitV (LitString x) => l ++ [x]
+    foldr (λ v l, match v with
+                  | LitV (LitString x) => x :: l
                   | _ => l
                   end
       ) [] vs.
@@ -167,20 +167,40 @@ Section lifting.
         destruct Hin as [->|]; [done|done].
   Qed.
 
-  Lemma has_hash_prefix datas pre suf d :
-    datas = pre ++ suf →
-    has_hash pre d = true →
-    has_hash datas d = true.
+  (* Lemma has_hash_subseteq datas pre suf d : *)
+  (*   sub ⊆ datas → *)
+  (*   has_hash datas d = true → *)
+  (*   d ∈ sub → *)
+  (*   has_hash sub d = true. *)
+  (* Proof. *)
+  (*   intros ->. induction pre as [|p pre IH]; [done|]. *)
+  (*   simpl. repeat case_decide; naive_solver. *)
+  (* Qed. *)
+
+  (* Hpast_inv : past ⊆ crypto_hash_prev_data *)
+  (* Hno_coll_inv : has_hash crypto_hash_prev_data data = true *)
+
+  Lemma no_collisions_contained d l :
+    d ∈ l →
+    no_collisions l →
+    no_collisions (l ++ [d]).
   Proof.
-    intros ->. induction pre as [|p pre IH]; [done|].
-    simpl. repeat case_decide; naive_solver.
+    (* TODO now *)
+  Admitted.
+
+  Lemma prefix_subseteq {A} (l l' : list A) :
+    prefix l l' →
+    l ⊆ l'.
+  Proof.
+    intros [? ?]. subst. set_solver.
   Qed.
 
   Definition is_hash_proph_inv : iProp Σ := (*  *)
-    inv nroot (∃ past future,
-          "H●" ∷ ghost_map_auth prefix_gn (1/2) $ list_to_map $ (λ k, pair k ()) <$> past ∗
+    inv nroot (∃ past hash_prev future,
+          "H●" ∷ mono_list_auth_own prefix_gn (1/2) hash_prev ∗
           "%Hall" ∷ ⌜ all_hash_data = past ++ (extract future) ⌝ ∗
-          "%Hno_coll" ∷ (⌜ no_collisions past ⌝) ∗
+          "%Hpast" ∷ ⌜ past ⊆ hash_prev ⌝ ∗
+          "%Hno_coll" ∷ (⌜ no_collisions hash_prev ⌝) ∗
           "Hproph" ∷ proph crypto_hash_proph_id future).
 
   Context {sem_fn : GoSemanticsFunctions} {pre_sem : go.PreSemantics}.
@@ -199,45 +219,87 @@ Section lifting.
     iDestruct "Hg" as "(H● & %)". destruct g1. simpl in *. subst.
     iInv "Hinv" as ">Hi" "Hclose".
     iNamedSuffix "Hi" "_inv".
-    iDestruct (ghost_map_auth_valid_2 with "[$] [$]") as "#[_ %Heq]".
+    Search mono_list_auth_own.
+    iDestruct (mono_list_auth_own_agree with "[$] [$]") as "#[_ %Heq]".
     destruct decide in Hstep.
     { (* already hashed before. *)
-      iFrame "∗#%". inv_base_step.
+      inv_base_step. iFrame "∗#%".
+      iCombine "H● H●_inv" as "H●".
+      iMod (mono_list_auth_own_update with "[$]") as "[[$ H●_inv] #Hlb]".
+      { by eexists. }
+      iCombineNamed "*_inv" as "Hi".
+      iMod ("Hclose" with "[Hi]") as "_".
+      { iNamed "Hi". iFrame "∗#%". iPureIntro.
+        split.
+        - set_solver.
+        - by apply no_collisions_contained.
+      }
+      iModIntro. iFrame "∗#%". iSplitR; first done.
+
+      wp_bind (ResolveProph _ _).
+      iInv "Hinv" as ">Hi" "Hclose".
+      iNamedSuffix "Hi" "_inv".
+      (* FIXME: bind doesn't work *)
+      iApply (wp_resolve_proph with "[$]").
+      iIntros "!> % [% Hproph_inv]". subst.
+      iCombineNamed "*_inv" as "Hi".
+      iMod ("Hclose" with "[Hi]") as "_".
+      { iNamed "Hi". iExists (past0 ++ [data]).
+        iDestruct (mono_list_auth_lb_valid with "[$] [$]") as %[_ Hlb].
+        iFrame "∗#%". iPureIntro.
+        split.
+        - rewrite Hall_inv0. rewrite -app_assoc.
+          f_equal. rewrite go.into_val_unfold //.
+        - apply prefix_subseteq in Hlb. set_solver.
+      }
+      iModIntro. wp_auto. wp_end. iPureIntro.
+      eapply no_collisions_has_hash in Hno_coll_inv; try done.
+      unfold hash_fn.
+      admit.
+    }
+    destruct decide in Hstep.
+    { (* ran into a collision *)
       iCombineNamed "*_inv" as "Hi".
       iMod ("Hclose" with "[Hi]") as "_".
       { iNamed "Hi". iFrame "∗#%". }
+      inv_base_step. iFrame "∗#%". iModIntro. iSplitR; first done.
+      iApply wp_AngelicExit. }
+    { (* already hashed before. *)
+      inv_base_step. iFrame "∗#%".
+      iCombine "H● H●_inv" as "H●".
+      iMod (mono_list_auth_own_update with "[$]") as "[[$ H●_inv] #Hlb]".
+      { by eexists. }
+      iCombineNamed "*_inv" as "Hi".
+      iMod ("Hclose" with "[Hi]") as "_".
+      { iNamed "Hi". iFrame "∗#%". iPureIntro.
+        split.
+        - set_solver.
+        - admit. (* new pure fact *)
+      }
       iModIntro. iFrame "∗#%". iSplitR; first done.
-      iApply wp_value. iApply "HΦ". iPureIntro.
-      unfold hash_fn.
-      erewrite has_hash_prefix; try done.
-      rewrite no_collisions_has_hash //.
 
-      destruct has_hash eqn:Hhash_hash;
-      rewrite decide_True //.
-      apply no_collision_clean in Hall_inv; last done.
-      eapply elem_of_subseteq; try done.
-      apply (f_equal dom) in Heq. rewrite !dom_list_to_map_L in Heq.
-      Search list_to_set elem_of.
-      rewrite fmap_fmap in Heq.
-      Search list_to_map dom.
-      Search subseteq elem_of.
-      set_solver.
-      Search (_ = _ ++ _) take.
-      unfold clean_hash_data.
-      simpl.
-      unfold
-      eapply elem_of_prefix. eassumption. }
-    destruct decide in Hstep.
-    { (* ran into a collision *)
-      inv_base_step. iFrame "∗#%". iModIntro.
-      admit. (* FIXME: heapGS bundling annoyane *) }
-    { (* first time computing this hash *)
-      inv_base_step. iFrame "∗#%". iModIntro.
-      iSplitR.
-      - iPureIntro.
-        Search prefix_of
+      wp_bind (ResolveProph _ _).
+      iInv "Hinv" as ">Hi" "Hclose".
+      iNamedSuffix "Hi" "_inv".
+      (* FIXME: bind doesn't work *)
+      iApply (wp_resolve_proph with "[$]").
+      iIntros "!> % [% Hproph_inv]". subst.
+      iCombineNamed "*_inv" as "Hi".
+      iMod ("Hclose" with "[Hi]") as "_".
+      { iNamed "Hi". iExists (past0 ++ [data]).
+        iDestruct (mono_list_auth_lb_valid with "[$] [$]") as %[_ Hlb].
+        iFrame "∗#%". iPureIntro.
+        split.
+        - rewrite Hall_inv0. rewrite -app_assoc.
+          f_equal. rewrite go.into_val_unfold //.
+        - apply prefix_subseteq in Hlb. set_solver.
+      }
+      iModIntro. wp_auto. wp_end.
+      iPureIntro.
+      admit. (* new pure fact. *)
     }
-  Qed.
+Admitted.
+
 
 (* design sketch for proving wp_Hash:
 - trusted code maintains this inv:

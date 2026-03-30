@@ -59,7 +59,9 @@ Section crypto.
         σ = σ' ∧
         (∀ data, v = #data →
                  if decide (data ∈ g.(crypto_hash_prev_data)) then
-                   e' = #(g.(crypto_total_hash_fn) data) ∧ g' = g
+                   g' = set crypto_hash_prev_data (.++ [data]) g ∧
+                   e' = (ResolveProph #crypto_hash_proph_id #data;;
+                         #(g.(crypto_total_hash_fn) data))%E
                  else (* data ∉ crypto_hash_prev_data *)
                    if decide ((g.(crypto_total_hash_fn) data) ∈ (g.(crypto_total_hash_fn) <$> g.(crypto_hash_prev_data))) then
                      g' = g ∧ e' = (GoInstruction AngelicExit #())
