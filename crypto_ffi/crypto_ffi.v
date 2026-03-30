@@ -235,7 +235,7 @@ Section lifting.
     {{{ is_hash_proph_inv }}}
       ExternalOp Hash #data
     {{{ hash, RET #hash; ⌜ hash_fn data = Some hash ⌝ }}}.
-  Proof.
+  Proof using pre_sem.
     iIntros (Φ) "#Hinv HΦ".
     iApply (wp_CryptoOp with "[-]").
     iIntros "!> * Hl Hg".
@@ -268,10 +268,10 @@ Section lifting.
       (* FIXME: bind doesn't work *)
       iApply (wp_resolve_proph with "[$]").
       iIntros "!> % [% Hproph_inv]". subst.
+      iDestruct (mono_list_auth_lb_valid with "[$] [$]") as %[_ Hlb].
       iCombineNamed "*_inv" as "Hi".
       iMod ("Hclose" with "[Hi]") as "_".
       { iNamed "Hi". iExists (past0 ++ [data]).
-        iDestruct (mono_list_auth_lb_valid with "[$] [$]") as %[_ Hlb].
         iFrame "∗#%". iPureIntro.
         split.
         - rewrite Hall_inv0. rewrite -app_assoc.
@@ -283,8 +283,10 @@ Section lifting.
       rewrite Hall_inv0 /extract -/extract go.into_val_unfold.
       rewrite has_hash_app_mid //.
       intros d Hd Hhash.
-      apply Hno_coll_inv0; [by apply Hpast_inv0 | | done].
-      apply Hlb. set_solver.
+      apply Hno_coll_inv0; [| | done].
+      { set_solver. }
+      apply prefix_subseteq in Hlb.
+      set_solver.
     }
     destruct decide in Hstep.
     { (* ran into a collision *)
@@ -313,10 +315,10 @@ Section lifting.
       (* FIXME: bind doesn't work *)
       iApply (wp_resolve_proph with "[$]").
       iIntros "!> % [% Hproph_inv]". subst.
+      iDestruct (mono_list_auth_lb_valid with "[$] [$]") as %[_ Hlb].
       iCombineNamed "*_inv" as "Hi".
       iMod ("Hclose" with "[Hi]") as "_".
       { iNamed "Hi". iExists (past0 ++ [data]).
-        iDestruct (mono_list_auth_lb_valid with "[$] [$]") as %[_ Hlb].
         iFrame "∗#%". iPureIntro.
         split.
         - rewrite Hall_inv0. rewrite -app_assoc.
@@ -329,39 +331,14 @@ Section lifting.
       rewrite Hall_inv0 /extract -/extract go.into_val_unfold.
       rewrite has_hash_app_mid //.
       intros d Hd Hhash.
-      apply Hno_coll_inv0; [by apply Hpast_inv0 | | done].
+      apply Hno_coll_inv0; try done.
+      { set_solver. }
+      apply prefix_subseteq in Hlb.
       apply Hlb. set_solver.
     }
 Qed.
 
-
-(* design sketch for proving wp_Hash:
-- trusted code maintains this inv:
-proph 0 suffix_data ∗
-own_ffi_state prefix_data ∗
-all_hash_data = prefix_data ++ suffix_data.
-- Resolve op updates proph, while HashOp updates own_ffi_state.
-- for consistency, need to update both of these atomically.
-otherwise, the ffi state might not match all_hash_data,
-preventing us from establishing hash_fn = Some.
-- so, we wanna call Resolve atomically with HashOp, but how?
-HashOp might infinite loop, which isn't atomic.
-solution: have HashOp ret err on collision. Resolve with this err.
-trusted code infinite loops after the Resolve.
-we only have to establish hash_fn = Some at the end of trusted code.
-- TODO: perennial doesn't have Resolve around atomic expression.
-need to port iris's support for that.
-*)
-
 End lifting.
-
-
-Section crypto_helpers.
-  Existing Instances crypto_op crypto_model crypto_semantics crypto_interp goose_cryptoGS goose_cryptoNodeGS.
-  Context `{!heapGS Σ}.
-
-
-End crypto_helpers.
 
 From Perennial.goose_lang Require Import adequacy.
 
