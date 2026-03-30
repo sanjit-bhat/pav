@@ -9,7 +9,6 @@ Section crypto.
 
   (** Type: func(uint64) Listener *)
   Definition TrustedHashⁱᵐᵖˡ : val :=
-    λ: "data",
-      Resolve (ExternalOp Hash "data") xO.
+    λ: "data", "". (* Resolve (ExternalOp Hash "data") xO. *)
 
 End crypto.
