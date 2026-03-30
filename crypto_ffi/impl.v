@@ -28,10 +28,12 @@ Defined.
 Record crypto_global_state : Type := {
   crypto_hash_prev_data : list (list w8);
   crypto_hash_proph_id : proph_id;
+  crypto_hash_fn : list w8 → list w8;
 }.
 
 Global Instance crypto_global_state_inhabited : Inhabited crypto_global_state :=
-  populate {| crypto_hash_prev_data := []; crypto_hash_proph_id := inhabitant |}.
+  populate {| crypto_hash_prev_data := []; crypto_hash_proph_id := inhabitant;
+                                           crypto_hash_fn := inhabitant |}.
 
 Record crypto_node_state : Type := {
 }.
@@ -52,25 +54,21 @@ Section crypto.
   Existing Instances r_mbind r_fmap.
   Context {go_gctx : GoGlobalContext}.
 
-  Context (hash_fn : list w8 → list w8).
-
   Definition is_crypto_ffi_step (op : CryptoOp) (v : val) (e' : expr)
     (σ σ' : ffi_state) (g g' : ffi_global_state) : Prop :=
     match op with
     | Hash =>
-        ∃ data,
-        v = #data ∧
         σ = σ' ∧
-        if decide (data ∈ g.(crypto_hash_prev_data)) then
-          e' = #() ∧ g' = g
-        else (* data ∉ crypto_hash_prev_data *)
-          if decide ((hash_fn data) ∈ (hash_fn <$> g.(crypto_hash_prev_data))) then
-            g' = g ∧ e' = (GoInstruction AngelicExit #())
-          else
-            g' = set crypto_hash_prev_data (.++ [data]) g ∧
-            e' = (ResolveProph #g.(crypto_hash_proph_id) "data";;
-                  #(hash_fn data))%E
-
+        (∀ data, v = #data →
+                 if decide (data ∈ g.(crypto_hash_prev_data)) then
+                   e' = #() ∧ g' = g
+                 else (* data ∉ crypto_hash_prev_data *)
+                   if decide ((g.(crypto_hash_fn) data) ∈ (g.(crypto_hash_fn) <$> g.(crypto_hash_prev_data))) then
+                     g' = g ∧ e' = (GoInstruction AngelicExit #())
+                   else
+                     g' = set crypto_hash_prev_data (.++ [data]) g ∧
+                     e' = (ResolveProph #g.(crypto_hash_proph_id) "data";;
+                           #(g.(crypto_hash_fn) data))%E)
     end.
 
   Definition ffi_step (op : CryptoOp) (v : val) : transition (state*global_state) expr :=

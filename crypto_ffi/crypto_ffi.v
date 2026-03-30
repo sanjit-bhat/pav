@@ -19,11 +19,13 @@ Set Printing Projections.
 (** * Crypto semantic interpretation and lifting lemmas *)
 
 Implicit Type Σ : gFunctors.
-Class cryptoGS (Σ : gFunctors) : Set := CryptoGS {
+Class cryptoGS (Σ : gFunctors) : Type := CryptoGS {
   all_hash_data : list (list w8);
+  hash_proph_id : proph_id;
+  total_hash_fn : list w8 → list w8;
 }.
 
-Class cryptoGpreS (Σ : gFunctors) : Set := {
+Class cryptoGpreS (Σ : gFunctors) : Type := {
 }.
 
 Class cryptoNodeGS Σ : Set := CryptoNodeGS {
@@ -48,7 +50,10 @@ Section crypto.
     {| ffiGlobalGS := cryptoGS;
        ffiLocalGS := cryptoNodeGS;
        ffi_local_ctx _ _ σ := True%I;
-       ffi_global_ctx _ _ g := (∃ l, proph g.(crypto_hash_proph_id) l)%I;
+       ffi_global_ctx _ _ g := (
+                                ⌜ g.(crypto_hash_proph_id) = hash_proph_id ⌝ ∗
+                                ⌜ g.(crypto_hash_fn) = total_hash_fn ⌝
+                              )%I;
        ffi_local_start _ _ σ := True%I;
        ffi_global_start _ _ g := True%I;
        ffi_restart _ _ _ := True%I;
@@ -114,7 +119,7 @@ Section lifting.
     inv_base_step. monad_inv. simpl in *.
     inv_base_step. monad_inv. destruct H0; inv_base_step.
     { iFrame "∗#%". iMod "Hmask" as "_". iIntros "Hlc". iModIntro.
-      iSplitL; last done. by iApply "IH". }
+      by iApply "IH". }
     iMod "Hmask" as "_".
     iDestruct "Hg" as "[Hffi_global Hg]".
     iMod ("HΦ" with "[//] [$] [$]") as "H".
@@ -124,42 +129,60 @@ Section lifting.
 
   (* TODO: add wp lemmas for each crypto op here *)
 
+  Definition is_hash_proph_inv : iProp Σ :=
+    inv nroot (∃ l, proph hash_proph_id l).
+
+  (* XXX *)
+  Local Definition clean_hash_data : list (list w8) :=
+    foldl (λ clean_so_far data,
+             if decide ((total_hash_fn data) ∈ total_hash_fn <$> clean_so_far) then
+               clean_so_far
+             else clean_so_far ++ [data]) [] all_hash_data.
+
+  Definition hash_fn (data : list w8) : option (list w8) :=
+    if decide (data ∈ clean_hash_data) then Some (total_hash_fn data) else None.
+
+  Lemma wp_Hash data :
+    {{{ is_hash_proph_inv }}}
+      ExternalOp Hash #data
+    {{{ hash, RET #hash; ⌜ hash_fn data = Some hash ⌝ }}}.
+  Proof.
+  Admitted.
+
 End lifting.
+
 
 Section crypto_helpers.
   Existing Instances crypto_op crypto_model crypto_semantics crypto_interp goose_cryptoGS goose_cryptoNodeGS.
   Context `{!heapGS Σ}.
 
-  (* TODO: add generally useful lemmas here *)
 
 End crypto_helpers.
 
 From Perennial.goose_lang Require Import adequacy.
 
-#[global]
-Program Instance crypto_interp_adequacy {go_gctx : GoGlobalContext} :
-  @ffi_interp_adequacy crypto_model crypto_interp crypto_op crypto_semantics :=
-  {| ffiGpreS := cryptoGpreS;
-     ffiΣ := cryptoΣ;
-     subG_ffiPreG := subG_cryptoGpreS;
-     ffi_initgP := λ g, True;
-     ffi_initP := λ σ g, True;
-  |}.
-Next Obligation.
-  rewrite //=. iIntros (_ Σ hPre g _). eauto.
-  (* TODO: allocate real ghost state here *)
-  iMod (mono_nat_own_alloc 0) as (γ) "[Hmono _]".
-  iExists (CryptoGS _ γ _). iFrame. eauto.
-Qed.
-Next Obligation.
-  rewrite //=.
-  iIntros (_ Σ hPre σ ??).
-  (* TODO: allocate real per-node ghost state here *)
-  iMod (mono_nat_own_alloc 0) as (γ) "[Hmono _]".
-  iExists (CryptoNodeGS _ _ γ). eauto with iFrame.
-Qed.
-Next Obligation.
-  intros ?. iIntros (Σ σ σ' Hcrash Hold) "Hctx".
-  simpl in Hold. destruct Hcrash.
-  iExists Hold. iFrame. iPureIntro. done.
-Qed.
+(* #[global] *)
+(* Program Instance crypto_interp_adequacy {go_gctx : GoGlobalContext} : *)
+(*   @ffi_interp_adequacy crypto_model crypto_interp crypto_op crypto_semantics := *)
+(*   {| ffiGpreS := cryptoGpreS; *)
+(*      ffiΣ := cryptoΣ; *)
+(*      subG_ffiPreG := subG_cryptoGpreS; *)
+(*      ffi_initgP := λ g, True; *)
+(*      ffi_initP := λ σ g, True; *)
+(*   |}. *)
+(* Next Obligation. *)
+(*   rewrite //=. iIntros (_ Σ hPre g _). eauto. *)
+(*   iExists (CryptoGS _ γ _). iFrame. eauto. *)
+(* Qed. *)
+(* Next Obligation. *)
+(*   rewrite //=. *)
+(*   iIntros (_ Σ hPre σ ??). *)
+(*   (* TODO: allocate real per-node ghost state here *) *)
+(*   iMod (mono_nat_own_alloc 0) as (γ) "[Hmono _]". *)
+(*   iExists (CryptoNodeGS _ _ γ). eauto with iFrame. *)
+(* Qed. *)
+(* Next Obligation. *)
+(*   intros ?. iIntros (Σ σ σ' Hcrash Hold) "Hctx". *)
+(*   simpl in Hold. destruct Hcrash. *)
+(*   iExists Hold. iFrame. iPureIntro. done. *)
+(* Qed. *)
