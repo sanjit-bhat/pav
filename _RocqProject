@@ -1,4 +1,5 @@
 -Q crypto_ffi Cryptoffi
+-Q prelude New
 -Q code New.code
 -Q generatedproof New.generatedproof
 -Q trusted_code New.trusted_code.github_com.sanjit_bhat.pav

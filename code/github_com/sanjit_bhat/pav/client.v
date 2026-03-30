@@ -9,6 +9,7 @@ Require Export New.code.github_com.sanjit_bhat.pav.ktcore.
 Require Export New.code.github_com.sanjit_bhat.pav.merkle.
 Require Export New.code.github_com.sanjit_bhat.pav.server.
 From New.golang Require Import defn.
+From New Require Import crypto_prelude.
 Module pkg_id.
 Definition client : go_string := "github.com/sanjit-bhat/pav/client".
 
@@ -881,7 +882,7 @@ Class serv_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext}
   #[global] serv_set_vrfSig (x : serv.t) y :: ⟦StructFieldSet (servⁱᵐᵖˡ) "vrfSig", (#x, #y)⟧ ⤳[under] #(x <|serv.vrfSig' := y|>);
 }.
 
-Class Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
+Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
   #[global] Client_instance :: Client_Assumptions;
   #[global] nextVer_instance :: nextVer_Assumptions;

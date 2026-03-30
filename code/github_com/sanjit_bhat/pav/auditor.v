@@ -11,6 +11,7 @@ Require Export New.code.github_com.sanjit_bhat.pav.server.
 Require Export New.code.github_com.sanjit_bhat.pav.safemarshal.
 Require Export New.code.github_com.tchajed.marshal.
 From New.golang Require Import defn.
+From New Require Import crypto_prelude.
 Module pkg_id.
 Definition auditor : go_string := "github.com/sanjit-bhat/pav/auditor".
 
@@ -1242,7 +1243,7 @@ Class GetReply_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalCont
   #[global] GetReply_set_Err (x : GetReply.t) y :: ⟦StructFieldSet (GetReplyⁱᵐᵖˡ) "Err", (#x, #y)⟧ ⤳[under] #(x <|GetReply.Err' := y|>);
 }.
 
-Class Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
+Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
   #[global] Auditor_instance :: Auditor_Assumptions;
   #[global] history_instance :: history_Assumptions;

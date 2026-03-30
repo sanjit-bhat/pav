@@ -4,6 +4,7 @@ Require Export New.code.github_com.goose_lang.std.
 Require Export New.code.github_com.sanjit_bhat.pav.cryptoffi.
 Require Export New.code.github_com.sanjit_bhat.pav.cryptoutil.
 From New.golang Require Import defn.
+From New Require Import crypto_prelude.
 Module pkg_id.
 Definition hashchain : go_string := "github.com/sanjit-bhat/pav/hashchain".
 
@@ -206,7 +207,7 @@ Class HashChain_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalCon
   #[global] HashChain'ptr_Prove_unfold :: MethodUnfold (go.PointerType (HashChain)) "Prove" (HashChain__Proveⁱᵐᵖˡ);
 }.
 
-Class Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
+Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
   #[global] HashChain_instance :: HashChain_Assumptions;
   #[global] Verify_unfold :: FuncUnfold Verify [] (Verifyⁱᵐᵖˡ);

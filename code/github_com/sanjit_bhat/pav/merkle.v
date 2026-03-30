@@ -7,6 +7,7 @@ Require Export New.code.github_com.sanjit_bhat.pav.cryptoutil.
 Require Export New.code.github_com.tchajed.marshal.
 Require Export New.code.github_com.sanjit_bhat.pav.safemarshal.
 From New.golang Require Import defn.
+From New Require Import crypto_prelude.
 Module pkg_id.
 Definition merkle : go_string := "github.com/sanjit-bhat/pav/merkle".
 
@@ -990,7 +991,7 @@ Class Proof_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext
   #[global] Proof_set_LeafVal (x : Proof.t) y :: ⟦StructFieldSet (Proofⁱᵐᵖˡ) "LeafVal", (#x, #y)⟧ ⤳[under] #(x <|Proof.LeafVal' := y|>);
 }.
 
-Class Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
+Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
   #[global] Map_instance :: Map_Assumptions;
   #[global] node_instance :: node_Assumptions;

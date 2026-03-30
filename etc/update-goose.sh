@@ -9,8 +9,8 @@ fi
 readonly PAV="$1"
 
 go tool goose -out code -dir "$PAV" \
-    ./advrpc ./alicebob ./auditor ./client ./cryptoffi ./cryptoutil \
+    ./advrpc ./alicebob ./auditor ./client ./cryptoffi ./cryptoffi/ffi ./cryptoutil \
     ./hashchain ./ktcore ./merkle ./netffi ./safemarshal ./server
 go tool proofgen -out generatedproof -configdir code -dir "$PAV" \
-    ./advrpc ./alicebob ./auditor ./client ./cryptoffi ./cryptoutil \
+    ./advrpc ./alicebob ./auditor ./client ./cryptoffi ./cryptoffi/ffi ./cryptoutil \
     ./hashchain ./ktcore ./merkle ./netffi ./safemarshal ./server

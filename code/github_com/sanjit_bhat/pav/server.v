@@ -10,6 +10,7 @@ Require Export New.code.github_com.sanjit_bhat.pav.cryptoffi.
 Require Export New.code.github_com.sanjit_bhat.pav.hashchain.
 Require Export New.code.github_com.sanjit_bhat.pav.merkle.
 From New.golang Require Import defn.
+From New Require Import crypto_prelude.
 Module pkg_id.
 Definition server : go_string := "github.com/sanjit-bhat/pav/server".
 
@@ -2027,7 +2028,7 @@ Class work_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext}
   #[global] work_set_mapVal (x : work.t) y :: ⟦StructFieldSet (workⁱᵐᵖˡ) "mapVal", (#x, #y)⟧ ⤳[under] #(x <|work.mapVal' := y|>);
 }.
 
-Class Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
+Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
   #[global] StartChain_instance :: StartChain_Assumptions;
   #[global] StartVrf_instance :: StartVrf_Assumptions;

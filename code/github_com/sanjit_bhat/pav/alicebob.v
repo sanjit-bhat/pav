@@ -10,6 +10,7 @@ Require Export New.code.github_com.sanjit_bhat.pav.cryptoffi.
 Require Export New.code.github_com.sanjit_bhat.pav.ktcore.
 Require Export New.code.github_com.sanjit_bhat.pav.server.
 From New.golang Require Import defn.
+From New Require Import crypto_prelude.
 Module pkg_id.
 Definition alicebob : go_string := "github.com/sanjit-bhat/pav/alicebob".
 
@@ -418,7 +419,7 @@ Class histEntry_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalCon
   #[global] histEntry_set_pk (x : histEntry.t) y :: ⟦StructFieldSet (histEntryⁱᵐᵖˡ) "pk", (#x, #y)⟧ ⤳[under] #(x <|histEntry.pk' := y|>);
 }.
 
-Class Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
+Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
   #[global] histEntry_instance :: histEntry_Assumptions;
   #[global] testAliceBob_unfold :: FuncUnfold testAliceBob [] (testAliceBobⁱᵐᵖˡ);

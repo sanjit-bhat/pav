@@ -5,6 +5,7 @@ Require Export New.code.github_com.sanjit_bhat.pav.cryptoutil.
 Require Export New.code.github_com.sanjit_bhat.pav.safemarshal.
 Require Export New.code.github_com.tchajed.marshal.
 From New.golang Require Import defn.
+From New Require Import crypto_prelude.
 Module pkg_id.
 Definition ktcore : go_string := "github.com/sanjit-bhat/pav/ktcore".
 
@@ -1578,7 +1579,7 @@ Class UpdateProof_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalC
   #[global] UpdateProof_set_NonMembProof (x : UpdateProof.t) y :: ⟦StructFieldSet (UpdateProofⁱᵐᵖˡ) "NonMembProof", (#x, #y)⟧ ⤳[under] #(x <|UpdateProof.NonMembProof' := y|>);
 }.
 
-Class Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
+Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
   #[global] Blame_instance :: Blame_Assumptions;
   #[global] Evid_instance :: Evid_Assumptions;

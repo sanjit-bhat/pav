@@ -8,7 +8,7 @@ Section crypto.
   Context {go_gctx : GoGlobalContext}.
 
   (** Type: func(uint64) Listener *)
-  Definition trustedHashⁱᵐᵖˡ : val :=
+  Definition TrustedHashⁱᵐᵖˡ : val :=
     λ: "data", ExternalOp Hash "data".
 
 End crypto.

@@ -1,3 +1,2 @@
 translate = ["HashLen", "*Hasher*", "SigPublicKey"]
-trusted = ["trusted*"]
-imports = ["!*", "crypto/ed25519"]
+imports = ["!*", "crypto/ed25519", "github.com/sanjit-bhat/pav/cryptoffi/ffi"]
