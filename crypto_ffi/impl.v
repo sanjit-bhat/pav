@@ -8,8 +8,6 @@ From Perennial.goose_lang Require Import lang.
 Set Default Proof Using "Type".
 Set Printing Projections.
 
-(** * The Crypto extension to GooseLang: primitive operations [Trusted definitions!] *)
-
 Inductive CryptoOp : Set :=
 | Hash
 .
@@ -61,13 +59,13 @@ Section crypto.
         σ = σ' ∧
         (∀ data, v = #data →
                  if decide (data ∈ g.(crypto_hash_prev_data)) then
-                   e' = #() ∧ g' = g
+                   e' = #(g.(crypto_hash_fn) data) ∧ g' = g
                  else (* data ∉ crypto_hash_prev_data *)
                    if decide ((g.(crypto_hash_fn) data) ∈ (g.(crypto_hash_fn) <$> g.(crypto_hash_prev_data))) then
                      g' = g ∧ e' = (GoInstruction AngelicExit #())
                    else
                      g' = set crypto_hash_prev_data (.++ [data]) g ∧
-                     e' = (ResolveProph #g.(crypto_hash_proph_id) "data";;
+                     e' = (ResolveProph #g.(crypto_hash_proph_id) #data;;
                            #(g.(crypto_hash_fn) data))%E)
     end.
 

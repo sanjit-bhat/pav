@@ -11,6 +11,7 @@ From Perennial.program_logic Require Import ectx_lifting atomic.
 From Perennial.Helpers Require Import CountableTactics Transitions Integers.
 From Perennial.goose_lang Require Import lang lifting.
 From Perennial.goose_lang Require Import crash_modality.
+From New.golang Require Import theory.
 From Cryptoffi Require Export impl.
 
 Set Default Proof Using "Type".
@@ -38,6 +39,15 @@ Definition cryptoΣ : gFunctors := #[].
 Instance subG_cryptoGpreS Σ : subG cryptoΣ Σ → cryptoGpreS Σ.
 Proof. Qed.
 
+Section clean.
+  Context `{!cryptoGS Σ}.
+  Local Definition clean_hash_data : list (list w8) :=
+    foldl (λ clean_so_far data,
+             if decide ((total_hash_fn data) ∈ total_hash_fn <$> clean_so_far) then
+               clean_so_far
+             else clean_so_far ++ [data]) [] all_hash_data.
+End clean.
+
 Section crypto.
   (* these are local instances on purpose, so that importing this file doesn't
   suddenly cause all FFI parameters to be inferred as the crypto model *)
@@ -52,7 +62,8 @@ Section crypto.
        ffi_local_ctx _ _ σ := True%I;
        ffi_global_ctx _ _ g := (
                                 ⌜ g.(crypto_hash_proph_id) = hash_proph_id ⌝ ∗
-                                ⌜ g.(crypto_hash_fn) = total_hash_fn ⌝
+                                ⌜ g.(crypto_hash_fn) = total_hash_fn ⌝ ∗
+                                ⌜ prefix g.(crypto_hash_prev_data) clean_hash_data ⌝
                               )%I;
        ffi_local_start _ _ σ := True%I;
        ffi_global_start _ _ g := True%I;
@@ -132,22 +143,51 @@ Section lifting.
   Definition is_hash_proph_inv : iProp Σ :=
     inv nroot (∃ l, proph hash_proph_id l).
 
-  (* XXX *)
-  Local Definition clean_hash_data : list (list w8) :=
-    foldl (λ clean_so_far data,
-             if decide ((total_hash_fn data) ∈ total_hash_fn <$> clean_so_far) then
-               clean_so_far
-             else clean_so_far ++ [data]) [] all_hash_data.
-
   Definition hash_fn (data : list w8) : option (list w8) :=
     if decide (data ∈ clean_hash_data) then Some (total_hash_fn data) else None.
 
+  Context {sem_fn : GoSemanticsFunctions} {pre_sem : go.PreSemantics}.
   Lemma wp_Hash data :
     {{{ is_hash_proph_inv }}}
       ExternalOp Hash #data
     {{{ hash, RET #hash; ⌜ hash_fn data = Some hash ⌝ }}}.
   Proof.
-  Admitted.
+    iIntros (Φ) "_ HΦ".
+    iApply (wp_CryptoOp with "[-]").
+    iIntros "!> * Hl Hg".
+    inv_base_step. monad_inv.
+    lazymatch goal with
+    | H : (if decide _ then _ else _) |- _ => rename H into Hstep
+    end.
+    iDestruct "Hg" as "(% & %)".
+    destruct decide in Hstep.
+    { (* already hashed before. *)
+      iFrame "∗#%". inv_base_step.
+      iModIntro. iFrame "∗#%". iApply wp_value. iApply "HΦ".
+      destruct g1. simpl in *. iPureIntro.
+      unfold hash_fn. subst.
+      rewrite decide_True //.
+      eapply elem_of_prefix; eassumption. }
+    destruct decide in Hstep.
+    { (* ran into a collision *)
+      inv_base_step. iFrame "∗#%". iModIntro.
+      admit. (* FIXME: heapGS bundling annoyane *) }
+    { (* first time computing this hash *)
+      inv_base_step. iFrame "∗#%". iModIntro.
+      iSplitR.
+      - iPureIntro.
+        Search prefix_of
+    }
+  Qed.
+
+  inv (
+      proph 0 l ∗
+      own_prev_hash_data prev_hash_data
+      ⌜ all_hash_data = prev_hash_data ++ (extract l) ⌝ ∗
+
+      l = (#(total_hash_fn data) :: l'
+      all_hash_data = prev_hash_data ++ [hash] ++ l'
+      )
 
 End lifting.
 
