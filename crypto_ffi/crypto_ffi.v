@@ -181,21 +181,13 @@ Section lifting.
   Qed.
 
 (* design sketch for proving wp_Hash:
-- trusted code maintains this inv:
-proph 0 suffix_data ∗
-own_ffi_state prefix_data ∗
-all_hash_data = prefix_data ++ suffix_data.
-- Resolve op updates proph, while HashOp updates own_ffi_state.
-- for consistency, need to update both of these atomically.
-otherwise, the ffi state might not match all_hash_data,
-preventing us from establishing hash_fn = Some.
-- so, we wanna call Resolve atomically with HashOp, but how?
-HashOp might infinite loop, which isn't atomic.
-solution: have HashOp ret err on collision. Resolve with this err.
-trusted code infinite loops after the Resolve.
-we only have to establish hash_fn = Some at the end of trusted code.
-- TODO: perennial doesn't have Resolve around atomic expression.
-need to port iris's support for that.
+- inv 1: ffi.data is coll free.
+- inv 2: every resolved val ∈ ffi.data.
+upheld by only Resolve'ing after calling HashOp, which might infinite loop.
+-> consider a trustedHash output.
+from inv 1, it doesn't collide with ffi.data.
+from inv 2, by extension, it doesn't collide with resolved vals.
+since hash_fn is constructed on resolved vals, hash_fn = Some.
 *)
 
 End lifting.
