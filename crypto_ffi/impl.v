@@ -58,11 +58,13 @@ Section crypto.
     | Hash =>
         σ = σ' ∧
         (∀ data, v = #data →
+                 (* already hashed [data]. *)
                  if decide (data ∈ g.(crypto_hash_prev_data)) then
                    g' = set crypto_hash_prev_data (.++ [data]) g ∧
                    e' = (ResolveProph #crypto_hash_proph_id #data;;
                          #(g.(crypto_total_hash_fn) data))%E
                  else (* data ∉ crypto_hash_prev_data *)
+                   (* collision. *)
                    if decide ((g.(crypto_total_hash_fn) data) ∈ (g.(crypto_total_hash_fn) <$> g.(crypto_hash_prev_data))) then
                      g' = g ∧ e' = (GoInstruction AngelicExit #())
                    else
