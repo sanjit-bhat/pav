@@ -18,30 +18,23 @@ Set Printing Projections.
 
 (** * Crypto semantic interpretation and lifting lemmas *)
 
-(* TODO: fill in with desired ghost state for global crypto resources *)
-Class cryptoGS Σ : Set := CryptoGS {
-  crypto_placeholder_name : gname;
-  #[global] cryptoG_monoG :: mono_natG Σ; (* placeholder; replace with real ghost state *)
+Implicit Type Σ : gFunctors.
+Class cryptoGS (Σ : gFunctors) : Set := CryptoGS {
+  all_hash_data : list (list w8);
 }.
 
-(* TODO: fill in with pre-ghost state needed before initialization *)
-Class cryptoGpreS Σ : Set := {
-  #[global] crypto_preG_monoG :: mono_natG Σ; (* placeholder; replace with real ghost state *)
+Class cryptoGpreS (Σ : gFunctors) : Set := {
 }.
 
-(* TODO: fill in with desired ghost state for per-node crypto resources *)
 Class cryptoNodeGS Σ : Set := CryptoNodeGS {
-  #[global] cryptoG_preS :: cryptoGpreS Σ;
-  crypto_node_placeholder_name : gname;
 }.
 
 (* TODO: update with real ghost functors *)
-Definition cryptoΣ : gFunctors :=
-  #[mono_natΣ].
+Definition cryptoΣ : gFunctors := #[].
 
 #[global]
 Instance subG_cryptoGpreS Σ : subG cryptoΣ Σ → cryptoGpreS Σ.
-Proof. solve_inG. Qed.
+Proof. Qed.
 
 Section crypto.
   (* these are local instances on purpose, so that importing this file doesn't
@@ -51,11 +44,11 @@ Section crypto.
 
   (* TODO: fill in ffi_local_ctx, ffi_global_ctx, ffi_local_start, ffi_global_start,
      ffi_crash_rel with the actual state interpretation *)
-  Local Program Instance crypto_interp: ffi_interp crypto_model :=
+  Local Program Instance crypto_interp : ffi_interp crypto_model :=
     {| ffiGlobalGS := cryptoGS;
        ffiLocalGS := cryptoNodeGS;
        ffi_local_ctx _ _ σ := True%I;
-       ffi_global_ctx _ _ g := True%I;
+       ffi_global_ctx _ _ g := (∃ l, proph g.(crypto_hash_proph_id) l)%I;
        ffi_local_start _ _ σ := True%I;
        ffi_global_start _ _ g := True%I;
        ffi_restart _ _ _ := True%I;
