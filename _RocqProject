@@ -1,7 +1,7 @@
 -Q crypto_ffi Cryptoffi
 -Q code New.code
 -Q generatedproof New.generatedproof
--Q trusted_code New.trusted_code
+-Q trusted_code New.trusted_code.github_com.sanjit_bhat.pav
 -Q manualproof New.manualproof.github_com.sanjit_bhat.pav
 -Q proof New.proof.github_com.sanjit_bhat.pav
 -arg -w -arg +deprecated-instance-without-locality
