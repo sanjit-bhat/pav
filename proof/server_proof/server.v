@@ -229,6 +229,8 @@ Proof.
   word.
 Qed.
 
+(* caller doesn't need anything from Put.
+and in fact, Put might logically execute *after* Put returns. *)
 Definition perm_put γ uid ver pk : iProp Σ :=
   □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
       (let pks := obj.(state.pending) !!! uid in
@@ -1034,21 +1036,33 @@ Qed.
 
 (** top-level methods. *)
 
-(* TODO: instead of duplicating the op perm bodies, should use their defns. *)
-Lemma wp_Server_Put s γ obj uid sl_pk pk ver :
+Lemma wp_Server_Put s γ obj uid sl_pk pk (ver : w64) :
   {{{
     is_pkg_init server ∗
     "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
-    (* caller doesn't need anything from Put.
-    and in fact, Put might logically execute *after* Put returns. *)
-    "#Hop_put" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
-      let obj' := set state.pending (pure_put uid ver pk) obj in
-      (own γ obj' ={∅,⊤}=∗ True))
+    "#Hop_put" ∷ perm_put γ uid (uint.nat ver) pk
   }}}
   s @! (go.PointerType server.Server) @! "Put" #uid #ver #sl_pk
   {{{ RET #(); True }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "@".
+  iNamed "Hown_serv_ro". iNamed "Hown_secs".
+  wp_auto.
+  wp_apply ktcore.wp_EvalMapLabel as "* @".
+  { iFrame "#". }
+  wp_apply ktcore.wp_GetCommitRand as "* @".
+  { iFrame "#". }
+  wp_apply ktcore.wp_GetMapVal as "* @".
+  { iFrame "#". }
+  wp_apply wp_alloc as "* Hptr_work".
+  iPersist "Hptr_work".
+  wp_apply wp_bag_send.
+  { iFrame "His_workQ".
+    rewrite /work.own_aux. iExists (work.mk' _ _ _).
+    iFrame "Hptr_work #%". }
+  wp_end.
+Qed.
 
 (* TODO: when adapting below to lock_perm change, obj conflicts with σ.
 need to rename existing obj to σ. *)
