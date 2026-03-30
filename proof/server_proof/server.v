@@ -1013,6 +1013,25 @@ Proof.
   iPureIntro. by rewrite last_snoc.
 Qed.
 
+Lemma wp_Server_worker s γ obj :
+  {{{
+    is_pkg_init server ∗
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj
+  }}}
+  s @! (go.PointerType server.Server) @! "worker" #()
+  {{{ RET #(); True }}}.
+Proof.
+  wp_start as "@". wp_auto.
+  wp_for "Hown_serv_lock".
+  wp_apply wp_Server_getWork as "* @"; [done|].
+  wp_if_destruct.
+  { wp_for_post. iFrame "∗#". }
+  wp_apply (wp_Server_doWork with "[$Hlock]") as "@".
+  { iFrame "#". }
+  wp_for_post.
+  iFrame "∗#".
+Qed.
+
 (** top-level methods. *)
 
 (* TODO: instead of duplicating the op perm bodies, should use their defns. *)
