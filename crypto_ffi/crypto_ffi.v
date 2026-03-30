@@ -21,9 +21,10 @@ Set Printing Projections.
 
 Implicit Type Σ : gFunctors.
 Class cryptoGS (Σ : gFunctors) : Type := CryptoGS {
+  prefix_gn : gname;
   all_hash_data : list (list w8);
-  hash_proph_id : proph_id;
   total_hash_fn : list w8 → list w8;
+  #[local] crypto_allG :: allG Σ;
 }.
 
 Class cryptoGpreS (Σ : gFunctors) : Type := {
@@ -39,15 +40,6 @@ Definition cryptoΣ : gFunctors := #[].
 Instance subG_cryptoGpreS Σ : subG cryptoΣ Σ → cryptoGpreS Σ.
 Proof. Qed.
 
-Section clean.
-  Context `{!cryptoGS Σ}.
-  Local Definition clean_hash_data : list (list w8) :=
-    foldl (λ clean_so_far data,
-             if decide ((total_hash_fn data) ∈ total_hash_fn <$> clean_so_far) then
-               clean_so_far
-             else clean_so_far ++ [data]) [] all_hash_data.
-End clean.
-
 Section crypto.
   (* these are local instances on purpose, so that importing this file doesn't
   suddenly cause all FFI parameters to be inferred as the crypto model *)
@@ -60,10 +52,9 @@ Section crypto.
     {| ffiGlobalGS := cryptoGS;
        ffiLocalGS := cryptoNodeGS;
        ffi_local_ctx _ _ σ := True%I;
-       ffi_global_ctx _ _ g := (
-                                ⌜ g.(crypto_hash_proph_id) = hash_proph_id ⌝ ∗
-                                ⌜ g.(crypto_hash_fn) = total_hash_fn ⌝ ∗
-                                ⌜ prefix g.(crypto_hash_prev_data) clean_hash_data ⌝
+       ffi_global_ctx _ _ g := (ghost_map_auth prefix_gn (1/2) $
+                                  list_to_map $ (λ k, pair k ()) <$> g.(crypto_hash_prev_data) ∗
+                                ⌜ g.(crypto_hash_fn) = total_hash_fn ⌝
                               )%I;
        ffi_local_start _ _ σ := True%I;
        ffi_global_start _ _ g := True%I;
@@ -138,13 +129,27 @@ Section lifting.
     iIntros "Hlc". iFrame "∗#%". done.
   Qed.
 
-  (* TODO: add wp lemmas for each crypto op here *)
-
-  Definition is_hash_proph_inv : iProp Σ :=
-    inv nroot (∃ l, proph hash_proph_id l).
+  Local Definition clean_hash_data : list (list w8) :=
+    foldl (λ clean_so_far data,
+             if decide ((total_hash_fn data) ∈ total_hash_fn <$> clean_so_far) then
+               clean_so_far
+             else clean_so_far ++ [data]) [] all_hash_data.
 
   Definition hash_fn (data : list w8) : option (list w8) :=
     if decide (data ∈ clean_hash_data) then Some (total_hash_fn data) else None.
+
+  Local Definition extract (vs : list val) : list (list w8) :=
+    foldl (λ l v, match v with
+                  | LitV (LitString x) => l ++ [x]
+                  | _ => l
+                  end
+      ) [] vs.
+
+  Definition is_hash_proph_inv : iProp Σ := (*  *)
+    inv nroot (∃ (ffi_pre : gmap (list w8) unit) past future,
+          "H●2" ∷ ghost_map_auth prefix_gn (1/2) ffi_pre ∗
+          "%Hall" ∷ ⌜ all_hash_data = past ++ (extract future) ⌝ ∗
+          "Hproph" ∷ proph crypto_hash_proph_id future).
 
   Context {sem_fn : GoSemanticsFunctions} {pre_sem : go.PreSemantics}.
   Lemma wp_Hash data :
