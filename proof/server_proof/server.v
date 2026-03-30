@@ -14,6 +14,26 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 Module server.
 Import serde.server.
 
+Section list.
+Context {PROP : bi}.
+
+(* TODO: upstream. *)
+Lemma big_sepL2_drop {A B} `{!BiAffine PROP} (n : nat)
+    (Φ : nat → A → B → PROP) (l1 : list A) (l2 : list B) :
+  ([∗ list] k ↦ y1;y2 ∈ l1;l2, Φ k y1 y2) ⊢
+  ([∗ list] k ↦ y1;y2 ∈ drop n l1;drop n l2, Φ (n + k)%nat y1 y2).
+Proof.
+  iIntros "H".
+  rewrite -{1}(take_drop n l1) -{1}(take_drop n l2).
+  iDestruct (big_sepL2_length with "H") as %?.
+  autorewrite with len in *.
+  iDestruct (big_sepL2_app_same_length with "H") as "[_ H]"; [len|].
+  destruct (decide (n ≥ length l1)).
+  - by rewrite !drop_ge; [|lia..].
+  - by replace (length (take n l1)) with n; [|len].
+Qed.
+End list.
+
 (** top-level server state and inv. *)
 
 Module cfg.
@@ -393,15 +413,15 @@ Collection W := sem.
 Definition is_audits γ digs audits : iProp Σ :=
   "%Hlen_audits" ∷ ⌜length digs = length audits⌝ ∗
   (* epoch 0 UpdateProof is invalid. *)
-  "#His_upds" ∷ ([∗ list] pred_ep ↦ p ∈ ktcore.AuditProof.Updates <$> drop 1 audits,
+  "#His_upds" ∷ ([∗ list] pred_ep ↦ aud ∈ drop 1 audits,
     ∃ dig0 dig1,
     "%Hlook0" ∷ ⌜digs !! pred_ep = Some dig0⌝ ∗
     "%Hlook1" ∷ ⌜digs !! (S pred_ep) = Some dig1⌝ ∗
-    "#His_upd" ∷ ktcore.wish_ListUpdate dig0 p dig1) ∗
-  "#His_sigs" ∷ ([∗ list] ep ↦ sig ∈ ktcore.AuditProof.LinkSig <$> audits,
+    "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
+  "#His_sigs" ∷ ([∗ list] ep ↦ aud ∈ audits,
     ∃ link,
     "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) = (take (S ep) digs, None)⌝ ∗
-    "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link sig).
+    "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig)).
 
 Definition own γ ptr digs q : iProp Σ :=
   ∃ ptr_chain sl_audits sl0_audits audits sl_vrfSig vrfSig,
@@ -431,10 +451,10 @@ Proof.
   pose proof Hlast_dig as Hsome_eps.
   rewrite last_lookup in Hsome_eps.
   apply lookup_lt_Some in Hsome_eps.
-  repeat iSplit.
+  rewrite /is_audits.
+  repeat iSplit; try done.
   - len.
   - rewrite drop_app_le; [|lia].
-    rewrite fmap_app.
     iSplit.
     + iApply big_sepL_impl; [done|].
       iIntros "!>*%@".
@@ -448,17 +468,16 @@ Proof.
         exact_eq Hlast_dig. f_equal. lia.
       * replace (S _) with (pred $ length (digs ++ [new_dig])); [|len].
         by rewrite -last_lookup last_snoc.
-  - rewrite fmap_app. simpl. iSplit.
-    * simpl. iApply big_sepL_impl; [done|].
-      iIntros "!>*%Hlook@".
-      apply lookup_lt_Some in Hlook.
-      autorewrite with len in *.
-      iFrame "#". iPureIntro.
-      by rewrite take_app_le; [|lia].
-    * simpl. len.
-      replace (length _ + 0)%nat with (length digs) by lia.
-      iFrame "#". iPureIntro.
-      by rewrite take_ge; [|len].
+  - simpl. iApply big_sepL_impl; [done|].
+    iIntros "!>*%Hlook@".
+    apply lookup_lt_Some in Hlook.
+    autorewrite with len in *.
+    iFrame "#". iPureIntro.
+    by rewrite take_app_le; [|lia].
+  - simpl.
+    replace (length _ + 0)%nat with (length digs) by lia.
+    iFrame "#". iPureIntro.
+    by rewrite take_ge; [|len].
 Qed.
 
 End proof.
@@ -1040,7 +1059,7 @@ Lemma wp_Server_Put s γ obj uid sl_pk pk (ver : w64) :
     is_pkg_init server ∗
     "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
-    "#Hop_put" ∷ perm_put γ uid (uint.nat ver) pk
+    "#Hperm_put" ∷ perm_put γ uid (uint.nat ver) pk
   }}}
   s @! (go.PointerType server.Server) @! "Put" #uid #ver #sl_pk
   {{{ RET #(); True }}}.
@@ -1067,8 +1086,7 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
   {{{
     is_pkg_init server ∗
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
-    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
-      (own γ σ ={∅,⊤}=∗ Q σ))
+    "Hperm_read" ∷ perm_read γ Q
   }}}
   s @! (go.PointerType server.Server) @! "History" #uid #prevEpoch #prevVerLen
   {{{
@@ -1113,8 +1131,7 @@ Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
   {{{
     is_pkg_init server ∗
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
-    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
-      (own γ σ ={∅,⊤}=∗ Q σ))
+    "Hperm_read" ∷ perm_read γ Q
   }}}
   s @! (go.PointerType server.Server) @! "Audit" #prevEpoch
   {{{
@@ -1144,13 +1161,64 @@ Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
           "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
-          let ep := (uint.nat prevEpoch + S i)%nat in
+          let ep := (S $ uint.nat prevEpoch + i)%nat in
           "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) =
             (take (S ep) σ.(state.hist), None)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "@".
+  iNamed "Hown_serv_lock".
+  wp_apply wp_with_defer as "* Hdefer". simpl.
+  wp_auto.
+  wp_apply (wp_RWMutex__RLock with "[$Hlock]") as "[Hlocked H]".
+  iNamed "H".
+  iApply ncfupd_wp.
+  rewrite /perm_read /own.
+  iMod "Hperm_read" as "(%&Hown_gs'&Hperm)".
+  iCombine "Hown_gs Hown_gs'" gives %<-.
+  iMod ("Hperm" with "[$Hown_gs']") as "HQ".
+  iModIntro.
+
+  iNamed "Hown_hist". iNamed "His_audits".
+  iDestruct (own_slice_len with "Hsl_audits") as %?.
+  iDestruct (own_slice_wf with "Hsl_audits") as %?.
+  iDestruct (big_sepL2_length with "Hown_audits") as %?.
+  wp_auto.
+  pose proof Hlast_dig as Hsome_digs.
+  rewrite last_lookup in Hsome_digs.
+  apply lookup_lt_Some in Hsome_digs.
+  wp_if_destruct.
+  { wp_apply (wp_RWMutex__RUnlock with "[-HΦ HQ]") as "Hlock".
+    { iFrame "∗∗#%". }
+    wp_end. iFrame "∗#". word. }
+  case_decide as Ht; [|word]. clear Ht. wp_auto.
+  iDestruct (own_slice_split_all with "Hsl_audits") as "[Hsl0 Hsl1]"; [shelve|].
+  wp_apply (wp_slice_append with "[$Hsl1]")
+    as "%sl_proof (Hsl_proof&_&Hsl1)".
+  { iDestruct own_slice_nil as "$".
+    iDestruct own_slice_cap_nil as "$". }
+  Unshelve. 2: { word. }
+  iDestruct (own_slice_combine with "Hsl0 Hsl1") as "Hsl_audits"; [len|].
+  rewrite take_drop -slice_slice_trivial /=.
+  iPersist "Hsl_proof".
+  wp_apply (wp_RWMutex__RUnlock with "[-HΦ HQ]") as "Hlock".
+  { iFrame "∗∗#%". }
+  wp_end. iFrame "∗#".
+
+  replace (sint.nat (word.add _ _)) with (S $ uint.nat prevEpoch) by word.
+  iExists (drop (S $ uint.nat prevEpoch) audits).
+  repeat iSplit; try iPureIntro.
+  - word.
+  - iDestruct (big_sepL2_drop with "Hown_audits") as "$".
+  - len.
+  - iDestruct (big_sepL_drop _ _  (uint.nat prevEpoch) with "His_upds") as "H".
+    rewrite drop_drop.
+    replace (1 + uint.nat prevEpoch)%nat with (S $ uint.nat prevEpoch) by lia.
+    iFrame "#".
+  - iDestruct (big_sepL_drop with "His_sigs") as "$".
+Qed.
 
 Lemma wp_Server_Start s γ obj Q :
   {{{
@@ -1212,9 +1280,7 @@ Proof.
   list_elem audits (pred $ length σ.(state.hist)) as last_audit.
   iDestruct (big_sepL2_lookup_r with "Hown_audits")
     as "(%ptr_audit&%Hlook_sl0_audits&@)"; [done|].
-  iDestruct (big_sepL_lookup with "His_sigs") as "@".
-  { rewrite list_lookup_fmap.
-    by apply fmap_Some_2. }
+  iDestruct (big_sepL_lookup with "His_sigs") as "@"; [done|].
   rewrite take_ge in His_link; [|lia].
   wp_apply (wp_load_slice_index with "[$Hsl_audits]"); [word|..].
   { iPureIntro. exact_eq Hlook_sl0_audits. f_equal. word. }
