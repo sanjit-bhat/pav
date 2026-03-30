@@ -45,7 +45,7 @@ Notation get_vrf_pk γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
 Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -328,7 +328,7 @@ Record t' := mk' {
 }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -347,7 +347,7 @@ End secrets.
 
 Module keyStore.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -383,7 +383,7 @@ End keyStore.
 
 Module history.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -470,7 +470,7 @@ Record t' := mk' {
 }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : server.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -508,7 +508,7 @@ Record t' :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -550,7 +550,7 @@ End proof.
 End Server.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : server.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".

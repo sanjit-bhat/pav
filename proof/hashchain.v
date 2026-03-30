@@ -8,7 +8,7 @@ From New.proof.github_com.sanjit_bhat.pav Require Import cryptoffi cryptoutil.
 Module hashchain.
 
 Section defs.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -207,7 +207,7 @@ Qed.
 End defs.
 
 Section wps.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : hashchain.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".

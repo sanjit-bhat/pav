@@ -51,7 +51,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -129,7 +129,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -201,7 +201,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -275,7 +275,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -356,7 +356,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -430,7 +430,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -507,7 +507,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -588,7 +588,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -662,7 +662,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -739,7 +739,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -812,7 +812,7 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
 Proof. Admitted.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".

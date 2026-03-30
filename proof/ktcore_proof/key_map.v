@@ -69,7 +69,7 @@ the other has its unfolding *)
 Definition plain_sub : relation plain_ty := map_included (λ _, prefix).
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -705,7 +705,7 @@ Proof.
 Qed.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".

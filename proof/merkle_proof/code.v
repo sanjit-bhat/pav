@@ -14,7 +14,7 @@ Module merkle.
 Import base.merkle serde.merkle theory.merkle.
 
 Section defs.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -291,7 +291,7 @@ Qed.
 End defs.
 
 Section wps.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -1708,7 +1708,7 @@ Qed.
 End wps.
 
 Section misc.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".

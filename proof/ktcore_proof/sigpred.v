@@ -31,7 +31,7 @@ Record t :=
 End cfg.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -129,7 +129,7 @@ Lemma prefix_eq {A} (l1 l2 : list A) :
 Proof. intros ? ?%prefix_length. by apply prefix_length_eq. Qed.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".

@@ -22,7 +22,7 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : client.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -78,7 +78,7 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : client.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -116,7 +116,7 @@ Record t :=
   }.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : client.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -138,7 +138,7 @@ End proof.
 End Client.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : client.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".

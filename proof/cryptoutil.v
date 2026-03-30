@@ -6,7 +6,7 @@ From New.proof.github_com.sanjit_bhat.pav Require Import cryptoffi.
 Module cryptoutil.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : cryptoutil.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".

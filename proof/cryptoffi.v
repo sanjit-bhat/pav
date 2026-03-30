@@ -12,7 +12,7 @@ Proof. done. Qed.
 #[global] Opaque hash_len.
 
 Section init.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : cryptoffi.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -37,7 +37,7 @@ Qed.
 End init.
 
 Section hash_defs.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -82,7 +82,7 @@ Proof. Admitted.
 End hash_defs.
 
 Section hash_wps.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : cryptoffi.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -128,7 +128,7 @@ Proof. Admitted.
 End hash_wps.
 
 Section vrf_defs.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -225,7 +225,7 @@ Qed.
 End vrf_defs.
 
 Section vrf_wps.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : cryptoffi.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -330,7 +330,7 @@ Proof. Admitted.
 End vrf_wps.
 
 Section sig_defs.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
@@ -384,7 +384,7 @@ Proof. Admitted.
 End sig_defs.
 
 Section sig_wps.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : cryptoffi.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
@@ -446,7 +446,7 @@ Proof. Admitted.
 End sig_wps.
 
 Section rand_wps.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : cryptoffi.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".

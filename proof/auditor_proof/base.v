@@ -7,7 +7,7 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
 
 Module auditor.
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".

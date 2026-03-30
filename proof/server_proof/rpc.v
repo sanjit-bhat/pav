@@ -22,7 +22,7 @@ Module server.
 Import serde.server server.server.
 
 Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : server.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
