@@ -185,8 +185,35 @@ Section lifting.
     no_collisions l →
     no_collisions (l ++ [d]).
   Proof.
-    (* TODO now *)
-  Admitted.
+    intros Hin Hncoll data data' Hd Hd' Hhash.
+    apply elem_of_app in Hd as [?|?%list_elem_of_singleton];
+    apply elem_of_app in Hd' as [?|?%list_elem_of_singleton];
+    subst; eauto using Hncoll.
+  Qed.
+
+  Lemma no_collisions_snoc l d :
+    no_collisions l →
+    total_hash_fn d ∉ (total_hash_fn <$> l) →
+    no_collisions (l ++ [d]).
+  Proof.
+    intros Hncoll Hfresh data data' Hd Hd' Hhash.
+    apply elem_of_app in Hd as [?|?%list_elem_of_singleton];
+    apply elem_of_app in Hd' as [?|?%list_elem_of_singleton]; subst; eauto.
+    - exfalso. apply Hfresh. apply list_elem_of_fmap. eauto.
+    - exfalso. apply Hfresh. apply list_elem_of_fmap. exists data'. split; [done|done].
+  Qed.
+
+  Lemma has_hash_app_mid pre data suf :
+    (∀ d, d ∈ pre → total_hash_fn d = total_hash_fn data → d = data) →
+    has_hash (pre ++ data :: suf) data = true.
+  Proof.
+    induction pre as [|d' pre IH]; intros Hinj; simpl.
+    - case_decide; done.
+    - case_decide; [done|].
+      case_decide.
+      + exfalso. apply H. apply Hinj; [set_solver|done].
+      + apply IH. intros. apply Hinj; set_solver.
+  Qed.
 
   Lemma prefix_subseteq {A} (l l' : list A) :
     prefix l l' →
@@ -219,7 +246,6 @@ Section lifting.
     iDestruct "Hg" as "(H● & %)". destruct g1. simpl in *. subst.
     iInv "Hinv" as ">Hi" "Hclose".
     iNamedSuffix "Hi" "_inv".
-    Search mono_list_auth_own.
     iDestruct (mono_list_auth_own_agree with "[$] [$]") as "#[_ %Heq]".
     destruct decide in Hstep.
     { (* already hashed before. *)
@@ -253,9 +279,12 @@ Section lifting.
         - apply prefix_subseteq in Hlb. set_solver.
       }
       iModIntro. wp_auto. wp_end. iPureIntro.
-      eapply no_collisions_has_hash in Hno_coll_inv; try done.
       unfold hash_fn.
-      admit.
+      rewrite Hall_inv0 /extract -/extract go.into_val_unfold.
+      rewrite has_hash_app_mid //.
+      intros d Hd Hhash.
+      apply Hno_coll_inv0; [by apply Hpast_inv0 | | done].
+      apply Hlb. set_solver.
     }
     destruct decide in Hstep.
     { (* ran into a collision *)
@@ -274,7 +303,7 @@ Section lifting.
       { iNamed "Hi". iFrame "∗#%". iPureIntro.
         split.
         - set_solver.
-        - admit. (* new pure fact *)
+        - by apply no_collisions_snoc.
       }
       iModIntro. iFrame "∗#%". iSplitR; first done.
 
@@ -296,9 +325,14 @@ Section lifting.
       }
       iModIntro. wp_auto. wp_end.
       iPureIntro.
-      admit. (* new pure fact. *)
+      unfold hash_fn.
+      rewrite Hall_inv0 /extract -/extract go.into_val_unfold.
+      rewrite has_hash_app_mid //.
+      intros d Hd Hhash.
+      apply Hno_coll_inv0; [by apply Hpast_inv0 | | done].
+      apply Hlb. set_solver.
     }
-Admitted.
+Qed.
 
 
 (* design sketch for proving wp_Hash:
