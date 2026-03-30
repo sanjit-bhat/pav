@@ -159,6 +159,9 @@ Proof. Admitted.
   Persistent (own_vrf_pk ptr_pk pk).
 Proof. Admitted.
 
+Lemma own_vrf_sk_to_pk ptr_sk pk : own_vrf_sk ptr_sk pk -∗ is_vrf_pk pk.
+Proof. Admitted.
+
 Lemma own_vrf_pk_valid ptr_pk pk : own_vrf_pk ptr_pk pk -∗ is_vrf_pk pk.
 Proof. Admitted.
 
@@ -286,6 +289,18 @@ Lemma wp_VrfPublicKey_Verify ptr_pk pk sl_data sl_proof (data proof : list w8) d
         "#His_proof" ∷ is_vrf_proof pk data proof ∗
         "%His_out" ∷ ⌜vrf_fn pk data = Some out⌝
       end
+  }}}.
+Proof. Admitted.
+
+Lemma wp_VrfPrivateKey_PublicKey ptr_sk pk :
+  {{{
+    is_pkg_init cryptoffi ∗
+    "#Hown_vrf_sk" ∷ own_vrf_sk ptr_sk pk
+  }}}
+  ptr_sk @! (go.PointerType cryptoffi.VrfPrivateKey) @! "PublicKey" #()
+  {{{
+    sl_enc, RET #sl_enc;
+    "Hsl_enc" ∷ sl_enc ↦* pk
   }}}.
 Proof. Admitted.
 
