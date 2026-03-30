@@ -11,7 +11,7 @@ Set Printing Projections.
 (** * The Crypto extension to GooseLang: primitive operations [Trusted definitions!] *)
 
 Inductive CryptoOp : Set :=
-| HashCheckCollision
+| Hash
 .
 #[global]
 Instance eq_CryptoOp : EqDecision CryptoOp.
@@ -26,11 +26,12 @@ Proof.
 Defined.
 
 Record crypto_global_state : Type := {
-  crypto_global_prev_data : list (list w8);
+  crypto_hash_prev_data : list (list w8);
+  crypto_hash_proph_id : proph_id;
 }.
 
 Global Instance crypto_global_state_inhabited : Inhabited crypto_global_state :=
-  populate {| crypto_global_prev_data := [] |}.
+  populate {| crypto_hash_prev_data := []; crypto_hash_proph_id := inhabitant |}.
 
 Record crypto_node_state : Type := {
 }.
@@ -56,17 +57,20 @@ Section crypto.
   Definition is_crypto_ffi_step (op : CryptoOp) (v : val) (e' : expr)
     (σ σ' : ffi_state) (g g' : ffi_global_state) : Prop :=
     match op with
-    | HashCheckCollision =>
+    | Hash =>
         ∃ data,
         v = #data ∧
         σ = σ' ∧
-        if decide (data ∈ g.(crypto_global_prev_data)) then
+        if decide (data ∈ g.(crypto_hash_prev_data)) then
           e' = #() ∧ g' = g
-        else (* data ∉ crypto_global_prev_data *)
-          if decide ((hash_fn data) ∈ (hash_fn <$> g.(crypto_global_prev_data))) then
+        else (* data ∉ crypto_hash_prev_data *)
+          if decide ((hash_fn data) ∈ (hash_fn <$> g.(crypto_hash_prev_data))) then
             g' = g ∧ e' = (GoInstruction AngelicExit #())
           else
-            g' = set crypto_global_prev_data (.++ [data]) g ∧ e' = #()
+            g' = set crypto_hash_prev_data (.++ [data]) g ∧
+            e' = (ResolveProph #g.(crypto_hash_proph_id) "data";;
+                  #(hash_fn data))%E
+
     end.
 
   Definition ffi_step (op : CryptoOp) (v : val) : transition (state*global_state) expr :=
