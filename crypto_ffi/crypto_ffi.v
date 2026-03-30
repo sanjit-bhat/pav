@@ -129,14 +129,17 @@ Section lifting.
     iIntros "Hlc". iFrame "∗#%". done.
   Qed.
 
-  Local Definition clean_hash_data : list (list w8) :=
-    foldl (λ clean_so_far data,
-             if decide ((total_hash_fn data) ∈ total_hash_fn <$> clean_so_far) then
-               clean_so_far
-             else clean_so_far ++ [data]) [] all_hash_data.
+  Fixpoint has_hash all d : bool :=
+    match all with
+    | [] => false
+    | d' :: all' =>
+        if decide (d' = d) then true
+        else if (decide (total_hash_fn d' = total_hash_fn d)) then false
+             else has_hash all' d
+    end.
 
   Definition hash_fn (data : list w8) : option (list w8) :=
-    if decide (data ∈ clean_hash_data) then Some (total_hash_fn data) else None.
+    if (has_hash all_hash_data data) then Some (total_hash_fn data) else None.
 
   Local Definition extract (vs : list val) : list (list w8) :=
     foldl (λ l v, match v with
@@ -145,10 +148,33 @@ Section lifting.
                   end
       ) [] vs.
 
+  Definition no_collisions (datas : list (list w8))  : Prop :=
+    ∀ data data',
+     data ∈ datas → data' ∈ datas →
+     total_hash_fn data = total_hash_fn data' →
+     data = data'.
+
+  Lemma no_collisions_has_hash datas d:
+    no_collisions datas →
+    d ∈ datas →
+    has_hash datas d = true.
+  Proof.
+    (* TODO now: prove this *)
+  Admitted.
+
+  Lemma has_hash_prefix datas pre suf d :
+    datas = pre ++ suf →
+    has_hash pre d = true →
+    has_hash datas d = true.
+  Proof.
+    (* TODO now: prove this *)
+  Admitted.
+
   Definition is_hash_proph_inv : iProp Σ := (*  *)
-    inv nroot (∃ (ffi_pre : gmap (list w8) unit) past future,
-          "H●2" ∷ ghost_map_auth prefix_gn (1/2) ffi_pre ∗
+    inv nroot (∃ past future,
+          "H●" ∷ ghost_map_auth prefix_gn (1/2) $ list_to_map $ (λ k, pair k ()) <$> past ∗
           "%Hall" ∷ ⌜ all_hash_data = past ++ (extract future) ⌝ ∗
+          "%Hno_coll" ∷ (⌜ no_collisions past ⌝) ∗
           "Hproph" ∷ proph crypto_hash_proph_id future).
 
   Context {sem_fn : GoSemanticsFunctions} {pre_sem : go.PreSemantics}.
@@ -157,22 +183,44 @@ Section lifting.
       ExternalOp Hash #data
     {{{ hash, RET #hash; ⌜ hash_fn data = Some hash ⌝ }}}.
   Proof.
-    iIntros (Φ) "_ HΦ".
+    iIntros (Φ) "#Hinv HΦ".
     iApply (wp_CryptoOp with "[-]").
     iIntros "!> * Hl Hg".
     inv_base_step. monad_inv.
     lazymatch goal with
     | H : (if decide _ then _ else _) |- _ => rename H into Hstep
     end.
-    iDestruct "Hg" as "(% & %)".
+    iDestruct "Hg" as "(H● & %)". destruct g1. simpl in *. subst.
+    iInv "Hinv" as ">Hi" "Hclose".
+    iNamedSuffix "Hi" "_inv".
+    iDestruct (ghost_map_auth_valid_2 with "[$] [$]") as "#[_ %Heq]".
     destruct decide in Hstep.
     { (* already hashed before. *)
       iFrame "∗#%". inv_base_step.
-      iModIntro. iFrame "∗#%". iApply wp_value. iApply "HΦ".
-      destruct g1. simpl in *. iPureIntro.
-      unfold hash_fn. subst.
+      iCombineNamed "*_inv" as "Hi".
+      iMod ("Hclose" with "[Hi]") as "_".
+      { iNamed "Hi". iFrame "∗#%". }
+      iModIntro. iFrame "∗#%". iSplitR; first done.
+      iApply wp_value. iApply "HΦ". iPureIntro.
+      unfold hash_fn.
+      erewrite has_hash_prefix; try done.
+      rewrite no_collisions_has_hash //.
+
+      destruct has_hash eqn:Hhash_hash;
       rewrite decide_True //.
-      eapply elem_of_prefix; eassumption. }
+      apply no_collision_clean in Hall_inv; last done.
+      eapply elem_of_subseteq; try done.
+      apply (f_equal dom) in Heq. rewrite !dom_list_to_map_L in Heq.
+      Search list_to_set elem_of.
+      rewrite fmap_fmap in Heq.
+      Search list_to_map dom.
+      Search subseteq elem_of.
+      set_solver.
+      Search (_ = _ ++ _) take.
+      unfold clean_hash_data.
+      simpl.
+      unfold
+      eapply elem_of_prefix. eassumption. }
     destruct decide in Hstep.
     { (* ran into a collision *)
       inv_base_step. iFrame "∗#%". iModIntro.
@@ -186,13 +234,21 @@ Section lifting.
   Qed.
 
 (* design sketch for proving wp_Hash:
-- inv 1: ffi.data is coll free.
-- inv 2: every resolved val ∈ ffi.data.
-upheld by only Resolve'ing after calling HashOp, which might infinite loop.
--> consider a trustedHash output.
-from inv 1, it doesn't collide with ffi.data.
-from inv 2, by extension, it doesn't collide with resolved vals.
-since hash_fn is constructed on resolved vals, hash_fn = Some.
+- trusted code maintains this inv:
+proph 0 suffix_data ∗
+own_ffi_state prefix_data ∗
+all_hash_data = prefix_data ++ suffix_data.
+- Resolve op updates proph, while HashOp updates own_ffi_state.
+- for consistency, need to update both of these atomically.
+otherwise, the ffi state might not match all_hash_data,
+preventing us from establishing hash_fn = Some.
+- so, we wanna call Resolve atomically with HashOp, but how?
+HashOp might infinite loop, which isn't atomic.
+solution: have HashOp ret err on collision. Resolve with this err.
+trusted code infinite loops after the Resolve.
+we only have to establish hash_fn = Some at the end of trusted code.
+- TODO: perennial doesn't have Resolve around atomic expression.
+need to port iris's support for that.
 *)
 
 End lifting.
