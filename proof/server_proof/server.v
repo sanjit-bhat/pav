@@ -170,6 +170,12 @@ Qed.
 
 (** state transition ops. *)
 
+Definition perm_read γ Q : iProp Σ :=
+  (|={⊤,∅}=>
+    ∃ obj, own γ obj ∗
+      (own γ obj
+        ={∅,⊤}=∗ Q obj)).
+
 Definition Q_read_lb prev_lb γ obj : iProp Σ :=
   mono_list_lb_own (digsγ γ) obj.(state.hist) ∗
   ⌜prev_lb `prefix_of` obj.(state.hist)⌝.
@@ -177,10 +183,7 @@ Definition Q_read_lb prev_lb γ obj : iProp Σ :=
 Lemma op_read_lb γ prev_lb :
   is_inv γ -∗
   mono_list_lb_own (digsγ γ) prev_lb -∗
-  (|={⊤,∅}=>
-    ∃ obj, own γ obj ∗
-      (own γ obj
-        ={∅,⊤}=∗ Q_read_lb prev_lb γ obj)).
+  perm_read γ (Q_read_lb prev_lb γ).
 Proof.
   iIntros "#Hinv #Hlb".
   rewrite /is_inv.
@@ -210,10 +213,7 @@ that's an arg to, e.g., CallHistory, independent of good-ness. *)
 Lemma op_read_idx γ prev_idx (a : list w8) :
   is_inv γ -∗
   mono_list_idx_own (digsγ γ) prev_idx a -∗
-  (|={⊤,∅}=>
-    ∃ obj, own γ obj ∗
-      (own γ obj
-        ={∅,⊤}=∗ Q_read_idx prev_idx γ obj)).
+  perm_read γ (Q_read_idx prev_idx γ).
 Proof.
   iIntros "#Hinv #Hidx".
   iDestruct "Hidx" as "(%&%Hlook&Hlb)".
@@ -959,7 +959,6 @@ Proof.
   wp_apply (merkle.wp_Map_Hash with "[$Hown_hidden]") as "* @".
   wp_apply (hashchain.wp_HashChain_Append with "[$Hown_chain]") as "* @ {Hsl_val}".
   { by iFrame "#". }
-  destruct His_chain as (His_chain&_).
 
   iApply ncfupd_wp.
   rewrite /own.
@@ -1157,12 +1156,11 @@ Lemma wp_Server_Start s γ obj Q :
   {{{
     is_pkg_init server ∗
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
-    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
-      (own γ σ ={∅,⊤}=∗ Q σ))
+    "Hperm_read" ∷ perm_read γ Q
   }}}
   s @! (go.PointerType server.Server) @! "Start" #()
   {{{
-    ptr_chain chain ptr_vrf vrf σ last_link, RET (#ptr_chain, #ptr_vrf);
+    chain vrf ptr_chain ptr_vrf σ last_link, RET (#ptr_chain, #ptr_vrf);
     let numEps := length σ.(state.hist) in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
@@ -1187,7 +1185,63 @@ Lemma wp_Server_Start s γ obj Q :
     "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ)
       vrf.(StartVrf.VrfSig)
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "@".
+  iNamed "Hown_serv_lock". iNamed "Hown_ro". iNamed "Hown_secs".
+  wp_apply wp_with_defer as "* Hdefer". simpl.
+  wp_auto.
+  wp_apply (wp_RWMutex__RLock with "[$Hlock]") as "[Hlocked H]".
+  iNamed "H".
+  iApply ncfupd_wp.
+  rewrite /perm_read /own.
+  iMod "Hperm_read" as "(%&Hown_gs'&Hperm)".
+  iCombine "Hown_gs Hown_gs'" gives %<-.
+  iMod ("Hperm" with "[$Hown_gs']") as "HQ".
+  iModIntro.
+
+  iNamed "Hown_hist". iNamed "His_audits".
+  iDestruct (own_slice_len with "Hsl_audits") as %?.
+  iDestruct (big_sepL2_length with "Hown_audits") as %?.
+  wp_auto.
+  pose proof Hlast_dig as Hsome_digs.
+  rewrite last_lookup in Hsome_digs.
+  apply lookup_lt_Some in Hsome_digs.
+  wp_apply (hashchain.wp_HashChain_Bootstrap with "[$Hown_chain]") as "* @"; [word|].
+  case_decide as Ht; [|word]. clear Ht.
+  wp_bind.
+  list_elem audits (pred $ length σ.(state.hist)) as last_audit.
+  iDestruct (big_sepL2_lookup_r with "Hown_audits")
+    as "(%ptr_audit&%Hlook_sl0_audits&@)"; [done|].
+  iDestruct (big_sepL_lookup with "His_sigs") as "@".
+  { rewrite list_lookup_fmap.
+    by apply fmap_Some_2. }
+  rewrite take_ge in His_link; [|lia].
+  wp_apply (wp_load_slice_index with "[$Hsl_audits]"); [word|..].
+  { iPureIntro. exact_eq Hlook_sl0_audits. f_equal. word. }
+  iIntros "Hsl_audits". wp_auto.
+  wp_apply cryptoffi.wp_VrfPrivateKey_PublicKey as "* H".
+  { iFrame "#". }
+  iNamedSuffix "H" "_vrf".
+  wp_apply wp_alloc as "* Hptr_chain".
+  wp_apply wp_alloc as "* Hptr_vrf".
+  iPersist "Hsl_proof Hsl_enc_vrf Hptr_chain Hptr_vrf".
+  wp_apply (wp_RWMutex__RUnlock with "[-HΦ HQ]") as "Hlock".
+  { iFrame "∗∗#%". }
+
+  iApply ("HΦ" $! (StartChain.mk' _ _ _ _) (StartVrf.mk' _ _)). simpl.
+  simpl. iFrame "∗#".
+  replace (uint.nat (word.sub _ _)) with (pred $ length σ.(state.hist)); [|word].
+  iFrame "%".
+  replace (_ - _) with (Z.of_nat $ pred $ length σ.(state.hist)); [|lia].
+  iDestruct (cryptoffi.own_vrf_sk_to_pk with "[]") as "His_vrf_pk"; [done|].
+  iFrame "#".
+  repeat iSplit; try iPureIntro.
+  - word.
+  - word.
+  - exact_eq His_bootLink. f_equal. lia.
+  - exact_eq His_link. f_equal. lia.
+  - done.
+Qed.
 
 End proof.
 End server.
