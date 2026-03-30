@@ -23,15 +23,15 @@ Proof.
   refine (mkExtOp CryptoOp _ _ unit _ _).
 Defined.
 
+Definition crypto_hash_proph_id : proph_id := xH.
+
 Record crypto_global_state : Type := {
   crypto_hash_prev_data : list (list w8);
-  crypto_hash_proph_id : proph_id;
   crypto_hash_fn : list w8 → list w8;
 }.
 
 Global Instance crypto_global_state_inhabited : Inhabited crypto_global_state :=
-  populate {| crypto_hash_prev_data := []; crypto_hash_proph_id := inhabitant;
-                                           crypto_hash_fn := inhabitant |}.
+  populate {| crypto_hash_prev_data := []; crypto_hash_fn := inhabitant |}.
 
 Record crypto_node_state : Type := {
 }.
@@ -65,7 +65,7 @@ Section crypto.
                      g' = g ∧ e' = (GoInstruction AngelicExit #())
                    else
                      g' = set crypto_hash_prev_data (.++ [data]) g ∧
-                     e' = (ResolveProph #g.(crypto_hash_proph_id) #data;;
+                     e' = (ResolveProph #crypto_hash_proph_id #data;;
                            #(g.(crypto_hash_fn) data))%E)
     end.
 
