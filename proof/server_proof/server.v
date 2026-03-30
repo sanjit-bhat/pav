@@ -1064,24 +1064,22 @@ Proof.
   wp_end.
 Qed.
 
-(* TODO: when adapting below to lock_perm change, obj conflicts with σ.
-need to rename existing obj to σ. *)
-Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
+Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
   {{{
     is_pkg_init server ∗
-    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
-    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
-      (own γ obj ={∅,⊤}=∗ Q obj))
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
+    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
+      (own γ σ ={∅,⊤}=∗ Q σ))
   }}}
   s @! (go.PointerType server.Server) @! "History" #uid #prevEpoch #prevVerLen
   {{{
-    sl_chainProof sl_linkSig sl_hist ptr_bound err obj last_dig,
+    sl_chainProof sl_linkSig sl_hist ptr_bound err σ last_dig,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #err);
-    let numEps := length obj.(state.hist) in
+    let numEps := length σ.(state.hist) in
     let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
-    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
-    "HQ" ∷ Q obj ∗
-    "%Hlast_hist" ∷ ⌜last obj.(state.hist) = Some last_dig⌝ ∗
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
+    "HQ" ∷ Q σ ∗
+    "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
     "#Herr" ∷
       match err with
       | true => ⌜uint.nat prevEpoch ≥ numEps ∨
@@ -1090,7 +1088,7 @@ Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
         ∃ lastLink chainProof linkSig hist bound,
         "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 $ length pks)⌝ ∗
-        "%His_lastLink" ∷ ⌜hashchain.inv_fn lastLink (S numEps) = (obj.(state.hist), None)⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.inv_fn lastLink (S numEps) = (σ.(state.hist), None)⌝ ∗
 
         "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
         "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
@@ -1098,7 +1096,7 @@ Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
         "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
-          (drop (S (uint.nat prevEpoch)) obj.(state.hist))⌝ ∗
+          (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
         "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid (uint.nat prevVerLen)
@@ -1112,19 +1110,19 @@ Lemma wp_Server_History s γ (uid prevEpoch prevVerLen : w64) Q :
   }}}.
 Proof. Admitted.
 
-Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
+Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
   {{{
     is_pkg_init server ∗
-    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
-    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
-      (own γ obj ={∅,⊤}=∗ Q obj))
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
+    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
+      (own γ σ ={∅,⊤}=∗ Q σ))
   }}}
   s @! (go.PointerType server.Server) @! "Audit" #prevEpoch
   {{{
-    sl_proofs err obj, RET (#sl_proofs, #err);
-    let numEps := length obj.(state.hist) in
-    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
-    "HQ" ∷ Q obj ∗
+    sl_proofs err σ, RET (#sl_proofs, #err);
+    let numEps := length σ.(state.hist) in
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
+    "HQ" ∷ Q σ ∗
     "Herr" ∷
       match err with
       | true => ⌜uint.nat prevEpoch ≥ numEps⌝
@@ -1142,32 +1140,32 @@ Lemma wp_Server_Audit s γ (prevEpoch : w64) Q :
         "#His_upds" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ dig0 dig1,
           let predEp := (uint.nat prevEpoch + i)%nat in
-          "%Hlook0" ∷ ⌜obj.(state.hist) !! predEp = Some dig0⌝ ∗
-          "%Hlook1" ∷ ⌜obj.(state.hist) !! (S predEp) = Some dig1⌝ ∗
+          "%Hlook0" ∷ ⌜σ.(state.hist) !! predEp = Some dig0⌝ ∗
+          "%Hlook1" ∷ ⌜σ.(state.hist) !! (S predEp) = Some dig1⌝ ∗
           "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
           let ep := (uint.nat prevEpoch + S i)%nat in
           "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) =
-            (take (S ep) obj.(state.hist), None)⌝ ∗
+            (take (S ep) σ.(state.hist), None)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end
   }}}.
 Proof. Admitted.
 
-Lemma wp_Server_Start s γ Q :
+Lemma wp_Server_Start s γ obj Q :
   {{{
     is_pkg_init server ∗
-    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
-    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
-      (own γ obj ={∅,⊤}=∗ Q obj))
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
+    "#Hop_read" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
+      (own γ σ ={∅,⊤}=∗ Q σ))
   }}}
   s @! (go.PointerType server.Server) @! "Start" #()
   {{{
-    ptr_chain chain ptr_vrf vrf obj last_link, RET (#ptr_chain, #ptr_vrf);
-    let numEps := length obj.(state.hist) in
-    "Hown_serv_lock" ∷ Server.lock_perm γ s ∗
-    "HQ" ∷ Q obj ∗
+    ptr_chain chain ptr_vrf vrf σ last_link, RET (#ptr_chain, #ptr_vrf);
+    let numEps := length σ.(state.hist) in
+    "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
+    "HQ" ∷ Q σ ∗
     "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 
     "#Hptr_chain" ∷ StartChain.own ptr_chain chain (□) ∗
@@ -1176,11 +1174,11 @@ Lemma wp_Server_Start s γ Q :
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
     "%His_PrevLink" ∷ ⌜hashchain.inv_fn chain.(StartChain.PrevLink)
       (S $ uint.nat chain.(StartChain.PrevEpochLen)) =
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist), None)⌝ ∗
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist), None)⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
-      (drop (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist))⌝ ∗
+      (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
     "%His_last_link" ∷ ⌜hashchain.inv_fn last_link (S numEps) =
-      (obj.(state.hist), None)⌝ ∗
+      (σ.(state.hist), None)⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
