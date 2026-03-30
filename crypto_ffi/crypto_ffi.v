@@ -50,17 +50,15 @@ Section crypto.
      ffi_crash_rel with the actual state interpretation *)
   Local Program Instance crypto_interp : ffi_interp crypto_model :=
     {| ffiGlobalGS := cryptoGS;
-       ffiLocalGS := cryptoNodeGS;
-       ffi_local_ctx _ _ σ := True%I;
-       ffi_global_ctx _ _ g := (ghost_map_auth prefix_gn (1/2) $
-                                  list_to_map $ (λ k, pair k ()) <$> g.(crypto_hash_prev_data) ∗
-                                ⌜ g.(crypto_total_hash_fn) = total_hash_fn ⌝
-                              )%I;
-       ffi_local_start _ _ σ := True%I;
-       ffi_global_start _ _ g := True%I;
-       ffi_restart _ _ _ := True%I;
-       ffi_crash_rel Σ hF1 σ1 hF2 σ2 :=
-         ⌜ hF1 = hF2 ⌝%I;
+      ffiLocalGS := cryptoNodeGS;
+      ffi_local_ctx _ _ σ := True%I;
+      ffi_global_ctx _ _ g := (mono_list_auth_own prefix_gn (1/2) g.(crypto_hash_prev_data) ∗
+                               ⌜ g.(crypto_hash_fn) = total_hash_fn ⌝)%I;
+      ffi_local_start _ _ σ := True%I;
+      ffi_global_start _ _ g := True%I;
+      ffi_restart _ _ _ := True%I;
+      ffi_crash_rel Σ hF1 σ1 hF2 σ2 :=
+        ⌜ hF1 = hF2 ⌝%I;
     |}.
 End crypto.
 
@@ -159,16 +157,24 @@ Section lifting.
     d ∈ datas →
     has_hash datas d = true.
   Proof.
-    (* TODO now: prove this *)
-  Admitted.
+    intros Hncoll. induction datas as [|d' datas IH]; [set_solver|].
+    intros Hin. simpl. case_decide; [done|].
+    case_decide.
+    - exfalso. apply H. apply Hncoll; [set_solver..|done].
+    - apply IH.
+      + intros ?? Hin1 Hin2. apply Hncoll; set_solver.
+      + rewrite elem_of_cons in Hin.
+        destruct Hin as [->|]; [done|done].
+  Qed.
 
   Lemma has_hash_prefix datas pre suf d :
     datas = pre ++ suf →
     has_hash pre d = true →
     has_hash datas d = true.
   Proof.
-    (* TODO now: prove this *)
-  Admitted.
+    intros ->. induction pre as [|p pre IH]; [done|].
+    simpl. repeat case_decide; naive_solver.
+  Qed.
 
   Definition is_hash_proph_inv : iProp Σ := (*  *)
     inv nroot (∃ past future,
