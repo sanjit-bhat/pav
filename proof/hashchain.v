@@ -140,8 +140,8 @@ Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
   | DecInvalid => ([], Some hash)
   end end.
 
-(* for now, intentionally left transp.
-callers should use valid vs. inv_fn when needed. *)
+(* to grow the hashchain, use [valid].
+when sending resources externally, only need [inv_fn]. *)
 Definition valid vs cut hash fuel :=
   inv_fn hash fuel = (vs, cut) ∧
   (∀ x, cut = Some x → Z.of_nat (length x) = cryptoffi.hash_len).
@@ -339,7 +339,7 @@ Lemma wp_HashChain_Append ptr_c vs sl_v d0 v :
     "Hown_HashChain" ∷ own ptr_c (vs ++ [v]) 1 ∗
     "Hsl_val" ∷ sl_v ↦*{d0} v ∗
     "#Hsl_newLink" ∷ sl_newLink ↦*□ newLink ∗
-    "%His_chain" ∷ ⌜valid (vs ++ [v]) None newLink (S $ S $ length vs)⌝
+    "%His_chain" ∷ ⌜inv_fn newLink (S $ S $ length vs) = (vs ++ [v], None)⌝
   }}}.
 Proof.
   wp_start. iNamed "Hpre". iNamed "Hown_HashChain".
@@ -365,6 +365,7 @@ Proof.
     iFrame "#%".
   - iPureIntro. subst. rewrite join_app. by list_simplifier.
   - iPureIntro. apply Forall_snoc. split; [done|word].
+  - by destruct His_chain_n as [].
 Qed.
 
 (* unlike most other pav wishes, [wish_Proof] doesn't tie down all
@@ -557,11 +558,11 @@ Proof.
   f_equal. word.
 Qed.
 
-Lemma wp_HashChain_Bootstrap c vs d old_vs last_val :
+Lemma wp_HashChain_Bootstrap c vs d :
   {{{
     is_pkg_init hashchain ∗
     "Hown_HashChain" ∷ own c vs d ∗
-    "->" ∷ ⌜vs = old_vs ++ [last_val]⌝
+    "%Hsome_vs" ∷ ⌜length vs > 0⌝
   }}}
   c @! (go.PointerType hashchain.HashChain) @! "Bootstrap" #()
   {{{
@@ -570,11 +571,20 @@ Lemma wp_HashChain_Bootstrap c vs d old_vs last_val :
     "#Hsl_bootLink" ∷ sl_bootLink ↦*□ bootLink ∗
     "Hsl_proof" ∷ sl_proof ↦* proof ∗
 
-    "%His_bootLink" ∷ ⌜valid old_vs None bootLink (S $ length old_vs)⌝ ∗
-    "%Hwish" ∷ ⌜wish_Proof proof [last_val]⌝
+    "%His_bootLink" ∷ ⌜inv_fn bootLink (length vs) = (take (pred $ length vs) vs, None)⌝ ∗
+    "%Hwish" ∷ ⌜wish_Proof proof (drop (pred $ length vs) vs)⌝
   }}}.
 Proof.
-  wp_start. iNamed "Hpre". iNamed "Hown_HashChain". wp_auto.
+  wp_start as "@".
+  assert (∃ vs' last_v, vs = vs' ++ [last_v]) as (old_vs&last_val&->).
+  { list_elem vs (pred $ length vs) as v.
+    rewrite -last_lookup in Hv_lookup.
+    apply last_Some in Hv_lookup.
+    naive_solver. }
+  len.
+  rewrite take_app_length'; [|lia].
+  rewrite drop_app_length'; [|lia].
+  iNamed "Hown_HashChain". wp_auto.
   iDestruct (own_slice_len with "Hsl_enc") as %?.
   apply join_same_len_length in Hsame_len as Hlen.
   rewrite app_length /= in Hlen.
@@ -588,9 +598,11 @@ Proof.
   iDestruct (own_slice_slice with "[$Hsl0 $Hsl1 $Hsl_b]") as "?"; [word|].
 
   iApply "HΦ".
-  opose proof (His_chain_pred _ _ _); [done|].
+  opose proof (His_chain_pred _ _ _) as [Hinv _]; [done|].
   iFrame "∗#%".
-  iPureIntro. subst. split.
+  iPureIntro. subst.
+  split. { exact_eq Hinv. f_equal. lia. }
+  split.
   - apply Forall_snoc in Hsame_len as [??].
     by rewrite Forall_singleton.
   - replace (sint.nat (word.sub _ _)) with
