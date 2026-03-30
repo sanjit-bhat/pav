@@ -27,11 +27,11 @@ Definition crypto_hash_proph_id : proph_id := xH.
 
 Record crypto_global_state : Type := {
   crypto_hash_prev_data : list (list w8);
-  crypto_hash_fn : list w8 → list w8;
+  crypto_total_hash_fn : list w8 → list w8;
 }.
 
 Global Instance crypto_global_state_inhabited : Inhabited crypto_global_state :=
-  populate {| crypto_hash_prev_data := []; crypto_hash_fn := inhabitant |}.
+  populate {| crypto_hash_prev_data := []; crypto_total_hash_fn := inhabitant |}.
 
 Record crypto_node_state : Type := {
 }.
@@ -59,14 +59,14 @@ Section crypto.
         σ = σ' ∧
         (∀ data, v = #data →
                  if decide (data ∈ g.(crypto_hash_prev_data)) then
-                   e' = #(g.(crypto_hash_fn) data) ∧ g' = g
+                   e' = #(g.(crypto_total_hash_fn) data) ∧ g' = g
                  else (* data ∉ crypto_hash_prev_data *)
-                   if decide ((g.(crypto_hash_fn) data) ∈ (g.(crypto_hash_fn) <$> g.(crypto_hash_prev_data))) then
+                   if decide ((g.(crypto_total_hash_fn) data) ∈ (g.(crypto_total_hash_fn) <$> g.(crypto_hash_prev_data))) then
                      g' = g ∧ e' = (GoInstruction AngelicExit #())
                    else
                      g' = set crypto_hash_prev_data (.++ [data]) g ∧
                      e' = (ResolveProph #crypto_hash_proph_id #data;;
-                           #(g.(crypto_hash_fn) data))%E)
+                           #(g.(crypto_total_hash_fn) data))%E)
     end.
 
   Definition ffi_step (op : CryptoOp) (v : val) : transition (state*global_state) expr :=

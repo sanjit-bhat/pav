@@ -20,14 +20,14 @@ Set Printing Projections.
 (** * Crypto semantic interpretation and lifting lemmas *)
 
 Implicit Type Σ : gFunctors.
-Class cryptoGS (Σ : gFunctors) : Type := CryptoGS {
+Class cryptoGS Σ : Type := CryptoGS {
   prefix_gn : gname;
   all_hash_data : list (list w8);
   total_hash_fn : list w8 → list w8;
   #[local] crypto_allG :: allG Σ;
 }.
 
-Class cryptoGpreS (Σ : gFunctors) : Type := {
+Class cryptoGpreS Σ : Type := {
 }.
 
 Class cryptoNodeGS Σ : Set := CryptoNodeGS {
@@ -54,7 +54,7 @@ Section crypto.
        ffi_local_ctx _ _ σ := True%I;
        ffi_global_ctx _ _ g := (ghost_map_auth prefix_gn (1/2) $
                                   list_to_map $ (λ k, pair k ()) <$> g.(crypto_hash_prev_data) ∗
-                                ⌜ g.(crypto_hash_fn) = total_hash_fn ⌝
+                                ⌜ g.(crypto_total_hash_fn) = total_hash_fn ⌝
                               )%I;
        ffi_local_start _ _ σ := True%I;
        ffi_global_start _ _ g := True%I;
