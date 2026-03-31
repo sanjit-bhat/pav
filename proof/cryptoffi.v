@@ -230,9 +230,7 @@ Lemma wp_VrfGenerateKey :
   {{{ is_pkg_init cryptoffi }}}
   @! cryptoffi.VrfGenerateKey #()
   {{{
-    (ptr_vrfPk ptr_vrfSk : loc) (vrfPk : list w8),
-    RET (#ptr_vrfPk, #ptr_vrfSk);
-    "#Hown_vrf_pk" ∷ own_vrf_pk ptr_vrfPk vrfPk ∗
+    ptr_vrfSk (vrfPk : list w8), RET #ptr_vrfSk;
     "#Hown_vrf_sk" ∷ own_vrf_sk ptr_vrfSk vrfPk
   }}}.
 Proof. Admitted.
