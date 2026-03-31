@@ -11,10 +11,6 @@ Existing Instances crypto_op crypto_model.
 Existing Instances crypto_semantics crypto_interp.
 Existing Instances goose_cryptoGS goose_cryptoNodeGS.
 
-(* TODO: update these adequacy theorems once the state interpretation is filled in.
-   The preconditions (ffi_global_start / ffi_local_start) should distribute real
-   resources rather than True. *)
-
 Theorem crypto_ffi_dist_adequacy Σ {go_gctx : GoGlobalContext}
   {hGhost: all.allG Σ} `{hPre: !gooseGpreS Σ} ebσs g (φinv : _ → Prop) :
   (∀ HG : gooseGlobalGS Σ,

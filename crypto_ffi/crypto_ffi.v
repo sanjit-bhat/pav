@@ -22,23 +22,23 @@ Set Printing Projections.
 Implicit Type Σ : gFunctors.
 Class cryptoGS Σ : Type := CryptoGS {
   prefix_gn : gname;
-  all_hash_data : list (list w8);
   total_hash_fn : list w8 → list w8;
   #[local] crypto_allG :: allG Σ;
 }.
 
 Class cryptoGpreS Σ : Type := {
+  #[local] cryptopre_allG :: allG Σ;
 }.
 
 Class cryptoNodeGS Σ : Set := CryptoNodeGS {
 }.
 
 (* TODO: update with real ghost functors *)
-Definition cryptoΣ : gFunctors := #[].
+Definition cryptoΣ : gFunctors := #[allΣ].
 
 #[global]
 Instance subG_cryptoGpreS Σ : subG cryptoΣ Σ → cryptoGpreS Σ.
-Proof. Qed.
+Proof. solve_inG. Qed.
 
 Section crypto.
   (* these are local instances on purpose, so that importing this file doesn't
@@ -55,7 +55,7 @@ Section crypto.
       ffi_global_ctx _ _ g := (mono_list_auth_own prefix_gn (1/2) g.(crypto_hash_prev_data) ∗
                                ⌜ g.(crypto_total_hash_fn) = total_hash_fn ⌝)%I;
       ffi_local_start _ _ σ := True%I;
-      ffi_global_start _ _ g := True%I;
+      ffi_global_start _ _ g := (mono_list_auth_own prefix_gn (1/2) g.(crypto_hash_prev_data))%I;
       ffi_restart _ _ _ := True%I;
       ffi_crash_rel Σ hF1 σ1 hF2 σ2 :=
         ⌜ hF1 = hF2 ⌝%I;
@@ -135,6 +135,12 @@ Section lifting.
         else if (decide (total_hash_fn d' = total_hash_fn d)) then false
              else has_hash all' d
     end.
+
+  Class HashContext := {
+    all_hash_data : list (list w8)
+  }.
+
+  Context {hash_ctx : HashContext}.
 
   Definition hash_fn (data : list w8) : option (list w8) :=
     if (has_hash all_hash_data data) then Some (total_hash_fn data) else None.
@@ -342,28 +348,30 @@ End lifting.
 
 From Perennial.goose_lang Require Import adequacy.
 
-(* #[global] *)
-(* Program Instance crypto_interp_adequacy {go_gctx : GoGlobalContext} : *)
-(*   @ffi_interp_adequacy crypto_model crypto_interp crypto_op crypto_semantics := *)
-(*   {| ffiGpreS := cryptoGpreS; *)
-(*      ffiΣ := cryptoΣ; *)
-(*      subG_ffiPreG := subG_cryptoGpreS; *)
-(*      ffi_initgP := λ g, True; *)
-(*      ffi_initP := λ σ g, True; *)
-(*   |}. *)
-(* Next Obligation. *)
-(*   rewrite //=. iIntros (_ Σ hPre g _). eauto. *)
-(*   iExists (CryptoGS _ γ _). iFrame. eauto. *)
-(* Qed. *)
-(* Next Obligation. *)
-(*   rewrite //=. *)
-(*   iIntros (_ Σ hPre σ ??). *)
-(*   (* TODO: allocate real per-node ghost state here *) *)
-(*   iMod (mono_nat_own_alloc 0) as (γ) "[Hmono _]". *)
-(*   iExists (CryptoNodeGS _ _ γ). eauto with iFrame. *)
-(* Qed. *)
-(* Next Obligation. *)
-(*   intros ?. iIntros (Σ σ σ' Hcrash Hold) "Hctx". *)
-(*   simpl in Hold. destruct Hcrash. *)
-(*   iExists Hold. iFrame. iPureIntro. done. *)
-(* Qed. *)
+#[global]
+Program Instance crypto_interp_adequacy {go_gctx : GoGlobalContext} :
+  @ffi_interp_adequacy crypto_model crypto_interp crypto_op crypto_semantics :=
+  {| ffiGpreS := cryptoGpreS;
+     ffiΣ := cryptoΣ;
+     subG_ffiPreG := subG_cryptoGpreS;
+     ffi_initgP := λ g, True;
+     ffi_initP := λ σ g, True;
+  |}.
+Next Obligation.
+  rewrite //=.
+  iIntros (_ Σ hPre σ ?).
+  iMod (mono_list_own_alloc) as (γ) "[Hmono _]".
+  iExists (CryptoGS _ _ _ _). simpl. iModIntro.
+  iDestruct "Hmono" as "[$ $]".
+  done.
+Qed.
+Next Obligation.
+  rewrite //=.
+  iIntros (_ Σ hPre σ ??).
+  iExists (CryptoNodeGS _). done.
+Qed.
+Final Obligation.
+  intros ?. iIntros (Σ σ σ' Hcrash Hold) "Hctx".
+  simpl in Hold. destruct Hcrash.
+  iExists Hold. iFrame. iPureIntro. done.
+Qed.
