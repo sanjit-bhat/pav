@@ -55,12 +55,45 @@ Section crypto.
       ffi_global_ctx _ _ g := (mono_list_auth_own prefix_gn (1/2) g.(crypto_hash_prev_data) ∗
                                ⌜ g.(crypto_total_hash_fn) = total_hash_fn ⌝)%I;
       ffi_local_start _ _ σ := True%I;
-      ffi_global_start _ _ g := (mono_list_auth_own prefix_gn (1/2) g.(crypto_hash_prev_data))%I;
+      ffi_global_start _ _ g := (mono_list_auth_own prefix_gn (1/2) (@nil (list w8)))%I;
       ffi_restart _ _ _ := True%I;
       ffi_crash_rel Σ hF1 σ1 hF2 σ2 :=
         ⌜ hF1 = hF2 ⌝%I;
     |}.
 End crypto.
+
+Class HashContext := {
+  all_hash_data : list (list w8)
+}.
+
+Section hash_inv.
+  Existing Instances crypto_op crypto_model crypto_semantics crypto_interp.
+  Context `{!gooseGlobalGS Σ} `{!invGS Σ}.
+  Local Instance : cryptoGS Σ := goose_ffiGlobalGS.
+
+  Context {hash_ctx : HashContext}.
+
+  Local Definition extract (vs : list val) : list (list w8) :=
+    foldr (λ v l, match v with
+                  | LitV (LitString x) => x :: l
+                  | _ => l
+                  end
+      ) [] vs.
+
+  Definition no_collisions (datas : list (list w8))  : Prop :=
+    ∀ data data',
+     data ∈ datas → data' ∈ datas →
+     total_hash_fn data = total_hash_fn data' →
+     data = data'.
+
+  Definition is_hash_proph_inv : iProp Σ := (*  *)
+    inv nroot (∃ past hash_prev future,
+          "H●" ∷ mono_list_auth_own prefix_gn (1/2) hash_prev ∗
+          "%Hall" ∷ ⌜ all_hash_data = past ++ (extract future) ⌝ ∗
+          "%Hpast" ∷ ⌜ past ⊆ hash_prev ⌝ ∗
+          "%Hno_coll" ∷ (⌜ no_collisions hash_prev ⌝) ∗
+          "Hproph" ∷ proph crypto_hash_proph_id future).
+End hash_inv.
 
 Section lifting.
   Existing Instances crypto_op crypto_model crypto_semantics crypto_interp.
@@ -136,27 +169,10 @@ Section lifting.
              else has_hash all' d
     end.
 
-  Class HashContext := {
-    all_hash_data : list (list w8)
-  }.
-
   Context {hash_ctx : HashContext}.
 
   Definition hash_fn (data : list w8) : option (list w8) :=
     if (has_hash all_hash_data data) then Some (total_hash_fn data) else None.
-
-  Local Definition extract (vs : list val) : list (list w8) :=
-    foldr (λ v l, match v with
-                  | LitV (LitString x) => x :: l
-                  | _ => l
-                  end
-      ) [] vs.
-
-  Definition no_collisions (datas : list (list w8))  : Prop :=
-    ∀ data data',
-     data ∈ datas → data' ∈ datas →
-     total_hash_fn data = total_hash_fn data' →
-     data = data'.
 
   Lemma no_collisions_has_hash datas d:
     no_collisions datas →
@@ -227,14 +243,6 @@ Section lifting.
   Proof.
     intros [? ?]. subst. set_solver.
   Qed.
-
-  Definition is_hash_proph_inv : iProp Σ := (*  *)
-    inv nroot (∃ past hash_prev future,
-          "H●" ∷ mono_list_auth_own prefix_gn (1/2) hash_prev ∗
-          "%Hall" ∷ ⌜ all_hash_data = past ++ (extract future) ⌝ ∗
-          "%Hpast" ∷ ⌜ past ⊆ hash_prev ⌝ ∗
-          "%Hno_coll" ∷ (⌜ no_collisions hash_prev ⌝) ∗
-          "Hproph" ∷ proph crypto_hash_proph_id future).
 
   Context {sem_fn : GoSemanticsFunctions} {pre_sem : go.PreSemantics}.
   Lemma wp_Hash data :
@@ -354,7 +362,7 @@ Program Instance crypto_interp_adequacy {go_gctx : GoGlobalContext} :
   {| ffiGpreS := cryptoGpreS;
      ffiΣ := cryptoΣ;
      subG_ffiPreG := subG_cryptoGpreS;
-     ffi_initgP := λ g, True;
+     ffi_initgP := λ g, g.(crypto_hash_prev_data) = [];
      ffi_initP := λ σ g, True;
   |}.
 Next Obligation.
@@ -362,6 +370,7 @@ Next Obligation.
   iIntros (_ Σ hPre σ ?).
   iMod (mono_list_own_alloc) as (γ) "[Hmono _]".
   iExists (CryptoGS _ _ _ _). simpl. iModIntro.
+  rewrite H.
   iDestruct "Hmono" as "[$ $]".
   done.
 Qed.
