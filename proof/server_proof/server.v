@@ -1116,16 +1116,89 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
           (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
-        "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid (uint.nat prevVerLen)
-          last_dig hist ∗
-        "%Heq_hist" ∷ ⌜Forall2
-          (λ x y, x = y.(ktcore.Memb.PkOpen).(ktcore.CommitOpen.Val))
-          (drop (uint.nat prevVerLen) pks) hist⌝ ∗
+        "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
+          (uint.nat prevVerLen) last_dig hist ∗
+        "%Heq_hist" ∷ ⌜drop (uint.nat prevVerLen) pks =
+          ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝ ∗
         "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid
           (length pks) last_dig bound
       end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "@".
+  iNamed "Hown_serv_lock".
+  wp_apply wp_with_defer as "* Hdefer". simpl.
+  wp_auto.
+  wp_apply (wp_RWMutex__RLock with "[$Hlock]") as "[Hlocked H]".
+  iNamed "H".
+  iApply ncfupd_wp.
+  rewrite /perm_read /own.
+  iMod "Hperm_read" as "(%&Hown_gs'&Hperm)".
+  iCombine "Hown_gs Hown_gs'" gives %<-.
+  iMod ("Hperm" with "[$Hown_gs']") as "HQ".
+  iModIntro.
+
+  iNamed "Hown_keys".
+  iNamed "Hown_hist". iNamed "His_audits".
+  iDestruct (own_slice_len with "Hsl_audits") as %?.
+  iDestruct (own_slice_wf with "Hsl_audits") as %?.
+  iDestruct (big_sepL2_length with "Hown_audits") as %?.
+  wp_auto.
+  pose proof Hlast_dig as Hsome_digs.
+  rewrite last_lookup in Hsome_digs.
+  apply lookup_lt_Some in Hsome_digs.
+  wp_if_destruct.
+  { wp_apply (wp_RWMutex__RUnlock with "[-HΦ HQ]") as "Hlock".
+    { iFrame "∗∗#%". }
+    wp_end. iFrame "∗#%". word. }
+  simpl.
+  wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
+  iAssert (⌜sint.Z (default slice.nil (ptr0_plain !! uid)).(slice.len) =
+    length $ ktcore.to_pks (get_vrf_pk γ) uid last_dig⌝)%I as %?.
+  { rewrite /keyStore.own_plain.
+    iNamed "Hown_plain".
+    rewrite lookup_total_alt.
+    destruct (_ !! uid) eqn:Hlook_ptr_plain.
+    - iDestruct (big_sepM2_lookup_l with "Hptr0_plain") as (?) "(%Hlook_plain&@)"; [done|].
+      iDestruct (own_slice_len with "Hsl_pks") as %?.
+      iDestruct (big_sepL2_length with "Hsl0_pks") as %?.
+      rewrite Hlook_plain /=. word.
+    - iDestruct (big_sepM2_lookup_l_none with "Hptr0_plain") as "%Hlook_plain"; [done|].
+      by rewrite Hlook_plain. }
+  wp_if_destruct.
+  { wp_apply (wp_RWMutex__RUnlock with "[-HΦ HQ]") as "Hlock".
+    { iFrame "∗∗#%". }
+    wp_end. iFrame "∗#%". word. }
+  wp_apply (hashchain.wp_HashChain_Prove with "[$Hown_chain]") as "* @"; [word|].
+  iPersist "Hsl_proof".
+  case_decide as Ht; [|word]. clear Ht.
+  list_elem audits (pred $ length σ.(state.hist)) as last_audit.
+  iDestruct (big_sepL2_lookup_r with "Hown_audits")
+    as "(%ptr_audit&%Hlook_sl0_audits&@)"; [done|].
+  iDestruct (big_sepL_lookup with "His_sigs") as "@"; [done|].
+  rewrite take_ge in His_link; [|lia].
+  wp_apply (wp_load_slice_index with "[$Hsl_audits]"); [word|..].
+  { iPureIntro. exact_eq Hlook_sl0_audits. f_equal. word. }
+  iIntros "Hsl_audits". wp_auto.
+  wp_apply (wp_Server_getHist with "[Hown_hidden Hown_plain Hstr_history
+    Hcap_audits Hown_gs Hptr_plain Hown_HashChain Hsl_audits]") as "* @".
+  { iFrame "∗#%". word. }
+  wp_apply (wp_Server_getBound with "[$Hown_serv $Hown_ro]") as "* @".
+  { iFrame "%". word. }
+
+  wp_apply (wp_RWMutex__RUnlock with "[-HΦ HQ]") as "Hlock".
+  { iFrame "∗∗#%". }
+  wp_end.
+  iFrame (Hlast_dig) "∗ Hown_ro". iFrame "#%".
+  replace (length _ - 1) with (Z.of_nat $ pred $ length σ.(state.hist)) by lia.
+  iFrame "#".
+  repeat iSplit; try iPureIntro.
+  - word.
+  - word.
+  - exact_eq His_link. f_equal. lia.
+  - exact_eq Hwish. f_equal. word.
+  - iExactEq "Hwish_bound". rewrite /named. f_equal. word.
+Qed.
 
 Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
   {{{
