@@ -13,8 +13,7 @@ Import serde.server server.server rpc.server.
 Module state.
 Record t :=
   mk {
-    start_ep: w64;
-    links: list $ list w8;
+    digs: list $ list w8;
   }.
 End state.
 
@@ -31,68 +30,62 @@ Record t :=
   }.
 End cfg.
 
-Notation get_vrf_pk γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
+Notation vrf_pkγ γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
 Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
+Notation start_epγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.start_ep)).
+Notation cutγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.cut)).
+Notation audit_offsetγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.audit_offset)).
 
 Module epoch.
-Record t :=
-  mk' {
-    link: list w8;
-  }.
-
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition own ptr obj ep γ : iProp Σ :=
-  ∃ sl_link sl_servSig servSig sl_adtrSig adtrSig,
+Definition own ptr σ ep γ : iProp Σ :=
+  ∃ sl_link link sl_servSig servSig sl_adtrSig adtrSig,
   "#Hstr_epoch" ∷ ptr ↦□ (auditor.epoch.mk sl_link sl_servSig sl_adtrSig) ∗
-  "#Hsl_link" ∷ sl_link ↦*□ obj.(link) ∗
+  "#Hsl_link" ∷ sl_link ↦*□ link ∗
+  "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) =
+    (take (S ep - start_epγ γ) σ.(state.digs), cutγ γ)⌝ ∗
   "#Hsl_servSig" ∷ sl_servSig ↦*□ servSig ∗
-  "#His_servSig" ∷ ktcore.wish_LinkSig γ.(cfg.serv_sig_pk) ep obj.(link) servSig ∗
+  "#His_servSig" ∷ ktcore.wish_LinkSig γ.(cfg.serv_sig_pk) (W64 ep) link servSig ∗
   "#Hsl_adtrSig" ∷ sl_adtrSig ↦*□ adtrSig ∗
-  "#His_adtrSig" ∷ ktcore.wish_LinkSig γ.(cfg.adtr_sig_pk) ep obj.(link) adtrSig.
+  "#His_adtrSig" ∷ ktcore.wish_LinkSig γ.(cfg.adtr_sig_pk) (W64 ep) link adtrSig.
 
 End proof.
 End epoch.
 
 Module history.
-Record t :=
-  mk' {
-    digs: list $ list w8;
-    cut: option $ list w8;
-  }.
-
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition own ptr obj γ σ q : iProp Σ :=
+Definition own ptr γ σ q : iProp Σ :=
   ∃ sl_lastDig lastDig sl_epochs sl0_epochs,
-  let last_ep := uint.Z σ.(state.start_ep) + length σ.(state.links) - 1 in
-  "Hstr_history" ∷ ptr ↦{#q} (auditor.history.mk sl_lastDig σ.(state.start_ep) sl_epochs) ∗
+  let last_ep := start_epγ γ + length σ.(state.digs) - 1 in
+  "Hstr_history" ∷ ptr ↦{#q} (auditor.history.mk sl_lastDig (W64 $ start_epγ γ) sl_epochs) ∗
   "#Hsl_lastDig" ∷ sl_lastDig ↦*□ lastDig ∗
-  "%Heq_lastDig" ∷ ⌜last obj.(digs) = Some lastDig⌝ ∗
+  "%Heq_lastDig" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
   "Hsl_epochs" ∷ sl_epochs ↦*{#q} sl0_epochs ∗
   "Hcap_epochs" ∷ own_slice_cap loc sl_epochs (DfracOwn q) ∗
-  "#Hepochs" ∷ ([∗ list] idx ↦ p;o ∈ sl0_epochs;σ.(state.links),
-    epoch.own p (epoch.mk' o) (W64 (uint.nat σ.(state.start_ep) + idx)) γ) ∗
-  "%Hsome_links" ∷ ⌜length σ.(state.links) > 0⌝ ∗
+  "#Hepochs" ∷ ([∗ list] idx ↦ p ∈ sl0_epochs,
+    epoch.own p σ (start_epγ γ + idx) γ) ∗
+  "%Hsome_digs" ∷ ⌜length σ.(state.digs) > 0⌝ ∗
   "%Hnoof_ep" ∷ ⌜last_ep = uint.Z $ W64 last_ep⌝.
 
-Definition align_serv obj σ servγ : iProp Σ :=
+Definition align_serv σ γ servγ : iProp Σ :=
   ∃ hist,
   "#His_hist" ∷ mono_list_lb_own (server.digsγ servγ) hist ∗
-  "%Heq_ep" ∷ ⌜length hist = (uint.nat σ.(state.start_ep) + length σ.(state.links))%nat⌝ ∗
-  "%Heq_digs" ∷ ⌜obj.(digs) = hist⌝ ∗
-  "%Heq_cut" ∷ ⌜obj.(cut) = None⌝.
+  "%Heq_digs" ∷ ⌜σ.(state.digs) = hist⌝ ∗
+  "%Heq_start_ep" ∷ ⌜start_epγ γ = 0%nat⌝ ∗
+  "%Heq_cut" ∷ ⌜cutγ γ = None⌝.
 
-#[global] Instance own_aux_combine_sep_as ptr obj0 obj1 γ σ0 σ1 q0 q1 :
-  CombineSepAs (own ptr obj0 γ σ0 q0) (own ptr obj1 γ σ1 q1) (own ptr obj0 γ σ0 (q0 + q1)) | 60.
+#[global] Instance own_aux_combine_sep_as ptr γ σ0 σ1 q0 q1 :
+  CombineSepAs (own ptr γ σ0 q0) (own ptr γ σ1 q1) (own ptr γ σ0 (q0 + q1)) | 60.
 Proof.
   rewrite /CombineSepAs.
   iIntros "[H0 H1]".
@@ -108,8 +101,8 @@ Proof.
   iFrame "∗#%".
 Qed.
 
-#[global] Instance own_frac ptr obj γ σ :
-  fractional.Fractional (λ q, own ptr obj γ σ q).
+#[global] Instance own_frac ptr γ σ :
+  fractional.Fractional (λ q, own ptr γ σ q).
 Proof.
   intros ??. iSplit.
   - iIntros "@".
@@ -121,8 +114,8 @@ Proof.
     by iCombine "H0 H1" as "H".
 Qed.
 
-#[global] Instance own_as_frac ptr obj γ σ q :
-  fractional.AsFractional (own ptr obj γ σ q) (λ q, own ptr obj γ σ q) q.
+#[global] Instance own_as_frac ptr γ σ q :
+  fractional.AsFractional (own ptr γ σ q) (λ q, own ptr γ σ q) q.
 Proof. auto. Qed.
 
 End proof.

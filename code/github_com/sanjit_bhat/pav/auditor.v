@@ -85,7 +85,7 @@ Definition GetReplyDecode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_st
 
 (* Update queries server for a new epoch update and applies it.
 
-   go: auditor.go:49:19 *)
+   go: auditor.go:47:19 *)
 Definition Auditor__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "a" <>,
     with_defer: (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -125,7 +125,7 @@ Definition Auditor__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
       else do:  #()))));;;
     return: (![ktcore.Blame] "err")).
 
-(* go: auditor.go:66:19 *)
+(* go: auditor.go:64:19 *)
 Definition Auditor__updOnceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "a" "p",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -193,7 +193,7 @@ Definition Auditor__updOnceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
 (* Get returns the auditor's info for a particular epoch.
    it errors if the epoch is out of bounds.
 
-   go: auditor.go:87:19 *)
+   go: auditor.go:85:19 *)
 Definition Auditor__Getⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "a" "epoch",
     with_defer: (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -242,7 +242,7 @@ Definition Auditor__Getⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     do:  ("vrf" <-[go.PointerType SignedVrf] "$r0");;;
     return: (![go.PointerType SignedLink] "link", ![go.PointerType SignedVrf] "vrf", ![go.bool] "err")).
 
-(* go: auditor.go:109:6 *)
+(* go: auditor.go:107:6 *)
 Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servAddr" "servPk",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -350,7 +350,7 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     do:  ("a" <-[go.PointerType Auditor] "$r0");;;
     return: (![go.PointerType Auditor] "a", ![cryptoffi.SigPublicKey] "sigPk", ![ktcore.Blame] "err")).
 
-(* go: auditor.go:137:6 *)
+(* go: auditor.go:135:6 *)
 Definition getNextLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "sigPk" "prevEp" "prevDig" "prevLink" "p",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -398,7 +398,7 @@ Definition getNextLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     else do:  #());;;
     return: (![go.uint64] "ep", ![go.SliceType go.byte] "dig", ![go.SliceType go.byte] "link", ![go.bool] "err")).
 
-(* go: auditor.go:154:6 *)
+(* go: auditor.go:152:6 *)
 Definition getNextDigⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "prevDig" "updates",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -439,7 +439,7 @@ Definition getNextDigⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
       do:  ("dig" <-[go.SliceType go.byte] "$r0")));;;
     return: (![go.SliceType go.byte] "dig", ![go.bool] "err")).
 
-(* go: auditor.go:171:6 *)
+(* go: auditor.go:169:6 *)
 Definition CheckStartChainⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "chain",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -502,7 +502,7 @@ Definition CheckStartChainⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     else do:  #());;;
     return: (![go.uint64] "ep", ![go.SliceType go.byte] "dig", ![go.SliceType go.byte] "link", ![go.bool] "err")).
 
-(* go: auditor.go:198:6 *)
+(* go: auditor.go:196:6 *)
 Definition CheckStartVrfⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "vrf",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
