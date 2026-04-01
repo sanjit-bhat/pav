@@ -34,6 +34,9 @@ Proof.
 Qed.
 End list.
 
+Lemma list_reln_singleton {A} (a : A) R : list_reln [a] R.
+Proof. by intros ?**. Qed.
+
 (** top-level server state and inv. *)
 
 Module cfg.
@@ -1420,13 +1423,13 @@ Proof.
 
   wp_apply (merkle.wp_Map_Hash with "[$Hown_Map]") as "* @".
   iDestruct (merkle.own_Map_to_is_map with "[$Hown_Map]") as %[Hinv_merkle ?].
-  wp_apply (hashchain.wp_HashChain_Append with "[$Hown_HashChain]") as "* @".
+  wp_apply (hashchain.wp_HashChain_Append with "[$Hown_HashChain]") as "* @ {Hsl_val}".
   { by iFrame "#". }
-  iMod (mono_list_auth_own_update_app [_] with "Hauth_digs") as "[[Hgs_digs Hgs_digs'] #Hlb_digs]".
+  iMod (mono_list_auth_own_update_app [_] with "Hauth_digs")
+    as "[[Hgs_digs Hgs_digs'] #Hlb_digs]".
   simpl in *.
-  (* TODO: make helper lemma for list_reln singleton. *)
   eassert (ktcore.mono_plain _ [hash]).
-  { rewrite /ktcore.mono_plain /list_reln. by intros **. }
+  { rewrite /ktcore.mono_plain. apply list_reln_singleton. }
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". rewrite /linkP.
     simplify_eq/=. by iFrame "#%". }
@@ -1451,27 +1454,40 @@ Proof.
     as "#His_chan_bag"; [done|].
   iStructNamed "Hptr_serv". simpl in *.
   iPersist "secs workQ mu keys hist".
-  iPersist "s sigPk Hsl_sigPk Hptr_secs Hptr_keys Hptr_audit".
+  iPersist "s sigPk Hsl_sigPk Hptr_secs Hptr_keys Hptr_audit Hsl_commit_sec".
   iMod (inv_alloc nroot _ (∃ σ, inv_aux γ σ) with "[Hgs_digs' Hgs_pend']") as "Ht".
   { iExists σ. simplify_eq/=.
     iFrame "∗". rewrite /valid /=.
     iFrame "%".
     iModIntro. iSplit; [naive_solver|].
     iPureIntro. intros **. simplify_eq/=.
-    rewrite Hinv_merkle.
-    admit. } (* TODO: plain_inv_fn on ∅ *)
+    by rewrite Hinv_merkle ktcore.plain_inv_empty. }
   iAssert (is_inv γ)%I with "Ht" as "{Ht} #His_inv".
   iMod (init_RWMutex (Server.own_aux γ ptr_serv obj)
     with "[-HΦ Hptr_mu] Hptr_mu") as "Hlock_perms".
   { admit. } (* TODO: Fractional *)
   { iExists σ. simplify_eq/=.
-    iFrame "∗".
+    iFrame "∗". simpl.
     iFrame "#". simpl.
-
-    lot of preds to crunch thru.
-    where does perm_add_hist come from?
-
-  wp_apply wp_fork.
+    rewrite Hinv_merkle ktcore.plain_inv_empty.
+    iModIntro. repeat iSplit; try iPureIntro; try done.
+    { rewrite /keyStore.own_plain. naive_solver. }
+    2: { by iApply op_add_hist. }
+    iExists [ktcore.AuditProof.mk' [] _].
+    iFrame "Hptr_audit #". simpl. repeat iSplit; try done.
+    by iDestruct own_slice_nil as "$". }
+  iDestruct (big_sepL_replicate_impl _ (Server.lock_perm γ ptr_serv obj)
+    with "Hlock_perms []") as "Hlock_perms".
+  { iIntros "!> H". simplify_eq/=. iFrame "∗#". simpl. word. }
+  assert (Z.to_nat rwmutex.actualMaxReaders =
+    S $ pred $ Z.to_nat rwmutex.actualMaxReaders) as Ht.
+  { rewrite rwmutex.actualMaxReaders_unseal. lia. }
+  iEval (rewrite Ht) in "Hlock_perms". clear Ht. simpl.
+  iDestruct "Hlock_perms" as "[Hlock_perm Hlock_perms]".
+  wp_apply (wp_fork with "[Hlock_perm]").
+  { by wp_apply (wp_Server_worker with "[$]"). }
+  wp_end. simplify_eq/=. iFrame "∗#".
+Admitted.
 
 End proof.
 End server.

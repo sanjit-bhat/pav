@@ -249,6 +249,15 @@ Definition is_plain vrf_pk plain hidden :=
 
 (** misc. *)
 
+Lemma plain_inv_empty vrf_pk : plain_inv_fn vrf_pk ∅ = ∅.
+Proof.
+  rewrite /plain_inv_fn.
+  rewrite /dec_map_labels /dec_map_labels_aux map_to_list_empty /=.
+  rewrite /dec_map_vals omap_empty.
+  rewrite /map_curry map_fold_empty.
+  by rewrite /filter_contig omap_empty.
+Qed.
+
 Lemma in_hidden_det {vrf_pk hidden uid ver opt_pk0 opt_pk1} :
   in_hidden vrf_pk hidden uid ver opt_pk0 →
   in_hidden vrf_pk hidden uid ver opt_pk1 →
