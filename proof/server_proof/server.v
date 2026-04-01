@@ -1118,13 +1118,13 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
   }}}
   s @! (go.PointerType server.Server) @! "History" #uid #prevEpoch #prevVerLen
   {{{
-    sl_chainProof sl_linkSig sl_hist ptr_bound err σ last_dig,
+    sl_chainProof sl_linkSig sl_hist ptr_bound err σ lastDig,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #err);
     let numEps := length σ.(state.hist) in
-    let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
+    let pks := ktcore.to_pks (get_vrf_pk γ) uid lastDig in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
-    "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+    "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some lastDig⌝ ∗
     "#Herr" ∷
       match err with
       | true => ⌜uint.nat prevEpoch ≥ numEps ∨
@@ -1145,11 +1145,11 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
         "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
-          (uint.nat prevVerLen) last_dig hist ∗
+          (uint.nat prevVerLen) lastDig hist ∗
         "%Heq_hist" ∷ ⌜drop (uint.nat prevVerLen) pks =
           ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝ ∗
         "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid
-          (length pks) last_dig bound
+          (length pks) lastDig bound
       end
   }}}.
 Proof.

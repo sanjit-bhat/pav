@@ -98,8 +98,7 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#His_cli" ∷ is_rpc_cli c good ∗
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
     "Hptr_reply" ∷ ptr_reply ↦ x ∗
-    "#Hfupd" ∷ match good with None => True | Some γ =>
-      □ (|={⊤,∅}=> ∃ σ, own γ σ ∗ (own γ σ ={∅,⊤}=∗ Q γ σ)) end
+    "#Hfupd" ∷ match good with None => True | Some γ => perm_read γ (Q γ) end
   }}}
   c @! (go.PointerType advrpc.Client) @! "Call" server.HistoryRpc #sl_arg #ptr_reply
   {{{
@@ -120,13 +119,13 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
     (("%Herr_serv_dec" ∷ ⌜err1 = true⌝ ∗
       "Hgenie" ∷ ¬ ⌜∃ obj tail, HistoryArg.wish arg obj tail⌝) ∨
 
-    ∃ uid prevEpoch prevVerLen tail σ lastDig lastKeys,
+    ∃ uid prevEpoch prevVerLen tail σ lastDig,
     let numEps := length σ.(state.hist) in
-    let pks := lastKeys !!! uid in
+    let pks := ktcore.to_pks (get_vrf_pk γ) uid lastDig in
     "%Hdec" ∷ ⌜HistoryArg.wish arg
       (HistoryArg.mk' uid prevEpoch prevVerLen) tail⌝ ∗
     "HQ" ∷ Q γ σ ∗
-    "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some (lastDig, lastKeys)⌝ ∗
+    "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some lastDig⌝ ∗
 
     "#Herr_serv_args" ∷
       match err1 with
@@ -136,19 +135,18 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
         ∃ lastLink,
         "%Hnoof_epochs" ∷ ⌜numEps = sint.nat (W64 numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
-        "#His_lastLink" ∷ hashchain.is_chain σ.(state.hist).*1 None lastLink numEps ∗
+        "%His_lastLink" ∷ ⌜hashchain.inv_fn lastLink (S numEps) = (σ.(state.hist), None)⌝ ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
-          (drop (S (uint.nat prevEpoch)) σ.(state.hist).*1)⌝ ∗
+          (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
-        "#Hwish_hist" ∷ ktcore.wish_ListMemb γ.(cfg.vrf_pk) uid prevVerLen
-          lastDig hist ∗
-        "%Heq_hist" ∷ ⌜Forall2
-          (λ x y, x = y.(ktcore.Memb.PkOpen).(ktcore.CommitOpen.Val))
-          (drop (uint.nat prevVerLen) pks) hist⌝ ∗
-        "#Hwish_bound" ∷ ktcore.wish_NonMemb γ.(cfg.vrf_pk) uid
-          (W64 $ length pks) lastDig bound
+        "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
+          (uint.nat prevVerLen) lastDig hist ∗
+        "%Heq_hist" ∷ ⌜drop (uint.nat prevVerLen) pks =
+          ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝ ∗
+        "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid
+          (length pks) lastDig bound
       end) end end
   }}}.
 Proof. Admitted.
@@ -160,8 +158,7 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#His_cli" ∷ is_rpc_cli c good ∗
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
     "Hptr_reply" ∷ ptr_reply ↦ x ∗
-    "#Hfupd" ∷ match good with None => True | Some γ =>
-      □ (|={⊤,∅}=> ∃ σ, own γ σ ∗ (own γ σ ={∅,⊤}=∗ Q γ σ)) end
+    "#Hfupd" ∷ match good with None => True | Some γ => perm_read γ (Q γ) end
   }}}
   c @! (go.PointerType advrpc.Client) @! "Call" server.AuditRpc #sl_arg #ptr_reply
   {{{
@@ -194,14 +191,14 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
         "#His_upds" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ dig0 dig1,
           let predEp := (uint.nat prevEpoch + i)%nat in
-          "%Hlook0" ∷ ⌜σ.(state.hist).*1 !! predEp = Some dig0⌝ ∗
-          "%Hlook1" ∷ ⌜σ.(state.hist).*1 !! (S predEp) = Some dig1⌝ ∗
+          "%Hlook0" ∷ ⌜σ.(state.hist) !! predEp = Some dig0⌝ ∗
+          "%Hlook1" ∷ ⌜σ.(state.hist) !! (S predEp) = Some dig1⌝ ∗
           "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
-          let ep := (uint.nat prevEpoch + S i)%nat in
-          "#His_link" ∷ hashchain.is_chain (take (S ep) σ.(state.hist).*1)
-            None link (S ep) ∗
+          let ep := (S $ uint.nat prevEpoch + i)%nat in
+          "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) =
+            (take (S ep) σ.(state.hist), None)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end) end end
   }}}.
@@ -214,8 +211,7 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#His_cli" ∷ is_rpc_cli c good ∗
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
     "Hptr_reply" ∷ ptr_reply ↦ x ∗
-    "#Hfupd" ∷ match good with None => True | Some γ =>
-      □ (|={⊤,∅}=> ∃ obj, own γ obj ∗ (own γ obj ={∅,⊤}=∗ Q γ obj)) end
+    "#Hfupd" ∷ match good with None => True | Some γ => perm_read γ (Q γ) end
   }}}
   c @! (go.PointerType advrpc.Client) @! "Call" server.StartRpc #sl_arg #ptr_reply
   {{{
@@ -228,28 +224,27 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     "Hsl_reply" ∷ sl_reply ↦* replyB ∗
 
     "Hgood" ∷ match good with None => True | Some γ =>
-    ∃ chain vrf obj last_link,
-    let numEps := length obj.(state.hist) in
+    ∃ chain vrf σ last_link,
+    let numEps := length σ.(state.hist) in
     "%His_reply" ∷ ⌜StartReply.wish replyB (StartReply.mk' chain vrf) []⌝ ∗
 
-    "HQ" ∷ Q γ obj ∗
+    "HQ" ∷ Q γ σ ∗
     "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
-    "#His_PrevLink" ∷ hashchain.is_chain
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist).*1)
-      None chain.(StartChain.PrevLink)
-      (uint.nat chain.(StartChain.PrevEpochLen)) ∗
+    "%His_PrevLink" ∷ ⌜hashchain.inv_fn chain.(StartChain.PrevLink)
+      (S $ uint.nat chain.(StartChain.PrevEpochLen)) =
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist), None)⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
-      (drop (uint.nat chain.(StartChain.PrevEpochLen)) obj.(state.hist).*1)⌝ ∗
-    "#His_last_link" ∷ hashchain.is_chain obj.(state.hist).*1 None
-      last_link numEps ∗
+      (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
+    "%His_last_link" ∷ ⌜hashchain.inv_fn last_link (S numEps) =
+      (σ.(state.hist), None)⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
-    "%Heq_VrfPk" ∷ ⌜γ.(cfg.vrf_pk) = vrf.(StartVrf.VrfPk)⌝ ∗
+    "%Heq_VrfPk" ∷ ⌜get_vrf_pk γ = vrf.(StartVrf.VrfPk)⌝ ∗
     "#His_VrfPk" ∷ cryptoffi.is_vrf_pk vrf.(StartVrf.VrfPk) ∗
-    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) γ.(cfg.vrf_pk)
+    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ)
       vrf.(StartVrf.VrfSig)
     end end
   }}}.
@@ -257,11 +252,11 @@ Proof. Admitted.
 
 Definition wish_CheckStartChain servPk chain digs cut (ep : w64) dig link : iProp Σ :=
   ∃ digs0 digs1,
-  "#His_chain_prev" ∷ hashchain.is_chain digs0 cut chain.(server.StartChain.PrevLink)
-    (uint.nat chain.(server.StartChain.PrevEpochLen)) ∗
+  "%His_chain_prev" ∷ ⌜hashchain.inv_fn chain.(StartChain.PrevLink)
+      (S $ uint.nat chain.(StartChain.PrevEpochLen)) = (digs0, cut)⌝ ∗
   "%His_proof" ∷ ⌜hashchain.wish_Proof chain.(server.StartChain.ChainProof) digs1⌝ ∗
-  "#His_chain_start" ∷ hashchain.is_chain digs cut link
-    (uint.nat chain.(server.StartChain.PrevEpochLen) + length digs1) ∗
+  "%His_chain_start" ∷ ⌜hashchain.inv_fn link
+    (S (uint.nat chain.(StartChain.PrevEpochLen)) + length digs1) = (digs, cut)⌝ ∗
   "#His_link_sig" ∷ ktcore.wish_LinkSig servPk ep link chain.(server.StartChain.LinkSig) ∗
 
   "%Heq_digs" ∷ ⌜digs = digs0 ++ digs1⌝ ∗
@@ -275,10 +270,12 @@ Lemma wish_CheckStartChain_det pk c digs0 digs1 cut0 cut1 e0 e1 d0 d1 l0 l1 :
 Proof.
   iNamedSuffix 1 "0".
   iNamedSuffix 1 "1".
-  iDestruct (hashchain.is_chain_inj with "His_chain_prev0 His_chain_prev1") as %[-> ->].
+  rewrite His_chain_prev1 in His_chain_prev0.
+  simplify_eq/=.
   opose proof (hashchain.wish_Proof_det _ _ _ His_proof0 His_proof1) as ->.
   simplify_eq/=.
-  iDestruct (hashchain.is_chain_det with "His_chain_start0 His_chain_start1") as %->.
+  rewrite -His_chain_start1 in His_chain_start0.
+  opose proof (hashchain.det _ _ _ _ His_chain_start0) as ->.
   iPureIntro.
   rewrite -Heq_ep0 in Heq_ep1.
   by simplify_eq/=.
@@ -319,13 +316,13 @@ Lemma wp_CallStart c good :
 
       "Hgood" ∷ match good with None => True | Some γ =>
         ∃ servHist ep dig link,
-        "#Hlb_servHist" ∷ mono_list_lb_own γ.(cfg.histγ) servHist ∗
+        "#Hlb_servHist" ∷ mono_list_lb_own (digsγ γ) servHist ∗
         (* epoch returned by CheckStartChain is only upper bound on (len digs).
         need exact equality so clients can certify their last ep. *)
         "%Heq_ep" ∷ ⌜uint.nat ep = (length servHist - 1)%nat⌝ ∗
         "#Hwish_StartChain" ∷ wish_CheckStartChain γ.(cfg.sig_pk) chain
-          servHist.*1 None ep dig link ∗
-        "%Heq_VrfPk" ∷ ⌜γ.(cfg.vrf_pk) = vrf.(StartVrf.VrfPk)⌝ ∗
+          servHist None ep dig link ∗
+        "%Heq_VrfPk" ∷ ⌜get_vrf_pk γ = vrf.(StartVrf.VrfPk)⌝ ∗
         "#Hwish_StartVrf" ∷ wish_CheckStartVrf γ.(cfg.sig_pk) vrf end)
     }}}.
 Proof.
@@ -337,7 +334,7 @@ Proof.
   { iFrame "#".
     iDestruct (own_slice_nil DfracDiscarded) as "$".
     case_match; try done.
-    iModIntro.
+    rewrite /perm_read.
     iMod mono_list_lb_own_nil as "#?".
     by iApply op_read_lb. }
   wp_if_destruct.
@@ -382,7 +379,7 @@ Proof.
 
   repeat iSplit; try done.
   - word.
-  - iExactEq "His_last_link". rewrite /named. f_equal. len.
+  - iPureIntro. exact_eq His_last_link. f_equal. len.
   - by rewrite take_drop.
   - len.
 Qed.
