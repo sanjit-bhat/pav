@@ -448,7 +448,7 @@ Definition is_audits γ digs audits : iProp Σ :=
     "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
   "#His_sigs" ∷ ([∗ list] ep ↦ aud ∈ audits,
     ∃ link,
-    "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) = (take (S ep) digs, None)⌝ ∗
+    "%His_link" ∷ ⌜hashchain.valid (take (S ep) digs) None link (S $ S ep)⌝ ∗
     "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig)).
 
 Definition own γ ptr digs q : iProp Σ :=
@@ -471,7 +471,7 @@ Lemma is_audits_grow new_dig upd_proof sig link γ digs last_dig audits :
   last digs = Some last_dig →
   is_audits γ digs audits -∗
   ktcore.wish_ListUpdate last_dig upd_proof new_dig -∗
-  ⌜hashchain.inv_fn link (S $ S $ ep) = (digs ++ [new_dig], None)⌝ -∗
+  ⌜hashchain.valid (digs ++ [new_dig]) None link (S $ S $ ep)⌝ -∗
   ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link sig -∗
   is_audits γ (digs ++ [new_dig]) (audits ++ [ktcore.AuditProof.mk' upd_proof sig]).
 Proof.
@@ -1135,7 +1135,7 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
         ∃ lastLink chainProof linkSig hist bound,
         "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 $ length pks)⌝ ∗
-        "%His_lastLink" ∷ ⌜hashchain.inv_fn lastLink (S numEps) = (σ.(state.hist), None)⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.valid (σ.(state.hist)) None lastLink (S numEps)⌝ ∗
 
         "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
         "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
@@ -1265,8 +1265,7 @@ Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
           let ep := (S $ uint.nat prevEpoch + i)%nat in
-          "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) =
-            (take (S ep) σ.(state.hist), None)⌝ ∗
+          "%His_link" ∷ ⌜hashchain.valid (take (S ep) σ.(state.hist)) None link (S $ S ep)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end
   }}}.
@@ -1348,8 +1347,7 @@ Lemma wp_Server_Start s γ obj Q :
       (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
       (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
-    "%His_last_link" ∷ ⌜hashchain.inv_fn last_link (S numEps) =
-      (σ.(state.hist), None)⌝ ∗
+    "%His_last_link" ∷ ⌜hashchain.valid (σ.(state.hist)) None last_link (S numEps)⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 

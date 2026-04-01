@@ -48,8 +48,7 @@ Definition own ptr σ ep γ : iProp Σ :=
   "#Hstr_epoch" ∷ ptr ↦□ (auditor.epoch.mk sl_link sl_servSig sl_adtrSig) ∗
   "#Hsl_link" ∷ sl_link ↦*□ link ∗
   (* could derive this from LinkSig, but it's easier to state explicitly. *)
-  "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) =
-    (take (S ep - start_epγ γ) σ.(state.digs), cutγ γ)⌝ ∗
+  "%His_link" ∷ ⌜hashchain.valid (take (S ep - start_epγ γ) σ.(state.digs)) (cutγ γ) link (S $ S ep)⌝ ∗
   "#Hsl_servSig" ∷ sl_servSig ↦*□ servSig ∗
   "#His_servSig" ∷ ktcore.wish_LinkSig γ.(cfg.serv_sig_pk) (W64 ep) link servSig ∗
   "#Hsl_adtrSig" ∷ sl_adtrSig ↦*□ adtrSig ∗

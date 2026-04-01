@@ -135,7 +135,7 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
         ∃ lastLink,
         "%Hnoof_epochs" ∷ ⌜numEps = sint.nat (W64 numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
-        "%His_lastLink" ∷ ⌜hashchain.inv_fn lastLink (S numEps) = (σ.(state.hist), None)⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.valid (σ.(state.hist)) None lastLink (S numEps)⌝ ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
           (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
@@ -197,8 +197,7 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
           let ep := (S $ uint.nat prevEpoch + i)%nat in
-          "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S ep) =
-            (take (S ep) σ.(state.hist), None)⌝ ∗
+          "%His_link" ∷ ⌜hashchain.valid (take (S ep) σ.(state.hist)) None link (S $ S ep)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end) end end
   }}}.
@@ -238,8 +237,7 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
       (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
       (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
-    "%His_last_link" ∷ ⌜hashchain.inv_fn last_link (S numEps) =
-      (σ.(state.hist), None)⌝ ∗
+    "%His_last_link" ∷ ⌜hashchain.valid (σ.(state.hist)) None last_link (S numEps)⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
@@ -256,8 +254,8 @@ Definition wish_CheckStartChain servPk chain digs cut (ep : w64) dig link : iPro
   "%His_chain_prev" ∷ ⌜hashchain.valid digs0 cut chain.(StartChain.PrevLink)
       (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
   "%His_proof" ∷ ⌜hashchain.wish_Proof chain.(server.StartChain.ChainProof) digs1⌝ ∗
-  "%His_chain_start" ∷ ⌜hashchain.inv_fn link
-    (S (uint.nat chain.(StartChain.PrevEpochLen)) + length digs1) = (digs, cut)⌝ ∗
+  "%His_chain_start" ∷ ⌜hashchain.valid digs cut link
+    (S (uint.nat chain.(StartChain.PrevEpochLen)) + length digs1)⌝ ∗
   "#His_link_sig" ∷ ktcore.wish_LinkSig servPk ep link chain.(server.StartChain.LinkSig) ∗
 
   "%Heq_digs" ∷ ⌜digs = digs0 ++ digs1⌝ ∗
