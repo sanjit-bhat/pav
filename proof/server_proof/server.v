@@ -1041,6 +1041,7 @@ Proof.
     repeat split.
     - exact_eq His_chain. f_equal. word.
     - len.
+    - lia.
     - by rewrite drop_0. }
 
   wp_apply wp_alloc as "%ptr_audit Hptr_audit".

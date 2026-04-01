@@ -64,6 +64,9 @@ Definition linkP γ (ep : w64) link : iProp Σ :=
     (digs, γ.(cfg.info).(digs_info.cut))⌝ ∗
   "#Hlb_digs" ∷ mono_list_lb_own γ.(cfg.digs) digs ∗
   "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (γ.(cfg.info).(digs_info.start_ep) + length digs)%nat⌝ ∗
+  (* we started auditing at least by this epoch. *)
+  "%Hlt_audit" ∷ ⌜γ.(cfg.info).(digs_info.start_ep) +
+    γ.(cfg.info).(digs_info.audit_offset) ≤ uint.nat ep⌝ ∗
   "%Hmono_plain" ∷ ⌜mono_plain γ.(cfg.vrf_pk) (drop γ.(cfg.info).(digs_info.audit_offset) digs)⌝.
 
 Definition linkP_aux γ enc : iProp Σ :=
@@ -180,7 +183,7 @@ Proof.
   intros * Hlook Hrepl.
   rewrite last_lookup in Hlast_dig.
   apply lookup_replicate in Hrepl as [-> ?].
-  opose proof (mono_plain_lookup vrf_pk uid Hmono Hlook Hlast_dig _) as Hpref; [len|].
+  opose proof (mono_plain_lookup uid Hmono Hlook Hlast_dig _) as Hpref; [len|].
   rewrite Hnil in Hpref.
   by apply prefix_nil_inv in Hpref as ->.
 Qed.
@@ -213,7 +216,7 @@ Proof.
   rewrite !last_lookup in Hold_dig Hnew_dig.
   eapply lookup_app_l_Some in Hold_dig.
   eassert (to_pks vrf_pk uid old_dig = to_pks vrf_pk uid new_dig) as Heq_pks.
-  { opose proof (mono_plain_lookup vrf_pk uid Hmono Hold_dig Hnew_dig _) as ?; [len|].
+  { opose proof (mono_plain_lookup uid Hmono Hold_dig Hnew_dig _) as ?; [len|].
     eapply inv_fn_None_bound in Hnone.
     eapply prefix_length_eq; [done|].
     simpl in *. lia. }
@@ -230,8 +233,8 @@ Proof.
   intros ? mid_dig * Hlook_mid Hrepl.
   apply lookup_replicate in Hrepl as [-> ?].
   rewrite (lookup_app_r' digs) in Hlook_mid.
-  opose proof (mono_plain_lookup vrf_pk uid Hmono Hold_dig Hlook_mid _) as Hpref_reg0; [len|].
-  opose proof (mono_plain_lookup vrf_pk uid Hmono Hlook_mid Hnew_dig _) as Hpref_reg1; [len|].
+  opose proof (mono_plain_lookup uid Hmono Hold_dig Hlook_mid _) as Hpref_reg0; [len|].
+  opose proof (mono_plain_lookup uid Hmono Hlook_mid Hnew_dig _) as Hpref_reg1; [len|].
   f_equal. rewrite -Heq_pks in Hpref_reg1.
   by eapply prefix_eq.
 Qed.
