@@ -288,11 +288,10 @@ Proof.
   iFrame "#%".
 Qed.
 
-Lemma wp_getNextDig sl_prevDig prevDig prevMap sl_updates updates :
+Lemma wp_getNextDig sl_prevDig prevDig sl_updates updates :
   {{{
     is_pkg_init auditor ∗
     "#Hsl_prevDig" ∷ sl_prevDig ↦*□ prevDig ∗
-    "#His_prevMap" ∷ merkle.is_map prevMap prevDig ∗
     "#Hown_updates" ∷ ktcore.UpdateProofSlice1D.own sl_updates updates (□)
   }}}
   @! auditor.getNextDig #sl_prevDig #sl_updates
@@ -302,11 +301,10 @@ Lemma wp_getNextDig sl_prevDig prevDig prevMap sl_updates updates :
       match err with
       | true => ¬ ∃ dig, ktcore.wish_ListUpdate prevDig updates dig
       | false =>
-        ∃ dig map,
+        ∃ dig,
         "#Hsl_dig" ∷ sl_dig ↦*□ dig ∗
-        "#His_map" ∷ merkle.is_map map dig ∗
         (* caller doesn't need to know map update elems. just subset. *)
-        "%Hsub" ∷ ⌜prevMap ⊆ map⌝ ∗
+        "%Hsub" ∷ ⌜merkle.inv_fn prevDig ⊆ merkle.inv_fn dig⌝ ∗
         "#Hwish_ListUpdate" ∷ ktcore.wish_ListUpdate prevDig updates dig
       end
   }}}.
@@ -316,7 +314,7 @@ Proof.
   iDestruct (own_slice_len with "Hsl_updates") as %[? ?].
   iDestruct (big_sepL2_length with "Hown_updates") as %?.
   iAssert (
-    ∃ (i : w64) sl_dig dig x map,
+    ∃ (i : w64) sl_dig dig (x : loc),
     let pref_updates := take (sint.nat i) updates in
     "i" ∷ i_ptr ↦ i ∗
     "%Hlt_i" ∷ ⌜0 ≤ sint.Z i ≤ length updates⌝ ∗
@@ -324,8 +322,7 @@ Proof.
     "err" ∷ err_ptr ↦ false ∗
     "dig" ∷ dig_ptr ↦ sl_dig ∗
     "#Hsl_dig" ∷ sl_dig ↦*□ dig ∗
-    "#His_map" ∷ merkle.is_map map dig ∗
-    "%Hsub" ∷ ⌜prevMap ⊆ map⌝ ∗
+    "%Hsub" ∷ ⌜merkle.inv_fn prevDig ⊆ merkle.inv_fn dig⌝ ∗
     "#Hwish" ∷ ktcore.wish_ListUpdate prevDig pref_updates dig
   )%I with "[-HΦ]" as "IH".
   { iFrame "∗#".
@@ -345,9 +342,11 @@ Proof.
   list_elem updates (sint.Z i) as upd.
   iDestruct (big_sepL2_lookup with "Hown_updates") as "#Hown_upd"; [done..|].
   iNamed "Hown_upd".
-  wp_pure; [word|].
-  wp_apply wp_load_slice_elem as "_"; [word|..].
+  case_decide as Ht; [|word]. clear Ht.
+  wp_bind.
+  wp_apply wp_load_slice_index; [word|..].
   { by iFrame "#". }
+  iIntros "_". wp_auto.
   wp_apply merkle.wp_VerifyUpdate as "* @".
   { iFrame "#". }
   wp_if_destruct.
@@ -374,17 +373,18 @@ Proof.
   iFrame "∗#".
   iSplit; [word|].
   iSplit.
-  - iDestruct (merkle.is_map_inj with "His_map His_map_old") as %<-.
-    iPureIntro.
-    trans map; try done.
+  - iPureIntro.
+    trans (merkle.inv_fn oldHash); try done.
+    rewrite Hupd.
     by apply insert_subseteq.
   - replace (sint.nat (word.add _ _)) with (S $ sint.nat i) by word.
     erewrite take_S_r; [|done].
+    destruct upd.
     iApply ktcore.wish_ListUpdate_grow; iFrame "#".
 Qed.
 
-Lemma wp_getNextLink hist γ σ sl_sigPk (prevEp : w64) sl_prevDig prevDig
-    sl_prevLink prevLink ptr_p proof prevMap :
+Lemma wp_getNextLink γ σ sl_sigPk (prevEp : w64) sl_prevDig prevDig
+    sl_prevLink prevLink ptr_p proof :
   {{{
     is_pkg_init auditor ∗
     "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.serv_sig_pk) ∗
@@ -392,26 +392,23 @@ Lemma wp_getNextLink hist γ σ sl_sigPk (prevEp : w64) sl_prevDig prevDig
     "#Hsl_prevLink" ∷ sl_prevLink ↦*□ prevLink ∗
     "#Hproof" ∷ ktcore.AuditProof.own ptr_p proof (□) ∗
 
-    "%Heq_prevEp" ∷ ⌜uint.Z prevEp = uint.Z σ.(state.start_ep) +
-      length σ.(state.links) - 1⌝ ∗
-    "%Heq_prevDig" ∷ ⌜last hist.(history.digs) = Some prevDig⌝ ∗
-    "#His_prevLink" ∷ hashchain.is_chain hist.(history.digs)
-      hist.(history.cut) prevLink (S $ uint.nat prevEp) ∗
-    "#His_prevMap" ∷ merkle.is_map prevMap prevDig
+    "%Heq_prevEp" ∷ ⌜uint.Z prevEp = start_epγ γ + length σ.(state.digs) - 1⌝ ∗
+    "%Heq_prevDig" ∷ ⌜last σ.(state.digs) = Some prevDig⌝ ∗
+    "#His_prevLink" ∷ ⌜hashchain.valid σ.(state.digs)
+      (cutγ γ) prevLink (S $ S $ uint.nat prevEp)⌝
   }}}
   @! auditor.getNextLink #sl_sigPk #prevEp #sl_prevDig #sl_prevLink #ptr_p
   {{{
     ep sl_dig sl_link err, RET (#ep, #sl_dig, #sl_link, #err);
     "Hgenie" ∷
       match err with
-      | true => ¬ ∃ ep dig link, wish_getNextLink γ.(cfg.serv_sig_pk) hist σ proof ep dig link
+      | true => ¬ ∃ ep dig link, wish_getNextLink γ σ proof ep dig link
       | false =>
-        ∃ dig link map,
+        ∃ dig link,
         "#Hsl_dig" ∷ sl_dig ↦*□ dig ∗
         "#Hsl_link" ∷ sl_link ↦*□ link ∗
-        "#Hwish_getNextLink" ∷ wish_getNextLink γ.(cfg.serv_sig_pk) hist σ proof ep dig link ∗
-        "#His_map" ∷ merkle.is_map map dig ∗
-        "%Hsub" ∷ ⌜prevMap ⊆ map⌝
+        "#Hwish_getNextLink" ∷ wish_getNextLink γ σ proof ep dig link ∗
+        "%Hsub" ∷ ⌜merkle.inv_fn prevDig ⊆ merkle.inv_fn dig⌝
       end
   }}}.
 Proof.
@@ -436,7 +433,9 @@ Proof.
   { iApply "HΦ". iNamedSuffix 1 "0". iApply "Hgenie".
     simplify_eq/=.
     iDestruct (ktcore.wish_ListUpdate_det with "Hwish_ListUpdate His_upd0") as %<-.
-    iDestruct (hashchain.is_chain_det with "His_chain His_link0") as %->.
+    destruct His_chain as [His_chain _].
+    rewrite -His_link0 in His_chain.
+    opose proof (hashchain.det _ _ _ _ His_chain) as ->.
     iExactEq "His_sig0". f_equal. word. }
   iNamed "Hgenie".
   iApply "HΦ". iFrame "#%".
@@ -518,7 +517,7 @@ Proof.
   iDestruct (big_sepL2_lookup_2_some with "Hepochs") as %[? ?]; [done|].
   iDestruct (big_sepL2_lookup with "Hepochs") as "@"; [done..|].
   iNamed "Hown_serv".
-  wp_apply (wp_load_slice_elem with "[$Hsl_epochs]") as "Hsl_epochs"; [word|done|].
+  wp_apply (wp_load_slice_idx with "[$Hsl_epochs]") as "Hsl_epochs"; [word|done|].
   wp_apply wp_alloc as "* Hptr_link".
   wp_apply wp_alloc as "* Hptr_vrf".
   iPersist "Hptr_link Hptr_vrf".
@@ -581,7 +580,7 @@ Proof.
   iDestruct (big_sepL2_lookup_2_some with "Hepochs") as %[? ?]; [done|].
   iDestruct (big_sepL2_lookup with "Hepochs") as "@"; [done..|].
   wp_pure; [word|].
-  wp_apply (wp_load_slice_elem with "[$Hsl_epochs]") as "Hsl_epochs"; [word|done|].
+  wp_apply (wp_load_slice_idx with "[$Hsl_epochs]") as "Hsl_epochs"; [word|done|].
 
   simpl in *.
   iPoseProof "Hinv_sigpred" as "@".
@@ -770,7 +769,7 @@ Proof.
   iDestruct (big_sepL2_lookup_2_some with "Hsl_proofs") as %[? ?]; [done|].
   iDestruct (big_sepL2_lookup with "Hsl_proofs") as "Hproof"; [done..|].
   wp_pure; [word|].
-  wp_apply wp_load_slice_elem as "_"; [word|..].
+  wp_apply wp_load_slice_idx as "_"; [word|..].
   { by iFrame "#". }
   iNamedSuffix "Hadtr" "0".
   wp_apply (wp_Auditor_updOnce with "[Hfld_hist0 Hown_hist0 Hown_gs_hist0]") as "* @".

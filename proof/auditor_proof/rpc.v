@@ -137,8 +137,8 @@ Definition wish_getNextLink γ σ proof (ep : w64) dig link : iProp Σ :=
   "%Heq_prevDig" ∷ ⌜last σ.(state.digs) = Some prevDig⌝ ∗
   "#His_upd" ∷ ktcore.wish_ListUpdate prevDig
     proof.(ktcore.AuditProof.Updates) dig ∗
-  "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S $ uint.nat ep) =
-    (σ.(state.digs) ++ [dig], cutγ γ)⌝ ∗
+  "%His_link" ∷ ⌜hashchain.valid (σ.(state.digs) ++ [dig]) (cutγ γ)
+    link (S $ S $ uint.nat ep)⌝ ∗
   "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.serv_sig_pk) ep link
     proof.(ktcore.AuditProof.LinkSig).
 
@@ -151,6 +151,8 @@ Proof.
   iNamedSuffix 1 "1".
   simplify_eq/=.
   iDestruct (ktcore.wish_ListUpdate_det with "His_upd0 His_upd1") as %->.
+  destruct His_link0 as [His_link0 _].
+  destruct His_link1 as [His_link1 _].
   rewrite -His_link1 in His_link0.
   opose proof (hashchain.det _ _ _ _ His_link0) as ->.
   iPureIntro. repeat split. word.
@@ -291,6 +293,7 @@ Proof.
     f_equal; try done.
     rewrite take_app_length'; [done|].
     len.
+  - word.
 Qed.
 
 End proof.
