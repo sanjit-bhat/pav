@@ -127,20 +127,20 @@ Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition wish_getNextLink sig_pk hist σ proof (ep : w64) dig link : iProp Σ :=
+Definition wish_getNextLink γ σ proof (ep : w64) dig link : iProp Σ :=
   ∃ prevDig,
-  "%Heq_ep" ∷ ⌜uint.Z ep = (uint.Z σ.(state.start_ep) + length σ.(state.links))%Z⌝ ∗
-  "%Heq_prevDig" ∷ ⌜last hist.(history.digs) = Some prevDig⌝ ∗
+  "%Heq_ep" ∷ ⌜uint.Z ep = (start_epγ γ + length σ.(state.digs))%Z⌝ ∗
+  "%Heq_prevDig" ∷ ⌜last σ.(state.digs) = Some prevDig⌝ ∗
   "#His_upd" ∷ ktcore.wish_ListUpdate prevDig
     proof.(ktcore.AuditProof.Updates) dig ∗
   "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S $ uint.nat ep) =
-    (hist.(history.digs) ++ [dig], hist.(history.cut))⌝ ∗
-  "#His_sig" ∷ ktcore.wish_LinkSig sig_pk ep link
+    (σ.(state.digs) ++ [dig], cutγ γ)⌝ ∗
+  "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.serv_sig_pk) ep link
     proof.(ktcore.AuditProof.LinkSig).
 
-Lemma wish_getNextLink_det sig_pk hist σ proof ep0 dig0 link0 ep1 dig1 link1 :
-  wish_getNextLink sig_pk hist σ proof ep0 dig0 link0 -∗
-  wish_getNextLink sig_pk hist σ proof ep1 dig1 link1 -∗
+Lemma wish_getNextLink_det γ σ proof ep0 dig0 link0 ep1 dig1 link1 :
+  wish_getNextLink γ σ proof ep0 dig0 link0 -∗
+  wish_getNextLink γ σ proof ep1 dig1 link1 -∗
   ⌜ep0 = ep1 ∧ dig0 = dig1 ∧ link0 = link1⌝.
 Proof.
   iNamedSuffix 1 "0".
@@ -172,17 +172,17 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
         (* writing determ trans per epoch makes postcond easier to use
         than one trans across all epochs. epochs are indep. *)
         ([∗ list] idx ↦ proof ∈ proofs,
-          □ ∀ adtr_hist adtrσ,
-          history.align_serv adtr_hist adtrσ γ -∗
-          ⌜uint.Z adtrσ.(state.start_ep) + length adtrσ.(state.links) - 1 =
+          □ ∀ adtrγ adtrσ,
+          history.align_serv adtrσ adtrγ γ -∗
+          ⌜start_epγ adtrγ + length adtrσ.(state.digs) - 1 =
             (uint.Z prevEpoch + idx)%Z⌝ -∗
+          ⌜adtrγ.(cfg.serv_sig_pk) = γ.(cfg.sig_pk)⌝ -∗
 
           ∃ ep dig link,
-          let adtr_hist' := set history.digs (.++ [dig]) adtr_hist in
-          let adtrσ' := set state.links (.++ [link]) adtrσ in
-          "#Hwish_getNextLink" ∷ wish_getNextLink γ.(cfg.sig_pk)
-            adtr_hist adtrσ proof ep dig link ∗
-          "#Halign_next" ∷ history.align_serv adtr_hist' adtrσ' γ) end)
+          let adtrσ' := set state.digs (.++ [dig]) adtrσ in
+          "#Hwish_getNextLink" ∷ wish_getNextLink adtrγ adtrσ
+            proof ep dig link ∗
+          "#Halign_next" ∷ history.align_serv adtrσ' adtrγ γ) end)
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -254,9 +254,9 @@ Proof.
 
   iClear "His_args".
   iApply big_sepL_intro.
-  iModIntro. iIntros (?? Hlook_proofs) "!> * @ %".
+  iModIntro. iIntros (?? Hlook_proofs) "!> * @ % %Heq_sig_pk".
   rewrite /wish_getNextLink /history.align_serv.
-  destruct adtr_hist, σ. simplify_eq/=.
+  destruct adtrσ, σ. simplify_eq/=.
   iDestruct (big_sepL_lookup with "His_upds") as "{His_upds} @"; [done|].
   iDestruct (big_sepL_lookup with "His_sigs") as "{His_sigs} @"; [done|].
   apply lookup_lt_Some in Hlook_proofs.
@@ -271,8 +271,8 @@ Proof.
     { by apply prefix_app_r. }
     rewrite -Hlook1. f_equal. word. }
 
+  rewrite Heq_sig_pk.
   iFrame "#".
-  autorewrite with len.
   repeat iSplit; try done; try iPureIntro.
   - word.
   - rewrite lookup_app_l in Hlook0; [|word].
@@ -283,11 +283,10 @@ Proof.
   - exact_eq His_link.
     { f_equal. word. }
     erewrite take_S_r.
-    + f_equal.
-      rewrite take_app_length'; [done|].
-      len.
-    + by rewrite -Hlook1.
-  - word.
+    2: { by erewrite <-Hlook1. }
+    f_equal; try done.
+    rewrite take_app_length'; [done|].
+    len.
 Qed.
 
 End proof.
