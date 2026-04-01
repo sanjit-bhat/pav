@@ -22,13 +22,17 @@ End state.
 Module cfg.
 Record t :=
   mk {
+    (* duplicate [serv_sig_pk] across [serv_good] bc we need to know
+    it unconditionally. *)
     serv_sig_pk: list w8;
     adtr_sig_pk: list w8;
-    sigpredγ: ktcore.sigpred_cfg.t;
-    vrf_pk: list w8;
+    sigγ: sigpred.cfg.t;
     serv_good: option $ server.cfg.t;
   }.
 End cfg.
+
+Notation get_vrf_pk γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
+Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
 
 Module epoch.
 Record t :=
@@ -76,15 +80,15 @@ Definition own ptr obj γ σ q : iProp Σ :=
   "Hsl_epochs" ∷ sl_epochs ↦*{#q} sl0_epochs ∗
   "Hcap_epochs" ∷ own_slice_cap loc sl_epochs (DfracOwn q) ∗
   "#Hepochs" ∷ ([∗ list] idx ↦ p;o ∈ sl0_epochs;σ.(state.links),
-    epoch.own p (epoch.mk' o) (uint.nat σ.(state.start_ep) + idx) γ) ∗
+    epoch.own p (epoch.mk' o) (W64 (uint.nat σ.(state.start_ep) + idx)) γ) ∗
   "%Hsome_links" ∷ ⌜length σ.(state.links) > 0⌝ ∗
   "%Hnoof_ep" ∷ ⌜last_ep = uint.Z $ W64 last_ep⌝.
 
 Definition align_serv obj σ servγ : iProp Σ :=
   ∃ hist,
-  "#His_hist" ∷ mono_list_lb_own servγ.(server.cfg.histγ) hist ∗
+  "#His_hist" ∷ mono_list_lb_own (server.digsγ servγ) hist ∗
   "%Heq_ep" ∷ ⌜length hist = (uint.nat σ.(state.start_ep) + length σ.(state.links))%nat⌝ ∗
-  "%Heq_digs" ∷ ⌜obj.(digs) = hist.*1⌝ ∗
+  "%Heq_digs" ∷ ⌜obj.(digs) = hist⌝ ∗
   "%Heq_cut" ∷ ⌜obj.(cut) = None⌝.
 
 #[global] Instance own_aux_combine_sep_as ptr obj0 obj1 γ σ0 σ1 q0 q1 :
@@ -94,7 +98,7 @@ Proof.
   iIntros "[H0 H1]".
   iNamedSuffix "H0" "0".
   iNamedSuffix "H1" "1".
-  iCombine "Hstr_history0 Hstr_history1" as "?" gives %[? ?].
+  iCombine "Hstr_history0 Hstr_history1" as "?" gives %?.
   simplify_eq/=.
   iCombine "Hsl_epochs0 Hsl_epochs1" as "?" gives %?.
   iCombine "Hcap_epochs0 Hcap_epochs1" as "?".
@@ -136,8 +140,8 @@ Definition wish_getNextLink sig_pk hist σ proof (ep : w64) dig link : iProp Σ 
   "%Heq_prevDig" ∷ ⌜last hist.(history.digs) = Some prevDig⌝ ∗
   "#His_upd" ∷ ktcore.wish_ListUpdate prevDig
     proof.(ktcore.AuditProof.Updates) dig ∗
-  "#His_link" ∷ hashchain.is_chain (hist.(history.digs) ++ [dig])
-    hist.(history.cut) link (S $ uint.nat ep) ∗
+  "%His_link" ∷ ⌜hashchain.inv_fn link (S $ S $ uint.nat ep) =
+    (hist.(history.digs) ++ [dig], hist.(history.cut))⌝ ∗
   "#His_sig" ∷ ktcore.wish_LinkSig sig_pk ep link
     proof.(ktcore.AuditProof.LinkSig).
 
@@ -150,7 +154,8 @@ Proof.
   iNamedSuffix 1 "1".
   simplify_eq/=.
   iDestruct (ktcore.wish_ListUpdate_det with "His_upd0 His_upd1") as %->.
-  iDestruct (hashchain.is_chain_det with "His_link0 His_link1") as %->.
+  rewrite -His_link1 in His_link0.
+  opose proof (hashchain.det _ _ _ _ His_link0) as ->.
   iPureIntro. repeat split. word.
 Qed.
 
@@ -159,8 +164,8 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
     is_pkg_init server ∗
     "#His_serv" ∷ is_rpc_cli c good ∗
     "#His_args" ∷ match good with None => True | Some γ =>
-      ∃ (entry : list w8 * keys_ty),
-      "#Hidx_ep" ∷ mono_list_idx_own γ.(cfg.histγ) (uint.nat prevEpoch) entry end
+      ∃ entry : list w8,
+      "#Hidx_ep" ∷ mono_list_idx_own (server.digsγ γ) (uint.nat prevEpoch) entry end
   }}}
   @! server.CallAudit #c #prevEpoch
   {{{
@@ -197,7 +202,6 @@ Proof.
   wp_apply (wp_Audit_cli_call (Q_read_idx (uint.nat prevEpoch))
     with "[$Hsl_b $Hreply]") as "* @".
   { iFrame "#". case_match; try done.
-    iModIntro.
     iNamed "His_args".
     by iApply op_read_idx. }
   wp_if_destruct.
@@ -257,7 +261,7 @@ Proof.
 
   iClear "His_args".
   iApply big_sepL_intro.
-  iModIntro. iIntros (?? Hlook_proofs) "!> * @! %".
+  iModIntro. iIntros (?? Hlook_proofs) "!> * @ %".
   rewrite /wish_getNextLink /history.align_serv.
   destruct adtr_hist, σ. simplify_eq/=.
   iDestruct (big_sepL_lookup with "His_upds") as "{His_upds} @"; [done|].
@@ -268,32 +272,29 @@ Proof.
     autorewrite with len in *. word. }
   simplify_eq/=.
   autorewrite with len in *.
-  pose proof Hlook1 as Ht.
-  apply list_lookup_fmap_Some_1 in Ht as (new_ep&?&Hlook_new).
-  iDestruct (mono_list_lb_own_le (hist ++ [new_ep]) with "Hnew_hist")
+  iDestruct (mono_list_lb_own_le (hist ++ [dig1]) with "Hnew_hist")
     as "{Hnew_hist His_hist} Hlb".
   { apply prefix_snoc.
     { by apply prefix_app_r. }
-    rewrite -Hlook_new. f_equal. word. }
+    rewrite -Hlook1. f_equal. word. }
 
   iFrame "#".
   autorewrite with len.
   repeat iSplit; try done; try iPureIntro.
   - word.
-  - apply list_lookup_fmap_Some_1 in Hlook0 as (?&?&Ht).
-    rewrite lookup_app_l in Ht; [|word].
-    replace (_ + _)%nat with (pred $ length hist) in Ht by word.
-    rewrite -last_lookup in Ht.
-    rewrite fmap_last Ht.
+  - rewrite lookup_app_l in Hlook0; [|word].
+    replace (_ + _)%nat with (pred $ length hist) in Hlook0 by word.
+    rewrite -last_lookup in Hlook0.
+    rewrite Hlook0.
     naive_solver.
-  - iExactEq "His_link". rewrite /named. f_equal; [|word].
+  - exact_eq His_link.
+    { f_equal. word. }
     erewrite take_S_r.
     + f_equal.
-      rewrite fmap_app take_app_length'; [done|].
+      rewrite take_app_length'; [done|].
       len.
-    + rewrite -Hlook1. f_equal. word.
+    + by rewrite -Hlook1.
   - word.
-  - rewrite fmap_app. naive_solver.
 Qed.
 
 End proof.
