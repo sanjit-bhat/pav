@@ -135,8 +135,8 @@ func (s *Server) worker() {
 
 func New() (*Server, cryptoffi.SigPublicKey) {
 	mu := new(sync.RWMutex)
-	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfSk := cryptoffi.VrfGenerateKey()
+	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfSig := ktcore.SignVrf(sigSk, vrfSk.PublicKey())
 	commitSec := cryptoffi.RandBytes(cryptoffi.HashLen)
 	secs := &secrets{sig: sigSk, vrf: vrfSk, commit: commitSec}
