@@ -232,9 +232,10 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
-    "%His_PrevLink" ∷ ⌜hashchain.inv_fn chain.(StartChain.PrevLink)
-      (S $ uint.nat chain.(StartChain.PrevEpochLen)) =
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist), None)⌝ ∗
+    "%His_PrevLink" ∷ ⌜hashchain.valid
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))
+      None chain.(StartChain.PrevLink)
+      (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
       (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
     "%His_last_link" ∷ ⌜hashchain.inv_fn last_link (S numEps) =
@@ -252,8 +253,8 @@ Proof. Admitted.
 
 Definition wish_CheckStartChain servPk chain digs cut (ep : w64) dig link : iProp Σ :=
   ∃ digs0 digs1,
-  "%His_chain_prev" ∷ ⌜hashchain.inv_fn chain.(StartChain.PrevLink)
-      (S $ uint.nat chain.(StartChain.PrevEpochLen)) = (digs0, cut)⌝ ∗
+  "%His_chain_prev" ∷ ⌜hashchain.valid digs0 cut chain.(StartChain.PrevLink)
+      (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
   "%His_proof" ∷ ⌜hashchain.wish_Proof chain.(server.StartChain.ChainProof) digs1⌝ ∗
   "%His_chain_start" ∷ ⌜hashchain.inv_fn link
     (S (uint.nat chain.(StartChain.PrevEpochLen)) + length digs1) = (digs, cut)⌝ ∗
@@ -270,6 +271,8 @@ Lemma wish_CheckStartChain_det pk c digs0 digs1 cut0 cut1 e0 e1 d0 d1 l0 l1 :
 Proof.
   iNamedSuffix 1 "0".
   iNamedSuffix 1 "1".
+  destruct His_chain_prev0 as [His_chain_prev0 _].
+  destruct His_chain_prev1 as [His_chain_prev1 _].
   rewrite His_chain_prev1 in His_chain_prev0.
   simplify_eq/=.
   opose proof (hashchain.wish_Proof_det _ _ _ His_proof0 His_proof1) as ->.

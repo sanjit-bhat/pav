@@ -22,11 +22,8 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_aux γ σ q : iProp Σ :=
-  "#Hgs_start_ep" ∷ dghost_var γ.(cfg.sigpredγ).(ktcore.sigpred_cfg.start_ep)
-    (□) σ.(state.start_ep) ∗
   (* 1/2 in lock inv, 1/2 in GS inv. *)
-  "Hgs_links" ∷ mono_list_auth_own γ.(cfg.sigpredγ).(ktcore.sigpred_cfg.links)
-    (q/2) σ.(state.links).
+  "Hgs_links" ∷ mono_list_auth_own (digsγ γ) (q/2) σ.(state.digs).
 
 Definition own γ σ : iProp Σ := own_aux γ σ 1.
 
@@ -38,7 +35,7 @@ Proof. apply _. Qed.
 #[global] Instance own_aux_frac γ σ :
   fractional.Fractional (λ q, own_aux γ σ q).
 Proof.
-  intros ??. iSplit.
+  rewrite /own_aux. intros ??. iSplit.
   - iIntros "@".
     rewrite Qp.div_add_distr.
     iDestruct "Hgs_links" as "[? ?]".
@@ -58,11 +55,10 @@ Proof. auto. Qed.
 #[global] Instance own_aux_combine_sep_gives γ σ0 σ1 q0 q1 :
   CombineSepGives (own_aux γ σ0 q0) (own_aux γ σ1 q1) (⌜σ0 = σ1⌝).
 Proof.
-  rewrite /CombineSepGives.
+  rewrite /CombineSepGives /own_aux.
   iIntros "[H0 H1]".
   iNamedSuffix "H0" "0".
   iNamedSuffix "H1" "1".
-  iCombine "Hgs_start_ep0 Hgs_start_ep1" gives %[? ?].
   iDestruct (mono_list_auth_own_agree with "Hgs_links0 Hgs_links1") as %[? ?].
   iModIntro.
   destruct σ0, σ1. by simplify_eq/=.
@@ -91,56 +87,51 @@ Definition own ptr γ good : iProp Σ :=
   "#Hstr_serv" ∷ ptr ↦□ (auditor.serv.mk ptr_cli sl_sigPk sl_vrfPk sl_servVrfSig sl_adtrVrfSig) ∗
   "#His_rpc" ∷ server.is_rpc_cli ptr_cli good ∗
   "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.serv_sig_pk) ∗
-  "#Hsl_vrfPk" ∷ sl_vrfPk ↦*□ γ.(cfg.vrf_pk) ∗
+  "#Hsl_vrfPk" ∷ sl_vrfPk ↦*□ vrf_pkγ γ ∗
   "#Hsl_servVrfSig" ∷ sl_servVrfSig ↦*□ servVrfSig ∗
-  "#His_servVrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.serv_sig_pk) γ.(cfg.vrf_pk) servVrfSig ∗
+  "#His_servVrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.serv_sig_pk) (vrf_pkγ γ) servVrfSig ∗
   "#Hsl_adtrVrfSig" ∷ sl_adtrVrfSig ↦*□ adtrVrfSig ∗
-  "#His_adtrVrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.adtr_sig_pk) γ.(cfg.vrf_pk) adtrVrfSig.
+  "#His_adtrVrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.adtr_sig_pk) (vrf_pkγ γ) adtrVrfSig.
 
 Definition align_serv γ servγ : iProp Σ :=
   (* trusted Auditor.New assumption. *)
   "%Heq_sig_pk" ∷ ⌜γ.(cfg.serv_sig_pk) = servγ.(server.cfg.sig_pk)⌝ ∗
   "#His_sig_pk" ∷ cryptoffi.is_sig_pk γ.(cfg.serv_sig_pk)
-    (ktcore.sigpred servγ.(server.cfg.sigpredγ)) ∗
+    (sigpred.P servγ.(server.cfg.sigγ)) ∗
   (* from signed vrf_pk. *)
-  "%Heq_vrf_pk" ∷ ⌜γ.(cfg.vrf_pk) = servγ.(server.cfg.vrf_pk)⌝.
+  "%Heq_vrf_pk" ∷ ⌜vrf_pkγ γ = server.vrf_pkγ servγ⌝.
 
 End proof.
 End serv.
 
 Module Auditor.
-Record t :=
-  mk' {
-    hist: history.t;
-  }.
-
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition own ptr obj γ σ q : iProp Σ :=
-  ∃ ptr_sk ptr_hist ptr_serv maps,
+Definition own ptr γ σ q : iProp Σ :=
+  ∃ ptr_sk ptr_hist ptr_serv,
   "#Hfld_sk" ∷ ptr.[auditor.Auditor.t, "sk"] ↦□ ptr_sk ∗
   "#Hfld_hist" ∷ ptr.[auditor.Auditor.t, "hist"] ↦□ ptr_hist ∗
   "#Hfld_serv" ∷ ptr.[auditor.Auditor.t, "serv"] ↦□ ptr_serv ∗
 
   "#Hown_sk" ∷ cryptoffi.own_sig_sk ptr_sk γ.(cfg.adtr_sig_pk)
-    (ktcore.sigpred γ.(cfg.sigpredγ)) ∗
+    (sigpred.P γ.(cfg.sigγ)) ∗
 
-  "Hown_hist" ∷ history.own ptr_hist obj.(hist) γ σ q ∗
+  "Hown_hist" ∷ history.own ptr_hist γ σ q ∗
   "Hown_gs_hist" ∷ own_aux γ σ q ∗
-  "#Hinv_sigpred" ∷ ktcore.sigpred_links_inv σ.(state.start_ep) σ.(state.links)
-    obj.(hist).(history.digs) obj.(hist).(history.cut) maps ∗
+  "%Hmono_maps" ∷ ⌜ktcore.mono_plain (vrf_pkγ γ)
+    (drop (audit_offsetγ γ) σ.(state.digs))⌝ ∗
   "#Halign_hist" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
-    history.align_serv obj.(hist) σ servγ end ∗
+    history.align_serv σ γ servγ end ∗
 
   "#Hown_serv" ∷ serv.own ptr_serv γ γ.(cfg.serv_good) ∗
   "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
     serv.align_serv γ servγ end.
 
-Definition own_aux ptr γ q : iProp Σ := ∃ obj σ, own ptr obj γ σ q.
+Definition own_aux ptr γ q : iProp Σ := ∃ σ, own ptr γ σ q.
 
 Definition lock_perm ptr γ : iProp Σ :=
   ∃ ptr_mu,
@@ -156,13 +147,13 @@ Proof.
     (* TODO: why needed? *)
     Typeclasses Opaque auditor.own_aux.
     iDestruct "Hown_gs_hist" as "[? ?]".
-    iFrame "#∗".
+    iFrame "#∗%".
   - iIntros "[(%&%&H0)(%&%&H1)]".
     iNamedSuffix "H0" "0".
     iNamedSuffix "H1" "1".
-    iCombine "Hfld_sk0 Hfld_sk1" gives %[? ?].
-    iCombine "Hfld_hist0 Hfld_hist1" gives %[? ?].
-    iCombine "Hfld_serv0 Hfld_serv1" gives %[? ?].
+    iCombine "Hfld_sk0 Hfld_sk1" gives %?.
+    iCombine "Hfld_hist0 Hfld_hist1" gives %?.
+    iCombine "Hfld_serv0 Hfld_serv1" gives %?.
     simplify_eq/=.
     iCombine "Hown_hist0 Hown_hist1" as "?".
     iCombine "Hown_gs_hist0 Hown_gs_hist1" as "?".
@@ -212,15 +203,18 @@ Proof.
   wp_if_destruct.
   2: {
     iApply "HΦ". iIntros "@". simpl in *.
-    iDestruct (hashchain.is_chain_hash_len with "His_chain_prev") as %?.
-    word. }
-  iDestruct (hashchain.is_chain_invert PrevLink (uint.nat PrevEpochLen))
-    as "(%&%&#His_chain_prev)"; [word|].
-  wp_apply (hashchain.wp_Verify with "[$His_chain_prev]") as "* @".
-  { iFrame "#". }
+    destruct His_chain_prev as []. word. }
+  assert (∃ a0 a1, hashchain.inv_fn PrevLink (S $ uint.nat PrevEpochLen) = (a0, a1))
+    as (prev_digs&cut&His_chain_prev).
+  { destruct (hashchain.inv_fn _ _). naive_solver. }
+  wp_apply (hashchain.wp_Verify with "[]") as "* @".
+  { iFrame "#". iPureIntro.
+    rewrite /hashchain.valid.
+    split; [done|]. word. }
   wp_if_destruct.
   { iApply "HΦ". iNamedSuffix 1 "'". simpl in *. iApply "Hgenie". naive_solver. }
   iNamed "Hgenie".
+  destruct His_chain as [His_chain _].
   iPersist "Hsl_newVal Hsl_newLink".
   wp_if_destruct.
   { iApply "HΦ". iNamedSuffix 1 "'". simpl in *.
@@ -239,21 +233,22 @@ Proof.
   wp_if_destruct.
   { iApply "HΦ". iNamedSuffix 1 "'". simpl in *. iApply "Hgenie".
     opose proof (hashchain.wish_Proof_det _ _ _ Hwish_chain His_proof') as ->.
-    iDestruct (hashchain.is_chain_inj with "His_chain_prev His_chain_prev'") as %[-> ->].
+    destruct His_chain_prev' as [His_chain_prev' _].
+    rewrite His_chain_prev in His_chain_prev'.
     simplify_eq/=.
-    iDestruct (hashchain.is_chain_det with "His_chain His_chain_start'") as %->.
+    rewrite -His_chain_start' in His_chain.
+    opose proof (hashchain.det _ _ _ _ His_chain) as ->.
     iExactEq "His_link_sig'". repeat f_equal. word. }
   iNamed "Hgenie".
-  iDestruct (hashchain.is_chain_hash_len with "His_chain_prev") as %?.
   iApply "HΦ".
   iFrame "#%". simpl in *.
   iPureIntro.
 
-  destruct new_vals as [|dig digs] using rev_ind; [|clear IHdigs].
+  destruct newVals as [|dig digs] using rev_ind; [|clear IHdigs].
   { exfalso. simpl in *. word. }
   rewrite last_snoc /=.
   autorewrite with len in *.
-  repeat split. word.
+  eexists. repeat split; [done|word..].
 Qed.
 
 Lemma wp_CheckStartVrf sl_servPk servPk ptr_vrf vrf :
@@ -278,7 +273,7 @@ Proof.
   wp_start as "@".
   iNamed "Hown_vrf". destruct vrf. simpl.
   wp_auto.
-  wp_apply cryptoffi.wp_VrfPublicKeyDecode as "* @! {Hsl_enc}".
+  wp_apply cryptoffi.wp_VrfPublicKeyDecode as "* @ {Hsl_enc}".
   { iFrame "#". }
   wp_if_destruct.
   { iApply "HΦ". iNamedSuffix 1 "'". simpl in *. by iApply "Hgenie". }

@@ -1006,6 +1006,7 @@ Proof.
   wp_apply (merkle.wp_Map_Hash with "[$Hown_hidden]") as "* @".
   wp_apply (hashchain.wp_HashChain_Append with "[$Hown_chain]") as "* @ {Hsl_val}".
   { by iFrame "#". }
+  destruct His_chain as [His_chain _].
 
   iApply ncfupd_wp.
   rewrite /own.
@@ -1340,9 +1341,11 @@ Lemma wp_Server_Start s γ obj Q :
     "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
 
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
-    "%His_PrevLink" ∷ ⌜hashchain.inv_fn chain.(StartChain.PrevLink)
-      (S $ uint.nat chain.(StartChain.PrevEpochLen)) =
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist), None)⌝ ∗
+    (* PrevLink is the only "assumed" link. need to guarantee its length. *)
+    "%His_PrevLink" ∷ ⌜hashchain.valid
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))
+      None chain.(StartChain.PrevLink)
+      (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
       (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
     "%His_last_link" ∷ ⌜hashchain.inv_fn last_link (S numEps) =
@@ -1403,10 +1406,10 @@ Proof.
   replace (_ - _) with (Z.of_nat $ pred $ length σ.(state.hist)); [|lia].
   iDestruct (cryptoffi.own_vrf_sk_to_pk with "[]") as "His_vrf_pk"; [done|].
   iFrame "#".
-  repeat iSplit; try iPureIntro.
+  with_strategy opaque [hashchain.valid] (repeat iSplit; try iPureIntro).
   - word.
   - word.
-  - exact_eq His_bootLink. f_equal. lia.
+  - exact_eq His_bootLink. lia.
   - exact_eq His_link. f_equal. lia.
   - done.
 Qed.
@@ -1451,6 +1454,7 @@ Proof.
   iDestruct (merkle.own_Map_to_is_map with "[$Hown_Map]") as %[Hinv_merkle ?].
   wp_apply (hashchain.wp_HashChain_Append with "[$Hown_HashChain]") as "* @ {Hsl_val}".
   { by iFrame "#". }
+  destruct His_chain as [His_chain _].
   iMod (mono_list_auth_own_update_app [_] with "Hauth_digs")
     as "[[Hgs_digs Hgs_digs'] #Hlb_digs]".
   simpl in *.
