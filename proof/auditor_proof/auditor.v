@@ -461,18 +461,15 @@ Lemma wp_Auditor_Get a γ epoch Q :
     "HQ" ∷ Q σ ∗
     "#Herr" ∷
       match err with
-      | true => ⌜uint.Z epoch < uint.Z σ.(state.start_ep) ∨
-        uint.Z epoch >= uint.Z σ.(state.start_ep) + length σ.(state.links)⌝
+      | true => ⌜uint.Z epoch < start_epγ γ + audit_offsetγ γ ∨
+        uint.Z epoch >= start_epγ γ + length σ.(state.digs)⌝
       | false =>
         ∃ link vrf,
         "#Hown_link" ∷ SignedLink.own ptr_link link (□) ∗
         "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
         "#Hwish_link" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) epoch link ∗
         "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗
-        "%Hlook_link" ∷ ⌜σ.(state.links) !!
-          (uint.nat epoch - uint.nat σ.(state.start_ep))%nat =
-          Some link.(SignedLink.Link)⌝ ∗
-        "%Heq_vrf" ∷ ⌜vrf.(SignedVrf.VrfPk) = γ.(cfg.vrf_pk)⌝
+        "%Heq_vrf" ∷ ⌜vrf.(SignedVrf.VrfPk) = vrf_pkγ γ⌝
       end
   }}}.
 Proof.
@@ -489,7 +486,6 @@ Proof.
   iModIntro.
 
   iDestruct (own_slice_len with "Hsl_epochs") as %[? ?].
-  iDestruct (big_sepL2_length with "Hepochs") as %?.
   wp_if_destruct.
   { wp_apply (wp_RWMutex__RUnlock with "[-HΦ HQ]") as "Hlock".
     { iFrame "∗∗ Hown_serv #%". }
@@ -501,15 +497,13 @@ Proof.
     { iFrame "∗∗ Hown_serv #%". }
     iApply "HΦ".
     iFrame "∗#".
-    word. }
-
-  simpl in *.
-  wp_pure; [word|].
-  list_elem σ.(state.links) (sint.nat (word.sub epoch σ.(state.start_ep))) as link.
-  iDestruct (big_sepL2_lookup_2_some with "Hepochs") as %[? ?]; [done|].
-  iDestruct (big_sepL2_lookup with "Hepochs") as "@"; [done..|].
+    iPureIntro. word. }
+  case_decide as Ht; [|word]. clear Ht.
+  list_elem sl0_epochs (sint.nat (word.sub epoch start_ep)) as ptr_epoch.
+  iDestruct (big_sepL_lookup with "Hepochs") as "@"; [done|].
   iNamed "Hown_serv".
-  wp_apply (wp_load_slice_idx with "[$Hsl_epochs]") as "Hsl_epochs"; [word|done|].
+  wp_apply (wp_load_slice_index with "[$Hsl_epochs]"); [word|done|].
+  iIntros "Hsl_epochs". wp_auto.
   wp_apply wp_alloc as "* Hptr_link".
   wp_apply wp_alloc as "* Hptr_vrf".
   iPersist "Hptr_link Hptr_vrf".
@@ -519,10 +513,8 @@ Proof.
   iFrame "Hfld_mu ∗".
   iExists (SignedLink.mk' _ _ _), (SignedVrf.mk' _ _ _).
   simpl in *.
-  replace (W64 (uint.nat _ + sint.nat _)) with epoch by word.
-  iFrame "#".
-  iPureIntro. split; [|done].
-  exact_eq Hlink_lookup. f_equal. word.
+  replace (W64 (uint.nat _ + sint.nat _)%nat) with epoch by word.
+  by iFrame "#".
 Qed.
 
 Lemma wp_Auditor_updOnce ptr_a a γ σ Q ptr_proof proof :
@@ -572,7 +564,7 @@ Proof.
   iDestruct (big_sepL2_lookup_2_some with "Hepochs") as %[? ?]; [done|].
   iDestruct (big_sepL2_lookup with "Hepochs") as "@"; [done..|].
   wp_pure; [word|].
-  wp_apply (wp_load_slice_idx with "[$Hsl_epochs]") as "Hsl_epochs"; [word|done|].
+  wp_apply (wp_load_slice_index with "[$Hsl_epochs]") as "Hsl_epochs"; [word|done|].
 
   simpl in *.
   iPoseProof "Hinv_sigpred" as "@".
@@ -761,7 +753,7 @@ Proof.
   iDestruct (big_sepL2_lookup_2_some with "Hsl_proofs") as %[? ?]; [done|].
   iDestruct (big_sepL2_lookup with "Hsl_proofs") as "Hproof"; [done..|].
   wp_pure; [word|].
-  wp_apply wp_load_slice_idx as "_"; [word|..].
+  wp_apply wp_load_slice_index as "_"; [word|..].
   { by iFrame "#". }
   iNamedSuffix "Hadtr" "0".
   wp_apply (wp_Auditor_updOnce with "[Hfld_hist0 Hown_hist0 Hown_gs_hist0]") as "* @".

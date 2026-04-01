@@ -76,9 +76,13 @@ Definition own ptr γ σ q : iProp Σ :=
   "Hcap_epochs" ∷ own_slice_cap loc sl_epochs (DfracOwn q) ∗
   "#Hepochs" ∷ ([∗ list] idx ↦ p ∈ sl0_epochs,
     epoch.own p σ (uint.nat start_ep + idx) γ) ∗
+
   "%Hsome_digs" ∷ ⌜length σ.(state.digs) > 0⌝ ∗
+  "%Hsome_epochs" ∷ ⌜length sl0_epochs > 0⌝ ∗
   "%Hnoof_ep" ∷ ⌜last_ep = uint.Z $ W64 last_ep⌝ ∗
-  "%Heq_audit_start" ∷ ⌜uint.nat start_ep = (start_epγ γ + audit_offsetγ γ)%nat⌝.
+  "%Heq_audit_start" ∷ ⌜uint.nat start_ep = (start_epγ γ + audit_offsetγ γ)%nat⌝ ∗
+  "%Heq_audit_end" ∷ ⌜(uint.nat start_ep + length sl0_epochs =
+    start_epγ γ + length σ.(state.digs))%nat⌝.
 
 Definition align_serv σ γ servγ : iProp Σ :=
   ∃ hist,
