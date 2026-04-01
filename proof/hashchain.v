@@ -140,11 +140,10 @@ Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
   | DecInvalid => ([], Some hash)
   end end.
 
-(* to grow the hashchain, use [valid].
-when sending resources externally, only need [inv_fn]. *)
+(* [valid] lets us use [hash] in the fixed-length hash encoding,
+to append to the hashchain. *)
 Definition valid vs cut hash fuel :=
-  inv_fn hash fuel = (vs, cut) ∧
-  (∀ x, cut = Some x → Z.of_nat (length x) = cryptoffi.hash_len).
+  inv_fn hash fuel = (vs, cut) ∧ Z.of_nat (length hash) = cryptoffi.hash_len.
 
 (* there are multiple parties (some operating under is_Some cut)
 that rely on the HashChain API to determ compute the same hash.
@@ -176,32 +175,17 @@ Proof.
     by simplify_eq/=.
 Qed.
 
-Local Lemma valid_len vs cut hash fuel :
-  valid vs cut hash fuel →
-  Z.of_nat (length hash) = cryptoffi.hash_len.
-Proof.
-  intros [Hfn ?].
-  destruct fuel; simplify_eq/=; [naive_solver|].
-  case_match eqn:Hdec; simplify_eq/=.
-  - apply dec_empty_inj in Hdec.
-    by apply cryptoffi.is_hash_len' in Hdec.
-  - apply dec_link_inj in Hdec as [Hdec _].
-    by apply cryptoffi.is_hash_len' in Hdec.
-  - naive_solver.
-Qed.
-
 Local Lemma snoc {vs cut prevLink fuel} v nextLink :
   valid vs cut prevLink fuel →
   cryptoffi.hash_fn (prevLink ++ v) = Some nextLink →
   valid (vs ++ [v]) cut nextLink (S fuel).
 Proof.
-  intros Hfn Hhash%cryptoffi.hash_bij_l.
-  apply valid_len in Hfn as ?.
-  destruct Hfn as [Hfn ?].
-  split; [|done]. simpl.
-  rewrite Hhash.
-  rewrite dec_link_det; [|done].
-  by rewrite Hfn.
+  intros [Hfn ?] Hhash%cryptoffi.hash_bij_l.
+  split.
+  - simpl. rewrite Hhash.
+    rewrite dec_link_det; [|done].
+    by rewrite Hfn.
+  - by eapply cryptoffi.is_hash_len'.
 Qed.
 
 End defs.
@@ -230,8 +214,9 @@ Proof.
   iApply "HΦ".
   iFrame.
   iPureIntro.
-  split; [|done]. simpl.
-  by apply cryptoffi.hash_bij_l in His_hash as ->.
+  split.
+  - simpl. by apply cryptoffi.hash_bij_l in His_hash as ->.
+  - by eapply cryptoffi.is_hash_len.
 Qed.
 
 Lemma wp_GetNextLink sl_prevLink d0 prevLink sl_nextVal d1 nextVal vs cut fuel :
@@ -339,7 +324,7 @@ Lemma wp_HashChain_Append ptr_c vs sl_v d0 v :
     "Hown_HashChain" ∷ own ptr_c (vs ++ [v]) 1 ∗
     "Hsl_val" ∷ sl_v ↦*{d0} v ∗
     "#Hsl_newLink" ∷ sl_newLink ↦*□ newLink ∗
-    "%His_chain" ∷ ⌜inv_fn newLink (S $ S $ length vs) = (vs ++ [v], None)⌝
+    "%His_chain" ∷ ⌜valid (vs ++ [v]) None newLink (S $ S $ length vs)⌝
   }}}.
 Proof.
   wp_start. iNamed "Hpre". iNamed "Hown_HashChain".
@@ -365,7 +350,6 @@ Proof.
     iFrame "#%".
   - iPureIntro. subst. rewrite join_app. by list_simplifier.
   - iPureIntro. apply Forall_snoc. split; [done|word].
-  - by destruct His_chain_n as [].
 Qed.
 
 (* unlike most other pav wishes, [wish_Proof] doesn't tie down all
@@ -417,7 +401,7 @@ Lemma wp_Verify sl_prevLink d0 prevLink sl_proof d1 proof old_vs cut fuel :
 Proof.
   wp_start. iNamed "Hpre".
   wp_auto.
-  apply valid_len in His_chain as ?.
+  pose proof His_chain as [_ ?].
   iDestruct (own_slice_len with "Hsl_proof") as %[? ?].
 
   wp_if_destruct.
@@ -571,7 +555,7 @@ Lemma wp_HashChain_Bootstrap c vs d :
     "#Hsl_bootLink" ∷ sl_bootLink ↦*□ bootLink ∗
     "Hsl_proof" ∷ sl_proof ↦* proof ∗
 
-    "%His_bootLink" ∷ ⌜inv_fn bootLink (length vs) = (take (pred $ length vs) vs, None)⌝ ∗
+    "%His_bootLink" ∷ ⌜valid (take (pred $ length vs) vs) None bootLink (length vs)⌝ ∗
     "%Hwish" ∷ ⌜wish_Proof proof (drop (pred $ length vs) vs)⌝
   }}}.
 Proof.
@@ -598,7 +582,7 @@ Proof.
   iDestruct (own_slice_slice with "[$Hsl0 $Hsl1 $Hsl_b]") as "?"; [word|].
 
   iApply "HΦ".
-  opose proof (His_chain_pred _ _ _) as [Hinv _]; [done|].
+  opose proof (His_chain_pred _ _ _) as Hinv; [done|].
   iFrame "∗#%".
   iPureIntro. subst.
   split. { exact_eq Hinv. f_equal. lia. }
@@ -614,4 +598,5 @@ Qed.
 End wps.
 
 #[global] Opaque inv_fn own wish_Proof.
+(* [valid] is just a thin wrapper. let it be Transparent. *)
 End hashchain.
