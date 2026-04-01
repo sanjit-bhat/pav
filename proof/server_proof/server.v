@@ -1467,8 +1467,7 @@ Proof.
     with "[-HΦ Hptr_mu] Hptr_mu") as "Hlock_perms".
   { admit. } (* TODO: Fractional *)
   { iExists σ. simplify_eq/=.
-    iFrame "∗". simpl.
-    iFrame "#". simpl.
+    iFrame "∗#". simpl.
     rewrite Hinv_merkle ktcore.plain_inv_empty.
     iModIntro. repeat iSplit; try iPureIntro; try done.
     { rewrite /keyStore.own_plain. naive_solver. }

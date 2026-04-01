@@ -44,20 +44,52 @@ Lemma wp_Dial (good : option cfg.t) (addr : w64) :
   }}}.
 Proof. Admitted.
 
-Lemma wp_CallPut c good uid sl_pk pk ver :
+Lemma wp_Put_cli_call c good uid pk ver sl_arg d0 arg ptr_reply (x : slice.t) :
+  {{{
+    is_pkg_init server ∗
+    "#His_cli" ∷ is_rpc_cli c good ∗
+    "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
+    "Hptr_reply" ∷ ptr_reply ↦ x ∗
+    "%His_arg" ∷ ⌜PutArg.wish arg (PutArg.mk' uid pk ver) []⌝ ∗
+    "#Hperm_put" ∷ match good with None => True | Some γ =>
+      perm_put γ uid (uint.nat ver) pk end
+  }}}
+  c @! (go.PointerType advrpc.Client) @! "Call" server.PutRpc #sl_arg #ptr_reply
+  {{{
+    RET #();
+    "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
+    "Hptr_reply" ∷ ptr_reply ↦ x
+  }}}.
+Proof. Admitted.
+
+Lemma wp_CallPut c good uid sl_pk (pk : list w8) (ver : w64) :
   {{{
     is_pkg_init server ∗
     "#His_cli" ∷ is_rpc_cli c good ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
     "#His_put" ∷ match good with None => True | Some γ =>
-      (* TODO: make this on same level as Server.Put. *)
       ∃ i uidγ,
       "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
-      "#Hidx" ∷ mono_list_idx_own uidγ i (ver, pk) end
+      "#Hidx" ∷ mono_list_idx_own uidγ i (uint.nat ver, pk) end
   }}}
   @! server.CallPut #c #uid #sl_pk #ver
   {{{ RET #(); True }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "@". wp_auto.
+  wp_apply wp_alloc as "* Ha".
+  iPersist "Ha".
+  wp_apply (PutArg.wp_enc (PutArg.mk' _ _ _)) as "* (Hsl_b&_&_&%Hwish)".
+  { iFrame "#".
+    iDestruct own_slice_nil as "$".
+    iDestruct own_slice_cap_nil as "$". }
+  simpl in *.
+  wp_apply wp_alloc as "* Hreply".
+  wp_apply (wp_Put_cli_call with "[$Hsl_b $Hreply]") as "* @".
+  { iFrame "#%". case_match; [|done].
+    iNamed "His_put".
+    by iApply op_put. }
+  wp_end.
+Qed.
 
 Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
     c good sl_arg d0 arg ptr_reply (x : slice.t) :
