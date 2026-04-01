@@ -188,6 +188,36 @@ Proof.
   - by eapply cryptoffi.is_hash_len'.
 Qed.
 
+(* wrapper lemmas about valid. *)
+Lemma det' {vs cut hash0 hash1 fuel0 fuel1} :
+  valid vs cut hash0 fuel0 →
+  valid vs cut hash1 fuel1 →
+  hash0 = hash1.
+Proof.
+  intros [Hinv0 _] [Hinv1 _].
+  rewrite -Hinv1 in Hinv0.
+  by eapply det.
+Qed.
+
+Lemma inj {vs0 vs1 cut0 cut1 hash fuel} :
+  valid vs0 cut0 hash fuel →
+  valid vs1 cut1 hash fuel →
+  vs0 = vs1 ∧ cut0 = cut1.
+Proof.
+  intros [Hinv0 _] [Hinv1 _].
+  rewrite Hinv0 in Hinv1.
+  by simplify_eq/=.
+Qed.
+
+Lemma invert hash fuel :
+  Z.of_nat (length hash) = cryptoffi.hash_len →
+  ∃ vs cut, valid vs cut hash fuel.
+Proof.
+  intros. rewrite /valid.
+  destruct (inv_fn hash fuel).
+  naive_solver.
+Qed.
+
 End defs.
 
 Section wps.
@@ -597,6 +627,5 @@ Qed.
 
 End wps.
 
-#[global] Opaque inv_fn own wish_Proof.
-(* [valid] is just a thin wrapper. let it be Transparent. *)
+#[global] Opaque inv_fn valid own wish_Proof.
 End hashchain.
