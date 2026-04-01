@@ -50,6 +50,7 @@ Lemma wp_CallPut c good uid sl_pk pk ver :
     "#His_cli" ∷ is_rpc_cli c good ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
     "#His_put" ∷ match good with None => True | Some γ =>
+      (* TODO: make this on same level as Server.Put. *)
       ∃ i uidγ,
       "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
       "#Hidx" ∷ mono_list_idx_own uidγ i (ver, pk) end

@@ -1203,6 +1203,9 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     exception_do (let: "mu" := (GoAlloc (go.PointerType sync.RWMutex) (GoZeroVal (go.PointerType sync.RWMutex) #())) in
     let: "$r0" := (GoAlloc sync.RWMutex (GoZeroVal sync.RWMutex #())) in
     do:  ("mu" <-[go.PointerType sync.RWMutex] "$r0");;;
+    let: "vrfSk" := (GoAlloc (go.PointerType cryptoffi.VrfPrivateKey) (GoZeroVal (go.PointerType cryptoffi.VrfPrivateKey) #())) in
+    let: "$r0" := ((FuncResolve cryptoffi.VrfGenerateKey [] #()) #()) in
+    do:  ("vrfSk" <-[go.PointerType cryptoffi.VrfPrivateKey] "$r0");;;
     let: "sigSk" := (GoAlloc (go.PointerType cryptoffi.SigPrivateKey) (GoZeroVal (go.PointerType cryptoffi.SigPrivateKey) #())) in
     let: "sigPk" := (GoAlloc cryptoffi.SigPublicKey (GoZeroVal cryptoffi.SigPublicKey #())) in
     let: ("$ret0", "$ret1") := ((FuncResolve cryptoffi.SigGenerateKey [] #()) #()) in
@@ -1210,9 +1213,6 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     let: "$r1" := "$ret1" in
     do:  ("sigPk" <-[cryptoffi.SigPublicKey] "$r0");;;
     do:  ("sigSk" <-[go.PointerType cryptoffi.SigPrivateKey] "$r1");;;
-    let: "vrfSk" := (GoAlloc (go.PointerType cryptoffi.VrfPrivateKey) (GoZeroVal (go.PointerType cryptoffi.VrfPrivateKey) #())) in
-    let: "$r0" := ((FuncResolve cryptoffi.VrfGenerateKey [] #()) #()) in
-    do:  ("vrfSk" <-[go.PointerType cryptoffi.VrfPrivateKey] "$r0");;;
     let: "vrfSig" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "$r0" := (let: "$a0" := (![go.PointerType cryptoffi.SigPrivateKey] "sigSk") in
     let: "$a1" := ((MethodResolve (go.PointerType cryptoffi.VrfPrivateKey) "PublicKey"%go (![go.PointerType cryptoffi.VrfPrivateKey] "vrfSk")) #()) in

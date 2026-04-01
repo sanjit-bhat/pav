@@ -1382,5 +1382,96 @@ Proof.
   - done.
 Qed.
 
+Lemma wp_New (uidγ : gmap w64 gname) :
+  {{{ is_pkg_init server }}}
+  @! server.New #()
+  {{{
+    γ obj ptr_server sl_sigPk, RET (#ptr_server, #sl_sigPk);
+    "#His_inv" ∷ is_inv γ ∗
+    "Hlocks" ∷ ([∗] replicate (pred $ Z.to_nat rwmutex.actualMaxReaders)
+      (Server.lock_perm γ ptr_server obj)) ∗
+    "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.sig_pk) ∗
+    "#His_sigPk" ∷ cryptoffi.is_sig_pk γ.(cfg.sig_pk) (sigpred.P γ.(cfg.sigγ))
+  }}}.
+Proof.
+  wp_start as "@". wp_auto.
+  wp_apply wp_alloc as "* Hptr_mu".
+  wp_apply cryptoffi.wp_VrfGenerateKey as "* @".
+  iMod (mono_list_own_alloc []) as (digsγ) "[Hauth_digs _]".
+  remember (sigpred.cfg.mk vrfPk digsγ (sigpred.digs_info.mk 0%nat None 0%nat)) as sigγ.
+  wp_apply (cryptoffi.wp_SigGenerateKey (sigpred.P sigγ)) as "* @".
+  wp_apply cryptoffi.wp_VrfPrivateKey_PublicKey as "* @".
+  { iFrame "#". }
+  iRename "Hsl_enc" into "Hsl_vrfPk". iPersist "Hsl_vrfPk".
+  wp_apply ktcore.wp_SignVrf as "* @".
+  { iFrame "#". rewrite /vrfP. by subst. }
+  wp_apply cryptoffi.wp_RandBytes as "* @".
+  rename b into commit_sec.
+  iRename "Hsl_b" into "Hsl_commit_sec".
+  wp_apply wp_alloc as "* Hptr_secs".
+  wp_apply wp_alloc as "* Hptr_merkle".
+  iDestruct (merkle.own_Map_init with "[$Hptr_merkle]") as "@"; [solve_pkg_init|].
+  wp_apply wp_map_make1 as "* Hptr_plain".
+  wp_apply wp_alloc as "* Hptr_keys".
+  wp_apply hashchain.wp_New as "* @".
+  wp_apply wp_alloc as "* Hptr_hist".
+  wp_apply chan.wp_make1 as "% %chanγ (#His_chan&%&Hown_chan)".
+  wp_apply wp_alloc as "%ptr_serv Hptr_serv".
+
+  wp_apply (merkle.wp_Map_Hash with "[$Hown_Map]") as "* @".
+  iDestruct (merkle.own_Map_to_is_map with "[$Hown_Map]") as %[Hinv_merkle ?].
+  wp_apply (hashchain.wp_HashChain_Append with "[$Hown_HashChain]") as "* @".
+  { by iFrame "#". }
+  iMod (mono_list_auth_own_update_app [_] with "Hauth_digs") as "[[Hgs_digs Hgs_digs'] #Hlb_digs]".
+  simpl in *.
+  (* TODO: make helper lemma for list_reln singleton. *)
+  eassert (ktcore.mono_plain _ [hash]).
+  { rewrite /ktcore.mono_plain /list_reln. by intros **. }
+  wp_apply ktcore.wp_SignLink as "* @".
+  { iFrame "#". rewrite /linkP.
+    simplify_eq/=. by iFrame "#%". }
+  wp_apply wp_alloc as "%ptr_audit Hptr_audit".
+  wp_apply wp_slice_literal as "* Ht".
+  { iIntros "**". by wp_auto. }
+  replace (sint.nat _) with 0%nat by word. simpl.
+  (* TODO: [Ht] not framing without specifying [ptr_audit]. *)
+  wp_apply (wp_slice_append _ _ _ [ptr_audit] with "[Ht]")
+    as "% (Hsl_audits&Hcap_audits&_)".
+  { iDestruct own_slice_nil as "$".
+    iDestruct own_slice_cap_nil as "$".
+    iFrame "Ht". }
+  Unshelve. 3: apply _. 2: apply _.
+  simpl.
+
+  iMod (dghost_var_alloc (∅ : ktcore.plain_ty)) as (pendγ) "[Hgs_pend Hgs_pend']".
+  eremember (Server.mk' (secrets.mk' commit_sec)) as obj.
+  eremember (cfg.mk sigPk pendγ uidγ sigγ) as γ.
+  eremember (state.mk ∅ [hash]) as σ.
+  iMod (start_bag (work.own_aux γ obj.(Server.secs)) with "His_chan Hown_chan")
+    as "#His_chan_bag"; [done|].
+  iStructNamed "Hptr_serv". simpl in *.
+  iPersist "secs workQ mu keys hist".
+  iPersist "s sigPk Hsl_sigPk Hptr_secs Hptr_keys Hptr_audit".
+  iMod (inv_alloc nroot _ (∃ σ, inv_aux γ σ) with "[Hgs_digs' Hgs_pend']") as "Ht".
+  { iExists σ. simplify_eq/=.
+    iFrame "∗". rewrite /valid /=.
+    iFrame "%".
+    iModIntro. iSplit; [naive_solver|].
+    iPureIntro. intros **. simplify_eq/=.
+    rewrite Hinv_merkle.
+    admit. } (* TODO: plain_inv_fn on ∅ *)
+  iAssert (is_inv γ)%I with "Ht" as "{Ht} #His_inv".
+  iMod (init_RWMutex (Server.own_aux γ ptr_serv obj)
+    with "[-HΦ Hptr_mu] Hptr_mu") as "Hlock_perms".
+  { admit. } (* TODO: Fractional *)
+  { iExists σ. simplify_eq/=.
+    iFrame "∗".
+    iFrame "#". simpl.
+
+    lot of preds to crunch thru.
+    where does perm_add_hist come from?
+
+  wp_apply wp_fork.
+
 End proof.
 End server.
