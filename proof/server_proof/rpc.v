@@ -121,7 +121,7 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
 
     ∃ uid prevEpoch prevVerLen tail σ lastDig,
     let numEps := length σ.(state.hist) in
-    let pks := ktcore.to_pks (get_vrf_pk γ) uid lastDig in
+    let pks := ktcore.to_pks (vrf_pkγ γ) uid lastDig in
     "%Hdec" ∷ ⌜HistoryArg.wish arg
       (HistoryArg.mk' uid prevEpoch prevVerLen) tail⌝ ∗
     "HQ" ∷ Q γ σ ∗
@@ -141,11 +141,11 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
           (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
-        "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
+        "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γ) uid
           (uint.nat prevVerLen) lastDig hist ∗
         "%Heq_hist" ∷ ⌜drop (uint.nat prevVerLen) pks =
           ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝ ∗
-        "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid
+        "#Hwish_bound" ∷ ktcore.wish_NonMemb (vrf_pkγ γ) uid
           (length pks) lastDig bound
       end) end end
   }}}.
@@ -242,9 +242,9 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
-    "%Heq_VrfPk" ∷ ⌜get_vrf_pk γ = vrf.(StartVrf.VrfPk)⌝ ∗
+    "%Heq_VrfPk" ∷ ⌜vrf_pkγ γ = vrf.(StartVrf.VrfPk)⌝ ∗
     "#His_VrfPk" ∷ cryptoffi.is_vrf_pk vrf.(StartVrf.VrfPk) ∗
-    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ)
+    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (vrf_pkγ γ)
       vrf.(StartVrf.VrfSig)
     end end
   }}}.
@@ -322,7 +322,7 @@ Lemma wp_CallStart c good :
         "%Heq_ep" ∷ ⌜uint.nat ep = (length servHist - 1)%nat⌝ ∗
         "#Hwish_StartChain" ∷ wish_CheckStartChain γ.(cfg.sig_pk) chain
           servHist None ep dig link ∗
-        "%Heq_VrfPk" ∷ ⌜get_vrf_pk γ = vrf.(StartVrf.VrfPk)⌝ ∗
+        "%Heq_VrfPk" ∷ ⌜vrf_pkγ γ = vrf.(StartVrf.VrfPk)⌝ ∗
         "#Hwish_StartVrf" ∷ wish_CheckStartVrf γ.(cfg.sig_pk) vrf end)
     }}}.
 Proof.

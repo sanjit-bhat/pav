@@ -64,7 +64,7 @@ Record t :=
   }.
 End state.
 
-Notation get_vrf_pk γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
+Notation vrf_pkγ γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
 Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
 
 Section proof.
@@ -137,8 +137,8 @@ Definition valid γ obj : iProp Σ :=
       mono_list_idx_own uidγ i (ver, pk))) ∗
   "%Hsub_pend" ∷ ⌜∀ last_dig,
     last obj.(state.hist) = Some last_dig →
-    ktcore.plain_sub (ktcore.to_plain (get_vrf_pk γ) last_dig) obj.(state.pending)⌝ ∗
-  "%Hsub_hist" ∷ ⌜ktcore.mono_plain (get_vrf_pk γ) obj.(state.hist)⌝.
+    ktcore.plain_sub (ktcore.to_plain (vrf_pkγ γ) last_dig) obj.(state.pending)⌝ ∗
+  "%Hsub_hist" ∷ ⌜ktcore.mono_plain (vrf_pkγ γ) obj.(state.hist)⌝.
 
 Definition inv_aux γ obj : iProp Σ :=
   "Hown_serv" ∷ own γ obj ∗
@@ -156,7 +156,7 @@ Lemma hist_pks_prefix uid γ (i j : nat) (x y : list w8) :
   is_inv γ -∗
   mono_list_idx_own (digsγ γ) i x -∗
   mono_list_idx_own (digsγ γ) j y ={⊤}=∗
-  ⌜ktcore.to_pks (get_vrf_pk γ) uid x `prefix_of` ktcore.to_pks (get_vrf_pk γ) uid y⌝.
+  ⌜ktcore.to_pks (vrf_pkγ γ) uid x `prefix_of` ktcore.to_pks (vrf_pkγ γ) uid y⌝.
 Proof.
   iIntros (?) "#Hinv #Hidx0 #Hidx1".
   rewrite /is_inv.
@@ -174,7 +174,7 @@ Lemma hist_to_put_perms γ i x :
   is_inv γ -∗
   mono_list_idx_own (digsγ γ) i x ={⊤}=∗
   ∀ uid pks,
-    ⌜ktcore.to_plain (get_vrf_pk γ) x !! uid = Some pks⌝ -∗
+    ⌜ktcore.to_plain (vrf_pkγ γ) x !! uid = Some pks⌝ -∗
     (* if empty pks, might not have uidγ. *)
     ⌜length pks > 0%nat⌝ -∗
     ∃ uidγ,
@@ -329,7 +329,7 @@ Qed.
 Definition perm_add_hist γ : iProp Σ :=
   □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
     ∀ dig,
-    ⌜ktcore.to_plain (get_vrf_pk γ) dig = obj.(state.pending)⌝ -∗
+    ⌜ktcore.to_plain (vrf_pkγ γ) dig = obj.(state.pending)⌝ -∗
     let obj' := set (state.hist) (.++ [dig]) obj in
     (own γ obj' ={∅,⊤}=∗ True)).
 
@@ -388,7 +388,7 @@ Definition own γ ptr obj : iProp Σ :=
   "#Hstr_secrets" ∷ ptr ↦□ (server.secrets.mk ptr_sig ptr_vrf sl_commit) ∗
   "#Hown_sig" ∷ cryptoffi.own_sig_sk ptr_sig γ.(cfg.sig_pk)
     (sigpred.P γ.(cfg.sigγ)) ∗
-  "#Hown_vrf" ∷ cryptoffi.own_vrf_sk ptr_vrf (get_vrf_pk γ) ∗
+  "#Hown_vrf" ∷ cryptoffi.own_vrf_sk ptr_vrf (vrf_pkγ γ) ∗
   "#Hsl_commit" ∷ sl_commit ↦*□ obj.(commit) ∗
   "%Hlen_commit" ∷ ⌜Z.of_nat (length obj.(commit)) = cryptoffi.hash_len⌝.
 
@@ -420,12 +420,12 @@ Definition is_commit commit_sec (hidden : gmap (list w8) (list w8)) :=
 
 Definition own γ ptr secs dig q : iProp Σ :=
   ∃ ptr_hidden hidden ptr_plain ptr0_plain,
-  let plain := ktcore.to_plain (get_vrf_pk γ) dig in
+  let plain := ktcore.to_plain (vrf_pkγ γ) dig in
   "#Hstr_keyStore" ∷ ptr ↦□ (server.keyStore.mk ptr_hidden ptr_plain) ∗
   "Hown_hidden" ∷ merkle.own_Map ptr_hidden hidden dig (DfracOwn q) ∗
   "Hptr_plain" ∷ ptr_plain ↦${#q} ptr0_plain ∗
   "Hown_plain" ∷ own_plain ptr0_plain plain q ∗
-  "%Hbij_maps" ∷ ⌜ktcore.is_plain (get_vrf_pk γ) plain hidden⌝ ∗
+  "%Hbij_maps" ∷ ⌜ktcore.is_plain (vrf_pkγ γ) plain hidden⌝ ∗
   "%His_commit" ∷ ⌜is_commit secs.(secrets.commit) hidden⌝.
 
 End proof.
@@ -461,10 +461,10 @@ Definition own γ ptr digs q : iProp Σ :=
   "#Hown_audits" ∷ ([∗ list] idx ↦ p; aud ∈ sl0_audits; audits,
     ktcore.AuditProof.own p aud (□)) ∗
   "#His_audits" ∷ is_audits γ digs audits ∗
-  "%Hmono_plain" ∷ ⌜ktcore.mono_plain (get_vrf_pk γ) digs⌝ ∗
+  "%Hmono_plain" ∷ ⌜ktcore.mono_plain (vrf_pkγ γ) digs⌝ ∗
 
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
-  "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ) vrfSig.
+  "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (vrf_pkγ γ) vrfSig.
 
 Lemma is_audits_grow new_dig upd_proof sig link γ digs last_dig audits :
   let ep := length digs in
@@ -531,7 +531,7 @@ Definition own γ secs ptr obj : iProp Σ :=
   "#Hsl_mapLabel" ∷ sl_mapLabel ↦*□ mapLabel ∗
   "#Hsl_mapVal" ∷ sl_mapVal ↦*□ mapVal ∗
 
-  "%His_mapLabel" ∷ ⌜ktcore.map_label_fn (get_vrf_pk γ) obj.(uid)
+  "%His_mapLabel" ∷ ⌜ktcore.map_label_fn (vrf_pkγ γ) obj.(uid)
     (uint.nat obj.(ver)) mapLabel⌝ ∗
   "%His_rand" ∷ ⌜ktcore.is_CommitRand secs.(secrets.commit) mapLabel rand⌝ ∗
   "%His_mapVal" ∷ ⌜ktcore.map_val_fn obj.(pk) rand mapVal⌝ ∗
@@ -581,7 +581,7 @@ Definition own γ ptr σ obj q : iProp Σ :=
   (* other 1/2 in server inv. *)
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
   "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
-  "%Heq_hist_pend" ∷ ⌜ktcore.to_plain (get_vrf_pk γ) last_dig = σ.(state.pending)⌝ ∗
+  "%Heq_hist_pend" ∷ ⌜ktcore.to_plain (vrf_pkγ γ) last_dig = σ.(state.pending)⌝ ∗
   "#Hperm_add_hist" ∷ perm_add_hist γ ∗
   "%Heq_digs_info" ∷ ⌜γ.(cfg.sigγ).(sigpred.cfg.info) =
     sigpred.digs_info.mk 0 None 0⌝.
@@ -619,7 +619,7 @@ Proof.
 Qed.
 
 Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
-  let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
+  let pks := ktcore.to_pks (vrf_pkγ γ) uid last_dig in
   {{{
     is_pkg_init server ∗
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
@@ -632,7 +632,7 @@ Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
     sl_hist hist, RET #sl_hist;
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
-    "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
+    "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γ) uid
       (uint.nat prefixLen) last_dig hist ∗
     "%Heq_hist" ∷ ⌜drop (uint.nat prefixLen) pks =
       ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
@@ -645,7 +645,7 @@ Proof.
   simplify_eq/=. wp_auto.
   wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
   (* destruct "uid existence" early to reduce complexity. *)
-  destruct (ktcore.to_plain (get_vrf_pk γ) last_dig !! uid) as [pks|] eqn:Hlook_uid.
+  destruct (ktcore.to_plain (vrf_pkγ γ) last_dig !! uid) as [pks|] eqn:Hlook_uid.
   2: {
     rewrite lookup_total_alt Hlook_uid /= in Heq_prefixLen |-*.
     iDestruct (big_sepM2_lookup_r_none with "Hptr0_plain") as %->; [done|].
@@ -681,7 +681,7 @@ Proof.
     "Hcap_hist" ∷ own_slice_cap loc sl_hist 1 ∗
     "#Hsl0_hist" ∷ ([∗ list] ptr;obj ∈ sl0_hist;hist, ktcore.Memb.own ptr obj (□)) ∗
 
-    "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
+    "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γ) uid
       (uint.nat prefixLen) last_dig hist ∗
     "%Heq_hist" ∷ ⌜subslice (uint.nat prefixLen) (uint.nat ver) pks =
       ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
@@ -762,7 +762,7 @@ Proof.
 Qed.
 
 Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
-  let pks := ktcore.to_pks (get_vrf_pk γ) uid last_dig in
+  let pks := ktcore.to_pks (vrf_pkγ γ) uid last_dig in
   {{{
     is_pkg_init server ∗
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
@@ -775,7 +775,7 @@ Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
     ptr_bound bound, RET #ptr_bound;
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
-    "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid
+    "#Hwish_bound" ∷ ktcore.wish_NonMemb (vrf_pkγ γ) uid
       (uint.nat numVers) last_dig bound
   }}}.
 Proof.
@@ -857,7 +857,7 @@ Proof.
 
   iAssert (
     ∃ (i : w64) (t0 : loc) sl_upd sl0_upd upd new_dig,
-    let new_pend := ktcore.to_plain (get_vrf_pk γ) new_dig in
+    let new_pend := ktcore.to_plain (vrf_pkγ γ) new_dig in
     "i" ∷ i_ptr ↦ i ∗
     "%Hlt_i" ∷ ⌜0 ≤ sint.Z i ≤ length work⌝ ∗
     "w" ∷ w_ptr ↦ t0 ∗
@@ -866,8 +866,8 @@ Proof.
     "Hcap_upd" ∷ own_slice_cap loc sl_upd 1 ∗
     "#Hsl0_upd" ∷ ([∗ list] ptr;obj ∈ sl0_upd;upd, ktcore.UpdateProof.own ptr obj (□)) ∗
     "#His_upd" ∷ ktcore.wish_ListUpdate last_dig upd new_dig ∗
-    "%Hmono" ∷ ⌜ktcore.plain_sub (ktcore.to_plain (get_vrf_pk γ) last_dig)
-      (ktcore.to_plain (get_vrf_pk γ) new_dig)⌝ ∗
+    "%Hmono" ∷ ⌜ktcore.plain_sub (ktcore.to_plain (vrf_pkγ γ) last_dig)
+      (ktcore.to_plain (vrf_pkγ γ) new_dig)⌝ ∗
     "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(Server.secs) new_dig 1 ∗
     "Hown_gs" ∷ own_aux γ {| state.pending := new_pend; state.hist := hist |} (1/2)
   )%I with "[Hown_keys Hown_gs upd Hsl_upd Hcap_upd w i]" as "IH".
@@ -902,10 +902,10 @@ Proof.
       "Hsl_pks" ∷ sl_pks ↦* sl0_pks ∗
       "Hcap_pks" ∷ own_slice_cap slice.t sl_pks 1 ∗
       "#Hsl0_pks" ∷ ([∗ list] sl_pk;pk ∈
-        sl0_pks;ktcore.to_pks (get_vrf_pk γ) w.(work.uid) old_dig,
+        sl0_pks;ktcore.to_pks (vrf_pkγ γ) w.(work.uid) old_dig,
         "Hsl_pk" ∷ sl_pk ↦*□ pk) ∗
       "Hown_plain" ∷ keyStore.own_plain (delete w.(work.uid) ptr0_plain)
-        (delete w.(work.uid) (ktcore.to_plain (get_vrf_pk γ) old_dig)) 1
+        (delete w.(work.uid) (ktcore.to_plain (vrf_pkγ γ) old_dig)) 1
     )%I with "[Hown_plain]" as "@".
     { destruct (ptr0_plain !! _) eqn:?; simpl in *.
       - iDestruct (big_sepM2_delete_l with "Hown_plain") as "(%&%&@&Hown_plain)"; [done|].
@@ -922,7 +922,7 @@ Proof.
     iDestruct (big_sepL2_length with "Hsl0_pks") as %?.
 
     iAssert (⌜uint.nat w.(work.ver) =
-      length $ ktcore.to_pks (get_vrf_pk γ) w.(work.uid) old_dig⌝)%I
+      length $ ktcore.to_pks (vrf_pkγ γ) w.(work.uid) old_dig⌝)%I
       as %Heq_ver; [word|].
     clear Ht.
     destruct (hidden !! mapLabel) eqn:Hlook_hid.
@@ -990,7 +990,7 @@ Proof.
     - instantiate (1:=ktcore.UpdateProof.mk' _ _ _). iFrame "#".
     - done.
     - by iApply ktcore.wish_ListUpdate_grow.
-    - trans (ktcore.to_plain (get_vrf_pk γ) old_dig); [done|].
+    - trans (ktcore.to_plain (vrf_pkγ γ) old_dig); [done|].
       apply insert_included; [apply _|].
       intros.
       setoid_rewrite lookup_total_correct; [|done].
@@ -1027,7 +1027,7 @@ Proof.
 
   iDestruct (own_slice_len with "Hsl_audits") as %?.
   iDestruct (big_sepL2_length with "Hown_audits") as %?.
-  eassert (ktcore.mono_plain (get_vrf_pk γ) (_ ++ [_])) as Hmono_plain'.
+  eassert (ktcore.mono_plain (vrf_pkγ γ) (_ ++ [_])) as Hmono_plain'.
   { rewrite /ktcore.mono_plain in Hmono_plain |-*.
     rewrite !fmap_app.
     eapply list_reln_snoc; [done|].
@@ -1121,7 +1121,7 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
     sl_chainProof sl_linkSig sl_hist ptr_bound err σ lastDig,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #err);
     let numEps := length σ.(state.hist) in
-    let pks := ktcore.to_pks (get_vrf_pk γ) uid lastDig in
+    let pks := ktcore.to_pks (vrf_pkγ γ) uid lastDig in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
     "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some lastDig⌝ ∗
@@ -1144,11 +1144,11 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
           (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
-        "#Hwish_hist" ∷ ktcore.wish_ListMemb (get_vrf_pk γ) uid
+        "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γ) uid
           (uint.nat prevVerLen) lastDig hist ∗
         "%Heq_hist" ∷ ⌜drop (uint.nat prevVerLen) pks =
           ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝ ∗
-        "#Hwish_bound" ∷ ktcore.wish_NonMemb (get_vrf_pk γ) uid
+        "#Hwish_bound" ∷ ktcore.wish_NonMemb (vrf_pkγ γ) uid
           (length pks) lastDig bound
       end
   }}}.
@@ -1182,7 +1182,7 @@ Proof.
   simpl.
   wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
   iAssert (⌜sint.Z (default slice.nil (ptr0_plain !! uid)).(slice.len) =
-    length $ ktcore.to_pks (get_vrf_pk γ) uid last_dig⌝)%I as %?.
+    length $ ktcore.to_pks (vrf_pkγ γ) uid last_dig⌝)%I as %?.
   { rewrite /keyStore.own_plain.
     iNamed "Hown_plain".
     rewrite lookup_total_alt.
@@ -1349,9 +1349,9 @@ Lemma wp_Server_Start s γ obj Q :
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
-    "%Heq_VrfPk" ∷ ⌜get_vrf_pk γ = vrf.(StartVrf.VrfPk)⌝ ∗
+    "%Heq_VrfPk" ∷ ⌜vrf_pkγ γ = vrf.(StartVrf.VrfPk)⌝ ∗
     "#His_VrfPk" ∷ cryptoffi.is_vrf_pk vrf.(StartVrf.VrfPk) ∗
-    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (get_vrf_pk γ)
+    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (vrf_pkγ γ)
       vrf.(StartVrf.VrfSig)
   }}}.
 Proof.
