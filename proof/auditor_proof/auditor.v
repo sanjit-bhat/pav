@@ -204,17 +204,13 @@ Proof.
   2: {
     iApply "HΦ". iIntros "@". simpl in *.
     destruct His_chain_prev as []. word. }
-  assert (∃ a0 a1, hashchain.inv_fn PrevLink (S $ uint.nat PrevEpochLen) = (a0, a1))
-    as (prev_digs&cut&His_chain_prev).
-  { destruct (hashchain.inv_fn _ _). naive_solver. }
+  opose proof (hashchain.invert PrevLink (S $ uint.nat PrevEpochLen))
+    as (?&?&His_chain_prev); [word|].
   wp_apply (hashchain.wp_Verify with "[]") as "* @".
-  { iFrame "#". iPureIntro.
-    rewrite /hashchain.valid.
-    split; [done|]. word. }
+  { iFrame "#%". }
   wp_if_destruct.
   { iApply "HΦ". iNamedSuffix 1 "'". simpl in *. iApply "Hgenie". naive_solver. }
   iNamed "Hgenie".
-  destruct His_chain as [His_chain _].
   iPersist "Hsl_newVal Hsl_newLink".
   wp_if_destruct.
   { iApply "HΦ". iNamedSuffix 1 "'". simpl in *.
@@ -233,11 +229,9 @@ Proof.
   wp_if_destruct.
   { iApply "HΦ". iNamedSuffix 1 "'". simpl in *. iApply "Hgenie".
     opose proof (hashchain.wish_Proof_det _ _ _ Hwish_chain His_proof') as ->.
-    destruct His_chain_prev' as [His_chain_prev' _].
-    rewrite His_chain_prev in His_chain_prev'.
+    opose proof (hashchain.inj His_chain_prev His_chain_prev') as [-> ->].
     simplify_eq/=.
-    rewrite -His_chain_start' in His_chain.
-    opose proof (hashchain.det _ _ _ _ His_chain) as ->.
+    opose proof (hashchain.det' His_chain His_chain_start') as ->.
     iExactEq "His_link_sig'". repeat f_equal. word. }
   iNamed "Hgenie".
   iApply "HΦ".
@@ -248,7 +242,7 @@ Proof.
   { exfalso. simpl in *. word. }
   rewrite last_snoc /=.
   autorewrite with len in *.
-  eexists. repeat split; [done|word..].
+  repeat split. word.
 Qed.
 
 Lemma wp_CheckStartVrf sl_servPk servPk ptr_vrf vrf :
@@ -433,14 +427,12 @@ Proof.
   { iApply "HΦ". iNamedSuffix 1 "0". iApply "Hgenie".
     simplify_eq/=.
     iDestruct (ktcore.wish_ListUpdate_det with "Hwish_ListUpdate His_upd0") as %<-.
-    destruct His_chain as [His_chain _].
-    rewrite -His_link0 in His_chain.
-    opose proof (hashchain.det _ _ _ _ His_chain) as ->.
+    opose proof (hashchain.det' His_chain His_link0) as ->.
     iExactEq "His_sig0". f_equal. word. }
   iNamed "Hgenie".
   iApply "HΦ". iFrame "#%".
   iSplit; [word|].
-  iExactEq "His_chain". rewrite /named. f_equal. word.
+  iPureIntro. exact_eq His_chain.f_equal. word.
 Qed.
 
 Definition wish_SignedLink servPk adtrPk ep link : iProp Σ :=

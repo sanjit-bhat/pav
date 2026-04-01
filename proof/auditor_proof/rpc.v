@@ -285,14 +285,11 @@ Proof.
     rewrite -last_lookup in Hlook0.
     rewrite Hlook0.
     naive_solver.
-  - exact_eq His_link.
-    { f_equal. word. }
+  - exact_eq His_link; [|done|word].
     erewrite take_S_r.
     2: { by erewrite <-Hlook1. }
-    f_equal; try done.
     rewrite take_app_length'; [done|].
     len.
-  - word.
 Qed.
 
 End proof.

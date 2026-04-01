@@ -641,7 +641,7 @@ Proof.
   simpl. wp_start as "@".
   iNamed "Hown_serv_ro". iNamed "Hown_secs".
   iNamed "Hown_serv". iNamed "Hown_keys".
-  iNamed "Hown_plain".
+  rewrite /keyStore.own_plain. iNamed "Hown_plain".
   simplify_eq/=. wp_auto.
   wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
   (* destruct "uid existence" early to reduce complexity. *)
@@ -1006,7 +1006,6 @@ Proof.
   wp_apply (merkle.wp_Map_Hash with "[$Hown_hidden]") as "* @".
   wp_apply (hashchain.wp_HashChain_Append with "[$Hown_chain]") as "* @ {Hsl_val}".
   { by iFrame "#". }
-  destruct His_chain as [His_chain _].
 
   iApply ncfupd_wp.
   rewrite /own.
@@ -1039,6 +1038,7 @@ Proof.
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". iPureIntro.
     destruct γ.(cfg.sigγ).(cfg.info). simplify_eq/=.
+    destruct His_chain as [His_chain _].
     repeat split.
     - exact_eq His_chain. f_equal. word.
     - len.
@@ -1404,7 +1404,7 @@ Proof.
   replace (_ - _) with (Z.of_nat $ pred $ length σ.(state.hist)); [|lia].
   iDestruct (cryptoffi.own_vrf_sk_to_pk with "[]") as "His_vrf_pk"; [done|].
   iFrame "#".
-  with_strategy opaque [hashchain.valid] (repeat iSplit; try iPureIntro).
+  repeat iSplit; try iPureIntro.
   - word.
   - word.
   - exact_eq His_bootLink. lia.
@@ -1452,7 +1452,6 @@ Proof.
   iDestruct (merkle.own_Map_to_is_map with "[$Hown_Map]") as %[Hinv_merkle ?].
   wp_apply (hashchain.wp_HashChain_Append with "[$Hown_HashChain]") as "* @ {Hsl_val}".
   { by iFrame "#". }
-  destruct His_chain as [His_chain _].
   iMod (mono_list_auth_own_update_app [_] with "Hauth_digs")
     as "[[Hgs_digs Hgs_digs'] #Hlb_digs]".
   simpl in *.
@@ -1460,6 +1459,7 @@ Proof.
   { rewrite /ktcore.mono_plain. apply list_reln_singleton. }
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". rewrite /linkP.
+    destruct His_chain as [His_chain _].
     simplify_eq/=. by iFrame "#%". }
   wp_apply wp_alloc as "%ptr_audit Hptr_audit".
   wp_apply wp_slice_literal as "* Ht".

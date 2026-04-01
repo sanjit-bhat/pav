@@ -269,14 +269,10 @@ Lemma wish_CheckStartChain_det pk c digs0 digs1 cut0 cut1 e0 e1 d0 d1 l0 l1 :
 Proof.
   iNamedSuffix 1 "0".
   iNamedSuffix 1 "1".
-  destruct His_chain_prev0 as [His_chain_prev0 _].
-  destruct His_chain_prev1 as [His_chain_prev1 _].
-  rewrite His_chain_prev1 in His_chain_prev0.
-  simplify_eq/=.
+  opose proof (hashchain.inj His_chain_prev0 His_chain_prev1) as [-> ->].
   opose proof (hashchain.wish_Proof_det _ _ _ His_proof0 His_proof1) as ->.
   simplify_eq/=.
-  rewrite -His_chain_start1 in His_chain_start0.
-  opose proof (hashchain.det _ _ _ _ His_chain_start0) as ->.
+  opose proof (hashchain.det' His_chain_start0 His_chain_start1) as ->.
   iPureIntro.
   rewrite -Heq_ep0 in Heq_ep1.
   by simplify_eq/=.
