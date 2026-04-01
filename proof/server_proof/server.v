@@ -84,10 +84,21 @@ Definition own_aux γ obj q : iProp Σ :=
 (* other 1/2 in server lock inv. *)
 Definition own γ obj : iProp Σ := own_aux γ obj (1/2).
 
-(* TODO: prove below admits using auditor.v as reference. *)
 #[global] Instance own_aux_frac γ obj :
   fractional.Fractional (λ q, own_aux γ obj q).
-Proof. Admitted.
+Proof.
+  intros ??. iSplit.
+  - iIntros "@".
+    iDestruct "Hown_pend" as "[? ?]".
+    iDestruct "Hown_hist" as "[? ?]".
+    iFrame.
+  - iIntros "[H0 H1]".
+    iNamedSuffix "H0" "0".
+    iNamedSuffix "H1" "1".
+    iCombine "Hown_pend0 Hown_pend1" as "?".
+    iCombine "Hown_hist0 Hown_hist1" as "?".
+    iFrame.
+Qed.
 
 #[global] Instance own_aux_as_frac γ obj q :
   fractional.AsFractional (own_aux γ obj q) (λ q, own_aux γ obj q) q.
@@ -95,11 +106,25 @@ Proof. auto. Qed.
 
 #[global] Instance own_aux_combine_sep_gives γ obj0 obj1 q0 q1 :
   CombineSepGives (own_aux γ obj0 q0) (own_aux γ obj1 q1) (⌜obj0 = obj1⌝).
-Proof. Admitted.
+Proof.
+  rewrite /CombineSepGives.
+  iIntros "[H0 H1]".
+  iNamedSuffix "H0" "0".
+  iNamedSuffix "H1" "1".
+  iCombine "Hown_pend0 Hown_pend1" gives %[? ?].
+  iDestruct (mono_list_auth_own_agree with "Hown_hist0 Hown_hist1") as %[? ?].
+  iModIntro.
+  destruct obj0, obj1. by simplify_eq/=.
+Qed.
 
 #[global] Instance own_aux_combine_sep_as γ obj0 obj1 q0 q1 :
   CombineSepAs (own_aux γ obj0 q0) (own_aux γ obj1 q1) (own_aux γ obj0 (q0 + q1)) | 60.
-Proof. Admitted.
+Proof.
+  rewrite /CombineSepAs.
+  iIntros "[H0 H1]".
+  iCombine "H0 H1" gives %->.
+  by iCombine "H0 H1" as "H".
+Qed.
 
 Definition valid γ obj : iProp Σ :=
   "#Hperm_uids" ∷ ([∗ map] uid ↦ pks ∈ obj.(state.pending),
