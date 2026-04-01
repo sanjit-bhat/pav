@@ -25,9 +25,7 @@ type history struct {
 	lastDig []byte
 	// the epoch of our first hist entry.
 	startEp uint64
-	// epochs that the server checked Update proofs for.
-	// invariant: epochs within bounds.
-	// invariant: at least one entry.
+	// epochs that the auditor checked update proofs for.
 	epochs []*epoch
 }
 
