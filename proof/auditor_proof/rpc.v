@@ -64,18 +64,21 @@ Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
+(* TODO: in-mem startEp and sigpred startEp are diff values.
+we should give them diff names. *)
 Definition own ptr γ σ q : iProp Σ :=
-  ∃ sl_lastDig lastDig sl_epochs sl0_epochs,
+  ∃ sl_lastDig lastDig start_ep sl_epochs sl0_epochs,
   let last_ep := start_epγ γ + length σ.(state.digs) - 1 in
-  "Hstr_history" ∷ ptr ↦{#q} (auditor.history.mk sl_lastDig (W64 $ start_epγ γ) sl_epochs) ∗
+  "Hstr_history" ∷ ptr ↦{#q} (auditor.history.mk sl_lastDig start_ep sl_epochs) ∗
   "#Hsl_lastDig" ∷ sl_lastDig ↦*□ lastDig ∗
   "%Heq_lastDig" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
   "Hsl_epochs" ∷ sl_epochs ↦*{#q} sl0_epochs ∗
   "Hcap_epochs" ∷ own_slice_cap loc sl_epochs (DfracOwn q) ∗
   "#Hepochs" ∷ ([∗ list] idx ↦ p ∈ sl0_epochs,
-    epoch.own p σ (start_epγ γ + idx) γ) ∗
+    epoch.own p σ (uint.nat start_ep + idx) γ) ∗
   "%Hsome_digs" ∷ ⌜length σ.(state.digs) > 0⌝ ∗
-  "%Hnoof_ep" ∷ ⌜last_ep = uint.Z $ W64 last_ep⌝.
+  "%Hnoof_ep" ∷ ⌜last_ep = uint.Z $ W64 last_ep⌝ ∗
+  "%Heq_audit_start" ∷ ⌜uint.nat start_ep = (start_epγ γ + audit_offsetγ γ)%nat⌝.
 
 Definition align_serv σ γ servγ : iProp Σ :=
   ∃ hist,
