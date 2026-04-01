@@ -195,7 +195,7 @@ Proof.
   iIntros "* %Hlook_uid %Hlen_pks".
   apply lookup_lt_Some in Hlook_hist as ?.
   list_elem (obj.(state.hist)) (pred (length obj.(state.hist))) as last_dig.
-  opose proof (ktcore.mono_plain_lookup (get_vrf_pk γ) uid _
+  opose proof (ktcore.mono_plain_lookup uid _
     Hlook_hist Hlast_dig_lookup _) as Hsub0; [done|lia|].
   rewrite -last_lookup in Hlast_dig_lookup.
   apply Hsub_pend in Hlast_dig_lookup as Hsub1.
