@@ -517,23 +517,21 @@ Proof.
   by iFrame "#".
 Qed.
 
-Lemma wp_Auditor_updOnce ptr_a a γ σ Q ptr_proof proof :
+Lemma wp_Auditor_updOnce ptr_a γ σ Q ptr_proof proof :
   {{{
     is_pkg_init auditor ∗
-    "Hadtr" ∷ Auditor.own ptr_a a γ σ 1 ∗
+    "Hadtr" ∷ Auditor.own ptr_a γ σ 1 ∗
     "#Hfupd" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
-      (∀ new_links,
-      let σ' := set state.links (.++ new_links) σ in
+      (∀ new_digs,
+      let σ' := set state.digs (.++ new_digs) σ in
       own γ σ' ={∅,⊤}=∗ Q σ')) ∗
 
     "#Hproof" ∷ ktcore.AuditProof.own ptr_proof proof (□) ∗
     "Hgood" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
       ∃ ep dig link,
-      let hist' := set history.digs (.++ [dig]) a.(Auditor.hist) in
-      let σ' := set state.links (.++ [link]) σ in
-      "#Hwish_getNextLink" ∷ wish_getNextLink γ.(cfg.serv_sig_pk)
-        a.(Auditor.hist) σ proof ep dig link ∗
-      "#Halign_next" ∷ history.align_serv hist' σ' servγ end
+      let σ' := set state.digs (.++ [dig]) σ in
+      "#Hwish_getNextLink" ∷ wish_getNextLink γ σ proof ep dig link ∗
+      "#Halign_next" ∷ history.align_serv σ' γ servγ end
   }}}
   ptr_a @! (go.PointerType auditor.Auditor) @! "updOnce" #ptr_proof
   {{{
@@ -543,40 +541,24 @@ Lemma wp_Auditor_updOnce ptr_a a γ σ Q ptr_proof proof :
     "Herr" ∷
       (if decide (err ≠ ∅)
       then
-        "Hadtr" ∷ Auditor.own ptr_a a γ σ 1 ∗
+        "Hadtr" ∷ Auditor.own ptr_a γ σ 1 ∗
         "HQ" ∷ Q σ
       else
-        ∃ new_dig new_link,
-        let a' := set Auditor.hist
-          (set history.digs (.++ [new_dig])) a in
-        let σ' := set state.links (.++ [new_link]) σ in
-        "Hadtr" ∷ Auditor.own ptr_a a' γ σ' 1 ∗
+        ∃ new_dig,
+        let σ' := set state.digs (.++ [new_dig]) σ in
+        "Hadtr" ∷ Auditor.own ptr_a γ σ' 1 ∗
         "HQ" ∷ Q σ')
   }}}.
 Proof.
   wp_start as "@".
   iNamed "Hadtr". iNamed "Hown_hist". iNamed "Hown_serv". wp_auto.
-  destruct a, hist. simpl in *.
   iDestruct (own_slice_len with "Hsl_epochs") as %[? ?].
-  iDestruct (big_sepL2_length with "Hepochs") as %?.
-  list_elem σ.(state.links)
-    (sint.nat (word.sub sl_epochs.(slice.len_f) (W64 1))) as prevLink.
-  iDestruct (big_sepL2_lookup_2_some with "Hepochs") as %[? ?]; [done|].
-  iDestruct (big_sepL2_lookup with "Hepochs") as "@"; [done..|].
-  wp_pure; [word|].
-  wp_apply (wp_load_slice_index with "[$Hsl_epochs]") as "Hsl_epochs"; [word|done|].
-
-  simpl in *.
-  iPoseProof "Hinv_sigpred" as "@".
-  iDestruct (big_sepL_lookup with "Hlinks") as "@"; [done|].
-  rewrite take_ge; [|word].
-  iDestruct (big_sepL2_length with "Hmaps") as %?.
-  iDestruct (big_sepL2_lookup_1_some with "Hmaps") as %[? Hlast_maps]; [done|].
-  iDestruct (big_sepL2_lookup with "Hmaps") as "@"; [done..|].
-  replace (sint.nat _) with (pred $ length maps) in Hlast_maps by word.
-  replace (_ - _ + _)%nat with (pred $ length digs) in Hlook_dig by word.
-  rewrite -!last_lookup in Hlook_dig, Hlast_maps.
-  simplify_eq/=.
+  list_elem sl0_epochs
+    (sint.nat (word.sub sl_epochs.(slice.len) (W64 1))) as ptr_epoch.
+  iDestruct (big_sepL_lookup with "Hepochs") as "@"; [done|].
+  case_decide as Ht; [|word]. clear Ht.
+  wp_apply (wp_load_slice_index with "[$Hsl_epochs]"); [word|done|].
+  iIntros "Hsl_epochs". wp_auto.
   wp_apply (wp_getNextLink (history.mk' digs cut) γ σ) as "* @".
   { simpl. iFrame "#%".
     iSplit; [word|].
