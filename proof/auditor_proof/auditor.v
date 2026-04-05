@@ -15,17 +15,29 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 Module auditor.
 Import base.auditor rpc.auditor serde.auditor.
 
+(* TODO: upstream. *)
+Lemma last_drop_Some {A} (l : list A) x n :
+  last l = Some x →
+  (n < length l)%nat →
+  last (drop n l) = Some x.
+Proof.
+  intros (?&->)%last_Some ?.
+  autorewrite with len in *.
+  rewrite drop_app_le; [|lia].
+  by rewrite last_snoc.
+Qed.
+
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
+(* 1/2 in Auditor pred, 1/2 in iris inv. *)
 Definition own_aux γ σ q : iProp Σ :=
-  (* 1/2 in lock inv, 1/2 in GS inv. *)
-  "Hgs_links" ∷ mono_list_auth_own (digsγ γ) (q/2) σ.(state.digs).
+  "Hgs_digs" ∷ mono_list_auth_own (digsγ γ) q σ.(state.digs).
 
-Definition own γ σ : iProp Σ := own_aux γ σ 1.
+Definition own γ σ := own_aux γ σ (1/2).
 
 Definition is_inv γ := inv nroot (∃ σ, own γ σ).
 
@@ -37,15 +49,13 @@ Proof. apply _. Qed.
 Proof.
   rewrite /own_aux. intros ??. iSplit.
   - iIntros "@".
-    rewrite Qp.div_add_distr.
-    iDestruct "Hgs_links" as "[? ?]".
-    iFrame "∗#".
+    iDestruct "Hgs_digs" as "[? ?]".
+    iFrame "∗".
   - iIntros "[H0 H1]".
     iNamedSuffix "H0" "0".
     iNamedSuffix "H1" "1".
-    iCombine "Hgs_links0 Hgs_links1" as "?".
-    rewrite -Qp.div_add_distr.
-    iFrame "∗#".
+    iCombine "Hgs_digs0 Hgs_digs1" as "?".
+    iFrame "∗".
 Qed.
 
 #[global] Instance own_aux_as_frac γ σ q :
@@ -59,7 +69,7 @@ Proof.
   iIntros "[H0 H1]".
   iNamedSuffix "H0" "0".
   iNamedSuffix "H1" "1".
-  iDestruct (mono_list_auth_own_agree with "Hgs_links0 Hgs_links1") as %[? ?].
+  iDestruct (mono_list_auth_own_agree with "Hgs_digs0 Hgs_digs1") as %[? ?].
   iModIntro.
   destruct σ0, σ1. by simplify_eq/=.
 Qed.
@@ -121,7 +131,7 @@ Definition own ptr γ σ q : iProp Σ :=
     (sigpred.P γ.(cfg.sigγ)) ∗
 
   "Hown_hist" ∷ history.own ptr_hist γ σ q ∗
-  "Hown_gs_hist" ∷ own_aux γ σ q ∗
+  "Hown_gs" ∷ own_aux γ σ (q/2) ∗
   "%Hmono_maps" ∷ ⌜ktcore.mono_plain (vrf_pkγ γ)
     (drop (audit_offsetγ γ) σ.(state.digs))⌝ ∗
   "#Halign_hist" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
@@ -144,10 +154,9 @@ Proof.
   rewrite /own_aux. intros ??. iSplit.
   - iIntros "(%&%&@)".
     iDestruct "Hown_hist" as "[? ?]".
-    (* TODO: why needed? *)
-    Typeclasses Opaque auditor.own_aux.
-    iDestruct "Hown_gs_hist" as "[? ?]".
-    iFrame "#∗%".
+    rewrite Qp.div_add_distr.
+    iDestruct "Hown_gs" as "[? ?]".
+    iFrame "∗#%".
   - iIntros "[(%&%&H0)(%&%&H1)]".
     iNamedSuffix "H0" "0".
     iNamedSuffix "H1" "1".
@@ -156,7 +165,8 @@ Proof.
     iCombine "Hfld_serv0 Hfld_serv1" gives %?.
     simplify_eq/=.
     iCombine "Hown_hist0 Hown_hist1" as "?".
-    iCombine "Hown_gs_hist0 Hown_gs_hist1" as "?".
+    iCombine "Hown_gs0 Hown_gs1" as "?".
+    rewrite -Qp.div_add_distr.
     iFrame "∗#%".
 Qed.
 
@@ -432,7 +442,7 @@ Proof.
   iNamed "Hgenie".
   iApply "HΦ". iFrame "#%".
   iSplit; [word|].
-  iPureIntro. exact_eq His_chain.f_equal. word.
+  iPureIntro. exact_eq His_chain. f_equal. word.
 Qed.
 
 Definition wish_SignedLink servPk adtrPk ep link : iProp Σ :=
@@ -481,7 +491,7 @@ Proof.
   iNamed "H". iNamed "Hown_hist". wp_auto.
   iApply ncfupd_wp.
   iMod "Hfupd" as "(%&Hadtr&Hfupd)".
-  iCombine "Hadtr Hown_gs_hist" gives %->.
+  iCombine "Hadtr Hown_gs" gives %->.
   iMod ("Hfupd" with "Hadtr") as "HQ".
   iModIntro.
 
@@ -559,14 +569,16 @@ Proof.
   case_decide as Ht; [|word]. clear Ht.
   wp_apply (wp_load_slice_index with "[$Hsl_epochs]"); [word|done|].
   iIntros "Hsl_epochs". wp_auto.
-  wp_apply (wp_getNextLink (history.mk' digs cut) γ σ) as "* @".
+  wp_apply (wp_getNextLink γ σ) as "* @".
   { simpl. iFrame "#%".
     iSplit; [word|].
-    rewrite /named. iExactEq "His_link". f_equal. word. }
+    iPureIntro. exact_eq His_link; [|word].
+    rewrite take_ge; [done|]. word. }
+  clear His_link.
   rewrite -wp_fupd.
   wp_if_destruct.
   { iMod "Hfupd" as "(%&Hadtr&Hfupd)".
-    iCombine "Hadtr Hown_gs_hist" gives %->.
+    iCombine "Hadtr Hown_gs" gives %->.
     destruct σ.
     iSpecialize ("Hfupd" $! []).
     list_simplifier.
@@ -584,38 +596,47 @@ Proof.
     iFrame "#". }
   iNamedSuffix "Hgenie" "_n".
 
-  iPoseProof "Hwish_getNextLink_n" as "H".
-  iNamedSuffix "H" "_n".
-  simpl in *.
-  iDestruct (ktcore.sigpred_links_inv_grow with "Hinv_sigpred His_map_n []") as "{Hinv_sigpred} Hinv_sigpred_n".
-  { naive_solver. }
-  { iExactEq "His_link_n". f_equal. word. }
-  rewrite -ncfupd_wp.
-  iMod "Hfupd" as "(%&Hadtr&Hfupd)".
-  iCombine "Hadtr Hown_gs_hist" gives %->.
-  destruct σ.
-  iSpecialize ("Hfupd" $! [link]).
-  simpl in *.
-  iNamedSuffix "Hown_gs_hist" "0".
-  iEval (rewrite /own) in "Hadtr".
-  iNamedSuffix "Hadtr" "1".
-  simpl in *.
-  iCombine "Hgs_links0 Hgs_links1" as "Hgs_links".
-  iMod (mono_list_auth_own_update_app [link] with "Hgs_links")
-    as "((Hgs_links0&Hgs_links1)&#Hlb_links)".
-  iMod ("Hfupd" with "[$Hgs_links1 //]") as "HQ".
+  iApply ncfupd_wp.
+  rewrite /own.
+  iMod "Hfupd" as "(%σ'&Hown_gs'&Hfupd)".
+  destruct σ'.
+  iCombine "Hown_gs Hown_gs'" as "Hown_gs" gives %?.
+  rewrite Qp.half_half.
+  simplify_eq/=.
+  rewrite /own_aux. iNamed "Hown_gs". simpl.
+  iMod (mono_list_auth_own_update_app [dig] with "Hgs_digs") as "[[Hhist Hhist'] #Hlb_hist]".
+  iMod ("Hfupd" with "[$Hhist']") as "HQ".
+  iAssert (own_aux _ (state.mk _) (1/2))%I with "[$Hhist]" as "Hown_gs".
   iModIntro.
 
+  iPoseProof "Hwish_getNextLink_n" as "H".
+  iNamedSuffix "H" "_n".
+  simplify_eq/=.
+  eassert (ktcore.mono_plain (vrf_pkγ γ)
+    (drop (audit_offsetγ γ) (digs ++ [_]))) as Hmono_plain'.
+  { rewrite drop_app_le; [|lia].
+    unfold ktcore.mono_plain in *.
+    rewrite !fmap_app.
+    eapply list_reln_snoc; [done|].
+    intros * Hlast_hist.
+    rewrite !fmap_last in Hlast_hist.
+    erewrite last_drop_Some in Hlast_hist; [|done|word].
+    simplify_eq/=.
+    by apply ktcore.plain_inv_mono. }
+  clear Hmono_maps.
   iNamed "Hproof".
-  wp_apply ktcore.wp_SignLink as "* H".
-  { iFrame "Hinv_sigpred_n #".
-    replace (uint.nat _ - uint.nat _)%nat with (length links) by word.
-    by rewrite lookup_snoc. }
-  iNamedSuffix "H" "_my".
+  wp_apply ktcore.wp_SignLink as "* @".
+  { with_strategy transparent [hashchain.valid]
+      destruct His_link_n as [His_link _].
+    iFrame "#%".
+    iPureIntro. split; [len|word]. }
+
   wp_apply wp_alloc as "* Hstr_epoch_n".
   iPersist "Hstr_epoch_n".
-  wp_apply wp_slice_literal as "* [Hsl_tmp _]".
-  wp_apply (wp_slice_append with "[$Hsl_epochs $Hcap_epochs $Hsl_tmp]")
+  wp_apply wp_slice_literal as "* Ht".
+  { iIntros "**". by wp_auto. }
+  replace (sint.nat (W64 0)) with 0%nat by word. simpl.
+  wp_apply (wp_slice_append with "[$Hsl_epochs $Hcap_epochs $Ht]")
     as "* (Hsl_epochs&Hcap_epochs&_)".
   iModIntro.
   rewrite ktcore.rw_BlameNone.
@@ -625,19 +646,28 @@ Proof.
   iFrame "∗".
   iFrame "Hstr_serv #".
   simpl in *.
-  replace (W64 (_ + (_ + _)%nat)) with ep by word.
-  iFrame "#".
-  simpl in *.
-  iSplit.
-  { iPureIntro.
-    autorewrite with len.
-    repeat split; try done; [|word..].
-    by rewrite last_snoc. }
-  case_match; try done.
-  iNamed "Hgood".
-  iDestruct (wish_getNextLink_det with "Hwish_getNextLink Hwish_getNextLink_n") as %?.
-  destruct_and!. simplify_eq/=.
-  iFrame "#".
+  replace (W64 (_ + (_ + _))%nat) with ep by word.
+  iFrame "#%".
+  autorewrite with len.
+  repeat iSplit; try iPureIntro.
+  - by rewrite last_snoc.
+  - iApply big_sepL_impl; [done|].
+    iIntros "!> * %Hlook H".
+    rewrite /epoch.own /=.
+    apply lookup_lt_Some in Hlook.
+    rewrite take_app_le; [|word].
+    iFrame.
+  - exact_eq His_link_n; [|word].
+    rewrite take_ge; [done|len].
+  - word.
+  - word.
+  - word.
+  - word.
+  - case_match; try done.
+    iNamed "Hgood".
+    iDestruct (wish_getNextLink_det with "Hwish_getNextLink Hwish_getNextLink_n") as %?.
+    destruct_and!. simplify_eq/=.
+    iFrame "#".
 Qed.
 
 Lemma wp_Auditor_Update ptr_a γ Q :
