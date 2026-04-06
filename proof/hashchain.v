@@ -145,6 +145,24 @@ to append to the hashchain. *)
 Definition valid vs cut hash fuel :=
   inv_fn hash fuel = (vs, cut) ∧ Z.of_nat (length hash) = cryptoffi.hash_len.
 
+Lemma fuel_bound hash fuel vs cut :
+  inv_fn hash fuel = (vs, cut) →
+  (length vs ≤ fuel)%nat.
+Proof.
+  revert hash vs.
+  induction fuel; intros; simplify_eq/=; [done|].
+  case_match; simplify_eq/=; [lia|idtac|lia].
+  destruct (inv_fn prevLink fuel) as [vs cut] eqn:Hinv.
+  ospecialize (IHfuel _ _ _).
+  { by erewrite Hinv. }
+  simpl. len.
+Qed.
+
+Lemma fuel_bound' {vs cut hash fuel} :
+  valid vs cut hash fuel →
+  (length vs ≤ fuel)%nat.
+Proof. intros [? _]. by eapply fuel_bound. Qed.
+
 (* there are multiple parties (some operating under is_Some cut)
 that rely on the HashChain API to determ compute the same hash.
 lucky for us, a hashchain (unlike a merkle tree) only has one location for cuts.
