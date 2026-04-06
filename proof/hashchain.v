@@ -187,6 +187,14 @@ Lemma fuel_bound' {vs cut hash fuel} :
   (length vs ≤ fuel)%nat.
 Proof. intros [? _]. by eapply fuel_bound. Qed.
 
+Tactic Notation "case_match_nat" :=
+  match goal with
+  | H : context [ match ?x with _ => _ end ] |- _ =>
+    match type of x with nat => destruct x as [|x] end
+  | |- context [ match ?x with _ => _ end ] =>
+    match type of x with nat => destruct x as [|x] end
+  end.
+
 (* there are multiple parties (some operating under is_Some cut)
 that rely on the HashChain API to determ compute the same hash.
 lucky for us, a hashchain (unlike a merkle tree) only has one location for cuts.
@@ -196,10 +204,11 @@ Lemma det hash0 hash1 fuel0 fuel1 :
   hash0 = hash1.
 Proof.
   revert hash0 hash1 fuel1.
-  induction fuel0; intros;
-    destruct fuel1; simplify_eq/=; try done;
-    try destruct (dec_chain (cryptoffi.hash_inv_fn hash0)) eqn:Hdec0;
+  induction fuel0 as [? IH] using lt_wf_ind.
+  intros * Hinv. rewrite !inv_fn_unfold in Hinv.
+  try destruct (dec_chain (cryptoffi.hash_inv_fn hash0)) eqn:Hdec0;
     try destruct (dec_chain (cryptoffi.hash_inv_fn hash1)) eqn:Hdec1;
+    repeat case_match_nat;
     simplify_eq/=; try done;
     try discriminate_list.
   - apply dec_empty_inj in Hdec0.
@@ -208,7 +217,7 @@ Proof.
     apply cryptoffi.hash_bij_r in Hdec1.
     by simplify_eq/=.
   - list_simplifier.
-    opose proof (IHfuel0 prevLink prevLink0 fuel1 _) as ->.
+    opose proof (IH fuel0 _ prevLink prevLink0 fuel1 _) as ->; [lia|..].
     { do 2 destruct (inv_fn _ _). by simplify_eq/=. }
     apply dec_link_inj in Hdec0 as [Hdec0 _].
     apply dec_link_inj in Hdec1 as [Hdec1 _].
@@ -277,7 +286,7 @@ Lemma wp_GetEmptyLink :
   {{{
     sl_hash hash, RET #sl_hash;
     "Hsl_hash" ∷ sl_hash ↦* hash ∗
-    "%His_chain" ∷ ⌜valid [] None hash 1⌝
+    "%His_chain" ∷ ⌜valid [] None hash 0⌝
   }}}.
 Proof.
   wp_start.
@@ -330,10 +339,10 @@ Definition own (ptr : loc) (vs : list $ list w8) (d : dfrac) : iProp Σ :=
   "#Hsl_pred_last_link" ∷ sl_pred_last_link ↦*□ pred_last_link ∗
   "%His_chain_pred" ∷ ⌜∀ x vs',
     vs = vs' ++ [x] →
-    valid vs' None pred_last_link (S $ length vs')⌝ ∗
+    valid vs' None pred_last_link (length vs')⌝ ∗
 
   "#Hsl_last_link" ∷ sl_last_link ↦*□ last_link ∗
-  "%His_chain" ∷ ⌜valid vs None last_link (S $ length vs)⌝ ∗
+  "%His_chain" ∷ ⌜valid vs None last_link (length vs)⌝ ∗
 
   "Hsl_enc" ∷ sl_enc ↦*{d} enc ∗
   "Hsl_enc_cap" ∷ own_slice_cap w8 sl_enc d ∗
@@ -396,7 +405,7 @@ Lemma wp_HashChain_Append ptr_c vs sl_v d0 v :
     "Hown_HashChain" ∷ own ptr_c (vs ++ [v]) 1 ∗
     "Hsl_val" ∷ sl_v ↦*{d0} v ∗
     "#Hsl_newLink" ∷ sl_newLink ↦*□ newLink ∗
-    "%His_chain" ∷ ⌜valid (vs ++ [v]) None newLink (S $ S $ length vs)⌝
+    "%His_chain" ∷ ⌜valid (vs ++ [v]) None newLink (S $ length vs)⌝
   }}}.
 Proof.
   wp_start. iNamed "Hpre". iNamed "Hown_HashChain".
@@ -627,7 +636,7 @@ Lemma wp_HashChain_Bootstrap c vs d :
     "#Hsl_bootLink" ∷ sl_bootLink ↦*□ bootLink ∗
     "Hsl_proof" ∷ sl_proof ↦* proof ∗
 
-    "%His_bootLink" ∷ ⌜valid (take (pred $ length vs) vs) None bootLink (length vs)⌝ ∗
+    "%His_bootLink" ∷ ⌜valid (take (pred $ length vs) vs) None bootLink (pred $ length vs)⌝ ∗
     "%Hwish" ∷ ⌜wish_Proof proof (drop (pred $ length vs) vs)⌝
   }}}.
 Proof.
