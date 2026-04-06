@@ -129,16 +129,33 @@ Proof.
 Qed.
 
 (* returns [vs] and [cut].
-to invert all [vs], fuel should at least be [S $ length vs]. *)
+to invert both [vs] AND starting link, use [fuel = length vs].
+
+impl runs one more invert than fuel so that hashchain user
+doesn't need to worry about inverting starting link.
+concretely, this lets the user do [fuel = length vs] instead of
+[fuel = S $ length vs], which gives a tighter [fuel_bound]. *)
 Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
-  match fuel with 0%nat => ([], Some hash) | S fuel' =>
   match dec_chain (cryptoffi.hash_inv_fn hash) with
   | DecEmpty => ([], None)
   | DecLink prevLink v =>
+    match fuel with 0%nat => ([], Some hash) | S fuel' =>
     let x := inv_fn prevLink fuel' in
-    (x.1 ++ [v], x.2)
+    (x.1 ++ [v], x.2) end
   | DecInvalid => ([], Some hash)
-  end end.
+  end.
+
+Lemma inv_fn_unfold hash fuel :
+  inv_fn hash fuel =
+  match dec_chain (cryptoffi.hash_inv_fn hash) with
+  | DecEmpty => ([], None)
+  | DecLink prevLink v =>
+    match fuel with 0%nat => ([], Some hash) | S fuel' =>
+    let x := inv_fn prevLink fuel' in
+    (x.1 ++ [v], x.2) end
+  | DecInvalid => ([], Some hash)
+  end.
+Proof. by destruct fuel. Qed.
 
 (* [valid] lets us use [hash] in the fixed-length hash encoding,
 to append to the hashchain. *)
@@ -149,6 +166,9 @@ Lemma fuel_bound hash fuel vs cut :
   inv_fn hash fuel = (vs, cut) →
   (length vs ≤ fuel)%nat.
 Proof.
+  rewrite inv_fn_unfold.
+  case_match; intros; simplify_eq/=; try lia.
+  (* leftoff *)
   revert hash vs.
   induction fuel; intros; simplify_eq/=; [done|].
   case_match; simplify_eq/=; [lia|idtac|lia].

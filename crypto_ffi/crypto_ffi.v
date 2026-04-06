@@ -14,6 +14,8 @@ From Perennial.goose_lang Require Import crash_modality.
 From New.golang Require Import theory.
 From Cryptoffi Require Export impl.
 
+(* TODO: add key ideas. *)
+
 Set Default Proof Using "Type".
 Set Printing Projections.
 
