@@ -1038,9 +1038,8 @@ Proof.
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". iPureIntro.
     destruct γ.(cfg.sigγ).(cfg.info). simplify_eq/=.
-    destruct His_chain as [His_chain _].
-    repeat split.
-    - exact_eq His_chain. f_equal. word.
+    split; [|repeat split].
+    - exact_eq His_chain. word.
     - len.
     - lia.
     - by rewrite drop_0. }
@@ -1407,7 +1406,6 @@ Proof.
   repeat iSplit; try iPureIntro.
   - word.
   - word.
-  - exact_eq His_bootLink. lia.
   - exact_eq His_link. f_equal. lia.
   - done.
 Qed.
@@ -1459,7 +1457,6 @@ Proof.
   { rewrite /ktcore.mono_plain. apply list_reln_singleton. }
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". rewrite /linkP.
-    destruct His_chain as [His_chain _].
     simplify_eq/=. by iFrame "#%". }
   wp_apply wp_alloc as "%ptr_audit Hptr_audit".
   wp_apply wp_slice_literal as "* Ht".

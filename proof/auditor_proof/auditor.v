@@ -214,7 +214,7 @@ Proof.
   2: {
     iApply "HΦ". iIntros "@". simpl in *.
     destruct His_chain_prev as []. word. }
-  opose proof (hashchain.invert PrevLink (S $ uint.nat PrevEpochLen))
+  opose proof (hashchain.invert PrevLink (uint.nat PrevEpochLen))
     as (?&?&His_chain_prev); [word|].
   wp_apply (hashchain.wp_Verify with "[]") as "* @".
   { iFrame "#%". }
@@ -628,9 +628,7 @@ Proof.
   clear Hmono_maps.
   iNamed "Hproof".
   wp_apply ktcore.wp_SignLink as "* @".
-  { with_strategy transparent [hashchain.valid]
-      destruct His_link_n as [His_link _].
-    iFrame "#%".
+  { iFrame "#%".
     iPureIntro. split; [len|word]. }
 
   wp_apply wp_alloc as "* Hstr_epoch_n".
@@ -875,57 +873,40 @@ Proof.
   iNamed "Hptr_chain".
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". rewrite /linkP. simplify_eq/=.
-    iFrame "#".
     iNamed "Hwish_CheckStartChain".
+    iFrame "#%".
     iPureIntro.
-    with_strategy transparent [hashchain.valid]
-      (destruct His_chain_prev as [His_link0 _];
-      destruct His_chain_start as [His_link1 _]).
-    apply hashchain.fuel_bound in His_link0 as ?.
-    apply hashchain.fuel_bound in His_link1 as ?.
-    repeat split; try done.
-    - subst. autorewrite with len in *.
-      rewrite last_lookup in Heq_dig.
-      apply lookup_lt_Some in Heq_dig.
-      clear -Heq_ep H H1 Heq_dig.
-      remember (length digs0) as len0.
-      remember (length digs1) as len1.
-      clear Heqlen0 Heqlen1 digs0 digs1.
-      destruct chain. simpl in *.
-      assert (S (uint.nat ep) >= len0 + len1)%nat; [|word].
-      Fail word.
-
-      (* something's not quite right with the bounds.
-      - invert link (S S ep) = (digs, cut).
-      - use start_ep = S ep - len digs.
-      - prove: S ep >= len digs.
-      - from hashchain bound, only get S S ep >= len digs.
-
-      - potential problem: hashchain fuel tied to hash inversion.
-      - maybe tie it to length vs.
-      *)
+    apply hashchain.fuel_bound' in His_chain_start as ?.
+    repeat split.
+    - word.
+    - rewrite last_lookup in Hlast_digs.
+      apply lookup_lt_Some in Hlast_digs.
+      word.
+    - apply last_Some in Hlast_digs as (digs'&->).
+      replace (pred _) with (length digs'); [|len].
+      rewrite drop_app_length /ktcore.mono_plain.
+      apply server.list_reln_singleton. }
 
   wp_apply wp_alloc as "* Hstr_epoch".
   iPersist "Hstr_epoch".
-  unshelve (wp_apply wp_slice_literal as "* [Hsl_epochs Hcap_epochs]"); [apply _|].
+  wp_apply wp_slice_literal as "* Hsl_epochs".
+  { iIntros "**". by wp_auto. }
+  (* leftoff. need own_slice_cap. *)
+  replace (sint.nat (W64 0)) with 0%nat by word. simpl.
   iNamed "Hptr_vrf".
   wp_apply wp_alloc as "* Hstr_hist".
   wp_apply ktcore.wp_SignVrf as "* @".
-  { iFrame "#". }
+  { iFrame "#". naive_solver. }
   wp_apply wp_alloc as "* Hstr_serv".
   rewrite -wp_fupd.
   wp_apply wp_alloc as "%ptr_a Hstr_adtr".
-  iPersist "Hstr_serv Hstr_adtr".
-  iDestruct (struct_fields_split with "Hstr_adtr") as "{Hstr_adtr} H".
-  iNamedSuffix "H" "_fld".
-  simpl in *.
+  iPersist "Hstr_serv".
+  iStructNamedSuffix "Hstr_adtr" "_fld". simpl in *.
 
-  remember (Auditor.mk' (history.mk' digs cut)) as obj.
-  remember (ktcore.sigpred_cfg.mk _ _ _) as sigpredγ.
-  remember (cfg.mk servPk sigPk sigpredγ vrf.(server.StartVrf.VrfPk) servGood) as γ.
-  remember (state.mk ep [link]) as σ.
-  iDestruct "Hauth_links" as "[Hauth_links0 Hauth_links1]".
-  iMod (inv_alloc nroot _ (∃ σ, own γ σ) with "[Hauth_links0]") as "#Ht".
+  remember (cfg.mk servPk sigPk sigγ servGood) as γ.
+  remember (state.mk digs) as σ.
+  iDestruct "Hauth_digs" as "[Hauth_digs0 Hauth_digs1]".
+  iMod (inv_alloc nroot _ (∃ σ, own γ σ) with "[Hauth_digs0]") as "#Ht".
   { iExists σ. subst. iFrame "∗#". }
   iAssert (is_inv γ)%I with "Ht" as "{Ht} #His_inv".
 
