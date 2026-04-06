@@ -134,7 +134,14 @@ to invert both [vs] AND starting link, use [fuel = length vs].
 impl runs one more invert than fuel so that hashchain user
 doesn't need to worry about inverting starting link.
 concretely, this lets the user do [fuel = length vs] instead of
-[fuel = S $ length vs], which gives a tighter [fuel_bound]. *)
+[fuel = S $ length vs], which gives a tighter [fuel_bound].
+
+NOTE: many of the below cases are invariant to whether fuel=0 or S fuel'.
+to de-duplicate proof branches, we use strong induction ([lt_wf_ind]),
+which doesn't immediately destruct fuel.
+the rocq kernel doesn't allow reducing a fixpoint, unless its
+decreasing arg is a constructor.
+to get around this, we prove a manual unfolding lemma, [inv_fn_unfold]. *)
 Fixpoint inv_fn hash fuel : ((list $ list w8) * option (list w8))%type :=
   match dec_chain (cryptoffi.hash_inv_fn hash) with
   | DecEmpty => ([], None)
@@ -166,16 +173,13 @@ Lemma fuel_bound hash fuel vs cut :
   inv_fn hash fuel = (vs, cut) →
   (length vs ≤ fuel)%nat.
 Proof.
-  rewrite inv_fn_unfold.
-  case_match; intros; simplify_eq/=; try lia.
-  (* leftoff *)
-  revert hash vs.
-  induction fuel; intros; simplify_eq/=; [done|].
-  case_match; simplify_eq/=; [lia|idtac|lia].
-  destruct (inv_fn prevLink fuel) as [vs cut] eqn:Hinv.
-  ospecialize (IHfuel _ _ _).
-  { by erewrite Hinv. }
-  simpl. len.
+  revert hash vs. induction fuel as [? IH] using lt_wf_ind.
+  intros * Hinv. rewrite inv_fn_unfold in Hinv.
+  case_match; try destruct fuel as [|fuel];
+    intros; simplify_eq/=; try lia.
+  destruct (inv_fn prevLink fuel) as (vs&cut) eqn:Hinv. simpl in *.
+  ospecialize (IH fuel _ _ _ _); [lia|done|].
+  len.
 Qed.
 
 Lemma fuel_bound' {vs cut hash fuel} :
