@@ -252,7 +252,9 @@ Proof.
   { exfalso. simpl in *. word. }
   rewrite last_snoc /=.
   autorewrite with len in *.
-  repeat split. word.
+  eexists. split; [|repeat split].
+  - exact_eq His_chain. word.
+  - word.
 Qed.
 
 Lemma wp_CheckStartVrf sl_servPk servPk ptr_vrf vrf :
@@ -677,8 +679,8 @@ Lemma wp_Auditor_Update ptr_a γ Q :
     (* pers fupd so that Auditor can add mult links,
     or even run Update as a background thread. *)
     "#Hfupd" ∷ □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
-      (∀ new_links,
-      let σ' := set state.links (.++ new_links) σ in
+      (∀ new_digs,
+      let σ' := set state.digs (.++ new_digs) σ in
       own γ σ' ={∅,⊤}=∗ Q σ'))
   }}}
   ptr_a @! (go.PointerType auditor.Auditor) @! "Update" #()
@@ -694,12 +696,11 @@ Proof.
   iNamed "Hlock".
   wp_apply wp_with_defer as "* Hdefer".
   (* TODO(goose): wp_with_defer adds [subst] expr.
-  [wp_auto] should probably simpl. *)
+  almost always call [simpl] after. *)
   simpl. wp_auto.
   wp_apply (wp_RWMutex__Lock with "[$Hperm]") as "[Hlocked H]".
   iNamed "H". iNamed "Hown_hist". iNamed "Hown_serv". wp_auto.
   iDestruct (own_slice_len with "Hsl_epochs") as %[? ?].
-  iDestruct (big_sepL2_length with "Hepochs") as %?.
   wp_apply wp_CallAudit as "* @".
   { iFrame "#".
     case_match; try done.
@@ -711,7 +712,7 @@ Proof.
   rewrite -ncfupd_wp.
   iPoseProof "Hfupd" as "H".
   iMod "H" as "(%&Hadtr&Hclose)".
-  iCombine "Hadtr Hown_gs_hist" gives %->.
+  iCombine "Hadtr Hown_gs" gives %->.
   destruct σ.
   iSpecialize ("Hclose" $! []).
   list_simplifier.
@@ -729,7 +730,7 @@ Proof.
 
   iPersist "Hdefer a".
   iAssert (
-    ∃ (i : w64) (a0 : loc) a σ,
+    ∃ new_digs (i : w64) (a0 : loc),
     "i" ∷ i_ptr ↦ i ∗
     "p" ∷ p_ptr ↦ a0 ∗
     "%Hlt_i" ∷ ⌜0 ≤ sint.Z i ≤ length proofs⌝ ∗
@@ -743,12 +744,12 @@ Proof.
              "HQ" ∷ Q σ0 -∗ Φ (# (ktcore.blame_to_u64 err))) ∗
     "Hlocked" ∷ own_RWMutex_Locked ptr_mu (Auditor.own_aux ptr_a γ) ∗
 
-    "Hadtr" ∷ Auditor.own ptr_a a γ σ 1 ∗
-    "%Heq_ep" ∷ ⌜(uint.Z start_ep + length links + sint.nat i =
-      uint.Z σ.(state.start_ep) + length σ.(state.links))%Z⌝ ∗
-    "HQ" ∷ Q σ
+    "Hadtr" ∷ Auditor.own ptr_a γ (state.mk (digs ++ new_digs)) 1 ∗
+    "%Hlen_new_digs" ∷ ⌜length new_digs = sint.nat i⌝ ∗
+    "HQ" ∷ Q (state.mk (digs ++ new_digs))
   )%I with "[-]" as "IH".
-  { iFrame "∗ Hstr_serv #%". simpl. word. }
+  { iExists []. list_simplifier.
+    iFrame "∗ Hstr_serv #%". simpl. word. }
   wp_for "IH".
   wp_if_destruct.
   2: {
@@ -764,18 +765,17 @@ Proof.
   list_elem proofs (sint.nat i) as proof.
   iDestruct (big_sepL2_lookup_2_some with "Hsl_proofs") as %[? ?]; [done|].
   iDestruct (big_sepL2_lookup with "Hsl_proofs") as "Hproof"; [done..|].
-  wp_pure; [word|].
+  case_decide as Ht; [|word]. clear Ht.
   wp_apply wp_load_slice_index as "_"; [word|..].
   { by iFrame "#". }
   iNamedSuffix "Hadtr" "0".
-  wp_apply (wp_Auditor_updOnce with "[Hfld_hist0 Hown_hist0 Hown_gs_hist0]") as "* @".
+  wp_apply (wp_Auditor_updOnce with "[Hfld_hist0 Hown_hist0 Hown_gs0]") as "* @".
   { iFrame "∗ Hown_serv0 #%".
     case_match; try done.
     iDestruct (big_sepL_lookup with "Hgood") as "{Hgood} Htrans"; [done|].
-    iDestruct ("Htrans" with "Halign_hist0 []") as "{Htrans} @"; [word|].
-    iNamed "Halign_serv0".
-    rewrite Heq_sig_pk.
-    iFrame "#". }
+    iDestruct ("Htrans" with "Halign_hist0 [][]") as "{Htrans} $".
+    { simpl. len. }
+    by iNamed "Halign_serv0". }
   case_bool_decide as Heq_err; wp_auto;
     rewrite ktcore.rw_Blame0 in Heq_err; subst.
   2: {
@@ -789,8 +789,9 @@ Proof.
   case_decide; try done.
   iNamed "Herr".
   wp_for_post.
+  list_simplifier.
   iFrame.
-  simpl. len.
+  len.
 Qed.
 
 Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
@@ -800,7 +801,7 @@ Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
     "%Heq_servPk" ∷ ⌜match servGood with None => True | Some servγ =>
       servPk = servγ.(server.cfg.sig_pk) end⌝ ∗
     "#His_servPk" ∷ match servGood with None => True | Some servγ =>
-      cryptoffi.is_sig_pk servPk (ktcore.sigpred servγ.(server.cfg.sigpredγ)) end
+      cryptoffi.is_sig_pk servPk (sigpred.P servγ.(server.cfg.sigγ)) end
   }}}
   @! auditor.New #servAddr #sl_servPk
   {{{
@@ -816,7 +817,7 @@ Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
 
       "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.adtr_sig_pk) ∗
       "#His_sigPk" ∷ cryptoffi.is_sig_pk γ.(cfg.adtr_sig_pk)
-        (ktcore.sigpred γ.(cfg.sigpredγ)))
+        (sigpred.P γ.(cfg.sigγ)))
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -862,32 +863,48 @@ Proof.
   iNamed "Hgenie".
 
   wp_apply wp_alloc as "* Hmu".
-  iMod (dghost_var_alloc vrf.(server.StartVrf.VrfPk)) as (vrfγ) "Hshot_vrf".
-  iPersist "Hshot_vrf".
-  iMod (dghost_var_alloc ep) as (start_epγ) "Hshot_start_ep".
-  iPersist "Hshot_start_ep".
-  iMod (mono_list_own_alloc [link]) as (linksγ) "[Hauth_links #Hlb_links]".
-  wp_apply (cryptoffi.wp_SigGenerateKey
-    (ktcore.sigpred (ktcore.sigpred_cfg.mk vrfγ start_epγ linksγ))) as "* @".
+  iMod (mono_list_own_alloc digs) as (digsγ) "[Hauth_digs #Hlb_digs]".
+  eassert (ktcore.mono_plain vrf.(server.StartVrf.VrfPk) [dig]).
+  { rewrite /ktcore.mono_plain. apply server.list_reln_singleton. }
+  remember (sigpred.cfg.mk vrf.(server.StartVrf.VrfPk) digsγ
+    (sigpred.digs_info.mk (S (uint.nat ep) - length digs)%nat cut
+      (pred $ length digs)))
+    as sigγ.
+  wp_apply (cryptoffi.wp_SigGenerateKey (sigpred.P sigγ)) as "* @".
   iPersist "Hsl_sigPk".
-  iDestruct (merkle.is_map_invert dig) as (m) "#His_map"; [word|].
   iNamed "Hptr_chain".
-  iAssert (ktcore.sigpred_links_inv ep [link] digs cut [m])%I as "#Hinv_sigpred".
-  { rewrite /ktcore.sigpred_links_inv /=.
-    iNamed "Hwish_CheckStartChain".
-    simplify_eq/=.
-    iFrame "#".
-    autorewrite with len in *.
-    repeat iSplit; try iPureIntro; try done.
-    - rewrite last_lookup in Heq_dig.
-      apply lookup_lt_Some in Heq_dig.
-      word.
-    - iExactEq "His_chain_start". rewrite /named. f_equal; [|word].
-      rewrite take_ge; [done|len].
-    - replace (_ + _ - _ + _)%nat with (pred $ length (digs0 ++ digs1)); [|len].
-      by rewrite -last_lookup last_app Heq_dig. }
   wp_apply ktcore.wp_SignLink as "* @".
-  { iFrame "#". by replace (_ - _)%nat with 0%nat by word. }
+  { iFrame "#". rewrite /linkP. simplify_eq/=.
+    iFrame "#".
+    iNamed "Hwish_CheckStartChain".
+    iPureIntro.
+    with_strategy transparent [hashchain.valid]
+      (destruct His_chain_prev as [His_link0 _];
+      destruct His_chain_start as [His_link1 _]).
+    apply hashchain.fuel_bound in His_link0 as ?.
+    apply hashchain.fuel_bound in His_link1 as ?.
+    repeat split; try done.
+    - subst. autorewrite with len in *.
+      rewrite last_lookup in Heq_dig.
+      apply lookup_lt_Some in Heq_dig.
+      clear -Heq_ep H H1 Heq_dig.
+      remember (length digs0) as len0.
+      remember (length digs1) as len1.
+      clear Heqlen0 Heqlen1 digs0 digs1.
+      destruct chain. simpl in *.
+      assert (S (uint.nat ep) >= len0 + len1)%nat; [|word].
+      Fail word.
+
+      (* something's not quite right with the bounds.
+      - invert link (S S ep) = (digs, cut).
+      - use start_ep = S ep - len digs.
+      - prove: S ep >= len digs.
+      - from hashchain bound, only get S S ep >= len digs.
+
+      - potential problem: hashchain fuel tied to hash inversion.
+      - maybe tie it to length vs.
+      *)
+
   wp_apply wp_alloc as "* Hstr_epoch".
   iPersist "Hstr_epoch".
   unshelve (wp_apply wp_slice_literal as "* [Hsl_epochs Hcap_epochs]"); [apply _|].

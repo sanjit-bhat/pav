@@ -252,10 +252,9 @@ Proof. Admitted.
 Definition wish_CheckStartChain servPk chain digs cut (ep : w64) dig link : iProp Σ :=
   ∃ digs0 digs1,
   "%His_chain_prev" ∷ ⌜hashchain.valid digs0 cut chain.(StartChain.PrevLink)
-      (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
+    (S $ uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
   "%His_proof" ∷ ⌜hashchain.wish_Proof chain.(server.StartChain.ChainProof) digs1⌝ ∗
-  "%His_chain_start" ∷ ⌜hashchain.valid digs cut link
-    (S (uint.nat chain.(StartChain.PrevEpochLen)) + length digs1)⌝ ∗
+  "%His_chain_start" ∷ ⌜hashchain.valid digs cut link (S $ S $ uint.nat ep)⌝ ∗
   "#His_link_sig" ∷ ktcore.wish_LinkSig servPk ep link chain.(server.StartChain.LinkSig) ∗
 
   "%Heq_digs" ∷ ⌜digs = digs0 ++ digs1⌝ ∗

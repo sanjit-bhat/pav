@@ -16,7 +16,7 @@ Record t :=
     start_ep : nat;
     (* the hashchain cut. *)
     cut : option $ list w8;
-    (* the offset in digs after which auditor started monitoring. *)
+    (* the offset in digs from when auditor started monitoring. *)
     audit_offset : nat;
   }.
 End digs_info.
