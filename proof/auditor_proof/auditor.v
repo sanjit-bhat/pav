@@ -401,7 +401,7 @@ Lemma wp_getNextLink γ σ sl_sigPk (prevEp : w64) sl_prevDig prevDig
     "%Heq_prevEp" ∷ ⌜uint.Z prevEp = start_epγ γ + length σ.(state.digs) - 1⌝ ∗
     "%Heq_prevDig" ∷ ⌜last σ.(state.digs) = Some prevDig⌝ ∗
     "#His_prevLink" ∷ ⌜hashchain.valid σ.(state.digs)
-      (cutγ γ) prevLink (S $ S $ uint.nat prevEp)⌝
+      (cutγ γ) prevLink (S $ uint.nat prevEp)⌝
   }}}
   @! auditor.getNextLink #sl_sigPk #prevEp #sl_prevDig #sl_prevLink #ptr_p
   {{{

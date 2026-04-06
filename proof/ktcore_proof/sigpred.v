@@ -60,8 +60,8 @@ Qed.
 
 Definition linkP γ (ep : w64) link : iProp Σ :=
   ∃ digs,
-  "%Hinv" ∷ ⌜hashchain.inv_fn link (S $ S $ uint.nat ep) =
-    (digs, γ.(cfg.info).(digs_info.cut))⌝ ∗
+  "%Hinv" ∷ ⌜hashchain.valid digs γ.(cfg.info).(digs_info.cut)
+    link (S $ uint.nat ep)⌝ ∗
   "#Hlb_digs" ∷ mono_list_lb_own γ.(cfg.digs) digs ∗
   "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (γ.(cfg.info).(digs_info.start_ep) + length digs)%nat⌝ ∗
   (* we started auditing at least by this epoch. *)
