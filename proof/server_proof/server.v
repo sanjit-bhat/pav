@@ -727,8 +727,7 @@ Proof.
   { iPureIntro. exact_eq Hpk_lookup'. f_equal. word. }
   wp_apply wp_alloc as "%ptr_open Hptr_open".
   wp_apply wp_alloc as "%ptr_memb Hptr_memb".
-  wp_apply wp_slice_literal as "* Ht".
-  { iIntros "**". by wp_auto. }
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Ht _]". wp_auto.
   replace (sint.nat _) with 0%nat by word. simpl.
   iPersist "Hptr_open Hptr_memb".
   wp_apply (wp_slice_append with "[$Hsl_hist $Hcap_hist $Ht]")
@@ -958,16 +957,14 @@ Proof.
       by apply cryptoffi.is_vrf_len in Ht. }
     iPersist "Hsl_updProof". simpl.
     wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
-    wp_apply wp_slice_literal as "* Ht".
-    { iIntros "**". by wp_auto. }
+    wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Ht _]". wp_auto.
     replace (sint.nat _) with 0%nat by word. simpl.
     wp_apply (wp_slice_append with "[$Hsl_pks $Hcap_pks $Ht]")
       as "%sl_pks (Hsl_pks&Hcap_pks&_)".
     simpl. wp_apply (wp_map_insert with "[$Hptr_plain]") as "Hptr_plain".
     wp_apply wp_alloc as "%ptr_info Hptr_info".
     iPersist "Hptr_info".
-    wp_apply wp_slice_literal as "* Ht".
-    { iIntros "**". by wp_auto. }
+    wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Ht _]". wp_auto.
     replace (sint.nat _) with 0%nat by word. simpl.
     wp_apply (wp_slice_append with "[$Hsl_upd $Hcap_upd $Ht]")
       as "%sl_upd' (Hsl_upd&Hcap_upd&_)".
@@ -1046,8 +1043,7 @@ Proof.
 
   wp_apply wp_alloc as "%ptr_audit Hptr_audit".
   iPersist "Hptr_audit".
-  wp_apply wp_slice_literal as "* Ht".
-  { iIntros "**". by wp_auto. }
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Ht _]". wp_auto.
   replace (sint.nat _) with 0%nat by word. simpl.
   wp_apply (wp_slice_append with "[$Hsl_audits $Hcap_audits $Ht]")
     as "%sl_audits' (Hsl_audits&Hcap_audits&_)".
@@ -1459,8 +1455,7 @@ Proof.
   { iFrame "#". rewrite /linkP.
     simplify_eq/=. by iFrame "#%". }
   wp_apply wp_alloc as "%ptr_audit Hptr_audit".
-  wp_apply wp_slice_literal as "* Ht".
-  { iIntros "**". by wp_auto. }
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Ht _]". wp_auto.
   replace (sint.nat _) with 0%nat by word. simpl.
   (* TODO: [Ht] not framing without specifying [ptr_audit]. *)
   wp_apply (wp_slice_append _ _ _ [ptr_audit] with "[Ht]")

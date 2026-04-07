@@ -633,8 +633,7 @@ Proof.
 
   wp_apply wp_alloc as "* Hstr_epoch_n".
   iPersist "Hstr_epoch_n".
-  wp_apply wp_slice_literal as "* Ht".
-  { iIntros "**". by wp_auto. }
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Ht _]". wp_auto.
   replace (sint.nat (W64 0)) with 0%nat by word. simpl.
   wp_apply (wp_slice_append with "[$Hsl_epochs $Hcap_epochs $Ht]")
     as "* (Hsl_epochs&Hcap_epochs&_)".
@@ -889,8 +888,7 @@ Proof.
 
   wp_apply wp_alloc as "* Hstr_epoch".
   iPersist "Hstr_epoch".
-  wp_apply wp_slice_literal as "* Hsl_epochs".
-  { iIntros "**". by wp_auto. }
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Hsl_epochs _]". wp_auto.
   (* leftoff. need own_slice_cap. *)
   replace (sint.nat (W64 0)) with 0%nat by word. simpl.
   iNamed "Hptr_vrf".

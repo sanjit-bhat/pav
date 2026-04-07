@@ -317,8 +317,7 @@ Proof.
   wp_apply cryptoffi.wp_NewHasher as "* @".
   (* TODO: in Search output, [go_instruction_ind] comes earlier than
   [wp_slice_literal]. maybe hide it from Search. *)
-  wp_apply wp_slice_literal as "* Hsl_b".
-  { iIntros "**". by wp_auto. }
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Hsl_b _]". wp_auto.
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_b]") as "@".
   iClear "Hsl_b".
   wp_apply wp_WriteInt as "* [Hsl_b _]".
@@ -362,8 +361,7 @@ Lemma wp_compInnerHash sl_child0 sl_child1 (child0 child1 : list w8) :
 Proof.
   wp_start as "@". wp_auto.
   wp_apply cryptoffi.wp_NewHasher as "* @".
-  wp_apply wp_slice_literal as "* Hsl_b".
-  { iIntros "**". by wp_auto. }
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Hsl_b _]". wp_auto.
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_b]") as "@".
   iClear "Hsl_b".
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_child0]") as "@".
