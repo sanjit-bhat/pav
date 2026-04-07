@@ -861,35 +861,35 @@ Proof.
 
   wp_apply wp_alloc as "* Hmu".
   iMod (mono_list_own_alloc digs) as (digsγ) "[Hauth_digs #Hlb_digs]".
-  eassert (ktcore.mono_plain vrf.(server.StartVrf.VrfPk) [dig]).
-  { rewrite /ktcore.mono_plain. apply server.list_reln_singleton. }
   remember (sigpred.cfg.mk vrf.(server.StartVrf.VrfPk) digsγ
     (sigpred.digs_info.mk (S (uint.nat ep) - length digs)%nat cut
       (pred $ length digs)))
     as sigγ.
+  assert (ktcore.mono_plain sigγ.(sigpred.cfg.vrf_pk)
+    (drop sigγ.(sigpred.cfg.info).(sigpred.digs_info.audit_offset) digs)).
+  { simplify_eq/=.
+    apply last_Some in Hlast_digs as (digs'&->).
+    replace (pred _) with (length digs'); [|len].
+    rewrite drop_app_length /ktcore.mono_plain.
+    apply server.list_reln_singleton. }
+  iAssert (⌜0 < length digs ≤ S $ uint.nat ep⌝)%I as %?.
+  { rewrite last_lookup in Hlast_digs.
+    apply lookup_lt_Some in Hlast_digs.
+    iNamed "Hwish_CheckStartChain".
+    apply hashchain.fuel_bound' in His_chain_start as ?.
+    word. }
   wp_apply (cryptoffi.wp_SigGenerateKey (sigpred.P sigγ)) as "* @".
   iPersist "Hsl_sigPk".
   iNamed "Hptr_chain".
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". rewrite /linkP. simplify_eq/=.
     iNamed "Hwish_CheckStartChain".
-    iFrame "#%".
-    iPureIntro.
-    apply hashchain.fuel_bound' in His_chain_start as ?.
-    repeat split.
-    - word.
-    - rewrite last_lookup in Hlast_digs.
-      apply lookup_lt_Some in Hlast_digs.
-      word.
-    - apply last_Some in Hlast_digs as (digs'&->).
-      replace (pred _) with (length digs'); [|len].
-      rewrite drop_app_length /ktcore.mono_plain.
-      apply server.list_reln_singleton. }
+    iFrame "#%". word. }
 
   wp_apply wp_alloc as "* Hstr_epoch".
   iPersist "Hstr_epoch".
-  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Hsl_epochs _]". wp_auto.
-  (* leftoff. need own_slice_cap. *)
+  wp_apply wp_slice_literal. iSplitR; [done|].
+  iIntros "* [Hsl_epochs Hcap_epochs]". wp_auto.
   replace (sint.nat (W64 0)) with 0%nat by word. simpl.
   iNamed "Hptr_vrf".
   wp_apply wp_alloc as "* Hstr_hist".
@@ -899,7 +899,8 @@ Proof.
   rewrite -wp_fupd.
   wp_apply wp_alloc as "%ptr_a Hstr_adtr".
   iPersist "Hstr_serv".
-  iStructNamedSuffix "Hstr_adtr" "_fld". simpl in *.
+  iStructNamed "Hstr_adtr". simpl in *.
+  iPersist "sk serv mu hist".
 
   remember (cfg.mk servPk sigPk sigγ servGood) as γ.
   remember (state.mk digs) as σ.
@@ -909,15 +910,22 @@ Proof.
   iAssert (is_inv γ)%I with "Ht" as "{Ht} #His_inv".
 
   iMod (init_RWMutex (Auditor.own_aux ptr_a γ) with "[-HΦ Hmu] Hmu") as "Hlocks".
-  { iExists obj, σ.
+  { iExists σ.
     subst. iModIntro.
     iNamed "Hwish_CheckStartVrf".
-    iFrame "Hstr_hist #∗".
+    iFrame "Hstr_hist #∗%".
     simpl in *.
     repeat iSplit; try done; try iPureIntro.
-    - replace (W64 (_ + _)) with ep by word.
+    - replace (_ + 0)%nat with (uint.nat ep) by word.
       iNamed "Hwish_CheckStartChain".
       iFrame "Hstr_epoch #".
+      simpl in *.
+      replace (W64 (uint.nat _)) with ep by word.
+      rewrite take_ge; [|word].
+      iFrame "#%".
+    - word.
+    - word.
+    - word.
     - word.
     - case_match; try done.
       iNamedSuffix "Hgood" "0".
@@ -925,10 +933,8 @@ Proof.
       iDestruct (server.wish_CheckStartChain_det with
         "Hwish_StartChain0 Hwish_CheckStartChain") as %?.
       destruct_and!. subst.
-      iFrame "#". iPureIntro. simpl. repeat split.
-      rewrite last_lookup in Hlast_digs.
-      apply lookup_lt_Some in Hlast_digs.
-      autorewrite with len in *. word.
+      iFrame "#".
+      iPureIntro. simpl. repeat split. word.
     - case_match; try done.
       iFrame "#". simpl in *.
       by iNamed "Hgood". }
