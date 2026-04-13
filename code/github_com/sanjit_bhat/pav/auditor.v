@@ -27,10 +27,6 @@ Definition history {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := g
 
 #[global] Opaque history.
 
-Definition epoch {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.epoch"%go [].
-
-#[global] Opaque epoch.
-
 Definition serv {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/auditor.serv"%go [].
 
 #[global] Opaque serv.
@@ -85,7 +81,7 @@ Definition GetReplyDecode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_st
 
 (* Update queries server for a new epoch update and applies it.
 
-   go: auditor.go:47:19 *)
+   go: auditor.go:39:19 *)
 Definition Auditor__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "a" <>,
     with_defer: (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -98,8 +94,8 @@ Definition Auditor__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
       "$oldf" #()
       )));;;
     let: "prevEp" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: "$r0" := (((![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] (StructFieldRef Auditor "hist"%go (![go.PointerType Auditor] "a"))))) +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType epoch)] (StructFieldRef history "epochs"%go (![go.PointerType history] (StructFieldRef Auditor "hist"%go (![go.PointerType Auditor] "a"))))) in
-    (FuncResolve go.len [go.SliceType (go.PointerType epoch)] #()) "$a0"))) -⟨go.uint64⟩ #(W64 1)) in
+    let: "$r0" := (((![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] (StructFieldRef Auditor "hist"%go (![go.PointerType Auditor] "a"))))) +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType SignedLink)] (StructFieldRef history "epochs"%go (![go.PointerType history] (StructFieldRef Auditor "hist"%go (![go.PointerType Auditor] "a"))))) in
+    (FuncResolve go.len [go.SliceType (go.PointerType SignedLink)] #()) "$a0"))) -⟨go.uint64⟩ #(W64 1)) in
     do:  ("prevEp" <-[go.uint64] "$r0");;;
     let: "upd" := (GoAlloc (go.SliceType (go.PointerType ktcore.AuditProof)) (GoZeroVal (go.SliceType (go.PointerType ktcore.AuditProof)) #())) in
     let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType advrpc.Client] (StructFieldRef serv "cli"%go (![go.PointerType serv] (StructFieldRef Auditor "serv"%go (![go.PointerType Auditor] "a"))))) in
@@ -125,7 +121,7 @@ Definition Auditor__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
       else do:  #()))));;;
     return: (![ktcore.Blame] "err")).
 
-(* go: auditor.go:64:19 *)
+(* go: auditor.go:56:19 *)
 Definition Auditor__updOnceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "a" "p",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -138,12 +134,12 @@ Definition Auditor__updOnceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
     let: "$r0" := (![go.PointerType history] (StructFieldRef Auditor "hist"%go (![go.PointerType Auditor] "a"))) in
     do:  ("hist" <-[go.PointerType history] "$r0");;;
     let: "prevEp" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: "$r0" := (((![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] "hist"))) +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType epoch)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist"))) in
-    (FuncResolve go.len [go.SliceType (go.PointerType epoch)] #()) "$a0"))) -⟨go.uint64⟩ #(W64 1)) in
+    let: "$r0" := (((![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] "hist"))) +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType SignedLink)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist"))) in
+    (FuncResolve go.len [go.SliceType (go.PointerType SignedLink)] #()) "$a0"))) -⟨go.uint64⟩ #(W64 1)) in
     do:  ("prevEp" <-[go.uint64] "$r0");;;
     let: "prevLink" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "$r0" := (![go.SliceType go.byte] (StructFieldRef epoch "link"%go (![go.PointerType epoch] (IndexRef (go.SliceType (go.PointerType epoch)) (![go.SliceType (go.PointerType epoch)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist")), (let: "$a0" := (![go.SliceType (go.PointerType epoch)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist"))) in
-     (FuncResolve go.len [go.SliceType (go.PointerType epoch)] #()) "$a0") -⟨go.int⟩ #(W64 1)))))) in
+    let: "$r0" := (![go.SliceType go.byte] (StructFieldRef SignedLink "Link"%go (![go.PointerType SignedLink] (IndexRef (go.SliceType (go.PointerType SignedLink)) (![go.SliceType (go.PointerType SignedLink)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist")), (let: "$a0" := (![go.SliceType (go.PointerType SignedLink)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist"))) in
+     (FuncResolve go.len [go.SliceType (go.PointerType SignedLink)] #()) "$a0") -⟨go.int⟩ #(W64 1)))))) in
     do:  ("prevLink" <-[go.SliceType go.byte] "$r0");;;
     let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "link" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
@@ -177,28 +173,30 @@ Definition Auditor__updOnceⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
     do:  ("sig" <-[go.SliceType go.byte] "$r0");;;
     let: "$r0" := (![go.SliceType go.byte] "dig") in
     do:  ((StructFieldRef history "lastDig"%go (![go.PointerType history] "hist")) <-[go.SliceType go.byte] "$r0");;;
-    let: "info" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
-    let: "$r0" := (GoAlloc epoch (let: "$v0" := (![go.SliceType go.byte] "link") in
+    let: "info" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "$r0" := (GoAlloc SignedLink (let: "$v0" := (![go.SliceType go.byte] "link") in
     let: "$v1" := (![go.SliceType go.byte] (StructFieldRef ktcore.AuditProof "LinkSig"%go (![go.PointerType ktcore.AuditProof] "p"))) in
     let: "$v2" := (![go.SliceType go.byte] "sig") in
-    CompositeLiteral epoch (LiteralValue [KeyedElement (Some (KeyField "link"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "servSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "adtrSig"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
-    do:  ("info" <-[go.PointerType epoch] "$r0");;;
-    let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType epoch)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist"))) in
-    let: "$a1" := ((let: "$sl0" := (![go.PointerType epoch] "info") in
-    CompositeLiteral (go.SliceType (go.PointerType epoch)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType epoch) "$sl0")]))) in
-    (FuncResolve go.append [go.SliceType (go.PointerType epoch)] #()) "$a0" "$a1") in
-    do:  ((StructFieldRef history "epochs"%go (![go.PointerType history] "hist")) <-[go.SliceType (go.PointerType epoch)] "$r0");;;
+    CompositeLiteral SignedLink (LiteralValue [KeyedElement (Some (KeyField "Link"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "ServSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "AdtrSig"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
+    do:  ("info" <-[go.PointerType SignedLink] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType SignedLink)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist"))) in
+    let: "$a1" := ((let: "$sl0" := (![go.PointerType SignedLink] "info") in
+    CompositeLiteral (go.SliceType (go.PointerType SignedLink)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType SignedLink) "$sl0")]))) in
+    (FuncResolve go.append [go.SliceType (go.PointerType SignedLink)] #()) "$a0" "$a1") in
+    do:  ((StructFieldRef history "epochs"%go (![go.PointerType history] "hist")) <-[go.SliceType (go.PointerType SignedLink)] "$r0");;;
     return: (![ktcore.Blame] "err")).
 
 (* Get returns the auditor's info for a particular epoch.
    it errors if the epoch is out of bounds.
 
-   go: auditor.go:85:19 *)
+   go: auditor.go:77:19 *)
 Definition Auditor__Getⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "a" "epoch",
     with_defer: (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "vrf" := (GoAlloc (go.PointerType SignedVrf) (GoZeroVal (go.PointerType SignedVrf) #())) in
-    let: "link" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "currLink" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "startLink" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "startEp" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: "a" := (GoAlloc (go.PointerType Auditor) "a") in
     let: "epoch" := (GoAlloc go.uint64 "epoch") in
     do:  ((MethodResolve (go.PointerType sync.RWMutex) "RLock"%go (![go.PointerType sync.RWMutex] (StructFieldRef Auditor "mu"%go (![go.PointerType Auditor] "a")))) #());;;
@@ -215,34 +213,29 @@ Definition Auditor__Getⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     then
       let: "$r0" := #true in
       do:  ("err" <-[go.bool] "$r0");;;
-      return: (![go.PointerType SignedLink] "link", ![go.PointerType SignedVrf] "vrf", ![go.bool] "err")
+      return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![go.bool] "err")
     else do:  #());;;
     let: "lastEp" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: "$r0" := (((![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] "hist"))) +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType epoch)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist"))) in
-    (FuncResolve go.len [go.SliceType (go.PointerType epoch)] #()) "$a0"))) -⟨go.uint64⟩ #(W64 1)) in
+    let: "$r0" := (((![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] "hist"))) +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType SignedLink)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist"))) in
+    (FuncResolve go.len [go.SliceType (go.PointerType SignedLink)] #()) "$a0"))) -⟨go.uint64⟩ #(W64 1)) in
     do:  ("lastEp" <-[go.uint64] "$r0");;;
     (if: Convert go.untyped_bool go.bool ((![go.uint64] "epoch") >⟨go.uint64⟩ (![go.uint64] "lastEp"))
     then
       let: "$r0" := #true in
       do:  ("err" <-[go.bool] "$r0");;;
-      return: (![go.PointerType SignedLink] "link", ![go.PointerType SignedVrf] "vrf", ![go.bool] "err")
+      return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![go.bool] "err")
     else do:  #());;;
-    let: "x" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
-    let: "$r0" := (![go.PointerType epoch] (IndexRef (go.SliceType (go.PointerType epoch)) (![go.SliceType (go.PointerType epoch)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist")), Convert go.uint64 go.int ((![go.uint64] "epoch") -⟨go.uint64⟩ (![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] "hist"))))))) in
-    do:  ("x" <-[go.PointerType epoch] "$r0");;;
-    let: "$r0" := (GoAlloc SignedLink (let: "$v0" := (![go.SliceType go.byte] (StructFieldRef epoch "link"%go (![go.PointerType epoch] "x"))) in
-    let: "$v1" := (![go.SliceType go.byte] (StructFieldRef epoch "servSig"%go (![go.PointerType epoch] "x"))) in
-    let: "$v2" := (![go.SliceType go.byte] (StructFieldRef epoch "adtrSig"%go (![go.PointerType epoch] "x"))) in
-    CompositeLiteral SignedLink (LiteralValue [KeyedElement (Some (KeyField "Link"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "ServSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "AdtrSig"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
-    do:  ("link" <-[go.PointerType SignedLink] "$r0");;;
-    let: "$r0" := (GoAlloc SignedVrf (let: "$v0" := (![go.SliceType go.byte] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Auditor "serv"%go (![go.PointerType Auditor] "a"))))) in
-    let: "$v1" := (![go.SliceType go.byte] (StructFieldRef serv "servVrfSig"%go (![go.PointerType serv] (StructFieldRef Auditor "serv"%go (![go.PointerType Auditor] "a"))))) in
-    let: "$v2" := (![go.SliceType go.byte] (StructFieldRef serv "adtrVrfSig"%go (![go.PointerType serv] (StructFieldRef Auditor "serv"%go (![go.PointerType Auditor] "a"))))) in
-    CompositeLiteral SignedVrf (LiteralValue [KeyedElement (Some (KeyField "VrfPk"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "ServSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "AdtrSig"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
+    let: "$r0" := (![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] "hist"))) in
+    do:  ("startEp" <-[go.uint64] "$r0");;;
+    let: "$r0" := (![go.PointerType SignedLink] (IndexRef (go.SliceType (go.PointerType SignedLink)) (![go.SliceType (go.PointerType SignedLink)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist")), #(W64 0)))) in
+    do:  ("startLink" <-[go.PointerType SignedLink] "$r0");;;
+    let: "$r0" := (![go.PointerType SignedLink] (IndexRef (go.SliceType (go.PointerType SignedLink)) (![go.SliceType (go.PointerType SignedLink)] (StructFieldRef history "epochs"%go (![go.PointerType history] "hist")), Convert go.uint64 go.int ((![go.uint64] "epoch") -⟨go.uint64⟩ (![go.uint64] (StructFieldRef history "startEp"%go (![go.PointerType history] "hist"))))))) in
+    do:  ("currLink" <-[go.PointerType SignedLink] "$r0");;;
+    let: "$r0" := (![go.PointerType SignedVrf] (StructFieldRef Auditor "vrf"%go (![go.PointerType Auditor] "a"))) in
     do:  ("vrf" <-[go.PointerType SignedVrf] "$r0");;;
-    return: (![go.PointerType SignedLink] "link", ![go.PointerType SignedVrf] "vrf", ![go.bool] "err")).
+    return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![go.bool] "err")).
 
-(* go: auditor.go:107:6 *)
+(* go: auditor.go:100:6 *)
 Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servAddr" "servPk",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -316,18 +309,18 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     let: "$a2" := (![go.SliceType go.byte] "startLink") in
     (FuncResolve ktcore.SignLink [] #()) "$a0" "$a1" "$a2") in
     do:  ("linkSig" <-[go.SliceType go.byte] "$r0");;;
-    let: "info" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
-    let: "$r0" := (GoAlloc epoch (let: "$v0" := (![go.SliceType go.byte] "startLink") in
+    let: "info" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "$r0" := (GoAlloc SignedLink (let: "$v0" := (![go.SliceType go.byte] "startLink") in
     let: "$v1" := (![go.SliceType go.byte] (StructFieldRef server.StartChain "LinkSig"%go (![go.PointerType server.StartChain] "chain"))) in
     let: "$v2" := (![go.SliceType go.byte] "linkSig") in
-    CompositeLiteral epoch (LiteralValue [KeyedElement (Some (KeyField "link"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "servSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "adtrSig"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
-    do:  ("info" <-[go.PointerType epoch] "$r0");;;
+    CompositeLiteral SignedLink (LiteralValue [KeyedElement (Some (KeyField "Link"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "ServSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "AdtrSig"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
+    do:  ("info" <-[go.PointerType SignedLink] "$r0");;;
     let: "hist" := (GoAlloc (go.PointerType history) (GoZeroVal (go.PointerType history) #())) in
     let: "$r0" := (GoAlloc history (let: "$v0" := (![go.SliceType go.byte] "startDig") in
     let: "$v1" := (![go.uint64] "startEp") in
-    let: "$v2" := (let: "$v0" := (![go.PointerType epoch] "info") in
-    CompositeLiteral (go.SliceType (go.PointerType epoch)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType epoch) "$v0")])) in
-    CompositeLiteral history (LiteralValue [KeyedElement (Some (KeyField "lastDig"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "startEp"%go)) (ElementExpression go.uint64 "$v1"); KeyedElement (Some (KeyField "epochs"%go)) (ElementExpression (go.SliceType (go.PointerType epoch)) "$v2")]))) in
+    let: "$v2" := (let: "$v0" := (![go.PointerType SignedLink] "info") in
+    CompositeLiteral (go.SliceType (go.PointerType SignedLink)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType SignedLink) "$v0")])) in
+    CompositeLiteral history (LiteralValue [KeyedElement (Some (KeyField "lastDig"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "startEp"%go)) (ElementExpression go.uint64 "$v1"); KeyedElement (Some (KeyField "epochs"%go)) (ElementExpression (go.SliceType (go.PointerType SignedLink)) "$v2")]))) in
     do:  ("hist" <-[go.PointerType history] "$r0");;;
     let: "vrfSig" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "$r0" := (let: "$a0" := (![go.PointerType cryptoffi.SigPrivateKey] "sk") in
@@ -337,20 +330,24 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     let: "serv" := (GoAlloc (go.PointerType serv) (GoZeroVal (go.PointerType serv) #())) in
     let: "$r0" := (GoAlloc serv (let: "$v0" := (![go.PointerType advrpc.Client] "cli") in
     let: "$v1" := (![cryptoffi.SigPublicKey] "servPk") in
-    let: "$v2" := (![go.SliceType go.byte] (StructFieldRef server.StartVrf "VrfPk"%go (![go.PointerType server.StartVrf] "vrf"))) in
-    let: "$v3" := (![go.SliceType go.byte] (StructFieldRef server.StartVrf "VrfSig"%go (![go.PointerType server.StartVrf] "vrf"))) in
-    let: "$v4" := (![go.SliceType go.byte] "vrfSig") in
-    CompositeLiteral serv (LiteralValue [KeyedElement (Some (KeyField "cli"%go)) (ElementExpression (go.PointerType advrpc.Client) "$v0"); KeyedElement (Some (KeyField "sigPk"%go)) (ElementExpression cryptoffi.SigPublicKey "$v1"); KeyedElement (Some (KeyField "vrfPk"%go)) (ElementExpression (go.SliceType go.byte) "$v2"); KeyedElement (Some (KeyField "servVrfSig"%go)) (ElementExpression (go.SliceType go.byte) "$v3"); KeyedElement (Some (KeyField "adtrVrfSig"%go)) (ElementExpression (go.SliceType go.byte) "$v4")]))) in
+    CompositeLiteral serv (LiteralValue [KeyedElement (Some (KeyField "cli"%go)) (ElementExpression (go.PointerType advrpc.Client) "$v0"); KeyedElement (Some (KeyField "sigPk"%go)) (ElementExpression cryptoffi.SigPublicKey "$v1")]))) in
     do:  ("serv" <-[go.PointerType serv] "$r0");;;
-    let: "$r0" := (GoAlloc Auditor (let: "$v0" := (![go.PointerType sync.RWMutex] "mu") in
-    let: "$v1" := (![go.PointerType cryptoffi.SigPrivateKey] "sk") in
-    let: "$v2" := (![go.PointerType history] "hist") in
-    let: "$v3" := (![go.PointerType serv] "serv") in
-    CompositeLiteral Auditor (LiteralValue [KeyedElement (Some (KeyField "mu"%go)) (ElementExpression (go.PointerType sync.RWMutex) "$v0"); KeyedElement (Some (KeyField "sk"%go)) (ElementExpression (go.PointerType cryptoffi.SigPrivateKey) "$v1"); KeyedElement (Some (KeyField "hist"%go)) (ElementExpression (go.PointerType history) "$v2"); KeyedElement (Some (KeyField "serv"%go)) (ElementExpression (go.PointerType serv) "$v3")]))) in
+    let: "signedVrf" := (GoAlloc (go.PointerType SignedVrf) (GoZeroVal (go.PointerType SignedVrf) #())) in
+    let: "$r0" := (GoAlloc SignedVrf (let: "$v0" := (![go.SliceType go.byte] (StructFieldRef server.StartVrf "VrfPk"%go (![go.PointerType server.StartVrf] "vrf"))) in
+    let: "$v1" := (![go.SliceType go.byte] (StructFieldRef server.StartVrf "VrfSig"%go (![go.PointerType server.StartVrf] "vrf"))) in
+    let: "$v2" := (![go.SliceType go.byte] "vrfSig") in
+    CompositeLiteral SignedVrf (LiteralValue [KeyedElement (Some (KeyField "VrfPk"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "ServSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "AdtrSig"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
+    do:  ("signedVrf" <-[go.PointerType SignedVrf] "$r0");;;
+    let: "$r0" := (GoAlloc Auditor (let: "$v0" := (![go.PointerType cryptoffi.SigPrivateKey] "sk") in
+    let: "$v1" := (![go.PointerType serv] "serv") in
+    let: "$v2" := (![go.PointerType SignedVrf] "signedVrf") in
+    let: "$v3" := (![go.PointerType sync.RWMutex] "mu") in
+    let: "$v4" := (![go.PointerType history] "hist") in
+    CompositeLiteral Auditor (LiteralValue [KeyedElement (Some (KeyField "sk"%go)) (ElementExpression (go.PointerType cryptoffi.SigPrivateKey) "$v0"); KeyedElement (Some (KeyField "serv"%go)) (ElementExpression (go.PointerType serv) "$v1"); KeyedElement (Some (KeyField "vrf"%go)) (ElementExpression (go.PointerType SignedVrf) "$v2"); KeyedElement (Some (KeyField "mu"%go)) (ElementExpression (go.PointerType sync.RWMutex) "$v3"); KeyedElement (Some (KeyField "hist"%go)) (ElementExpression (go.PointerType history) "$v4")]))) in
     do:  ("a" <-[go.PointerType Auditor] "$r0");;;
     return: (![go.PointerType Auditor] "a", ![cryptoffi.SigPublicKey] "sigPk", ![ktcore.Blame] "err")).
 
-(* go: auditor.go:135:6 *)
+(* go: auditor.go:129:6 *)
 Definition getNextLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "sigPk" "prevEp" "prevDig" "prevLink" "p",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -398,7 +395,7 @@ Definition getNextLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     else do:  #());;;
     return: (![go.uint64] "ep", ![go.SliceType go.byte] "dig", ![go.SliceType go.byte] "link", ![go.bool] "err")).
 
-(* go: auditor.go:152:6 *)
+(* go: auditor.go:146:6 *)
 Definition getNextDigⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "prevDig" "updates",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -439,7 +436,7 @@ Definition getNextDigⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
       do:  ("dig" <-[go.SliceType go.byte] "$r0")));;;
     return: (![go.SliceType go.byte] "dig", ![go.bool] "err")).
 
-(* go: auditor.go:169:6 *)
+(* go: auditor.go:163:6 *)
 Definition CheckStartChainⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "chain",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -502,7 +499,7 @@ Definition CheckStartChainⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     else do:  #());;;
     return: (![go.uint64] "ep", ![go.SliceType go.byte] "dig", ![go.SliceType go.byte] "link", ![go.bool] "err")).
 
-(* go: auditor.go:196:6 *)
+(* go: auditor.go:190:6 *)
 Definition CheckStartVrfⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "vrf",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -565,22 +562,30 @@ Definition NewRpcAuditorⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
         do:  ((![go.PointerType (go.SliceType go.byte)] "reply") <-[go.SliceType go.byte] "$r0");;;
         return: (#())
       else do:  #());;;
-      let: "r2" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-      let: "r1" := (GoAlloc (go.PointerType SignedVrf) (GoZeroVal (go.PointerType SignedVrf) #())) in
-      let: "r0" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
-      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.uint64] (StructFieldRef GetArg "Epoch"%go (![go.PointerType GetArg] "a"))) in
+      let: "r4" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+      let: "r3" := (GoAlloc (go.PointerType SignedVrf) (GoZeroVal (go.PointerType SignedVrf) #())) in
+      let: "r2" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+      let: "r1" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+      let: "r0" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+      let: (((("$ret0", "$ret1"), "$ret2"), "$ret3"), "$ret4") := (let: "$a0" := (![go.uint64] (StructFieldRef GetArg "Epoch"%go (![go.PointerType GetArg] "a"))) in
       (MethodResolve (go.PointerType Auditor) "Get"%go (![go.PointerType Auditor] "adtr")) "$a0") in
       let: "$r0" := "$ret0" in
       let: "$r1" := "$ret1" in
       let: "$r2" := "$ret2" in
-      do:  ("r0" <-[go.PointerType SignedLink] "$r0");;;
-      do:  ("r1" <-[go.PointerType SignedVrf] "$r1");;;
-      do:  ("r2" <-[go.bool] "$r2");;;
+      let: "$r3" := "$ret3" in
+      let: "$r4" := "$ret4" in
+      do:  ("r0" <-[go.uint64] "$r0");;;
+      do:  ("r1" <-[go.PointerType SignedLink] "$r1");;;
+      do:  ("r2" <-[go.PointerType SignedLink] "$r2");;;
+      do:  ("r3" <-[go.PointerType SignedVrf] "$r3");;;
+      do:  ("r4" <-[go.bool] "$r4");;;
       let: "r" := (GoAlloc (go.PointerType GetReply) (GoZeroVal (go.PointerType GetReply) #())) in
-      let: "$r0" := (GoAlloc GetReply (let: "$v0" := (![go.PointerType SignedLink] "r0") in
-      let: "$v1" := (![go.PointerType SignedVrf] "r1") in
-      let: "$v2" := (![go.bool] "r2") in
-      CompositeLiteral GetReply (LiteralValue [KeyedElement (Some (KeyField "Link"%go)) (ElementExpression (go.PointerType SignedLink) "$v0"); KeyedElement (Some (KeyField "Vrf"%go)) (ElementExpression (go.PointerType SignedVrf) "$v1"); KeyedElement (Some (KeyField "Err"%go)) (ElementExpression go.bool "$v2")]))) in
+      let: "$r0" := (GoAlloc GetReply (let: "$v0" := (![go.uint64] "r0") in
+      let: "$v1" := (![go.PointerType SignedLink] "r1") in
+      let: "$v2" := (![go.PointerType SignedLink] "r2") in
+      let: "$v3" := (![go.PointerType SignedVrf] "r3") in
+      let: "$v4" := (![go.bool] "r4") in
+      CompositeLiteral GetReply (LiteralValue [KeyedElement (Some (KeyField "StartEp"%go)) (ElementExpression go.uint64 "$v0"); KeyedElement (Some (KeyField "StartLink"%go)) (ElementExpression (go.PointerType SignedLink) "$v1"); KeyedElement (Some (KeyField "CurrLink"%go)) (ElementExpression (go.PointerType SignedLink) "$v2"); KeyedElement (Some (KeyField "Vrf"%go)) (ElementExpression (go.PointerType SignedVrf) "$v3"); KeyedElement (Some (KeyField "Err"%go)) (ElementExpression go.bool "$v4")]))) in
       do:  ("r" <-[go.PointerType GetReply] "$r0");;;
       let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] (![go.PointerType (go.SliceType go.byte)] "reply")) in
       let: "$a1" := (![go.PointerType GetReply] "r") in
@@ -597,7 +602,9 @@ Definition CallGetⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
   λ: "c" "epoch",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
     let: "vrf" := (GoAlloc (go.PointerType SignedVrf) (GoZeroVal (go.PointerType SignedVrf) #())) in
-    let: "link" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "currLink" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "startLink" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "startEp" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: "epoch" := (GoAlloc go.uint64 "epoch") in
     let: "c" := (GoAlloc (go.PointerType advrpc.Client) "c") in
     let: "a" := (GoAlloc (go.PointerType GetArg) (GoZeroVal (go.PointerType GetArg) #())) in
@@ -619,7 +626,7 @@ Definition CallGetⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
     then
       let: "$r0" := ktcore.BlameUnknown in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.PointerType SignedLink] "link", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")
+      return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")
     else do:  #());;;
     let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "r" := (GoAlloc (go.PointerType GetReply) (GoZeroVal (go.PointerType GetReply) #())) in
@@ -631,23 +638,27 @@ Definition CallGetⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
     do:  ("r" <-[go.PointerType GetReply] "$r0");;;
     do:  "$r1";;;
     do:  ("errb" <-[go.bool] "$r2");;;
-    let: "$r0" := (![go.PointerType SignedLink] (StructFieldRef GetReply "Link"%go (![go.PointerType GetReply] "r"))) in
-    do:  ("link" <-[go.PointerType SignedLink] "$r0");;;
+    let: "$r0" := (![go.uint64] (StructFieldRef GetReply "StartEp"%go (![go.PointerType GetReply] "r"))) in
+    do:  ("startEp" <-[go.uint64] "$r0");;;
+    let: "$r0" := (![go.PointerType SignedLink] (StructFieldRef GetReply "StartLink"%go (![go.PointerType GetReply] "r"))) in
+    do:  ("startLink" <-[go.PointerType SignedLink] "$r0");;;
+    let: "$r0" := (![go.PointerType SignedLink] (StructFieldRef GetReply "CurrLink"%go (![go.PointerType GetReply] "r"))) in
+    do:  ("currLink" <-[go.PointerType SignedLink] "$r0");;;
     let: "$r0" := (![go.PointerType SignedVrf] (StructFieldRef GetReply "Vrf"%go (![go.PointerType GetReply] "r"))) in
     do:  ("vrf" <-[go.PointerType SignedVrf] "$r0");;;
     (if: ![go.bool] "errb"
     then
       let: "$r0" := ktcore.BlameAdtrFull in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.PointerType SignedLink] "link", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")
+      return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")
     else do:  #());;;
     (if: ![go.bool] (StructFieldRef GetReply "Err"%go (![go.PointerType GetReply] "r"))
     then
       let: "$r0" := ktcore.BlameUnknown in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.PointerType SignedLink] "link", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")
+      return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")
     else do:  #());;;
-    return: (![go.PointerType SignedLink] "link", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")).
+    return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")).
 
 (* go: serde.out.go:10:6 *)
 Definition GetArgEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
@@ -839,7 +850,15 @@ Definition GetReplyEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     let: "$r0" := (![go.SliceType go.byte] "b0") in
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
-    let: "$a1" := (![go.PointerType SignedLink] (StructFieldRef GetReply "Link"%go (![go.PointerType GetReply] "o"))) in
+    let: "$a1" := (![go.uint64] (StructFieldRef GetReply "StartEp"%go (![go.PointerType GetReply] "o"))) in
+    (FuncResolve marshal.WriteInt [] #()) "$a0" "$a1") in
+    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+    let: "$a1" := (![go.PointerType SignedLink] (StructFieldRef GetReply "StartLink"%go (![go.PointerType GetReply] "o"))) in
+    (FuncResolve SignedLinkEncode [] #()) "$a0" "$a1") in
+    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+    let: "$a1" := (![go.PointerType SignedLink] (StructFieldRef GetReply "CurrLink"%go (![go.PointerType GetReply] "o"))) in
     (FuncResolve SignedLinkEncode [] #()) "$a0" "$a1") in
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
@@ -852,19 +871,19 @@ Definition GetReplyEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     return: (![go.SliceType go.byte] "b")).
 
-(* go: serde.out.go:73:6 *)
+(* go: serde.out.go:75:6 *)
 Definition GetReplyDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b0",
     exception_do (let: "b0" := (GoAlloc (go.SliceType go.byte) "b0") in
     let: "err1" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "b1" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "a1" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
+    let: "a1" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b0") in
-    (FuncResolve SignedLinkDecode [] #()) "$a0") in
+    (FuncResolve safemarshal.ReadInt [] #()) "$a0") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    do:  ("a1" <-[go.PointerType SignedLink] "$r0");;;
+    do:  ("a1" <-[go.uint64] "$r0");;;
     do:  ("b1" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err1" <-[go.bool] "$r2");;;
     (if: ![go.bool] "err1"
@@ -872,13 +891,13 @@ Definition GetReplyDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     else do:  #());;;
     let: "err2" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "b2" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "a2" := (GoAlloc (go.PointerType SignedVrf) (GoZeroVal (go.PointerType SignedVrf) #())) in
+    let: "a2" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
     let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b1") in
-    (FuncResolve SignedVrfDecode [] #()) "$a0") in
+    (FuncResolve SignedLinkDecode [] #()) "$a0") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    do:  ("a2" <-[go.PointerType SignedVrf] "$r0");;;
+    do:  ("a2" <-[go.PointerType SignedLink] "$r0");;;
     do:  ("b2" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err2" <-[go.bool] "$r2");;;
     (if: ![go.bool] "err2"
@@ -886,22 +905,52 @@ Definition GetReplyDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     else do:  #());;;
     let: "err3" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "b3" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "a3" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "a3" := (GoAlloc (go.PointerType SignedLink) (GoZeroVal (go.PointerType SignedLink) #())) in
     let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b2") in
-    (FuncResolve safemarshal.ReadBool [] #()) "$a0") in
+    (FuncResolve SignedLinkDecode [] #()) "$a0") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    do:  ("a3" <-[go.bool] "$r0");;;
+    do:  ("a3" <-[go.PointerType SignedLink] "$r0");;;
     do:  ("b3" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err3" <-[go.bool] "$r2");;;
     (if: ![go.bool] "err3"
     then return: (Convert go.untyped_nil (go.PointerType GetReply) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
     else do:  #());;;
-    return: (GoAlloc GetReply (let: "$v0" := (![go.PointerType SignedLink] "a1") in
-     let: "$v1" := (![go.PointerType SignedVrf] "a2") in
-     let: "$v2" := (![go.bool] "a3") in
-     CompositeLiteral GetReply (LiteralValue [KeyedElement (Some (KeyField "Link"%go)) (ElementExpression (go.PointerType SignedLink) "$v0"); KeyedElement (Some (KeyField "Vrf"%go)) (ElementExpression (go.PointerType SignedVrf) "$v1"); KeyedElement (Some (KeyField "Err"%go)) (ElementExpression go.bool "$v2")])), ![go.SliceType go.byte] "b3", #false)).
+    let: "err4" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "b4" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "a4" := (GoAlloc (go.PointerType SignedVrf) (GoZeroVal (go.PointerType SignedVrf) #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b3") in
+    (FuncResolve SignedVrfDecode [] #()) "$a0") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    do:  ("a4" <-[go.PointerType SignedVrf] "$r0");;;
+    do:  ("b4" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err4" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err4"
+    then return: (Convert go.untyped_nil (go.PointerType GetReply) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    let: "err5" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "b5" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "a5" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b4") in
+    (FuncResolve safemarshal.ReadBool [] #()) "$a0") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    do:  ("a5" <-[go.bool] "$r0");;;
+    do:  ("b5" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err5" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err5"
+    then return: (Convert go.untyped_nil (go.PointerType GetReply) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    return: (GoAlloc GetReply (let: "$v0" := (![go.uint64] "a1") in
+     let: "$v1" := (![go.PointerType SignedLink] "a2") in
+     let: "$v2" := (![go.PointerType SignedLink] "a3") in
+     let: "$v3" := (![go.PointerType SignedVrf] "a4") in
+     let: "$v4" := (![go.bool] "a5") in
+     CompositeLiteral GetReply (LiteralValue [KeyedElement (Some (KeyField "StartEp"%go)) (ElementExpression go.uint64 "$v0"); KeyedElement (Some (KeyField "StartLink"%go)) (ElementExpression (go.PointerType SignedLink) "$v1"); KeyedElement (Some (KeyField "CurrLink"%go)) (ElementExpression (go.PointerType SignedLink) "$v2"); KeyedElement (Some (KeyField "Vrf"%go)) (ElementExpression (go.PointerType SignedVrf) "$v3"); KeyedElement (Some (KeyField "Err"%go)) (ElementExpression go.bool "$v4")])), ![go.SliceType go.byte] "b5", #false)).
 
 #[global] Instance info' : PkgInfo pkg_id.auditor :=
 {|
@@ -931,11 +980,12 @@ Record t :=
 mk {
   sk' : loc;
   serv' : loc;
+  vrf' : loc;
   mu' : loc;
   hist' : loc;
 }.
 
-#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _) (zero_val _)|}.
+#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _) (zero_val _) (zero_val _)|}.
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
@@ -944,6 +994,7 @@ End Auditor.
 Definition Auditor'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
   (go.FieldDecl "sk"%go (go.PointerType cryptoffi.SigPrivateKey));
   (go.FieldDecl "serv"%go (go.PointerType serv));
+  (go.FieldDecl "vrf"%go (go.PointerType SignedVrf));
   (go.FieldDecl "mu"%go (go.PointerType sync.RWMutex));
   (go.FieldDecl "hist"%go (go.PointerType history))
 ].
@@ -961,6 +1012,8 @@ Class Auditor_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalConte
   #[global] Auditor_set_sk (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "sk", (#x, #y)⟧ ⤳[under] #(x <|Auditor.sk' := y|>);
   #[global] Auditor_get_serv (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "serv", #x⟧ ⤳[under] #x.(Auditor.serv');
   #[global] Auditor_set_serv (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "serv", (#x, #y)⟧ ⤳[under] #(x <|Auditor.serv' := y|>);
+  #[global] Auditor_get_vrf (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "vrf", #x⟧ ⤳[under] #x.(Auditor.vrf');
+  #[global] Auditor_set_vrf (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "vrf", (#x, #y)⟧ ⤳[under] #(x <|Auditor.vrf' := y|>);
   #[global] Auditor_get_mu (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "mu", #x⟧ ⤳[under] #x.(Auditor.mu');
   #[global] Auditor_set_mu (x : Auditor.t) y :: ⟦StructFieldSet (Auditorⁱᵐᵖˡ) "mu", (#x, #y)⟧ ⤳[under] #(x <|Auditor.mu' := y|>);
   #[global] Auditor_get_hist (x : Auditor.t) :: ⟦StructFieldGet (Auditorⁱᵐᵖˡ) "hist", #x⟧ ⤳[under] #x.(Auditor.hist');
@@ -989,7 +1042,7 @@ End history.
 Definition history'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
   (go.FieldDecl "lastDig"%go (go.SliceType go.byte));
   (go.FieldDecl "startEp"%go go.uint64);
-  (go.FieldDecl "epochs"%go (go.SliceType (go.PointerType epoch)))
+  (go.FieldDecl "epochs"%go (go.SliceType (go.PointerType SignedLink)))
 ].
 Program Definition history'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (history'fds_unsealed).
 Global Instance equals_unfold_history {ext : ffi_syntax} {go_gctx : GoGlobalContext} : history'fds =→ history'fds_unsealed.
@@ -1009,45 +1062,6 @@ Class history_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalConte
   #[global] history_set_epochs (x : history.t) y :: ⟦StructFieldSet (historyⁱᵐᵖˡ) "epochs", (#x, #y)⟧ ⤳[under] #(x <|history.epochs' := y|>);
 }.
 
-Module epoch.
-Section def.
-Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
-Record t :=
-mk {
-  link' : slice.t;
-  servSig' : slice.t;
-  adtrSig' : slice.t;
-}.
-
-#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _)|}.
-#[global] Arguments mk : clear implicits.
-#[global] Arguments t : clear implicits.
-End def.
-End epoch.
-
-Definition epoch'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
-  (go.FieldDecl "link"%go (go.SliceType go.byte));
-  (go.FieldDecl "servSig"%go (go.SliceType go.byte));
-  (go.FieldDecl "adtrSig"%go (go.SliceType go.byte))
-].
-Program Definition epoch'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (epoch'fds_unsealed).
-Global Instance equals_unfold_epoch {ext : ffi_syntax} {go_gctx : GoGlobalContext} : epoch'fds =→ epoch'fds_unsealed.
-Proof. rewrite /epoch'fds seal_eq //. Qed.
-
-Definition epochⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.StructType (epoch'fds).
-
-Class epoch_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
-{
-  #[global] epoch_type_repr  :: go.TypeReprUnderlying epochⁱᵐᵖˡ epoch.t;
-  #[global] epoch_underlying :: (epoch) <u (epochⁱᵐᵖˡ);
-  #[global] epoch_get_link (x : epoch.t) :: ⟦StructFieldGet (epochⁱᵐᵖˡ) "link", #x⟧ ⤳[under] #x.(epoch.link');
-  #[global] epoch_set_link (x : epoch.t) y :: ⟦StructFieldSet (epochⁱᵐᵖˡ) "link", (#x, #y)⟧ ⤳[under] #(x <|epoch.link' := y|>);
-  #[global] epoch_get_servSig (x : epoch.t) :: ⟦StructFieldGet (epochⁱᵐᵖˡ) "servSig", #x⟧ ⤳[under] #x.(epoch.servSig');
-  #[global] epoch_set_servSig (x : epoch.t) y :: ⟦StructFieldSet (epochⁱᵐᵖˡ) "servSig", (#x, #y)⟧ ⤳[under] #(x <|epoch.servSig' := y|>);
-  #[global] epoch_get_adtrSig (x : epoch.t) :: ⟦StructFieldGet (epochⁱᵐᵖˡ) "adtrSig", #x⟧ ⤳[under] #x.(epoch.adtrSig');
-  #[global] epoch_set_adtrSig (x : epoch.t) y :: ⟦StructFieldSet (epochⁱᵐᵖˡ) "adtrSig", (#x, #y)⟧ ⤳[under] #(x <|epoch.adtrSig' := y|>);
-}.
-
 Module serv.
 Section def.
 Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
@@ -1055,12 +1069,9 @@ Record t :=
 mk {
   cli' : loc;
   sigPk' : cryptoffi.SigPublicKey.t;
-  vrfPk' : slice.t;
-  servVrfSig' : slice.t;
-  adtrVrfSig' : slice.t;
 }.
 
-#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _) (zero_val _) (zero_val _)|}.
+#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _)|}.
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
@@ -1068,10 +1079,7 @@ End serv.
 
 Definition serv'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
   (go.FieldDecl "cli"%go (go.PointerType advrpc.Client));
-  (go.FieldDecl "sigPk"%go cryptoffi.SigPublicKey);
-  (go.FieldDecl "vrfPk"%go (go.SliceType go.byte));
-  (go.FieldDecl "servVrfSig"%go (go.SliceType go.byte));
-  (go.FieldDecl "adtrVrfSig"%go (go.SliceType go.byte))
+  (go.FieldDecl "sigPk"%go cryptoffi.SigPublicKey)
 ].
 Program Definition serv'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (serv'fds_unsealed).
 Global Instance equals_unfold_serv {ext : ffi_syntax} {go_gctx : GoGlobalContext} : serv'fds =→ serv'fds_unsealed.
@@ -1087,12 +1095,6 @@ Class serv_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext}
   #[global] serv_set_cli (x : serv.t) y :: ⟦StructFieldSet (servⁱᵐᵖˡ) "cli", (#x, #y)⟧ ⤳[under] #(x <|serv.cli' := y|>);
   #[global] serv_get_sigPk (x : serv.t) :: ⟦StructFieldGet (servⁱᵐᵖˡ) "sigPk", #x⟧ ⤳[under] #x.(serv.sigPk');
   #[global] serv_set_sigPk (x : serv.t) y :: ⟦StructFieldSet (servⁱᵐᵖˡ) "sigPk", (#x, #y)⟧ ⤳[under] #(x <|serv.sigPk' := y|>);
-  #[global] serv_get_vrfPk (x : serv.t) :: ⟦StructFieldGet (servⁱᵐᵖˡ) "vrfPk", #x⟧ ⤳[under] #x.(serv.vrfPk');
-  #[global] serv_set_vrfPk (x : serv.t) y :: ⟦StructFieldSet (servⁱᵐᵖˡ) "vrfPk", (#x, #y)⟧ ⤳[under] #(x <|serv.vrfPk' := y|>);
-  #[global] serv_get_servVrfSig (x : serv.t) :: ⟦StructFieldGet (servⁱᵐᵖˡ) "servVrfSig", #x⟧ ⤳[under] #x.(serv.servVrfSig');
-  #[global] serv_set_servVrfSig (x : serv.t) y :: ⟦StructFieldSet (servⁱᵐᵖˡ) "servVrfSig", (#x, #y)⟧ ⤳[under] #(x <|serv.servVrfSig' := y|>);
-  #[global] serv_get_adtrVrfSig (x : serv.t) :: ⟦StructFieldGet (servⁱᵐᵖˡ) "adtrVrfSig", #x⟧ ⤳[under] #x.(serv.adtrVrfSig');
-  #[global] serv_set_adtrVrfSig (x : serv.t) y :: ⟦StructFieldSet (servⁱᵐᵖˡ) "adtrVrfSig", (#x, #y)⟧ ⤳[under] #(x <|serv.adtrVrfSig' := y|>);
 }.
 
 Module GetArg.
@@ -1209,19 +1211,23 @@ Section def.
 Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
 Record t :=
 mk {
-  Link' : loc;
+  StartEp' : w64;
+  StartLink' : loc;
+  CurrLink' : loc;
   Vrf' : loc;
   Err' : bool;
 }.
 
-#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _)|}.
+#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _) (zero_val _) (zero_val _)|}.
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
 End GetReply.
 
 Definition GetReply'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
-  (go.FieldDecl "Link"%go (go.PointerType SignedLink));
+  (go.FieldDecl "StartEp"%go go.uint64);
+  (go.FieldDecl "StartLink"%go (go.PointerType SignedLink));
+  (go.FieldDecl "CurrLink"%go (go.PointerType SignedLink));
   (go.FieldDecl "Vrf"%go (go.PointerType SignedVrf));
   (go.FieldDecl "Err"%go go.bool)
 ].
@@ -1235,8 +1241,12 @@ Class GetReply_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalCont
 {
   #[global] GetReply_type_repr  :: go.TypeReprUnderlying GetReplyⁱᵐᵖˡ GetReply.t;
   #[global] GetReply_underlying :: (GetReply) <u (GetReplyⁱᵐᵖˡ);
-  #[global] GetReply_get_Link (x : GetReply.t) :: ⟦StructFieldGet (GetReplyⁱᵐᵖˡ) "Link", #x⟧ ⤳[under] #x.(GetReply.Link');
-  #[global] GetReply_set_Link (x : GetReply.t) y :: ⟦StructFieldSet (GetReplyⁱᵐᵖˡ) "Link", (#x, #y)⟧ ⤳[under] #(x <|GetReply.Link' := y|>);
+  #[global] GetReply_get_StartEp (x : GetReply.t) :: ⟦StructFieldGet (GetReplyⁱᵐᵖˡ) "StartEp", #x⟧ ⤳[under] #x.(GetReply.StartEp');
+  #[global] GetReply_set_StartEp (x : GetReply.t) y :: ⟦StructFieldSet (GetReplyⁱᵐᵖˡ) "StartEp", (#x, #y)⟧ ⤳[under] #(x <|GetReply.StartEp' := y|>);
+  #[global] GetReply_get_StartLink (x : GetReply.t) :: ⟦StructFieldGet (GetReplyⁱᵐᵖˡ) "StartLink", #x⟧ ⤳[under] #x.(GetReply.StartLink');
+  #[global] GetReply_set_StartLink (x : GetReply.t) y :: ⟦StructFieldSet (GetReplyⁱᵐᵖˡ) "StartLink", (#x, #y)⟧ ⤳[under] #(x <|GetReply.StartLink' := y|>);
+  #[global] GetReply_get_CurrLink (x : GetReply.t) :: ⟦StructFieldGet (GetReplyⁱᵐᵖˡ) "CurrLink", #x⟧ ⤳[under] #x.(GetReply.CurrLink');
+  #[global] GetReply_set_CurrLink (x : GetReply.t) y :: ⟦StructFieldSet (GetReplyⁱᵐᵖˡ) "CurrLink", (#x, #y)⟧ ⤳[under] #(x <|GetReply.CurrLink' := y|>);
   #[global] GetReply_get_Vrf (x : GetReply.t) :: ⟦StructFieldGet (GetReplyⁱᵐᵖˡ) "Vrf", #x⟧ ⤳[under] #x.(GetReply.Vrf');
   #[global] GetReply_set_Vrf (x : GetReply.t) y :: ⟦StructFieldSet (GetReplyⁱᵐᵖˡ) "Vrf", (#x, #y)⟧ ⤳[under] #(x <|GetReply.Vrf' := y|>);
   #[global] GetReply_get_Err (x : GetReply.t) :: ⟦StructFieldGet (GetReplyⁱᵐᵖˡ) "Err", #x⟧ ⤳[under] #x.(GetReply.Err');
@@ -1247,7 +1257,6 @@ Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions
 {
   #[global] Auditor_instance :: Auditor_Assumptions;
   #[global] history_instance :: history_Assumptions;
-  #[global] epoch_instance :: epoch_Assumptions;
   #[global] serv_instance :: serv_Assumptions;
   #[global] GetArg_instance :: GetArg_Assumptions;
   #[global] SignedLink_instance :: SignedLink_Assumptions;

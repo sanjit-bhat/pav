@@ -33,6 +33,7 @@ Local Set Default Proof Using "All".
       (
       "sk" ∷ l.[(auditor.Auditor.t), "sk"] ↦{dq} v.(auditor.Auditor.sk') ∗
       "serv" ∷ l.[(auditor.Auditor.t), "serv"] ↦{dq} v.(auditor.Auditor.serv') ∗
+      "vrf" ∷ l.[(auditor.Auditor.t), "vrf"] ↦{dq} v.(auditor.Auditor.vrf') ∗
       "mu" ∷ l.[(auditor.Auditor.t), "mu"] ↦{dq} v.(auditor.Auditor.mu') ∗
       "hist" ∷ l.[(auditor.Auditor.t), "hist"] ↦{dq} v.(auditor.Auditor.hist') ∗
       "_" ∷ True
@@ -69,6 +70,19 @@ Proof. solve_pointsto_access_struct. Qed.
     (l.[(auditor.Auditor.t), "serv"] ↦ (v.(auditor.Auditor.serv')))
     (l.[(auditor.Auditor.t), "serv"] ↦ serv')
     (l ↦ v) (l ↦ (v <|(auditor.Auditor.serv') := serv'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance Auditor_access_load_vrf l (v : (auditor.Auditor.t)) dq :
+  AccessStrict
+    (l.[(auditor.Auditor.t), "vrf"] ↦{dq} (v.(auditor.Auditor.vrf')))
+    (l.[(auditor.Auditor.t), "vrf"] ↦{dq} (v.(auditor.Auditor.vrf')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance Auditor_access_store_vrf l (v : (auditor.Auditor.t)) vrf' :
+  AccessStrict
+    (l.[(auditor.Auditor.t), "vrf"] ↦ (v.(auditor.Auditor.vrf')))
+    (l.[(auditor.Auditor.t), "vrf"] ↦ vrf')
+    (l ↦ v) (l ↦ (v <|(auditor.Auditor.vrf') := vrf'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance Auditor_access_load_mu l (v : (auditor.Auditor.t)) dq :
   AccessStrict
@@ -169,75 +183,6 @@ Proof. solve_pointsto_access_struct. Qed.
 End def.
 End history.
 
-Module epoch.
-Section def.
-
-Context `{!heapGS Σ}.
-Context {sem : go.Semantics}.
-Context {package_sem' : auditor.Assumptions}.
-
-Local Set Default Proof Using "All".
-
-#[global]Program Instance epoch_typed_pointsto  :
-  TypedPointsto (Σ:=Σ) (auditor.epoch.t) :=
-  {|
-    typed_pointsto_def l v dq :=
-      (
-      "link" ∷ l.[(auditor.epoch.t), "link"] ↦{dq} v.(auditor.epoch.link') ∗
-      "servSig" ∷ l.[(auditor.epoch.t), "servSig"] ↦{dq} v.(auditor.epoch.servSig') ∗
-      "adtrSig" ∷ l.[(auditor.epoch.t), "adtrSig"] ↦{dq} v.(auditor.epoch.adtrSig') ∗
-      "_" ∷ True
-      )%I
-  |}.
-Final Obligation. solve_typed_pointsto_agree. Qed.
-
-#[global] Instance epoch_into_val_typed
-   :
-  IntoValTypedUnderlying (auditor.epoch.t) (auditor.epochⁱᵐᵖˡ).
-Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance epoch_access_load_link l (v : (auditor.epoch.t)) dq :
-  AccessStrict
-    (l.[(auditor.epoch.t), "link"] ↦{dq} (v.(auditor.epoch.link')))
-    (l.[(auditor.epoch.t), "link"] ↦{dq} (v.(auditor.epoch.link')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance epoch_access_store_link l (v : (auditor.epoch.t)) link' :
-  AccessStrict
-    (l.[(auditor.epoch.t), "link"] ↦ (v.(auditor.epoch.link')))
-    (l.[(auditor.epoch.t), "link"] ↦ link')
-    (l ↦ v) (l ↦ (v <|(auditor.epoch.link') := link'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance epoch_access_load_servSig l (v : (auditor.epoch.t)) dq :
-  AccessStrict
-    (l.[(auditor.epoch.t), "servSig"] ↦{dq} (v.(auditor.epoch.servSig')))
-    (l.[(auditor.epoch.t), "servSig"] ↦{dq} (v.(auditor.epoch.servSig')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance epoch_access_store_servSig l (v : (auditor.epoch.t)) servSig' :
-  AccessStrict
-    (l.[(auditor.epoch.t), "servSig"] ↦ (v.(auditor.epoch.servSig')))
-    (l.[(auditor.epoch.t), "servSig"] ↦ servSig')
-    (l ↦ v) (l ↦ (v <|(auditor.epoch.servSig') := servSig'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance epoch_access_load_adtrSig l (v : (auditor.epoch.t)) dq :
-  AccessStrict
-    (l.[(auditor.epoch.t), "adtrSig"] ↦{dq} (v.(auditor.epoch.adtrSig')))
-    (l.[(auditor.epoch.t), "adtrSig"] ↦{dq} (v.(auditor.epoch.adtrSig')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance epoch_access_store_adtrSig l (v : (auditor.epoch.t)) adtrSig' :
-  AccessStrict
-    (l.[(auditor.epoch.t), "adtrSig"] ↦ (v.(auditor.epoch.adtrSig')))
-    (l.[(auditor.epoch.t), "adtrSig"] ↦ adtrSig')
-    (l ↦ v) (l ↦ (v <|(auditor.epoch.adtrSig') := adtrSig'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-End def.
-End epoch.
-
 Module serv.
 Section def.
 
@@ -254,9 +199,6 @@ Local Set Default Proof Using "All".
       (
       "cli" ∷ l.[(auditor.serv.t), "cli"] ↦{dq} v.(auditor.serv.cli') ∗
       "sigPk" ∷ l.[(auditor.serv.t), "sigPk"] ↦{dq} v.(auditor.serv.sigPk') ∗
-      "vrfPk" ∷ l.[(auditor.serv.t), "vrfPk"] ↦{dq} v.(auditor.serv.vrfPk') ∗
-      "servVrfSig" ∷ l.[(auditor.serv.t), "servVrfSig"] ↦{dq} v.(auditor.serv.servVrfSig') ∗
-      "adtrVrfSig" ∷ l.[(auditor.serv.t), "adtrVrfSig"] ↦{dq} v.(auditor.serv.adtrVrfSig') ∗
       "_" ∷ True
       )%I
   |}.
@@ -291,45 +233,6 @@ Proof. solve_pointsto_access_struct. Qed.
     (l.[(auditor.serv.t), "sigPk"] ↦ (v.(auditor.serv.sigPk')))
     (l.[(auditor.serv.t), "sigPk"] ↦ sigPk')
     (l ↦ v) (l ↦ (v <|(auditor.serv.sigPk') := sigPk'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance serv_access_load_vrfPk l (v : (auditor.serv.t)) dq :
-  AccessStrict
-    (l.[(auditor.serv.t), "vrfPk"] ↦{dq} (v.(auditor.serv.vrfPk')))
-    (l.[(auditor.serv.t), "vrfPk"] ↦{dq} (v.(auditor.serv.vrfPk')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance serv_access_store_vrfPk l (v : (auditor.serv.t)) vrfPk' :
-  AccessStrict
-    (l.[(auditor.serv.t), "vrfPk"] ↦ (v.(auditor.serv.vrfPk')))
-    (l.[(auditor.serv.t), "vrfPk"] ↦ vrfPk')
-    (l ↦ v) (l ↦ (v <|(auditor.serv.vrfPk') := vrfPk'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance serv_access_load_servVrfSig l (v : (auditor.serv.t)) dq :
-  AccessStrict
-    (l.[(auditor.serv.t), "servVrfSig"] ↦{dq} (v.(auditor.serv.servVrfSig')))
-    (l.[(auditor.serv.t), "servVrfSig"] ↦{dq} (v.(auditor.serv.servVrfSig')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance serv_access_store_servVrfSig l (v : (auditor.serv.t)) servVrfSig' :
-  AccessStrict
-    (l.[(auditor.serv.t), "servVrfSig"] ↦ (v.(auditor.serv.servVrfSig')))
-    (l.[(auditor.serv.t), "servVrfSig"] ↦ servVrfSig')
-    (l ↦ v) (l ↦ (v <|(auditor.serv.servVrfSig') := servVrfSig'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance serv_access_load_adtrVrfSig l (v : (auditor.serv.t)) dq :
-  AccessStrict
-    (l.[(auditor.serv.t), "adtrVrfSig"] ↦{dq} (v.(auditor.serv.adtrVrfSig')))
-    (l.[(auditor.serv.t), "adtrVrfSig"] ↦{dq} (v.(auditor.serv.adtrVrfSig')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance serv_access_store_adtrVrfSig l (v : (auditor.serv.t)) adtrVrfSig' :
-  AccessStrict
-    (l.[(auditor.serv.t), "adtrVrfSig"] ↦ (v.(auditor.serv.adtrVrfSig')))
-    (l.[(auditor.serv.t), "adtrVrfSig"] ↦ adtrVrfSig')
-    (l ↦ v) (l ↦ (v <|(auditor.serv.adtrVrfSig') := adtrVrfSig'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 
 End def.
@@ -528,7 +431,9 @@ Local Set Default Proof Using "All".
   {|
     typed_pointsto_def l v dq :=
       (
-      "Link" ∷ l.[(auditor.GetReply.t), "Link"] ↦{dq} v.(auditor.GetReply.Link') ∗
+      "StartEp" ∷ l.[(auditor.GetReply.t), "StartEp"] ↦{dq} v.(auditor.GetReply.StartEp') ∗
+      "StartLink" ∷ l.[(auditor.GetReply.t), "StartLink"] ↦{dq} v.(auditor.GetReply.StartLink') ∗
+      "CurrLink" ∷ l.[(auditor.GetReply.t), "CurrLink"] ↦{dq} v.(auditor.GetReply.CurrLink') ∗
       "Vrf" ∷ l.[(auditor.GetReply.t), "Vrf"] ↦{dq} v.(auditor.GetReply.Vrf') ∗
       "Err" ∷ l.[(auditor.GetReply.t), "Err"] ↦{dq} v.(auditor.GetReply.Err') ∗
       "_" ∷ True
@@ -540,18 +445,44 @@ Final Obligation. solve_typed_pointsto_agree. Qed.
    :
   IntoValTypedUnderlying (auditor.GetReply.t) (auditor.GetReplyⁱᵐᵖˡ).
 Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance GetReply_access_load_Link l (v : (auditor.GetReply.t)) dq :
+#[global] Instance GetReply_access_load_StartEp l (v : (auditor.GetReply.t)) dq :
   AccessStrict
-    (l.[(auditor.GetReply.t), "Link"] ↦{dq} (v.(auditor.GetReply.Link')))
-    (l.[(auditor.GetReply.t), "Link"] ↦{dq} (v.(auditor.GetReply.Link')))
+    (l.[(auditor.GetReply.t), "StartEp"] ↦{dq} (v.(auditor.GetReply.StartEp')))
+    (l.[(auditor.GetReply.t), "StartEp"] ↦{dq} (v.(auditor.GetReply.StartEp')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance GetReply_access_store_Link l (v : (auditor.GetReply.t)) Link' :
+#[global] Instance GetReply_access_store_StartEp l (v : (auditor.GetReply.t)) StartEp' :
   AccessStrict
-    (l.[(auditor.GetReply.t), "Link"] ↦ (v.(auditor.GetReply.Link')))
-    (l.[(auditor.GetReply.t), "Link"] ↦ Link')
-    (l ↦ v) (l ↦ (v <|(auditor.GetReply.Link') := Link'|>))%I.
+    (l.[(auditor.GetReply.t), "StartEp"] ↦ (v.(auditor.GetReply.StartEp')))
+    (l.[(auditor.GetReply.t), "StartEp"] ↦ StartEp')
+    (l ↦ v) (l ↦ (v <|(auditor.GetReply.StartEp') := StartEp'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance GetReply_access_load_StartLink l (v : (auditor.GetReply.t)) dq :
+  AccessStrict
+    (l.[(auditor.GetReply.t), "StartLink"] ↦{dq} (v.(auditor.GetReply.StartLink')))
+    (l.[(auditor.GetReply.t), "StartLink"] ↦{dq} (v.(auditor.GetReply.StartLink')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance GetReply_access_store_StartLink l (v : (auditor.GetReply.t)) StartLink' :
+  AccessStrict
+    (l.[(auditor.GetReply.t), "StartLink"] ↦ (v.(auditor.GetReply.StartLink')))
+    (l.[(auditor.GetReply.t), "StartLink"] ↦ StartLink')
+    (l ↦ v) (l ↦ (v <|(auditor.GetReply.StartLink') := StartLink'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance GetReply_access_load_CurrLink l (v : (auditor.GetReply.t)) dq :
+  AccessStrict
+    (l.[(auditor.GetReply.t), "CurrLink"] ↦{dq} (v.(auditor.GetReply.CurrLink')))
+    (l.[(auditor.GetReply.t), "CurrLink"] ↦{dq} (v.(auditor.GetReply.CurrLink')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance GetReply_access_store_CurrLink l (v : (auditor.GetReply.t)) CurrLink' :
+  AccessStrict
+    (l.[(auditor.GetReply.t), "CurrLink"] ↦ (v.(auditor.GetReply.CurrLink')))
+    (l.[(auditor.GetReply.t), "CurrLink"] ↦ CurrLink')
+    (l ↦ v) (l ↦ (v <|(auditor.GetReply.CurrLink') := CurrLink'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance GetReply_access_load_Vrf l (v : (auditor.GetReply.t)) dq :
   AccessStrict
