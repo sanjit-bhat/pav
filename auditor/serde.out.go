@@ -65,23 +65,33 @@ func SignedVrfDecode(b0 []byte) (*SignedVrf, []byte, bool) {
 }
 func GetReplyEncode(b0 []byte, o *GetReply) []byte {
 	var b = b0
-	b = SignedLinkEncode(b, o.Link)
+	b = marshal.WriteInt(b, o.StartEp)
+	b = SignedLinkEncode(b, o.StartLink)
+	b = SignedLinkEncode(b, o.CurrLink)
 	b = SignedVrfEncode(b, o.Vrf)
 	b = marshal.WriteBool(b, o.Err)
 	return b
 }
 func GetReplyDecode(b0 []byte) (*GetReply, []byte, bool) {
-	a1, b1, err1 := SignedLinkDecode(b0)
+	a1, b1, err1 := safemarshal.ReadInt(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := SignedVrfDecode(b1)
+	a2, b2, err2 := SignedLinkDecode(b1)
 	if err2 {
 		return nil, nil, true
 	}
-	a3, b3, err3 := safemarshal.ReadBool(b2)
+	a3, b3, err3 := SignedLinkDecode(b2)
 	if err3 {
 		return nil, nil, true
 	}
-	return &GetReply{Link: a1, Vrf: a2, Err: a3}, b3, false
+	a4, b4, err4 := SignedVrfDecode(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	a5, b5, err5 := safemarshal.ReadBool(b4)
+	if err5 {
+		return nil, nil, true
+	}
+	return &GetReply{StartEp: a1, StartLink: a2, CurrLink: a3, Vrf: a4, Err: a5}, b5, false
 }

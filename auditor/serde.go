@@ -17,7 +17,9 @@ type SignedVrf struct {
 }
 
 type GetReply struct {
-	Link *SignedLink
-	Vrf  *SignedVrf
-	Err  bool
+	StartEp   uint64
+	StartLink *SignedLink
+	CurrLink  *SignedLink
+	Vrf       *SignedVrf
+	Err       bool
 }

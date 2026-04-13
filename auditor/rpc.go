@@ -18,14 +18,14 @@ func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
 			*reply = GetReplyEncode(*reply, r)
 			return
 		}
-		r0, r1, r2 := adtr.Get(a.Epoch)
-		r := &GetReply{Link: r0, Vrf: r1, Err: r2}
+		r0, r1, r2, r3, r4 := adtr.Get(a.Epoch)
+		r := &GetReply{StartEp: r0, StartLink: r1, CurrLink: r2, Vrf: r3, Err: r4}
 		*reply = GetReplyEncode(*reply, r)
 	}
 	return advrpc.NewServer(h)
 }
 
-func CallGet(c *advrpc.Client, epoch uint64) (link *SignedLink, vrf *SignedVrf, err ktcore.Blame) {
+func CallGet(c *advrpc.Client, epoch uint64) (startEp uint64, startLink, currLink *SignedLink, vrf *SignedVrf, err ktcore.Blame) {
 	a := &GetArg{Epoch: epoch}
 	ab := GetArgEncode(nil, a)
 	rb := new([]byte)
@@ -34,7 +34,9 @@ func CallGet(c *advrpc.Client, epoch uint64) (link *SignedLink, vrf *SignedVrf, 
 		return
 	}
 	r, _, errb := GetReplyDecode(*rb)
-	link = r.Link
+	startEp = r.StartEp
+	startLink = r.StartLink
+	currLink = r.CurrLink
 	vrf = r.Vrf
 	if errb {
 		err = ktcore.BlameAdtrFull

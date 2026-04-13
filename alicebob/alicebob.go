@@ -50,14 +50,6 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (err ktcore.Blame, evid *ktc
 		return
 	}
 
-	// run first audit to learn auditor has init epoch in its hist.
-	if err, evid = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
-		return
-	}
-	if err, evid = bob.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
-		return
-	}
-
 	// run alice and bob.
 	var aliceHist []*histEntry
 	var aliceErr ktcore.Blame
@@ -96,12 +88,16 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (err ktcore.Blame, evid *ktc
 	if err = adtr.Update(); err != ktcore.BlameNone {
 		return
 	}
-	if err, evid = alice.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+	adtrStartEp0, err, evid := alice.Audit(adtrAddr, adtrPk)
+	if err != ktcore.BlameNone {
 		return
 	}
-	if err, evid = bob.Audit(adtrAddr, adtrPk); err != ktcore.BlameNone {
+	std.Assert(adtrStartEp0 == 0)
+	adtrStartEp1, err, evid := bob.Audit(adtrAddr, adtrPk)
+	if err != ktcore.BlameNone {
 		return
 	}
+	std.Assert(adtrStartEp1 == 0)
 
 	// Assume alice monitored bob's Get epoch.
 	primitive.Assume(bobEp < uint64(len(aliceHist)))

@@ -151,16 +151,20 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	return
 }
 
-func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (err ktcore.Blame, evid *ktcore.Evid) {
+func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp uint64, err ktcore.Blame, evid *ktcore.Evid) {
 	cli := advrpc.Dial(adtrAddr)
 	last := c.last
-	link, vrf, err := auditor.CallGet(cli, last.epoch)
+	startEp, startLink, currLink, vrf, err := auditor.CallGet(cli, last.epoch)
 	if err != ktcore.BlameNone {
 		return
 	}
 	// check adtr sig for consistency under untrusted server and trusted auditor.
 	// check serv sig to catch serv misbehavior.
-	if checkAuditLink(c.serv.sigPk, adtrPk, last.epoch, link) {
+	if checkAuditLink(c.serv.sigPk, adtrPk, startEp, startLink) {
+		err = ktcore.BlameAdtrFull
+		return
+	}
+	if checkAuditLink(c.serv.sigPk, adtrPk, last.epoch, currLink) {
 		err = ktcore.BlameAdtrFull
 		return
 	}
@@ -177,8 +181,8 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (err ktco
 		return
 	}
 	// link evidence.
-	if !bytes.Equal(last.link, link.Link) {
-		evid = &ktcore.Evid{Link: &ktcore.EvidLink{Epoch: last.epoch, Link0: last.link, Sig0: last.sig, Link1: link.Link, Sig1: link.ServSig}}
+	if !bytes.Equal(last.link, currLink.Link) {
+		evid = &ktcore.Evid{Link: &ktcore.EvidLink{Epoch: last.epoch, Link0: last.link, Sig0: last.sig, Link1: currLink.Link, Sig1: currLink.ServSig}}
 		err = ktcore.BlameServSig
 		return
 	}
