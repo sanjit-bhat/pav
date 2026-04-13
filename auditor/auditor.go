@@ -14,19 +14,18 @@ import (
 )
 
 type Auditor struct {
-	mu   *sync.RWMutex
 	sk   *cryptoffi.SigPrivateKey
-	hist *history
 	serv *serv
+
+	mu   *sync.RWMutex
+	hist *history
 }
 
 type history struct {
 	lastDig []byte
 	// the epoch of our first hist entry.
 	startEp uint64
-	// epochs that the server checked Update proofs for.
-	// invariant: epochs within bounds.
-	// invariant: at least one entry.
+	// epochs that the auditor checked update proofs for.
 	epochs []*epoch
 }
 
@@ -78,7 +77,6 @@ func (a *Auditor) updOnce(p *ktcore.AuditProof) (err ktcore.Blame) {
 	hist.lastDig = dig
 	info := &epoch{link: link, servSig: p.LinkSig, adtrSig: sig}
 	hist.epochs = append(hist.epochs, info)
-	a.hist = hist
 	return
 }
 

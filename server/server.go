@@ -13,21 +13,18 @@ import (
 
 // performance params.
 var (
-	// WorkQSize should be max keys expected per epoch.
-	WorkQSize int = 1024
-	// TODO: should this be eq to [WorkQSize]? or average # keys?
-	BatchSize int = 128
-	// BatchTimeout should be time between epochs.
-	BatchTimeout = time.Second
+	// EpochTime roughly matches AKD.
+	EpochTime = time.Second
 )
 
 type Server struct {
-	mu   *sync.RWMutex
 	secs *secrets
+	// workQ for batching puts into one epoch update.
+	workQ chan *work
+
+	mu   *sync.RWMutex
 	keys *keyStore
 	hist *history
-	// workQ for batch processing Put requests.
-	workQ chan *Work
 }
 
 type secrets struct {
@@ -47,7 +44,9 @@ type keyStore struct {
 type history struct {
 	// chain is a hashchain of merkle digests across the epochs.
 	chain *hashchain.HashChain
-	// audits has auditing proofs on prior epochs.
+	// audits has auditing info for all epochs.
+	// for epoch 0, the UpdateProof is invalid (there is no prior epoch),
+	// but [Server.Audit] will never return it.
 	audits   []*ktcore.AuditProof
 	vrfPkSig []byte
 }
@@ -67,8 +66,11 @@ func (s *Server) Start() (chain *StartChain, vrf *StartVrf) {
 }
 
 // Put queues pk (at the specified version) for insertion.
-func (s *Server) Put(uid uint64, pk []byte, ver uint64) {
-	s.workQ <- &Work{Uid: uid, Pk: pk, Ver: ver}
+func (s *Server) Put(uid uint64, ver uint64, pk []byte) {
+	label := ktcore.EvalMapLabel(s.secs.vrf, uid, ver)
+	rand := ktcore.GetCommitRand(s.secs.commit, label)
+	val := ktcore.GetMapVal(pk, rand)
+	s.workQ <- &work{uid: uid, ver: ver, pk: pk, mapLabel: label, mapVal: val}
 }
 
 // History gives key history for uid, excluding first prevVerLen versions.
@@ -107,62 +109,34 @@ func (s *Server) Audit(prevEpoch uint64) (proof []*ktcore.AuditProof, err bool) 
 	return
 }
 
-type Work struct {
-	Uid uint64
-	Pk  []byte
-	Ver uint64
-	Err bool
-}
+type work struct {
+	// the original Put request.
+	uid uint64
+	ver uint64
+	pk  []byte
 
-type mapEntry struct {
-	label []byte
-	val   []byte
+	// the computed merkle map entry.
+	mapLabel []byte
+	mapVal   []byte
 }
 
 func (s *Server) worker() {
+	// our merkle tree only supports one latest view, so merkle updates
+	// must be sync'd with epoch releases. we batch updates for perf.
 	for {
-		work := getWork(s.workQ)
-		if len(work) == 0 {
+		w := s.getWork()
+		// empty batches are safe, but for perf, skip them.
+		if len(w) == 0 {
 			continue
 		}
-		s.doWork(work)
+		s.doWork(w)
 	}
-}
-
-func getWork(workQ <-chan *Work) (work []*Work) {
-	work = make([]*Work, 0, BatchSize)
-	timer := time.NewTimer(BatchTimeout)
-
-	// batch-aggregator with timeout.
-	for i := 0; i < BatchSize; i++ {
-		select {
-		case job, ok := <-workQ:
-			// never close channel.
-			std.Assert(ok)
-			work = append(work, job)
-		case <-timer.C:
-			return
-		}
-	}
-	return
-}
-
-func (s *Server) doWork(work []*Work) {
-	s.checkWork(work)
-
-	// NOTE: for correctness, addEntries (write) must start with the same
-	// state as makeEntries (read). we ensure this by not having any write
-	// lockers outside this fn.
-	ents := s.makeEntries(work)
-	s.mu.Lock()
-	s.addEntries(work, ents)
-	s.mu.Unlock()
 }
 
 func New() (*Server, cryptoffi.SigPublicKey) {
 	mu := new(sync.RWMutex)
-	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfSk := cryptoffi.VrfGenerateKey()
+	sigPk, sigSk := cryptoffi.SigGenerateKey()
 	vrfSig := ktcore.SignVrf(sigSk, vrfSk.PublicKey())
 	commitSec := cryptoffi.RandBytes(cryptoffi.HashLen)
 	secs := &secrets{sig: sigSk, vrf: vrfSk, commit: commitSec}
@@ -171,10 +145,11 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	keys := &keyStore{hidden: hidden, plain: plain}
 	chain := hashchain.New()
 	hist := &history{chain: chain, vrfPkSig: vrfSig}
-	wq := make(chan *Work, WorkQSize)
+	wq := make(chan *work)
 	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, workQ: wq}
 
-	// commit empty map as epoch 0.
+	// commit empty map as epoch 0 to always have some epoch
+	// against which we can respond to requests.
 	dig := keys.hidden.Hash()
 	link := chain.Append(dig)
 	linkSig := ktcore.SignLink(s.secs.sig, 0, link)
@@ -184,72 +159,35 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	return s, sigPk
 }
 
-func (s *Server) checkWork(work []*Work) {
-	uidSet := make(map[uint64]bool, len(work))
-	for _, w := range work {
-		uid := w.Uid
-		// error out wrong versions.
-		nextVer := uint64(len(s.keys.plain[uid]))
-		if w.Ver != nextVer {
-			w.Err = true
-			continue
+func (s *Server) getWork() (work []*work) {
+	timer := time.NewTimer(EpochTime)
+	// don't care about upper-bounding batch size.
+	// so aggregate as much work as we can within [EpochTime].
+	for {
+		select {
+		case <-timer.C:
+			return
+		case w := <-s.workQ:
+			work = append(work, w)
 		}
-		// error out duplicate uid's. arbitrarily picks one to succeed.
-		_, ok := uidSet[uid]
-		if ok {
-			w.Err = true
-			continue
-		}
-		uidSet[uid] = false
 	}
 }
 
-func (s *Server) makeEntries(work []*Work) (ents []*mapEntry) {
-	ents = make([]*mapEntry, len(work))
-	wg := new(sync.WaitGroup)
-	for i := 0; i < len(work); i++ {
-		job := work[i]
-		if job.Err {
-			continue
-		}
-		out := &mapEntry{}
-		ents[i] = out
-		wg.Add(1)
-		go func() {
-			s.makeEntry(job, out)
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-	return
-}
-
-func (s *Server) makeEntry(in *Work, out *mapEntry) {
-	numVers := uint64(len(s.keys.plain[in.Uid]))
-	mapLabel := ktcore.EvalMapLabel(s.secs.vrf, in.Uid, numVers)
-	rand := ktcore.GetCommitRand(s.secs.commit, mapLabel)
-	open := &ktcore.CommitOpen{Val: in.Pk, Rand: rand}
-	mapVal := ktcore.GetMapVal(open)
-
-	out.label = mapLabel
-	out.val = mapVal
-}
-
-func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
+func (s *Server) doWork(work []*work) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	upd := make([]*ktcore.UpdateProof, 0, len(work))
-	for i := 0; i < len(work); i++ {
-		job := work[i]
-		if job.Err {
+	for _, w := range work {
+		// check: for each uid, maintain contiguous seq of versions.
+		nextVer := uint64(len(s.keys.plain[w.uid]))
+		if w.ver != nextVer {
 			continue
 		}
 
-		out := ents[i]
-		label := out.label
-
-		proof := s.keys.hidden.Put(label, out.val)
-		s.keys.plain[job.Uid] = append(s.keys.plain[job.Uid], job.Pk)
-
-		info := &ktcore.UpdateProof{MapLabel: label, MapVal: out.val, NonMembProof: proof}
+		// update.
+		proof := s.keys.hidden.Put(w.mapLabel, w.mapVal)
+		s.keys.plain[w.uid] = append(s.keys.plain[w.uid], w.pk)
+		info := &ktcore.UpdateProof{MapLabel: w.mapLabel, MapVal: w.mapVal, NonMembProof: proof}
 		upd = append(upd, info)
 	}
 
@@ -264,6 +202,7 @@ func (s *Server) addEntries(work []*Work, ents []*mapEntry) {
 func (s *Server) getHist(uid, prefixLen uint64) (hist []*ktcore.Memb) {
 	pks := s.keys.plain[uid]
 	numVers := uint64(len(pks))
+	hist = make([]*ktcore.Memb, 0, numVers-prefixLen)
 	for ver := prefixLen; ver < numVers; ver++ {
 		label, labelProof := ktcore.ProveMapLabel(s.secs.vrf, uid, ver)
 		inMap, _, mapProof := s.keys.hidden.Prove(label)

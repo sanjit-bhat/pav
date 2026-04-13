@@ -20,7 +20,7 @@ const (
 )
 
 func init() {
-	server.BatchTimeout = time.Millisecond
+	server.EpochTime = time.Millisecond
 }
 
 func testAliceBob(servAddr uint64, adtrAddr uint64) (err ktcore.Blame, evid *ktcore.Evid) {

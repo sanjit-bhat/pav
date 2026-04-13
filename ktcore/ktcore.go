@@ -10,7 +10,7 @@ import (
 )
 
 func SignVrf(sk *cryptoffi.SigPrivateKey, vrfPk []byte) (sig []byte) {
-	b := make([]byte, 0, 1+8+cryptoffi.HashLen)
+	b := make([]byte, 0, 1+8+32)
 	b = VrfSigEncode(b, &VrfSig{SigTag: VrfSigTag, VrfPk: vrfPk})
 	// benchmark: turn off sigs for akd compat.
 	sig = sk.Sign(b)
@@ -18,7 +18,7 @@ func SignVrf(sk *cryptoffi.SigPrivateKey, vrfPk []byte) (sig []byte) {
 }
 
 func VerifyVrfSig(pk cryptoffi.SigPublicKey, vrfPk, sig []byte) (err bool) {
-	b := make([]byte, 0, 1+8+cryptoffi.HashLen)
+	b := make([]byte, 0, 1+8+32)
 	b = VrfSigEncode(b, &VrfSig{SigTag: VrfSigTag, VrfPk: vrfPk})
 	return pk.Verify(b, sig)
 }
@@ -55,8 +55,9 @@ func CheckMapLabel(pk *cryptoffi.VrfPublicKey, uid, ver uint64, proof []byte) (l
 	return pk.Verify(b, proof)
 }
 
-func GetMapVal(pkOpen *CommitOpen) (val []byte) {
-	b := CommitOpenEncode(nil, pkOpen)
+func GetMapVal(pk []byte, rand []byte) (val []byte) {
+	b := make([]byte, 0, 8+32+8+cryptoffi.HashLen)
+	b = CommitOpenEncode(b, &CommitOpen{Val: pk, Rand: rand})
 	return cryptoutil.Hash(b)
 }
 
