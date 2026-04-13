@@ -138,6 +138,8 @@ Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 (** staged / committed keys. *)
+(* TODO: move to separate file.
+this is only related to sigpred in that it uses [mono_plain]. *)
 
 (* after auditing, learn that client digs equal auditor digs.
 also learn [mono_plain], so "apply" that in [is_staged_keys]. *)
