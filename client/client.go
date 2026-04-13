@@ -98,9 +98,8 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		return
 	}
 	ep = next.epoch
-	histLen := uint64(len(hist))
-	boundVer := c.pend.ver + histLen
-	if !std.SumNoOverflow(c.pend.ver, histLen) {
+	boundVer := c.pend.ver + uint64(len(hist))
+	if !std.SumNoOverflow(c.pend.ver, uint64(len(hist))) {
 		err = ktcore.BlameServFull
 		return
 	}
@@ -112,41 +111,48 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		err = ktcore.BlameServFull
 		return
 	}
-
-	// check consistency with pending.
-	// TODO: may be easier to factor these pending <-> hist checks into func.
-	if !c.pend.isPending {
-		// if no pending, shouldn't have any updates.
-		if histLen != 0 {
-			// conflicting updates could also come from other bad clients.
-			err = ktcore.BlameServFull | ktcore.BlameClients
-			return
-		}
-		c.last = next
-		return
-	}
-	// good client only has one version update at a time.
-	if histLen > 1 {
-		err = ktcore.BlameServFull | ktcore.BlameClients
-		return
-	}
-	// update hasn't yet fired.
-	if histLen == 0 {
-		c.last = next
-		return
-	}
-	newKey := hist[0]
-	// equals pending put.
-	if !bytes.Equal(newKey.PkOpen.Val, c.pend.pendingPk) {
+	if isChanged, errb = checkPend(c.pend, hist); errb {
+		// conflicting updates could also come from other bad clients.
 		err = ktcore.BlameServFull | ktcore.BlameClients
 		return
 	}
 
 	// update.
 	c.last = next
+	if !isChanged {
+		return
+	}
 	c.pend.isPending = false
 	c.pend.pendingPk = nil
 	c.pend.ver = boundVer
+	return
+}
+
+func checkPend(pend *nextVer, hist []*ktcore.Memb) (isChanged, err bool) {
+	histLen := uint64(len(hist))
+	if !pend.isPending {
+		// client hasn't given permission to do any updates.
+		if histLen != 0 {
+			err = true
+			return
+		}
+		return
+	}
+	// client has up to one pending update at a time.
+	if histLen > 1 {
+		err = true
+		return
+	}
+	// update hasn't yet fired.
+	if histLen == 0 {
+		return
+	}
+	newKey := hist[0]
+	// update equals pending.
+	if !bytes.Equal(newKey.PkOpen.Val, pend.pendingPk) {
+		err = true
+		return
+	}
 	isChanged = true
 	return
 }
