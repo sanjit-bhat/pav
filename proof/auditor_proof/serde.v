@@ -242,18 +242,23 @@ End SignedVrf.
 Module GetReply.
 Record t :=
   mk' {
-    Link: SignedLink.t;
+    StartEp: w64;
+    StartLink: SignedLink.t;
+    CurrLink: SignedLink.t;
     Vrf: SignedVrf.t;
     Err: bool;
   }.
 
 Definition pure_enc obj :=
-  SignedLink.pure_enc obj.(Link) ++
+  safemarshal.w64.pure_enc obj.(StartEp) ++
+  SignedLink.pure_enc obj.(StartLink) ++
+  SignedLink.pure_enc obj.(CurrLink) ++
   SignedVrf.pure_enc obj.(Vrf) ++
   safemarshal.bool.pure_enc obj.(Err).
 
 Definition valid obj :=
-  SignedLink.valid obj.(Link) ∧
+  SignedLink.valid obj.(StartLink) ∧
+  SignedLink.valid obj.(CurrLink) ∧
   SignedVrf.valid obj.(Vrf).
 
 Definition wish b obj tail :=
@@ -273,10 +278,11 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
-  ∃ ptr_Link ptr_Vrf,
-  "Hstruct" ∷ ptr ↦{d} (auditor.GetReply.mk ptr_Link ptr_Vrf obj.(Err)) ∗
+  ∃ ptr_StartLink ptr_CurrLink ptr_Vrf,
+  "Hstruct" ∷ ptr ↦{d} (auditor.GetReply.mk obj.(StartEp) ptr_StartLink ptr_CurrLink ptr_Vrf obj.(Err)) ∗
 
-  "Hown_Link" ∷ SignedLink.own ptr_Link obj.(Link) d ∗
+  "Hown_StartLink" ∷ SignedLink.own ptr_StartLink obj.(StartLink) d ∗
+  "Hown_CurrLink" ∷ SignedLink.own ptr_CurrLink obj.(CurrLink) d ∗
   "Hown_Vrf" ∷ SignedVrf.own ptr_Vrf obj.(Vrf) d.
 
 Lemma wp_enc obj sl_b b ptr_obj d :

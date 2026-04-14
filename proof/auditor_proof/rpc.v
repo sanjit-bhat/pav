@@ -4,11 +4,13 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 From New.proof.github_com.sanjit_bhat.pav Require Import
   advrpc cryptoffi hashchain ktcore merkle.
 
+From New.proof.github_com.sanjit_bhat.pav.auditor_proof Require Import
+  serde.
 From New.proof.github_com.sanjit_bhat.pav.server_proof Require Import
   serde server rpc.
 
 Module auditor.
-Import serde.server server.server rpc.server.
+Import serde.server server.server rpc.server serde.auditor.
 
 Module state.
 Record t :=
@@ -36,26 +38,25 @@ Notation start_epγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.
 Notation cutγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.cut)).
 Notation audit_offsetγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.audit_offset)).
 
-Module epoch.
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition own ptr σ ep γ : iProp Σ :=
-  ∃ sl_link link sl_servSig servSig sl_adtrSig adtrSig,
-  "#Hstr_epoch" ∷ ptr ↦□ (auditor.epoch.mk sl_link sl_servSig sl_adtrSig) ∗
-  "#Hsl_link" ∷ sl_link ↦*□ link ∗
-  (* could derive this from LinkSig, but it's easier to state explicitly. *)
-  "%His_link" ∷ ⌜hashchain.valid (take (S ep - start_epγ γ) σ.(state.digs)) (cutγ γ) link (S ep)⌝ ∗
-  "#Hsl_servSig" ∷ sl_servSig ↦*□ servSig ∗
-  "#His_servSig" ∷ ktcore.wish_LinkSig γ.(cfg.serv_sig_pk) (W64 ep) link servSig ∗
-  "#Hsl_adtrSig" ∷ sl_adtrSig ↦*□ adtrSig ∗
-  "#His_adtrSig" ∷ ktcore.wish_LinkSig γ.(cfg.adtr_sig_pk) (W64 ep) link adtrSig.
+Definition wish_SignedLink servPk adtrPk ep link : iProp Σ :=
+  "#Hwish_adtr_sig" ∷ ktcore.wish_LinkSig adtrPk ep
+    link.(SignedLink.Link) link.(SignedLink.AdtrSig) ∗
+  "#Hwish_serv_sig" ∷ ktcore.wish_LinkSig servPk ep
+    link.(SignedLink.Link) link.(SignedLink.ServSig).
+
+Definition wish_SignedVrf servPk adtrPk vrf : iProp Σ :=
+  "#Hwish_adtr_sig" ∷ ktcore.wish_VrfSig adtrPk
+    vrf.(SignedVrf.VrfPk) vrf.(SignedVrf.AdtrSig) ∗
+  "#Hwish_serv_sig" ∷ ktcore.wish_VrfSig servPk
+    vrf.(SignedVrf.VrfPk) vrf.(SignedVrf.ServSig).
 
 End proof.
-End epoch.
 
 Module history.
 Section proof.
@@ -63,6 +64,15 @@ Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
+
+Definition own_ep ptr σ (ep : nat) γ : iProp Σ :=
+  ∃ sig_link,
+  "#Hown_epoch" ∷ SignedLink.own ptr sig_link (□) ∗
+  "#His_epoch" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk)
+    (W64 ep) sig_link ∗
+  (* could derive this from LinkSig, but it's easier to state explicitly. *)
+  "%His_link" ∷ ⌜hashchain.valid (take (S ep - start_epγ γ) σ.(state.digs))
+    (cutγ γ) sig_link.(SignedLink.Link) (S ep)⌝.
 
 (* TODO: in-mem startEp and sigpred startEp are diff values.
 we should give them diff names. *)
@@ -74,8 +84,8 @@ Definition own ptr γ σ q : iProp Σ :=
   "%Heq_lastDig" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
   "Hsl_epochs" ∷ sl_epochs ↦*{#q} sl0_epochs ∗
   "Hcap_epochs" ∷ own_slice_cap loc sl_epochs (DfracOwn q) ∗
-  "#Hepochs" ∷ ([∗ list] idx ↦ p ∈ sl0_epochs,
-    epoch.own p σ (uint.nat start_ep + idx) γ) ∗
+  "#Hepochs" ∷ ([∗ list] idx ↦ ptr ∈ sl0_epochs,
+    own_ep ptr σ (uint.nat start_ep + idx)%nat γ) ∗
 
   "%Hsome_digs" ∷ ⌜length σ.(state.digs) > 0⌝ ∗
   "%Hsome_epochs" ∷ ⌜length sl0_epochs > 0⌝ ∗

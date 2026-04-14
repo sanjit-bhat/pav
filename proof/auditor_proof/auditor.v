@@ -93,23 +93,16 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own ptr γ good : iProp Σ :=
-  ∃ ptr_cli sl_sigPk sl_vrfPk sl_servVrfSig servVrfSig sl_adtrVrfSig adtrVrfSig,
-  "#Hstr_serv" ∷ ptr ↦□ (auditor.serv.mk ptr_cli sl_sigPk sl_vrfPk sl_servVrfSig sl_adtrVrfSig) ∗
+  ∃ ptr_cli sl_sigPk,
+  "#Hstr_serv" ∷ ptr ↦□ (auditor.serv.mk ptr_cli sl_sigPk) ∗
   "#His_rpc" ∷ server.is_rpc_cli ptr_cli good ∗
-  "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.serv_sig_pk) ∗
-  "#Hsl_vrfPk" ∷ sl_vrfPk ↦*□ vrf_pkγ γ ∗
-  "#Hsl_servVrfSig" ∷ sl_servVrfSig ↦*□ servVrfSig ∗
-  "#His_servVrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.serv_sig_pk) (vrf_pkγ γ) servVrfSig ∗
-  "#Hsl_adtrVrfSig" ∷ sl_adtrVrfSig ↦*□ adtrVrfSig ∗
-  "#His_adtrVrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.adtr_sig_pk) (vrf_pkγ γ) adtrVrfSig.
+  "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.serv_sig_pk).
 
 Definition align_serv γ servγ : iProp Σ :=
   (* trusted Auditor.New assumption. *)
   "%Heq_sig_pk" ∷ ⌜γ.(cfg.serv_sig_pk) = servγ.(server.cfg.sig_pk)⌝ ∗
   "#His_sig_pk" ∷ cryptoffi.is_sig_pk γ.(cfg.serv_sig_pk)
-    (sigpred.P servγ.(server.cfg.sigγ)) ∗
-  (* from signed vrf_pk. *)
-  "%Heq_vrf_pk" ∷ ⌜vrf_pkγ γ = server.vrf_pkγ servγ⌝.
+    (sigpred.P servγ.(server.cfg.sigγ)).
 
 End proof.
 End serv.
@@ -122,10 +115,11 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own ptr γ σ q : iProp Σ :=
-  ∃ ptr_sk ptr_hist ptr_serv,
+  ∃ ptr_sk ptr_hist ptr_serv ptr_vrf vrf,
   "#Hfld_sk" ∷ ptr.[auditor.Auditor.t, "sk"] ↦□ ptr_sk ∗
   "#Hfld_hist" ∷ ptr.[auditor.Auditor.t, "hist"] ↦□ ptr_hist ∗
   "#Hfld_serv" ∷ ptr.[auditor.Auditor.t, "serv"] ↦□ ptr_serv ∗
+  "#Hfld_vrf" ∷ ptr.[auditor.Auditor.t, "vrf"] ↦□ ptr_vrf ∗
 
   "#Hown_sk" ∷ cryptoffi.own_sig_sk ptr_sk γ.(cfg.adtr_sig_pk)
     (sigpred.P γ.(cfg.sigγ)) ∗
@@ -139,7 +133,12 @@ Definition own ptr γ σ q : iProp Σ :=
 
   "#Hown_serv" ∷ serv.own ptr_serv γ γ.(cfg.serv_good) ∗
   "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
-    serv.align_serv γ servγ end.
+    serv.align_serv γ servγ end ∗
+
+  "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
+  "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗
+  (* from signed vrf_pk. *)
+  "%Heq_vrf_pk" ∷ ⌜vrf.(SignedVrf.VrfPk) = vrf_pkγ γ⌝.
 
 Definition own_aux ptr γ q : iProp Σ := ∃ σ, own ptr γ σ q.
 
@@ -152,17 +151,18 @@ Definition lock_perm ptr γ : iProp Σ :=
   fractional.Fractional (λ q, own_aux ptr γ q).
 Proof.
   rewrite /own_aux. intros ??. iSplit.
-  - iIntros "(%&%&@)".
+  - iIntros "@".
     iDestruct "Hown_hist" as "[? ?]".
     rewrite Qp.div_add_distr.
     iDestruct "Hown_gs" as "[? ?]".
     iFrame "∗#%".
-  - iIntros "[(%&%&H0)(%&%&H1)]".
+  - iIntros "[H0 H1]".
     iNamedSuffix "H0" "0".
     iNamedSuffix "H1" "1".
     iCombine "Hfld_sk0 Hfld_sk1" gives %?.
     iCombine "Hfld_hist0 Hfld_hist1" gives %?.
     iCombine "Hfld_serv0 Hfld_serv1" gives %?.
+    iCombine "Hfld_vrf0 Hfld_vrf1" gives %?.
     simplify_eq/=.
     iCombine "Hown_hist0 Hown_hist1" as "?".
     iCombine "Hown_gs0 Hown_gs1" as "?".
@@ -447,18 +447,6 @@ Proof.
   iPureIntro. exact_eq His_chain. f_equal. word.
 Qed.
 
-Definition wish_SignedLink servPk adtrPk ep link : iProp Σ :=
-  "#Hwish_adtr_sig" ∷ ktcore.wish_LinkSig adtrPk ep
-    link.(SignedLink.Link) link.(SignedLink.AdtrSig) ∗
-  "#Hwish_serv_sig" ∷ ktcore.wish_LinkSig servPk ep
-    link.(SignedLink.Link) link.(SignedLink.ServSig).
-
-Definition wish_SignedVrf servPk adtrPk vrf : iProp Σ :=
-  "#Hwish_adtr_sig" ∷ ktcore.wish_VrfSig adtrPk
-    vrf.(SignedVrf.VrfPk) vrf.(SignedVrf.AdtrSig) ∗
-  "#Hwish_serv_sig" ∷ ktcore.wish_VrfSig servPk
-    vrf.(SignedVrf.VrfPk) vrf.(SignedVrf.ServSig).
-
 Lemma wp_Auditor_Get a γ epoch Q :
   {{{
     is_pkg_init auditor ∗
@@ -468,7 +456,8 @@ Lemma wp_Auditor_Get a γ epoch Q :
   }}}
   a @! (go.PointerType auditor.Auditor) @! "Get" #epoch
   {{{
-    ptr_link ptr_vrf err σ, RET (#ptr_link, #ptr_vrf, #err);
+    (startEp : w64) ptr_startLink ptr_currLink ptr_vrf err σ,
+    RET (#startEp, #ptr_startLink, #ptr_currLink, #ptr_vrf, #err);
     "Hlock" ∷ Auditor.lock_perm a γ ∗
     "HQ" ∷ Q σ ∗
     "#Herr" ∷
@@ -476,12 +465,15 @@ Lemma wp_Auditor_Get a γ epoch Q :
       | true => ⌜uint.Z epoch < start_epγ γ + audit_offsetγ γ ∨
         uint.Z epoch >= start_epγ γ + length σ.(state.digs)⌝
       | false =>
-        ∃ link vrf,
-        "#Hown_link" ∷ SignedLink.own ptr_link link (□) ∗
+        ∃ startLink currLink vrf,
+        "#Hown_startLink" ∷ SignedLink.own ptr_startLink startLink (□) ∗
+        "#Hown_currLink" ∷ SignedLink.own ptr_currLink currLink (□) ∗
         "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
-        "#Hwish_link" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) epoch link ∗
+        "#Hwish_startLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) startEp startLink ∗
+        "#Hwish_currLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) epoch currLink ∗
         "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗
-        "%Heq_vrf" ∷ ⌜vrf.(SignedVrf.VrfPk) = vrf_pkγ γ⌝
+        "%Heq_vrf" ∷ ⌜vrf.(SignedVrf.VrfPk) = vrf_pkγ γ⌝ ∗
+        "%Heq_startEp" ∷ ⌜uint.nat startEp = (start_epγ γ + audit_offsetγ γ)%nat⌝
       end
   }}}.
 Proof.
@@ -511,22 +503,26 @@ Proof.
     iFrame "∗#".
     iPureIntro. word. }
   case_decide as Ht; [|word]. clear Ht.
-  list_elem sl0_epochs (sint.nat (word.sub epoch start_ep)) as ptr_epoch.
-  iDestruct (big_sepL_lookup with "Hepochs") as "@"; [done|].
-  iNamed "Hown_serv".
-  wp_apply (wp_load_slice_index with "[$Hsl_epochs]"); [word|done|].
-  iIntros "Hsl_epochs". wp_auto.
-  wp_apply wp_alloc as "* Hptr_link".
-  wp_apply wp_alloc as "* Hptr_vrf".
-  iPersist "Hptr_link Hptr_vrf".
+  list_elem sl0_epochs 0%nat as ptr_startEpoch.
+  iDestruct (big_sepL_lookup with "Hepochs") as "HstartLink".
+  { exact Hptr_startEpoch_lookup. }
+  wp_apply (wp_load_slice_index with "[$Hsl_epochs]") as "Hsl_epochs";
+    [word|done|].
+  case_decide as Ht; [|word]. clear Ht.
+  list_elem sl0_epochs (sint.nat (word.sub epoch start_ep)) as ptr_currEpoch.
+  iDestruct (big_sepL_lookup with "Hepochs") as "HcurrLink".
+  { exact Hptr_currEpoch_lookup. }
+  wp_apply (wp_load_slice_index with "[$Hsl_epochs]") as "Hsl_epochs";
+    [word|done|].
   wp_apply (wp_RWMutex__RUnlock with "[-HΦ HQ]") as "Hlock".
-  { iFrame "∗∗ Hstr_serv #%". }
+  { iFrame "∗∗#%". }
   iApply "HΦ".
   iFrame "Hfld_mu ∗".
-  iExists (SignedLink.mk' _ _ _), (SignedVrf.mk' _ _ _).
-  simpl in *.
+  iNamedSuffix "HstartLink" "_start".
+  iNamedSuffix "HcurrLink" "_curr".
+  replace (W64 (uint.nat _ + 0)%nat) with start_ep by word.
   replace (W64 (uint.nat _ + sint.nat _)%nat) with epoch by word.
-  by iFrame "#".
+  iFrame "#%".
 Qed.
 
 Lemma wp_Auditor_updOnce ptr_a γ σ Q ptr_proof proof :
@@ -887,7 +883,6 @@ Proof.
     iFrame "#%". word. }
 
   wp_apply wp_alloc as "* Hstr_epoch".
-  iPersist "Hstr_epoch".
   wp_apply wp_slice_literal. iSplitR; [done|].
   iIntros "* [Hsl_epochs Hcap_epochs]". wp_auto.
   replace (sint.nat (W64 0)) with 0%nat by word. simpl.
@@ -896,11 +891,12 @@ Proof.
   wp_apply ktcore.wp_SignVrf as "* @".
   { iFrame "#". naive_solver. }
   wp_apply wp_alloc as "* Hstr_serv".
+  wp_apply wp_alloc as "* Hstr_signedVrf".
   rewrite -wp_fupd.
   wp_apply wp_alloc as "%ptr_a Hstr_adtr".
-  iPersist "Hstr_serv".
   iStructNamed "Hstr_adtr". simpl in *.
-  iPersist "sk serv mu hist".
+  iPersist "sk serv vrf mu hist".
+  iPersist "Hstr_epoch Hstr_serv Hstr_signedVrf".
 
   remember (cfg.mk servPk sigPk sigγ servGood) as γ.
   remember (state.mk digs) as σ.
@@ -914,12 +910,12 @@ Proof.
     subst. iModIntro.
     iNamed "Hwish_CheckStartVrf".
     iFrame "Hstr_hist #∗%".
-    simpl in *.
+    iExists (SignedVrf.mk' _ _ _). simpl in *.
+    iFrame "#". simpl.
     repeat iSplit; try done; try iPureIntro.
-    - replace (_ + 0)%nat with (uint.nat ep) by word.
+    - iExists (SignedLink.mk' _ _ _). simpl.
       iNamed "Hwish_CheckStartChain".
-      iFrame "Hstr_epoch #".
-      simpl in *.
+      replace (_ + 0)%nat with (uint.nat ep) by word.
       replace (W64 (uint.nat _)) with ep by word.
       rewrite take_ge; [|word].
       iFrame "#%".
