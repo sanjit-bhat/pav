@@ -43,8 +43,6 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-(** staged / committed keys. *)
-
 Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   ∃ last_dig,
   (* [next_ver] only has meaning with some digs. *)

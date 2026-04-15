@@ -17,10 +17,34 @@ Collection W := sem.
 
 Local Definition kt_ptsto_def γ ep uid opt_pk : iProp Σ :=
   ∃ dig,
-  "#Hlook_dig" ∷ mono_list_idx_own γ.(sigpred.cfg.digs) ep dig ∗
-  "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(sigpred.cfg.vrf_pk) uid dig = opt_pk⌝.
+  "#Hlook_dig" ∷ mono_list_idx_own γ.(cfg.digs) ep dig ∗
+  "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(cfg.vrf_pk) uid dig = opt_pk⌝.
 Program Definition kt_ptsto := sealed @kt_ptsto_def.
 Definition kt_ptsto_unseal : kt_ptsto = _ := seal_eq _.
+
+Definition is_staged γcli uid keys_start_ep keys : iProp Σ :=
+  ∃ digs next_ver,
+  let n_drop := (keys_start_ep - γcli.(cfg.info).(digs_info.start_ep))%nat in
+  "#Hlb_digs" ∷ mono_list_lb_own γcli.(cfg.digs) digs ∗
+  "%Hstaged" ∷ ⌜is_staged_keys γcli.(cfg.vrf_pk) (drop n_drop digs)
+    uid keys next_ver⌝ ∗
+
+  "%Hlt_start" ∷ ⌜γcli.(cfg.info).(digs_info.start_ep) ≤ keys_start_ep⌝.
+
+Definition is_audit γcli γadtr end_ep : iProp Σ :=
+  ∃ (digs : list $ list w8),
+  "#Hcli_digs" ∷ mono_list_lb_own γcli.(cfg.digs) digs ∗
+  "#Hadtr_digs" ∷ mono_list_lb_own γadtr.(cfg.digs) digs ∗
+  "%Hlen_digs" ∷ ⌜length digs =
+    (S end_ep - γcli.(cfg.info).(digs_info.start_ep))%nat⌝ ∗
+  "%Hmono_plain" ∷ ⌜mono_plain γadtr.(cfg.vrf_pk)
+    (drop γadtr.(cfg.info).(digs_info.audit_offset) digs)⌝ ∗
+
+  "%Heq_vrf" ∷ ⌜γcli.(cfg.vrf_pk) = γadtr.(cfg.vrf_pk)⌝ ∗
+  "%Heq_start" ∷ ⌜γcli.(cfg.info).(digs_info.start_ep) =
+    γadtr.(cfg.info).(digs_info.start_ep)⌝ ∗
+  "%Heq_cut" ∷ ⌜γcli.(cfg.info).(digs_info.cut) =
+    γadtr.(cfg.info).(digs_info.cut)⌝.
 
 End proof.
 

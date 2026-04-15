@@ -7,7 +7,7 @@ specs:
 - Audit: is_audit γcli γadtr end_ep.
   + end_ep is epoch of Audit.
   + impl:
-    (1) first cli digs = auditor digs, up thru end_ep.
+    (1) cli digs = auditor digs, up thru end_ep.
     (2) mono_plain from γadtr.(start) to end_ep.
 
 lemmas:
