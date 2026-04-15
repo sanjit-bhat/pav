@@ -45,12 +45,6 @@ Collection W := sem.
 
 (** staged / committed keys. *)
 
-(* after auditing, learn that client digs equal auditor digs.
-also learn [mono_plain], so "apply" that in [is_staged_keys]. *)
-Definition is_committed_keys vrf_pk digs uid keys :=
-  Forall2 (λ dig opt_key,
-    last $ to_pks vrf_pk uid dig = opt_key) digs keys.
-
 Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   ∃ last_dig,
   (* [next_ver] only has meaning with some digs. *)
@@ -60,38 +54,18 @@ Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   in_hidden vrf_pk (merkle.inv_fn last_dig) uid next_ver None ∧
   ( mono_plain vrf_pk digs →
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
-    is_committed_keys vrf_pk digs uid keys ).
+    keys = last <$> ((λ x, to_pks vrf_pk uid x) <$> digs) ).
 
-Lemma commit_staged vrf_pk digs uid keys next_ver :
-  is_staged_keys vrf_pk digs uid keys next_ver →
-  mono_plain vrf_pk digs →
-  is_committed_keys vrf_pk digs uid keys.
-Proof. rewrite /is_staged_keys. naive_solver. Qed.
-
-Lemma is_staged_init vrf_pk digs last_dig uid :
-  let keys := replicate (length digs) None in
-  last digs = Some last_dig →
-  in_hidden vrf_pk (merkle.inv_fn last_dig) uid 0 None →
-  is_staged_keys vrf_pk digs uid keys 0.
+Lemma is_staged_init vrf_pk dig uid :
+  in_hidden vrf_pk (merkle.inv_fn dig) uid 0 None →
+  is_staged_keys vrf_pk [dig] uid [None] 0.
 Proof.
-  rewrite /is_staged_keys. intros Hlast_dig Hnone.
+  rewrite /is_staged_keys /=. intros Hnone.
   eexists. repeat (split; [done|]).
   intros Hmono.
-  assert (to_pks vrf_pk uid last_dig = []) as Hnil.
-  { eapply inv_fn_None_bound in Hnone as ?.
-    simpl. by destruct (plain_inv_fn _ _ !!! _). }
-  split. { by rewrite Hnil. }
-  clear Hnone.
-
-  rewrite /is_committed_keys.
-  apply Forall2_same_length_lookup.
-  split; [len|].
-  intros * Hlook Hrepl.
-  rewrite last_lookup in Hlast_dig.
-  apply lookup_replicate in Hrepl as [-> ?].
-  opose proof (mono_plain_lookup uid Hmono Hlook Hlast_dig _) as Hpref; [len|].
-  rewrite Hnil in Hpref.
-  by apply prefix_nil_inv in Hpref as ->.
+  assert (to_pks vrf_pk uid dig = []) as ->; [|done].
+  eapply inv_fn_None_bound in Hnone as ?.
+  by destruct (plain_inv_fn _ _ !!! _).
 Qed.
 
 (* grow staged keys by replicating the last existing key. *)
@@ -108,17 +82,15 @@ Proof.
   rewrite /is_staged_keys. intros (old_dig&Hold_dig&_&Hstage) Hnew_dig Hold_key Hnone.
   eexists. repeat (split; [done|]).
   intros Hmono.
-  odestruct (Hstage _) as (Hver&Hkeys).
+  odestruct (Hstage _) as (Hver&->).
   { unfold mono_plain in *.
     rewrite !fmap_app in Hmono.
     apply list_reln_app in Hmono.
     naive_solver. }
   clear Hstage.
   assert (old_key = last $ to_pks vrf_pk uid old_dig) as ->.
-  { rewrite /is_committed_keys in Hkeys.
-    apply Forall2_last in Hkeys.
-    rewrite Hold_dig Hold_key in Hkeys.
-    by inv Hkeys. }
+  { rewrite !fmap_last Hold_dig in Hold_key.
+    by simplify_eq/=. }
   rewrite !last_lookup in Hold_dig Hnew_dig.
   eapply lookup_app_l_Some in Hold_dig.
   eassert (to_pks vrf_pk uid old_dig = to_pks vrf_pk uid new_dig) as Heq_pks.
@@ -131,13 +103,12 @@ Proof.
   (* approach: bring all facts to plain maps layer,
   then do the core reasoning there. *)
   split. { by rewrite -Heq_pks. }
-  rewrite /is_committed_keys in Hkeys |-*.
-  eapply Forall2_app; [done|].
-  clear Hkeys.
-  eapply Forall2_same_length_lookup.
-  split; [len|].
-  intros ? mid_dig * Hlook_mid Hrepl.
+  list_simplifier. f_equal.
+  eapply list_eq_same_length; [done|len|].
+  intros * _ Hrepl Hlook_mid.
   apply lookup_replicate in Hrepl as [-> ?].
+  apply list_lookup_fmap_Some in Hlook_mid as (?&->&Hlook_mid).
+  apply list_lookup_fmap_Some in Hlook_mid as (mid_dig&->&Hlook_mid).
   rewrite (lookup_app_r' digs) in Hlook_mid.
   opose proof (mono_plain_lookup uid Hmono Hold_dig Hlook_mid _) as Hpref_reg0; [len|].
   opose proof (mono_plain_lookup uid Hmono Hlook_mid Hnew_dig _) as Hpref_reg1; [len|].
@@ -261,7 +232,7 @@ Proof.
   clear Hsome Hnone.
   intros Hmono.
   ospecialize (Heq_old_new _); [done|].
-  odestruct (Hstage _) as (Hver&Hkeys).
+  odestruct (Hstage _) as (Hver&->).
   { unfold mono_plain in *.
     rewrite /mono_plain !fmap_app in Hmono.
     by apply list_reln_app in Hmono as []. }
@@ -271,10 +242,8 @@ Proof.
     autorewrite with len in *. lia. }
 
   assert (old_key = last $ to_pks vrf_pk uid old_dig) as ->.
-  { rewrite /is_committed_keys in Hkeys.
-    apply Forall2_last in Hkeys.
-    rewrite Hold_dig Hold_key in Hkeys.
-    by inv Hkeys. }
+  { rewrite !fmap_last Hold_dig in Hold_key.
+    by simplify_eq/=. }
   clear Hold_key.
   rewrite !last_lookup in Hold_dig Hnew_dig.
   eapply (lookup_app_l_Some _ new_digs) in Hold_dig.
@@ -284,12 +253,11 @@ Proof.
   apply lookup_lt_Some in Hgrow_dig as ?.
   autorewrite with len in *.
   replace (S (_ - _)) with (length new_digs - grow_idx)%nat; [|lia].
-  rewrite /is_committed_keys in Hkeys |-*.
-  eapply Forall2_app; [done|].
-  clear Hkeys.
-  eapply Forall2_same_length_lookup.
-  split; [len|].
-  intros ? mid_dig * Hmid_dig Hrepl.
+  list_simplifier. f_equal.
+  eapply list_eq_same_length; [done|len|].
+  intros * _ Hrepl Hlook_mid.
+  apply list_lookup_fmap_Some in Hlook_mid as (?&->&Hlook_mid).
+  apply list_lookup_fmap_Some in Hlook_mid as (mid_dig&->&Hmid_dig).
   rewrite (lookup_app_r' digs) in Hmid_dig.
   apply lookup_app_Some in Hrepl as [Hrepl|[? Hrepl]].
   - apply lookup_replicate in Hrepl as [-> ?].
