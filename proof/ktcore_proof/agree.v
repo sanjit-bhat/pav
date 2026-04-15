@@ -35,6 +35,10 @@ Collection W := sem.
 
 Local Ltac unseal := rewrite ?kt_ptsto_unseal /kt_ptsto_def.
 
+Global Instance kt_ptsto_pers γ ep uid opt_pk :
+  Persistent ((γ, ep, uid) ↪KT opt_pk).
+Proof. unseal. apply _. Qed.
+
 Lemma kt_ptsto_agree γ ep uid opt_pk0 opt_pk1 :
   (γ, ep, uid) ↪KT opt_pk0 -∗
   (γ, ep, uid) ↪KT opt_pk1 -∗
