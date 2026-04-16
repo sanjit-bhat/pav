@@ -17,32 +17,29 @@ Collection W := sem.
 
 Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
   ∃ dig,
-  "#Hidx_dig" ∷ mono_list_idx_own γ.(cfg.digs)
-    (ep - γ.(cfg.info).(digs_info.start_ep)) dig ∗
+  "#Hidx_dig" ∷ mono_list_idx_own γ.(cfg.digs) (ep - start_epγ γ) dig ∗
   "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(cfg.vrf_pk) uid dig = opt_pk⌝.
 
 (* [start_ep] of [keys]. *)
 Definition is_staged_keys γcli uid start_ep keys : iProp Σ :=
   ∃ digs next_ver,
-  let n_drop := (start_ep - γcli.(cfg.info).(digs_info.start_ep))%nat in
+  let n_drop := (start_ep - start_epγ γcli)%nat in
   "#Hlb_digs" ∷ mono_list_lb_own γcli.(cfg.digs) digs ∗
   "%Hstaged" ∷ ⌜staged_keys γcli.(cfg.vrf_pk) (drop n_drop digs)
     uid keys next_ver⌝ ∗
 
-  "%Hlt_start" ∷ ⌜γcli.(cfg.info).(digs_info.start_ep) ≤ start_ep⌝.
+  "%Hlt_start" ∷ ⌜start_epγ γcli ≤ start_ep⌝.
 
 Definition is_audit γcli γadtr ep : iProp Σ :=
   ∃ (digs : list $ list w8),
   "#Hcli_digs" ∷ mono_list_lb_own γcli.(cfg.digs) digs ∗
   "#Hadtr_digs" ∷ mono_list_lb_own γadtr.(cfg.digs) digs ∗
-  "%Hlen_digs" ∷ ⌜Z.of_nat $ length digs =
-    S ep - γcli.(cfg.info).(digs_info.start_ep)⌝ ∗
+  "%Hlen_digs" ∷ ⌜Z.of_nat $ length digs = S ep - start_epγ γcli⌝ ∗
   "%Hmono_plain" ∷ ⌜mono_plain γadtr.(cfg.vrf_pk)
-    (drop γadtr.(cfg.info).(digs_info.audit_offset) digs)⌝ ∗
+    (drop (audit_offsetγ γadtr) digs)⌝ ∗
 
   "%Heq_vrf" ∷ ⌜γcli.(cfg.vrf_pk) = γadtr.(cfg.vrf_pk)⌝ ∗
-  "%Heq_start" ∷ ⌜γcli.(cfg.info).(digs_info.start_ep) =
-    γadtr.(cfg.info).(digs_info.start_ep)⌝ ∗
+  "%Heq_start" ∷ ⌜start_epγ γcli = start_epγ γadtr⌝ ∗
   "%Heq_cut" ∷ ⌜γcli.(cfg.info).(digs_info.cut) =
     γadtr.(cfg.info).(digs_info.cut)⌝.
 
@@ -88,8 +85,7 @@ Qed.
 Lemma commit_staged γcli uid keys_start_ep keys γadtr audit_ep :
   is_staged_keys γcli uid keys_start_ep keys -∗
   is_audit γcli γadtr audit_ep -∗
-  ⌜γadtr.(cfg.info).(digs_info.start_ep) +
-    γadtr.(cfg.info).(digs_info.audit_offset) ≤ keys_start_ep⌝ -∗
+  ⌜start_epγ γadtr + audit_offsetγ γadtr ≤ keys_start_ep⌝ -∗
   ⌜keys_start_ep + length keys ≤ S audit_ep⌝ -∗
   (∀ i opt_pk,
     let ep := (keys_start_ep + i)%nat in
@@ -114,9 +110,8 @@ Proof.
   odestruct (Hstaged _) as (_&->).
   { rewrite drop_app_le in Hmono_plain; [|word].
     eremember (keys_start_ep - _)%nat as n_drop.
-    rewrite -(take_drop
-      (n_drop - γadtr.(cfg.info).(digs_info.audit_offset))
-      (drop _ _)) drop_drop in Hmono_plain.
+    rewrite -(take_drop (n_drop - audit_offsetγ γadtr) (drop _ _))
+      drop_drop in Hmono_plain.
     replace (_ + _)%nat with n_drop in Hmono_plain; [|lia].
     list_simplifier.
     rewrite /mono_plain !fmap_app in Hmono_plain |-*.
@@ -131,6 +126,27 @@ Proof.
   rewrite lookup_drop in Hlook_digs.
   exact_eq Hlook_digs. f_equal. lia.
 Qed.
+
+(* this lemma needs to return a new γadtr:
+- need to use γdigs of γadtr1, for the mlist_lb.
+- but to get the expanded range, need audit_offset of γadtr0.
+
+with new γadtr, need to weaken kt_ptsto_agree:
+- suppose alice and bob both trust A0, A1, A2.
+- alice uses A0 + A2. bob uses A1 + A2.
+A0 and A1 have different audit_offset's.
+- then they'll end up with different audit_offset's.
+and won't be able to use curr kt_ptsto_agree. *)
+Lemma combine_audits γcli γadtr0 γadtr1 audit_ep0 audit_ep1 :
+  is_audit γcli γadtr0 audit_ep0 -∗
+  is_audit γcli γadtr1 audit_ep1 -∗
+  ⌜start_epγ γadtr0 + audit_offsetγ γadtr0 ≤
+    start_epγ γadtr1 + audit_offsetγ γadtr1 ≤ audit_ep0⌝ -∗
+  ⌜audit_ep0 ≤ audit_ep1⌝ -∗
+  let new_γadtr := set cfg.info (set digs_info.audit_offset
+    (λ _, audit_offsetγ γadtr0)) γadtr1 in
+  is_audit γcli new_γadtr audit_ep1.
+Proof. Admitted.
 
 End proof.
 End ktcore.

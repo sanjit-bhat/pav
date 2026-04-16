@@ -30,6 +30,9 @@ Record t :=
   }.
 End cfg.
 
+Global Notation start_epγ γ := (γ.(cfg.info).(digs_info.start_ep)).
+Global Notation audit_offsetγ γ := (γ.(cfg.info).(digs_info.audit_offset)).
+
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
