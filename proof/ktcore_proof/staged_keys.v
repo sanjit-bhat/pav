@@ -52,7 +52,7 @@ Definition is_staged_keys vrf_pk digs uid keys next_ver :=
   in_hidden vrf_pk (merkle.inv_fn last_dig) uid next_ver None ∧
   ( mono_plain vrf_pk digs →
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
-    keys = last <$> ((λ x, to_pks vrf_pk uid x) <$> digs) ).
+    keys = (λ x, last $ to_pks vrf_pk uid x) <$> digs ).
 
 Lemma is_staged_init vrf_pk dig uid :
   in_hidden vrf_pk (merkle.inv_fn dig) uid 0 None →
@@ -105,7 +105,6 @@ Proof.
   eapply list_eq_same_length; [done|len|].
   intros * _ Hrepl Hlook_mid.
   apply lookup_replicate in Hrepl as [-> ?].
-  apply list_lookup_fmap_Some in Hlook_mid as (?&->&Hlook_mid).
   apply list_lookup_fmap_Some in Hlook_mid as (mid_dig&->&Hlook_mid).
   rewrite (lookup_app_r' digs) in Hlook_mid.
   opose proof (mono_plain_lookup uid Hmono Hold_dig Hlook_mid _) as Hpref_reg0; [len|].
@@ -253,9 +252,8 @@ Proof.
   replace (S (_ - _)) with (length new_digs - grow_idx)%nat; [|lia].
   list_simplifier. f_equal.
   eapply list_eq_same_length; [done|len|].
-  intros * _ Hrepl Hlook_mid.
-  apply list_lookup_fmap_Some in Hlook_mid as (?&->&Hlook_mid).
-  apply list_lookup_fmap_Some in Hlook_mid as (mid_dig&->&Hmid_dig).
+  intros * _ Hrepl Hmid_dig.
+  apply list_lookup_fmap_Some in Hmid_dig as (mid_dig&->&Hmid_dig).
   rewrite (lookup_app_r' digs) in Hmid_dig.
   apply lookup_app_Some in Hrepl as [Hrepl|[? Hrepl]].
   - apply lookup_replicate in Hrepl as [-> ?].

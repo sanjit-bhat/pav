@@ -15,9 +15,10 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Local Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
+Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
   ∃ dig,
-  "#Hlook_dig" ∷ mono_list_idx_own γ.(cfg.digs) ep dig ∗
+  "#Hlook_dig" ∷ mono_list_idx_own γ.(cfg.digs)
+    (ep - γ.(cfg.info).(digs_info.start_ep)) dig ∗
   "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(cfg.vrf_pk) uid dig = opt_pk⌝.
 
 Definition is_staged γcli uid keys_start_ep keys : iProp Σ :=
@@ -33,8 +34,8 @@ Definition is_audit γcli γadtr end_ep : iProp Σ :=
   ∃ (digs : list $ list w8),
   "#Hcli_digs" ∷ mono_list_lb_own γcli.(cfg.digs) digs ∗
   "#Hadtr_digs" ∷ mono_list_lb_own γadtr.(cfg.digs) digs ∗
-  "%Hlen_digs" ∷ ⌜length digs =
-    (S end_ep - γcli.(cfg.info).(digs_info.start_ep))%nat⌝ ∗
+  "%Hlen_digs" ∷ ⌜Z.of_nat $ length digs =
+    S end_ep - γcli.(cfg.info).(digs_info.start_ep)⌝ ∗
   "%Hmono_plain" ∷ ⌜mono_plain γadtr.(cfg.vrf_pk)
     (drop γadtr.(cfg.info).(digs_info.audit_offset) digs)⌝ ∗
 
@@ -46,8 +47,8 @@ Definition is_audit γcli γadtr end_ep : iProp Σ :=
 
 End proof.
 
-Global Notation "γ ↪KT[ ep , uid ] opt_pk" :=
-  (kt_ptsto γ ep uid opt_pk) (at level 20).
+Global Notation "γ ↪KT[ ep , uid ] opt_pk" := (kt_ptsto γ ep uid opt_pk)
+  (at level 20, format "γ  ↪KT[ ep ,  uid ]  opt_pk").
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -71,7 +72,17 @@ Lemma kt_ptsto_txfer γcli γadtr ep uid opt_pk end_ep :
   ⌜(γadtr.(cfg.info).(digs_info.start_ep) +
     γadtr.(cfg.info).(digs_info.audit_offset) ≤ ep ≤ end_ep)%nat⌝ -∗
   γadtr ↪KT[ep, uid] opt_pk.
-Proof. Admitted.
+Proof.
+  iIntros "@@%". rewrite /kt_ptsto.
+  eremember (ep - _)%nat as ep_t.
+  list_elem digs ep_t as dig'. subst.
+  iDestruct (mono_list_idx_own_get with "Hcli_digs") as "Hlook"; [done|].
+  iDestruct (mono_list_idx_agree with "Hlook_dig Hlook") as %<-.
+  iClear "Hlook".
+  iDestruct (mono_list_idx_own_get with "Hadtr_digs") as "Hlook"; [done|].
+  rewrite Heq_vrf Heq_start.
+  by iFrame "#".
+Qed.
 
 End proof.
 End ktcore.
