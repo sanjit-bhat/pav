@@ -9,12 +9,62 @@ From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
 Module ktcore.
 Import key_map.ktcore sigpred.sigpred staged_keys.ktcore.
 
+(* TODO: upstream. *)
+Lemma last_drop_Some {A} (l : list A) x n :
+  last l = Some x →
+  (n < length l)%nat →
+  last (drop n l) = Some x.
+Proof.
+  intros (?&->)%last_Some ?.
+  autorewrite with len in *.
+  rewrite drop_app_le; [|lia].
+  by rewrite last_snoc.
+Qed.
+
+(* TODO: upstream. *)
+Lemma list_reln_snoc' {A} R (l : list A) a :
+  list_reln (l ++ [a]) R → list_reln l R.
+Proof.
+  rewrite /list_reln. intros Hr * Hlook0 Hlook1.
+  eapply lookup_app_l_Some in Hlook0, Hlook1.
+  by eapply Hr.
+Qed.
+
+(* TODO: upstream. *)
+Lemma list_reln_app' {A} R (l0 : list A) l1 :
+  list_reln l0 R →
+  list_reln l1 R →
+  (∀ x0 x1, last l0 = Some x0 → head l1 = Some x1 → R x0 x1) →
+  list_reln (l0 ++ l1) R.
+Proof.
+  intros Hl0. induction l1 using rev_ind; [by list_simplifier|].
+  intros Hl1 Hr.
+  rewrite (assoc _).
+  apply list_reln_snoc.
+  - apply IHl1.
+    + by eapply list_reln_snoc'.
+    + intros * ? Hhead. eapply Hr; [done|].
+      by rewrite head_snoc Hhead.
+  - clear IHl1.
+    destruct l1 using rev_ind; [|clear IHl1].
+    + list_simplifier.
+      intros **. by apply Hr.
+    + rewrite (assoc _) last_snoc.
+      intros **. simplify_eq/=.
+      rewrite -(assoc _) in Hl1.
+      apply list_reln_app in Hl1 as [_ Hl1].
+      rewrite /list_reln in Hl1.
+      by eapply (Hl1 0%nat).
+Qed.
+
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
+(* a simpler (but too weak for multi-auditor) way to state this is with
+(γsigpred, ep, uid, opt_pk). *)
 Definition kt_ptsto γdigs vrf_pk digs_start_ep ep uid opt_pk : iProp Σ :=
   ∃ dig,
   "#Hidx_dig" ∷ mono_list_idx_own γdigs (ep - digs_start_ep) dig ∗
@@ -128,26 +178,49 @@ Proof.
   exact_eq Hlook_digs. f_equal. lia.
 Qed.
 
-(* this lemma needs to return a new γadtr:
-- need to use γdigs of γadtr1, for the mlist_lb.
-- but to get the expanded range, need audit_offset of γadtr0.
-
-with new γadtr, need to weaken kt_ptsto_agree:
-- suppose alice and bob both trust A0, A1, A2.
-- alice uses A0 + A2. bob uses A1 + A2.
-A0 and A1 have different audit_offset's.
-- then they'll end up with different audit_offset's.
-and won't be able to use curr kt_ptsto_agree. *)
+(* this lemma expects adtr0 to come before adtr1.
+return new γadtr bc we need audit_offset of γadtr0 and digs of γadtr1.
+NOTE: for two clients to agree, they need the same γdigs.
+therefore, their combine sequences need to end with same auditor. *)
 Lemma combine_audits γcli γadtr0 γadtr1 audit_ep0 audit_ep1 :
   is_audit γcli γadtr0 audit_ep0 -∗
   is_audit γcli γadtr1 audit_ep1 -∗
-  ⌜start_epγ γadtr0 + audit_offsetγ γadtr0 ≤
-    start_epγ γadtr1 + audit_offsetγ γadtr1 ≤ audit_ep0⌝ -∗
+  ⌜audit_offsetγ γadtr0 ≤ audit_offsetγ γadtr1⌝ -∗
+  ⌜start_epγ γadtr1 + audit_offsetγ γadtr1 ≤ audit_ep0⌝ -∗
   ⌜audit_ep0 ≤ audit_ep1⌝ -∗
-  let new_γadtr := set cfg.info (set digs_info.audit_offset
-    (λ _, audit_offsetγ γadtr0)) γadtr1 in
+  let new_γadtr :=
+    γadtr1 <| cfg.info; digs_info.audit_offset := audit_offsetγ γadtr0 |> in
   is_audit γcli new_γadtr audit_ep1.
-Proof. Admitted.
+Proof.
+  iNamedSuffix 1 "0". iNamedSuffix 1 "1". iIntros "%%%".
+  rewrite /is_audit /=. iFrame "Hadtr_digs1 #%".
+  iAssert (⌜digs `prefix_of` digs0⌝)%I as %(new_digs&->).
+  { iDestruct (mono_list_lb_valid with "Hcli_digs0 Hcli_digs1")
+      as %[?|Hpref]; [done|].
+    by apply prefix_length_eq in Hpref as ->; [|lia]. }
+  iPureIntro.
+  autorewrite with len in *.
+  rewrite !drop_app_le in Hmono_plain1 |-*; [|word..].
+  rewrite /mono_plain !fmap_app in Hmono_plain0 Hmono_plain1 |-*.
+  rewrite -Heq_vrf0 Heq_vrf1 in Hmono_plain0.
+  pose proof Hmono_plain1 as Ht.
+  apply list_reln_app in Ht as [_ Hmono].
+  apply list_reln_app'; [done..|].
+
+  intros * Hlook0 Hlook1.
+  apply (last_drop_Some _ _ (audit_offsetγ γadtr1 - audit_offsetγ γadtr0))
+    in Hlook0; [|len].
+  rewrite -!fmap_drop drop_drop in Hlook0.
+  replace (_ + _)%nat with (audit_offsetγ γadtr1) in Hlook0 by word.
+  rewrite last_lookup in Hlook0.
+  rewrite head_lookup in Hlook1.
+  eapply list_reln_trans.
+  1: apply _.
+  - exact Hmono_plain1.
+  - by apply lookup_app_l_Some.
+  - by erewrite lookup_app_r' in Hlook1.
+  - len.
+Qed.
 
 End proof.
 End ktcore.

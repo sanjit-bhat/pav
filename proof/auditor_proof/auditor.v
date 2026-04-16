@@ -15,18 +15,6 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 Module auditor.
 Import base.auditor rpc.auditor serde.auditor.
 
-(* TODO: upstream. *)
-Lemma last_drop_Some {A} (l : list A) x n :
-  last l = Some x →
-  (n < length l)%nat →
-  last (drop n l) = Some x.
-Proof.
-  intros (?&->)%last_Some ?.
-  autorewrite with len in *.
-  rewrite drop_app_le; [|lia].
-  by rewrite last_snoc.
-Qed.
-
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
@@ -618,7 +606,7 @@ Proof.
     eapply list_reln_snoc; [done|].
     intros * Hlast_hist.
     rewrite !fmap_last in Hlast_hist.
-    erewrite last_drop_Some in Hlast_hist; [|done|word].
+    erewrite ktcore.last_drop_Some in Hlast_hist; [|done|word].
     simplify_eq/=.
     by apply ktcore.plain_inv_mono. }
   clear Hmono_maps.
