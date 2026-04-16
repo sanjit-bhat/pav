@@ -43,22 +43,24 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Definition is_staged_keys vrf_pk digs uid keys next_ver :=
+Definition staged_keys vrf_pk digs uid keys next_ver :=
   ∃ last_dig,
   (* [next_ver] only has meaning with some digs. *)
   last digs = Some last_dig ∧
   (* need unconditional [next_ver] knowledge to prove that
-  [is_staged_keys_grow_new] unconditionally produces [new_dig]. *)
+  [staged_grow_new] unconditionally produces [new_dig]. *)
   in_hidden vrf_pk (merkle.inv_fn last_dig) uid next_ver None ∧
+  (* common inv needed by users outside this file. *)
+  length digs = length keys ∧
   ( mono_plain vrf_pk digs →
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
     keys = (λ x, last $ to_pks vrf_pk uid x) <$> digs ).
 
 Lemma is_staged_init vrf_pk dig uid :
   in_hidden vrf_pk (merkle.inv_fn dig) uid 0 None →
-  is_staged_keys vrf_pk [dig] uid [None] 0.
+  staged_keys vrf_pk [dig] uid [None] 0.
 Proof.
-  rewrite /is_staged_keys /=. intros Hnone.
+  rewrite /staged_keys /=. intros Hnone.
   eexists. repeat (split; [done|]).
   intros Hmono.
   assert (to_pks vrf_pk uid dig = []) as ->; [|done].
@@ -67,18 +69,19 @@ Proof.
 Qed.
 
 (* grow staged keys by replicating the last existing key. *)
-Lemma is_staged_keys_grow_last vrf_pk digs new_digs new_dig uid keys old_key next_ver :
+Lemma staged_grow_last vrf_pk digs new_digs new_dig uid keys old_key next_ver :
   let digs' := digs ++ new_digs in
   let keys' := keys ++ replicate (length new_digs) old_key in
   let new_m := merkle.inv_fn new_dig in
-  is_staged_keys vrf_pk digs uid keys next_ver →
+  staged_keys vrf_pk digs uid keys next_ver →
   last digs' = Some new_dig →
   last keys = Some old_key →
   in_hidden vrf_pk new_m uid next_ver None →
-  is_staged_keys vrf_pk digs' uid keys' next_ver.
+  staged_keys vrf_pk digs' uid keys' next_ver.
 Proof.
-  rewrite /is_staged_keys. intros (old_dig&Hold_dig&_&Hstage) Hnew_dig Hold_key Hnone.
-  eexists. repeat (split; [done|]).
+  rewrite /staged_keys.
+  intros (old_dig&Hold_dig&_&?&Hstage) Hnew_dig Hold_key Hnone.
+  eexists. repeat (split; [done|]). split; [len|].
   intros Hmono.
   odestruct (Hstage _) as (Hver&->).
   { unfold mono_plain in *.
@@ -114,10 +117,10 @@ Proof.
 Qed.
 
 (* grow staged keys by adding a new key. *)
-Lemma is_staged_keys_grow_new vrf_pk digs new_digs new_dig uid keys old_key new_key next_ver :
+Lemma staged_grow_new vrf_pk digs new_digs new_dig uid keys old_key new_key next_ver :
   let digs' := digs ++ new_digs in
   let new_m := merkle.inv_fn new_dig in
-  is_staged_keys vrf_pk digs uid keys next_ver →
+  staged_keys vrf_pk digs uid keys next_ver →
   last digs' = Some new_dig →
   last keys = Some old_key →
   in_hidden vrf_pk new_m uid next_ver (Some new_key) →
@@ -130,10 +133,10 @@ Lemma is_staged_keys_grow_new vrf_pk digs new_digs new_dig uid keys old_key new_
     (* [S num_new] implicitly says there's at least one [new_digs]
     that has [new_key]. *)
     num_old + S num_new = length new_digs ∧
-    is_staged_keys vrf_pk digs' uid keys' (S next_ver).
+    staged_keys vrf_pk digs' uid keys' (S next_ver).
 Proof.
-  rewrite /is_staged_keys.
-  intros (old_dig&Hold_dig&Hnone'&Hstage) Hnew_dig Hold_key Hsome Hnone.
+  rewrite /staged_keys.
+  intros (old_dig&Hold_dig&Hnone'&?&Hstage) Hnew_dig Hold_key Hsome Hnone.
   assert (last new_digs = Some new_dig) as Hnew_dig'.
   { destruct (last new_digs) eqn:Ht.
     { by rewrite last_app Ht in Hnew_dig. }
@@ -199,13 +202,13 @@ Proof.
     new_digs) as [[grow_idx grow_dig]|] eqn:Hfind.
   2: {
     exists (length new_digs - 1)%nat, 0%nat.
-    split.
-    { rewrite last_lookup in Hnew_dig'.
-      apply lookup_lt_Some in Hnew_dig'.
-      lia. }
+    pose proof Hnew_dig' as Hlen_new_digs.
+    rewrite last_lookup in Hlen_new_digs.
+    apply lookup_lt_Some in Hlen_new_digs.
+    split; [lia|].
     rewrite last_app Hnew_dig'.
     eexists.
-    do 2 (split; [done|]).
+    do 2 (split; [done|]). split; [len|].
 
     intros Hmono. exfalso.
     apply list_find_None in Hfind.
@@ -224,8 +227,8 @@ Proof.
 
   apply list_find_Some in Hfind as (Hgrow_dig&Hgrow_len&Hfind).
   exists grow_idx, (length new_digs - S grow_idx)%nat.
-  split. { apply lookup_lt_Some in Hgrow_dig. lia. }
-  eexists. do 2 (split; [done|]).
+  apply lookup_lt_Some in Hgrow_dig as ?.
+  split; [lia|]. eexists. do 2 (split; [done|]). split; [len|].
   clear Hsome Hnone.
   intros Hmono.
   ospecialize (Heq_old_new _); [done|].
