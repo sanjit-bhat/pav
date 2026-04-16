@@ -15,12 +15,10 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Local Definition kt_ptsto_def γ ep uid opt_pk : iProp Σ :=
+Local Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
   ∃ dig,
   "#Hlook_dig" ∷ mono_list_idx_own γ.(cfg.digs) ep dig ∗
   "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(cfg.vrf_pk) uid dig = opt_pk⌝.
-Program Definition kt_ptsto := sealed @kt_ptsto_def.
-Definition kt_ptsto_unseal : kt_ptsto = _ := seal_eq _.
 
 Definition is_staged γcli uid keys_start_ep keys : iProp Σ :=
   ∃ digs next_ver,
@@ -48,7 +46,7 @@ Definition is_audit γcli γadtr end_ep : iProp Σ :=
 
 End proof.
 
-Global Notation "( γ , ep , uid ) ↪KT opt_pk" :=
+Global Notation "γ ↪KT[ ep , uid ] opt_pk" :=
   (kt_ptsto γ ep uid opt_pk) (at level 20).
 
 Section proof.
@@ -57,21 +55,23 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Local Ltac unseal := rewrite ?kt_ptsto_unseal /kt_ptsto_def.
-
-Global Instance kt_ptsto_pers γ ep uid opt_pk :
-  Persistent ((γ, ep, uid) ↪KT opt_pk).
-Proof. unseal. apply _. Qed.
-
 Lemma kt_ptsto_agree γ ep uid opt_pk0 opt_pk1 :
-  (γ, ep, uid) ↪KT opt_pk0 -∗
-  (γ, ep, uid) ↪KT opt_pk1 -∗
+  γ ↪KT[ep, uid] opt_pk0 -∗
+  γ ↪KT[ep, uid] opt_pk1 -∗
   ⌜opt_pk0 = opt_pk1⌝.
 Proof.
-  unseal. iNamedSuffix 1 "0". iNamedSuffix 1 "1".
+  iNamedSuffix 1 "0". iNamedSuffix 1 "1".
   iDestruct (mono_list_idx_agree with "Hlook_dig0 Hlook_dig1") as %->.
   by subst.
 Qed.
+
+Lemma kt_ptsto_txfer γcli γadtr ep uid opt_pk end_ep :
+  γcli ↪KT[ep, uid] opt_pk -∗
+  is_audit γcli γadtr end_ep -∗
+  ⌜(γadtr.(cfg.info).(digs_info.start_ep) +
+    γadtr.(cfg.info).(digs_info.audit_offset) ≤ ep ≤ end_ep)%nat⌝ -∗
+  γadtr ↪KT[ep, uid] opt_pk.
+Proof. Admitted.
 
 End proof.
 End ktcore.
