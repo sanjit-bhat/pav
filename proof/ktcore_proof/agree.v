@@ -15,10 +15,10 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
+Definition kt_ptsto γdigs vrf_pk digs_start_ep ep uid opt_pk : iProp Σ :=
   ∃ dig,
-  "#Hidx_dig" ∷ mono_list_idx_own γ.(cfg.digs) (ep - start_epγ γ) dig ∗
-  "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(cfg.vrf_pk) uid dig = opt_pk⌝.
+  "#Hidx_dig" ∷ mono_list_idx_own γdigs (ep - digs_start_ep) dig ∗
+  "%Heq_pk" ∷ ⌜last $ ktcore.to_pks vrf_pk uid dig = opt_pk⌝.
 
 (* [start_ep] of [keys]. *)
 Definition is_staged_keys γcli uid start_ep keys : iProp Σ :=
@@ -45,8 +45,9 @@ Definition is_audit γcli γadtr ep : iProp Σ :=
 
 End proof.
 
-Global Notation "γ ↪KT[ ep , uid ] opt_pk" := (kt_ptsto γ ep uid opt_pk)
-  (at level 20, format "γ  ↪KT[ ep ,  uid ]  opt_pk").
+Global Notation "γdigs ↪KT[ vrf_pk , digs_start_ep , ep , uid ] opt_pk" :=
+  (kt_ptsto γdigs vrf_pk digs_start_ep ep uid opt_pk)
+  (at level 20, format "γdigs  ↪KT[ vrf_pk ,  digs_start_ep ,  ep ,  uid ]  opt_pk").
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -54,9 +55,9 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Lemma kt_ptsto_agree γ ep uid opt_pk0 opt_pk1 :
-  γ ↪KT[ep, uid] opt_pk0 -∗
-  γ ↪KT[ep, uid] opt_pk1 -∗
+Lemma kt_ptsto_agree γdigs vrf_pk digs_start_ep ep uid opt_pk0 opt_pk1 :
+  γdigs ↪KT[vrf_pk, digs_start_ep, ep, uid] opt_pk0 -∗
+  γdigs ↪KT[vrf_pk, digs_start_ep, ep, uid] opt_pk1 -∗
   ⌜opt_pk0 = opt_pk1⌝.
 Proof.
   iNamedSuffix 1 "0". iNamedSuffix 1 "1".
@@ -65,11 +66,11 @@ Proof.
 Qed.
 
 Lemma kt_ptsto_txfer γcli γadtr ep uid opt_pk audit_ep :
-  γcli ↪KT[ep, uid] opt_pk -∗
+  γcli.(cfg.digs) ↪KT[γcli.(cfg.vrf_pk), start_epγ γcli, ep, uid] opt_pk -∗
   is_audit γcli γadtr audit_ep -∗
   ⌜γadtr.(cfg.info).(digs_info.start_ep) +
     γadtr.(cfg.info).(digs_info.audit_offset) ≤ ep ≤ audit_ep⌝ -∗
-  γadtr ↪KT[ep, uid] opt_pk.
+  γadtr.(cfg.digs) ↪KT[γadtr.(cfg.vrf_pk), start_epγ γadtr, ep, uid] opt_pk.
 Proof.
   iIntros "@@%". rewrite /kt_ptsto.
   eremember (ep - _)%nat as ep_t.
@@ -90,7 +91,7 @@ Lemma commit_staged γcli uid keys_start_ep keys γadtr audit_ep :
   (∀ i opt_pk,
     let ep := (keys_start_ep + i)%nat in
     ⌜keys !! i = Some opt_pk⌝ -∗
-    γadtr ↪KT[ep, uid] opt_pk).
+    γadtr.(cfg.digs) ↪KT[γadtr.(cfg.vrf_pk), start_epγ γadtr, ep, uid] opt_pk).
 Proof.
   iIntros "@ #Haudit %% * %Hlook_keys".
   apply lookup_lt_Some in Hlook_keys as ?.
