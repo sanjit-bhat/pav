@@ -8,7 +8,7 @@ From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   key_map serde sigpred.
 
 Module ktcore.
-Import key_map.ktcore serde.ktcore sigpred.ktcore.
+Import key_map.ktcore serde.ktcore.
 
 Section proof.
 Context `{!heapGS Σ}.

@@ -9,7 +9,7 @@ From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   base ktcore serde sigpred.
 
 Module ktcore.
-Import ktcore.ktcore serde.ktcore sigpred.ktcore.
+Import ktcore.ktcore serde.ktcore.
 
 Module EvidVrf.
 Record t :=

@@ -70,15 +70,13 @@ Definition kt_ptsto γdigs vrf_pk digs_start_ep ep uid opt_pk : iProp Σ :=
   "#Hidx_dig" ∷ mono_list_idx_own γdigs (ep - digs_start_ep) dig ∗
   "%Heq_pk" ∷ ⌜last $ ktcore.to_pks vrf_pk uid dig = opt_pk⌝.
 
-(* [start_ep] of [keys]. *)
-Definition is_staged_keys γcli uid start_ep keys : iProp Σ :=
+(* (ab)use sigpred.cfg for Client, even tho it's not an Auditor.
+audit_offset is when Client started tracking its own key. *)
+Definition is_staged_keys γcli uid keys : iProp Σ :=
   ∃ digs next_ver,
-  let n_drop := (start_ep - start_epγ γcli)%nat in
   "#Hlb_digs" ∷ mono_list_lb_own γcli.(cfg.digs) digs ∗
-  "%Hstaged" ∷ ⌜staged_keys γcli.(cfg.vrf_pk) (drop n_drop digs)
-    uid keys next_ver⌝ ∗
-
-  "%Hlt_start" ∷ ⌜start_epγ γcli ≤ start_ep⌝.
+  "%Hstaged" ∷ ⌜staged_keys γcli.(cfg.vrf_pk) (drop (audit_offsetγ γcli) digs)
+    uid keys next_ver⌝.
 
 Definition is_audit γcli γadtr ep : iProp Σ :=
   ∃ (digs : list $ list w8),
@@ -133,20 +131,22 @@ Proof.
   by iFrame "#".
 Qed.
 
-Lemma commit_staged γcli uid keys_start_ep keys γadtr audit_ep :
-  is_staged_keys γcli uid keys_start_ep keys -∗
+Lemma commit_staged γcli uid keys γadtr audit_ep :
+  let keys_start_ep := (start_epγ γcli + audit_offsetγ γcli)%nat in
+  is_staged_keys γcli uid keys -∗
   is_audit γcli γadtr audit_ep -∗
-  ⌜start_epγ γadtr + audit_offsetγ γadtr ≤ keys_start_ep⌝ -∗
+  ⌜audit_offsetγ γadtr ≤ audit_offsetγ γcli⌝ -∗
   ⌜keys_start_ep + length keys ≤ S audit_ep⌝ -∗
   (∀ i opt_pk,
     let ep := (keys_start_ep + i)%nat in
     ⌜keys !! i = Some opt_pk⌝ -∗
     γadtr.(cfg.digs) ↪KT[γadtr.(cfg.vrf_pk), start_epγ γadtr, ep, uid] opt_pk).
 Proof.
-  iIntros "@ #Haudit %% * %Hlook_keys".
+  simpl. iIntros "@ #Haudit %% * %Hlook_keys".
   apply lookup_lt_Some in Hlook_keys as ?.
+  iPoseProof "Haudit" as "@".
   iApply kt_ptsto_txfer; [|done|word].
-  iNamed "Haudit". rewrite /kt_ptsto.
+  iClear "Haudit". rewrite /kt_ptsto.
   destruct Hstaged as (?&Hlast_digs&_&?&Hstaged).
   rewrite last_lookup in Hlast_digs.
   apply lookup_lt_Some in Hlast_digs.
@@ -160,10 +160,9 @@ Proof.
 
   odestruct (Hstaged _) as (_&->).
   { rewrite drop_app_le in Hmono_plain; [|word].
-    eremember (keys_start_ep - _)%nat as n_drop.
-    rewrite -(take_drop (n_drop - audit_offsetγ γadtr) (drop _ _))
+    rewrite -(take_drop (audit_offsetγ γcli - audit_offsetγ γadtr) (drop _ _))
       drop_drop in Hmono_plain.
-    replace (_ + _)%nat with n_drop in Hmono_plain; [|lia].
+    replace (_ + _)%nat with (audit_offsetγ γcli) in Hmono_plain; [|lia].
     list_simplifier.
     rewrite /mono_plain !fmap_app in Hmono_plain |-*.
     apply list_reln_app in Hmono_plain as [_ Hmono].
@@ -181,7 +180,9 @@ Qed.
 (* this lemma expects adtr0 to come before adtr1.
 return new γadtr bc we need audit_offset of γadtr0 and digs of γadtr1.
 NOTE: for two clients to agree, they need the same γdigs.
-therefore, their combine sequences need to end with same auditor. *)
+therefore, their combine sequences need to end with same auditor.
+without hashchain inversion, not sure how to do multi-auditor agreement.
+there's no final Auditor with all the digs. *)
 Lemma combine_audits γcli γadtr0 γadtr1 audit_ep0 audit_ep1 :
   is_audit γcli γadtr0 audit_ep0 -∗
   is_audit γcli γadtr1 audit_ep1 -∗
@@ -215,7 +216,7 @@ Proof.
   rewrite last_lookup in Hlook0.
   rewrite head_lookup in Hlook1.
   eapply list_reln_trans.
-  1: apply _.
+  - apply _.
   - exact Hmono_plain1.
   - by apply lookup_app_l_Some.
   - by erewrite lookup_app_r' in Hlook1.
