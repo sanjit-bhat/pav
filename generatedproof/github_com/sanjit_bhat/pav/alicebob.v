@@ -2,7 +2,6 @@
 Require Export New.proof.crypto_prelude.
 Require Export New.generatedproof.bytes.
 Require Export New.generatedproof.github_com.goose_lang.primitive.
-Require Export New.generatedproof.github_com.goose_lang.std.
 Require Export New.generatedproof.github_com.sanjit_bhat.pav.auditor.
 Require Export New.generatedproof.github_com.sanjit_bhat.pav.client.
 Require Export New.generatedproof.github_com.sanjit_bhat.pav.cryptoffi.
@@ -16,7 +15,7 @@ Require Export New.code.github_com.sanjit_bhat.pav.alicebob.
 Set Default Proof Using "Type".
 
 Module alicebob.
-Module histEntry.
+Module optPk.
 Section def.
 
 Context `{!heapGS Σ}.
@@ -25,50 +24,50 @@ Context {package_sem' : alicebob.Assumptions}.
 
 Local Set Default Proof Using "All".
 
-#[global]Program Instance histEntry_typed_pointsto  :
-  TypedPointsto (Σ:=Σ) (alicebob.histEntry.t) :=
+#[global]Program Instance optPk_typed_pointsto  :
+  TypedPointsto (Σ:=Σ) (alicebob.optPk.t) :=
   {|
     typed_pointsto_def l v dq :=
       (
-      "isReg" ∷ l.[(alicebob.histEntry.t), "isReg"] ↦{dq} v.(alicebob.histEntry.isReg') ∗
-      "pk" ∷ l.[(alicebob.histEntry.t), "pk"] ↦{dq} v.(alicebob.histEntry.pk') ∗
+      "opt" ∷ l.[(alicebob.optPk.t), "opt"] ↦{dq} v.(alicebob.optPk.opt') ∗
+      "pk" ∷ l.[(alicebob.optPk.t), "pk"] ↦{dq} v.(alicebob.optPk.pk') ∗
       "_" ∷ True
       )%I
   |}.
 Final Obligation. solve_typed_pointsto_agree. Qed.
 
-#[global] Instance histEntry_into_val_typed
+#[global] Instance optPk_into_val_typed
    :
-  IntoValTypedUnderlying (alicebob.histEntry.t) (alicebob.histEntryⁱᵐᵖˡ).
+  IntoValTypedUnderlying (alicebob.optPk.t) (alicebob.optPkⁱᵐᵖˡ).
 Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance histEntry_access_load_isReg l (v : (alicebob.histEntry.t)) dq :
+#[global] Instance optPk_access_load_opt l (v : (alicebob.optPk.t)) dq :
   AccessStrict
-    (l.[(alicebob.histEntry.t), "isReg"] ↦{dq} (v.(alicebob.histEntry.isReg')))
-    (l.[(alicebob.histEntry.t), "isReg"] ↦{dq} (v.(alicebob.histEntry.isReg')))
+    (l.[(alicebob.optPk.t), "opt"] ↦{dq} (v.(alicebob.optPk.opt')))
+    (l.[(alicebob.optPk.t), "opt"] ↦{dq} (v.(alicebob.optPk.opt')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance histEntry_access_store_isReg l (v : (alicebob.histEntry.t)) isReg' :
+#[global] Instance optPk_access_store_opt l (v : (alicebob.optPk.t)) opt' :
   AccessStrict
-    (l.[(alicebob.histEntry.t), "isReg"] ↦ (v.(alicebob.histEntry.isReg')))
-    (l.[(alicebob.histEntry.t), "isReg"] ↦ isReg')
-    (l ↦ v) (l ↦ (v <|(alicebob.histEntry.isReg') := isReg'|>))%I.
+    (l.[(alicebob.optPk.t), "opt"] ↦ (v.(alicebob.optPk.opt')))
+    (l.[(alicebob.optPk.t), "opt"] ↦ opt')
+    (l ↦ v) (l ↦ (v <|(alicebob.optPk.opt') := opt'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance histEntry_access_load_pk l (v : (alicebob.histEntry.t)) dq :
+#[global] Instance optPk_access_load_pk l (v : (alicebob.optPk.t)) dq :
   AccessStrict
-    (l.[(alicebob.histEntry.t), "pk"] ↦{dq} (v.(alicebob.histEntry.pk')))
-    (l.[(alicebob.histEntry.t), "pk"] ↦{dq} (v.(alicebob.histEntry.pk')))
+    (l.[(alicebob.optPk.t), "pk"] ↦{dq} (v.(alicebob.optPk.pk')))
+    (l.[(alicebob.optPk.t), "pk"] ↦{dq} (v.(alicebob.optPk.pk')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance histEntry_access_store_pk l (v : (alicebob.histEntry.t)) pk' :
+#[global] Instance optPk_access_store_pk l (v : (alicebob.optPk.t)) pk' :
   AccessStrict
-    (l.[(alicebob.histEntry.t), "pk"] ↦ (v.(alicebob.histEntry.pk')))
-    (l.[(alicebob.histEntry.t), "pk"] ↦ pk')
-    (l ↦ v) (l ↦ (v <|(alicebob.histEntry.pk') := pk'|>))%I.
+    (l.[(alicebob.optPk.t), "pk"] ↦ (v.(alicebob.optPk.pk')))
+    (l.[(alicebob.optPk.t), "pk"] ↦ pk')
+    (l ↦ v) (l ↦ (v <|(alicebob.optPk.pk') := pk'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 
 End def.
-End histEntry.
+End optPk.
 
 End alicebob.
