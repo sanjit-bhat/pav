@@ -151,6 +151,139 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
   }}}.
 Proof. Admitted.
 
+Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
+  {{{
+    is_pkg_init server ∗
+    "#His_cli" ∷ is_rpc_cli c good ∗
+    "#His_args" ∷ match good with None => True | Some γ =>
+      ∃ (dig : list w8),
+      "#Hidx_ep" ∷ mono_list_idx_own (digsγ γ) (uint.nat prevEpoch) dig ∗
+      "%Hlt_ver" ∷ ⌜uint.nat prevVerLen ≤
+        length $ ktcore.to_pks (vrf_pkγ γ) uid dig⌝ end
+  }}}
+  @! server.CallHistory #c #uid #prevEpoch #prevVerLen
+  {{{
+    sl_chainProof sl_linkSig sl_hist ptr_bound err,
+    RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #(ktcore.blame_to_u64 err));
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool good]}⌝ ∗
+    "Herr" ∷ (if decide (err ≠ ∅) then True else
+      ∃ chainProof linkSig hist bound,
+      "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
+      "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
+      "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
+      "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
+
+      "Hgood" ∷ match good with None => True | Some γ =>
+        ∃ servHist lastDig lastLink,
+        let numEps := length servHist in
+        let pks := ktcore.to_pks (vrf_pkγ γ) uid lastDig in
+        "#Hlb_servHist" ∷ mono_list_lb_own (digsγ γ) servHist ∗
+        "%Hlt_prevEpoch" ∷ ⌜uint.nat prevEpoch < numEps⌝ ∗
+        "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
+        "%Hlast_servHist" ∷ ⌜last servHist = Some lastDig⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.valid servHist None lastLink numEps⌝ ∗
+
+        "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
+          (drop (S (uint.nat prevEpoch)) servHist)⌝ ∗
+        "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
+          (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
+        "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γ) uid
+          (uint.nat prevVerLen) lastDig hist ∗
+        "%Heq_hist" ∷ ⌜drop (uint.nat prevVerLen) pks =
+          ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝ ∗
+        "#Hwish_bound" ∷ ktcore.wish_NonMemb (vrf_pkγ γ) uid
+          (length pks) lastDig bound end)
+  }}}.
+Proof.
+  wp_start as "@". wp_auto.
+  wp_apply wp_alloc as "* Ha".
+  wp_apply (HistoryArg.wp_enc (HistoryArg.mk' _ _ _) with "[$Ha]") as "* (Hsl_b&_&_&%Hwish)".
+  { iDestruct own_slice_nil as "$".
+    iDestruct own_slice_cap_nil as "$". }
+  simpl in *.
+  wp_apply wp_alloc as "* Hreply".
+  wp_apply (wp_History_cli_call (Q_read_idx (uint.nat prevEpoch))
+    with "[$Hsl_b $Hreply]") as "* @".
+  { iFrame "#". case_match; [|done].
+    iNamed "His_args".
+    by iApply op_read_idx. }
+  wp_if_destruct.
+  (* BlameUnknown only from network. *)
+  { rewrite ktcore.rw_BlameUnknown.
+    iApply "HΦ".
+    iSplit; [|by case_decide].
+    iPureIntro. apply ktcore.blame_unknown. }
+  iNamed "Herr_net".
+  iPersist "Hsl_reply".
+  wp_apply (HistoryReply.wp_dec with "[$Hsl_reply]") as "* Hgenie".
+  wp_if_destruct.
+  (* serv promised well-encoded reply. *)
+  { rewrite ktcore.rw_BlameServFull.
+    iApply "HΦ".
+    iSplit; [|by case_decide].
+    iApply ktcore.blame_one.
+    iIntros (?).
+    case_match; try done.
+    iNamed "Hgood".
+    iApply "Hgenie".
+    naive_solver. }
+  iDestruct "Hgenie" as (??) "(#Hreply&_&%His_dec)".
+  destruct obj. iNamed "Hreply".
+  wp_auto. simpl.
+  rewrite -wp_fupd.
+  wp_if_destruct.
+  { rewrite ktcore.rw_BlameServFull.
+    iApply "HΦ".
+    iApply fupd_sep.
+    iSplitL; try done.
+    iApply ktcore.blame_one.
+    (* instead of using [fupd_not_prop], another option is to change
+    [BlameSpec] to allow proving contra under fupd. *)
+    rewrite -fupd_not_prop.
+    iIntros (?).
+    case_match; try done.
+    iNamed "Hgood".
+    opose proof (HistoryReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+    simplify_eq/=.
+    iDestruct "Hgood" as "[@|@]".
+    (* we gave well-encoded arg. *)
+    - iApply "Hgenie". naive_solver.
+    (* we gave valid decoded args. *)
+    - opose proof (HistoryArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
+      simplify_eq/=.
+      iDestruct "HQ" as "[#Hnew_hist %]".
+      iDestruct "Herr_serv_args" as %[?|?].
+      (* good prevEpoch. *)
+      1: lia.
+      (* good prevVerLen. *)
+      iNamed "His_args".
+      iMod (hist_pks_prefix uid0 with "His_cli Hidx_ep []") as %?%prefix_length.
+      2: {
+        rewrite last_lookup in Hlast_hist.
+        iDestruct (mono_list_idx_own_get with "Hnew_hist") as "H"; [done|].
+        iFrame "H". }
+      { word. }
+      iPureIntro. simpl in *.
+      word. }
+
+  rewrite /ktcore.BlameNone ktcore.rw_BlameNone.
+  iApply "HΦ".
+  iApply fupd_sep.
+  iSplitR. { iPureIntro. apply ktcore.blame_none. }
+  case_decide; try done.
+  iFrame "#".
+  case_match; try done.
+  iNamed "Hgood".
+  opose proof (HistoryReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+  simplify_eq/=.
+  iDestruct "Hgood" as "[@|@]"; try done.
+  opose proof (HistoryArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
+  simplify_eq/=.
+  iDestruct "HQ" as "[#Hnew_hist %]".
+  iNamed "Herr_serv_args".
+  by iFrame "#%".
+Qed.
+
 Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
     c good sl_arg d0 arg ptr_reply (x : slice.t) :
   {{{

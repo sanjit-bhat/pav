@@ -66,6 +66,9 @@ End state.
 
 Notation vrf_pkγ γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
 Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
+Notation start_epγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.start_ep)).
+Notation cutγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.cut)).
+Notation audit_offsetγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.audit_offset)).
 
 Section proof.
 Context `{!heapGS Σ}.
