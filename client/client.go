@@ -195,7 +195,7 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp 
 	return
 }
 
-func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err ktcore.Blame) {
+func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, ep uint64, err ktcore.Blame) {
 	cli := advrpc.Dial(servAddr)
 	chain, vrf, err := server.CallStart(cli)
 	if err != ktcore.BlameNone {
@@ -216,6 +216,7 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, err kt
 	last := &epoch{epoch: startEp, dig: startDig, link: startLink, sig: chain.LinkSig}
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: vrf.VrfSig}
 	c = &Client{uid: uid, pend: pendingPut, last: last, serv: serv}
+	ep, _, err = c.SelfMon()
 	return
 }
 
