@@ -54,12 +54,12 @@ Definition uid_inv γ : iProp Σ :=
   "Hputs" ∷ mono_list_auth_own γ 1 puts.
 Definition is_uid_inv γ : iProp Σ := inv nroot (uid_inv γ).
 
-Definition own ptr σ obj : iProp Σ :=
+Definition own ptr (pending_pk : option $ list w8) obj : iProp Σ :=
   ∃ w_ver isPending sl_pendingPk,
   "Hstr_nextVer" ∷ ptr ↦ (client.nextVer.mk w_ver isPending sl_pendingPk) ∗
   "%Heq_ver" ∷ ⌜uint.nat w_ver = obj.(ver)⌝ ∗
   "#HpendingPk" ∷
-    match σ.(state.pending_pk) with
+    match pending_pk with
     | None =>
       "%HisPending" ∷ ⌜isPending = false⌝
     | Some pk =>
@@ -67,7 +67,7 @@ Definition own ptr σ obj : iProp Σ :=
       "#Hsl_pendingPk" ∷ sl_pendingPk ↦*□ pk
     end.
 
-Definition align_serv_pend γcli γserv σ obj : iProp Σ :=
+Definition align_serv_pend γcli γserv (pending_pk : option $ list w8) obj : iProp Σ :=
   ∃ uidγ,
   "%Hlook_uidγ" ∷ ⌜γserv.(server.cfg.uidγ) !! γcli.(cfg.uid) = Some uidγ⌝ ∗
   "HgoodCli" ∷
@@ -76,48 +76,57 @@ Definition align_serv_pend γcli γserv σ obj : iProp Σ :=
       ∃ puts,
       "Hputs" ∷ mono_list_auth_own uidγ 1 puts ∗
       "%Hbound" ∷ ⌜∀ (ver' : nat) pk, (ver', pk) ∈ puts → ver' ≤ obj.(ver)⌝ ∗
-      "%Heq_pend" ∷ ⌜∀ pk, (obj.(ver), pk) ∈ puts → σ.(state.pending_pk) = Some pk⌝
+      "%Heq_pend" ∷ ⌜∀ pk, (obj.(ver), pk) ∈ puts → pending_pk = Some pk⌝
     | false =>
       "#Huid_inv" ∷ is_uid_inv uidγ
     end.
 
-Definition align_serv_hist γ σ obj : iProp Σ :=
+Definition align_serv_hist γ (digs : list $ list w8) obj : iProp Σ :=
   ∃ i dig,
   let pks := ktcore.to_pks (vrf_pkγ γ) γ.(cfg.uid) dig in
-  "%Hlook_dig" ∷ ⌜σ.(state.digs) !! i = Some dig⌝ ∗
+  "%Hlook_dig" ∷ ⌜digs !! i = Some dig⌝ ∗
   "%Hver_hist" ∷ ⌜obj.(ver) ≤ length pks⌝.
 
 End proof.
 End nextVer.
 
 Module epoch.
+Record t :=
+  mk' {
+    epoch : w64;
+    dig : list w8;
+    link : list w8;
+    sig : list w8;
+  }.
+
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : client.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition own ptr γ σ : iProp Σ :=
-  ∃ epoch sl_dig dig sl_link link sl_sig sig,
-  let num_eps := (start_epγ γ + length σ.(state.digs))%nat in
-  "#Hstr_epoch" ∷ ptr ↦□ (client.epoch.mk epoch sl_dig sl_link sl_sig) ∗
-  "#Hsl_dig" ∷ sl_dig ↦*□ dig ∗
-  "#Hsl_link" ∷ sl_link ↦*□ link ∗
-  "#Hsl_sig" ∷ sl_sig ↦*□ sig ∗
+Definition valid γ digs obj : iProp Σ :=
+  let num_eps := (start_epγ γ + length digs)%nat in
+  "%Heq_ep" ∷ ⌜S $ uint.nat obj.(epoch) = num_eps⌝ ∗
+  "%Hlast_dig" ∷ ⌜last digs = Some obj.(dig)⌝ ∗
+  "%His_chain" ∷ ⌜hashchain.valid digs (cutγ γ) obj.(link) num_eps⌝ ∗
+  "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) obj.(epoch) obj.(link) obj.(sig).
 
-  "%Heq_ep" ∷ ⌜S $ uint.nat epoch = num_eps⌝ ∗
-  "%Hlast_dig" ∷ ⌜last σ.(state.digs) = Some dig⌝ ∗
-  "%His_chain" ∷ ⌜hashchain.valid σ.(state.digs) (cutγ γ) link num_eps⌝ ∗
-  "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) epoch link sig.
+Definition own ptr obj : iProp Σ :=
+  ∃ sl_dig sl_link sl_sig,
+  "#Hstr_epoch" ∷ ptr ↦□ (client.epoch.mk obj.(epoch) sl_dig sl_link sl_sig) ∗
+  "#Hsl_dig" ∷ sl_dig ↦*□ obj.(dig) ∗
+  "#Hsl_link" ∷ sl_link ↦*□ obj.(link) ∗
+  "#Hsl_sig" ∷ sl_sig ↦*□ obj.(sig).
 
-Definition align_serv γcli γserv σ : iProp Σ :=
-  "#His_hist" ∷ mono_list_lb_own (server.digsγ γserv) σ.(state.digs) ∗
-  "%Hmono_plain" ∷ ⌜ktcore.mono_plain (server.vrf_pkγ γserv) σ.(state.digs)⌝ ∗
+Definition align_serv γcli γserv digs : iProp Σ :=
+  "#His_hist" ∷ mono_list_lb_own (server.digsγ γserv) digs ∗
+  "%Hmono_plain" ∷ ⌜ktcore.mono_plain (server.vrf_pkγ γserv) digs⌝ ∗
 
-  "%Heq_start" ∷ ⌜start_epγ γcli = server.start_epγ γserv⌝ ∗
-  "%Heq_start0" ∷ ⌜start_epγ γcli = 0%nat⌝ ∗
-  "%Heq_cut" ∷ ⌜cutγ γcli = server.cutγ γserv⌝ ∗
-  "%Heq_cut0" ∷ ⌜cutγ γcli = None⌝.
+  "%Heq_serv_start" ∷ ⌜start_epγ γcli = server.start_epγ γserv⌝ ∗
+  "%Heq_start" ∷ ⌜start_epγ γcli = 0%nat⌝ ∗
+  "%Heq_serv_cut" ∷ ⌜cutγ γcli = server.cutγ γserv⌝ ∗
+  "%Heq_cut" ∷ ⌜cutγ γcli = None⌝.
 
 End proof.
 End epoch.
@@ -156,19 +165,21 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own γ ptr σ : iProp Σ :=
-  ∃ ptr_pend pend ptr_last ptr_serv,
+  ∃ ptr_pend pend ptr_last last ptr_serv,
   "Hstr_client" ∷ ptr ↦ (client.Client.mk γ.(cfg.uid) ptr_pend ptr_last ptr_serv) ∗
-  "Hown_pend" ∷ nextVer.own ptr_pend σ pend ∗
+  "Hown_pend" ∷ nextVer.own ptr_pend σ.(state.pending_pk) pend ∗
   "Halign_pend_pend" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    nextVer.align_serv_pend γ γserv σ pend end ∗
+    nextVer.align_serv_pend γ γserv σ.(state.pending_pk) pend end ∗
   "#Halign_pend_hist" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    nextVer.align_serv_hist γ σ pend end ∗
-  "#Hown_last" ∷ epoch.own ptr_last γ σ ∗
+    nextVer.align_serv_hist γ σ.(state.digs) pend end ∗
+  "#Hown_last" ∷ epoch.own ptr_last last ∗
+  "#His_last" ∷ epoch.valid γ σ.(state.digs) last ∗
   "#Halign_last" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    epoch.align_serv γ γserv σ end ∗
+    epoch.align_serv γ γserv σ.(state.digs) end ∗
   "#Hown_serv" ∷ serv.own γ ptr_serv ∗
-  "#Halgin_serv" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    serv.align_serv γ γserv end.
+  "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
+    serv.align_serv γ γserv end ∗
+  "Hown_digs" ∷ mono_list_auth_own (digsγ γ) 1 σ.(state.digs).
 
 End proof.
 End Client.
@@ -179,45 +190,37 @@ Context {sem : go.Semantics} {package_sem : client.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-(*
-Section proof.
-Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : client.Assumptions}.
-Collection W := sem + package_sem.
-#[local] Set Default Proof Using "W".
-
-(* TODO: might be able to hide [newDigs]. *)
-Definition wish_getNextEp prev sigPk chainProof sig newDigs next : iProp Σ :=
+(* arg order: Client state + getNextEp args + new Client state.
+TODO: describe more once we finish proving related stuff.
+especially all the implicit assertions this is making. *)
+Definition wish_getNextEp γ digs chainProof sig newDigs next : iProp Σ :=
   ∃ nextEp nextDig nextLink,
-  "%Heq_next" ∷ ⌜next = epoch.mk' nextEp nextDig nextLink sig
-    (prev.(epoch.digs) ++ newDigs) prev.(epoch.cut)⌝ ∗
-  "%HnextEp" ∷ ⌜uint.Z nextEp = (uint.Z prev.(epoch.epoch) + length newDigs)%Z⌝ ∗
-  "%HnextDig" ∷ ⌜last next.(epoch.digs) = Some nextDig⌝ ∗
+  "%Heq_next" ∷ ⌜next = epoch.mk' nextEp nextDig nextLink sig⌝ ∗
   "%HnewDigs" ∷ ⌜hashchain.wish_Proof chainProof newDigs⌝ ∗
-  "#HnextLink" ∷ hashchain.is_chain next.(epoch.digs)
-    next.(epoch.cut) nextLink (S $ uint.nat nextEp) ∗
-  "#HnextSig" ∷ ktcore.wish_LinkSig sigPk nextEp nextLink sig.
+  "#His_next" ∷ epoch.valid γ (digs ++ newDigs) next.
 
-Lemma wish_getNextEp_det prev pk chain sig digs0 digs1 next0 next1 :
-  wish_getNextEp prev pk chain sig digs0 next0 -∗
-  wish_getNextEp prev pk chain sig digs1 next1 -∗
-  ⌜digs0 = digs1 ∧ next0 = next1⌝.
+Lemma wish_getNextEp_det γ digs proof sig newDigs0 newDigs1 next0 next1 :
+  wish_getNextEp γ digs proof sig newDigs0 next0 -∗
+  wish_getNextEp γ digs proof sig newDigs1 next1 -∗
+  ⌜newDigs0 = newDigs1 ∧ next0 = next1⌝.
 Proof.
   iNamedSuffix 1 "0".
   iNamedSuffix 1 "1".
+  iNamedSuffix "His_next0" "0".
+  iNamedSuffix "His_next1" "1".
   opose proof (hashchain.wish_Proof_det _ _ _ HnewDigs0 HnewDigs1) as ->.
   simplify_eq/=.
-  iDestruct (hashchain.is_chain_det with "HnextLink0 HnextLink1") as %->.
-  by replace nextEp with nextEp0 in * by word.
+  opose proof (hashchain.det' His_chain0 His_chain1) as ->.
+  by assert (nextEp = nextEp0) as -> by word.
 Qed.
-*)
 
-Lemma wp_getNextEp ptr_prev prev info sl_sigPk sigPk sl_chainProof chainProof sl_sig sig :
+Lemma wp_getNextEp ptr_prev prev γ digs sl_sigPk sigPk sl_chainProof chainProof sl_sig sig :
   {{{
     is_pkg_init client ∗
-    "#Hown_prev" ∷ epoch.own ptr_prev prev info ∗
+    "#Hown_prev" ∷ epoch.own ptr_prev prev ∗
+    "#His_prev" ∷ epoch.valid γ digs prev ∗
     "#Hsl_sigPk" ∷ sl_sigPk ↦*□ sigPk ∗
-    "%Heq_sigPk" ∷ ⌜sigPk = info.(servInfo.sig_pk)⌝ ∗
+    "%Heq_sigPk" ∷ ⌜sigPk = γ.(cfg.sig_pk)⌝ ∗
     "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
     "#Hsl_sig" ∷ sl_sig ↦*□ sig
   }}}
@@ -226,36 +229,38 @@ Lemma wp_getNextEp ptr_prev prev info sl_sigPk sigPk sl_chainProof chainProof sl
     ptr_next (err : bool), RET (#ptr_next, #err);
     "Hgenie" ∷
       match err with
-      | true => ¬ ∃ digs next, wish_getNextEp prev sigPk chainProof sig digs next
+      | true => ¬ ∃ newDigs next, wish_getNextEp γ digs chainProof sig newDigs next
       | false =>
-        ∃ digs next,
-        "#Hwish_getNextEp" ∷ wish_getNextEp prev sigPk chainProof sig digs next ∗
-        "#Hown_next" ∷ epoch.own ptr_next next info
+        ∃ newDigs next,
+        "#Hwish_getNextEp" ∷ wish_getNextEp γ digs chainProof sig newDigs next ∗
+        "#Hown_next" ∷ epoch.own ptr_next next
       end
   }}}.
 Proof.
   wp_start as "@".
   iNamedSuffix "Hown_prev" "_prev".
+  iNamedSuffix "His_prev" "_prev".
   wp_auto.
   wp_apply hashchain.wp_Verify as "* @".
-  { iFrame "#". }
+  { iFrame "#%". }
   iPersist "Hsl_newVal Hsl_newLink".
   wp_if_destruct.
   { iApply "HΦ". iIntros "@". simpl in *. iApply "Hgenie". naive_solver. }
   iNamed "Hgenie".
   wp_apply std.wp_SumNoOverflow.
   wp_if_destruct.
-  2: { iApply "HΦ". iIntros "@".
+  2: { iApply "HΦ". iIntros "@". iNamed "His_next".
     opose proof (hashchain.wish_Proof_det _ _ _ Hwish_chain HnewDigs) as <-.
-    word. }
+    autorewrite with len in *. word. }
   wp_apply ktcore.wp_VerifyLinkSig as "* @".
   { iFrame "#". }
   wp_if_destruct.
-  { iApply "HΦ". iIntros "@". iApply "Hgenie".
+  { iApply "HΦ". iIntros "@". iNamed "His_next". iApply "Hgenie".
     opose proof (hashchain.wish_Proof_det _ _ _ Hwish_chain HnewDigs) as <-.
     simplify_eq/=.
-    iDestruct (hashchain.is_chain_det with "His_chain HnextLink") as %<-.
-    iExactEq "HnextSig". repeat f_equal. word. }
+    opose proof (hashchain.det' His_chain His_chain0) as ->.
+    iExactEq "His_sig". repeat f_equal.
+    autorewrite with len in *. word. }
   iNamed "Hgenie".
   iPersist "prev".
   wp_bind (If _ _ _).
@@ -264,33 +269,28 @@ Proof.
     ∃ sl_nextDig nextDig,
     "->" ∷ ⌜v = execute_val⌝ ∗
     "nextDig" ∷ nextDig_ptr ↦ sl_nextDig ∗
-    "%HnextDig" ∷ ⌜last (prev.(epoch.digs) ++ new_vals) = Some nextDig⌝ ∗
+    "%HnextDig" ∷ ⌜last (digs ++ newVals) = Some nextDig⌝ ∗
     "#Hsl_nextDig" ∷ sl_nextDig ↦*□ nextDig
     )%I
     with "[nextDig]"
   ) as "* @".
   { wp_if_destruct.
-    - destruct new_vals; simpl in *; try done.
+    - destruct newVals; simpl in *; try done.
       list_simplifier.
       by iFrame "∗#%".
-    - destruct new_vals using rev_ind; simpl in *; [word|]. clear IHnew_vals.
+    - destruct newVals using rev_ind; simpl in *; [word|]. clear IHnewVals.
       rewrite (assoc _) !last_snoc /=.
       by iFrame "∗#". }
   rewrite -wp_fupd.
   wp_apply wp_alloc as "* Hptr_next".
   iPersist "Hptr_next".
+
   iModIntro.
   iApply "HΦ".
-
-  (* TODO[word]: w/o explicitly providing w64,
-  something unfolds w64 to Naive.wrap and Naive.unsigned,
-  which fails word tactic. *)
-  iExists _, (epoch.mk' (word.add prev.(epoch.epoch) extLen) _ _ _
-    (prev.(epoch.digs) ++ new_vals) _).
+  iExists _, (epoch.mk' _ _ _ _).
   iFrame "Hptr_next #%". simpl in *.
-  repeat iSplit; [done|word|..].
-  - iExactEq "His_chain". rewrite /named. repeat f_equal. word.
-  - iExactEq "His_chain". rewrite /named. repeat f_equal. word.
+  repeat iExists _. repeat iSplit; [done|len|].
+  iPureIntro. exact_eq His_chain. len.
 Qed.
 
 Lemma wp_checkMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_memb memb :
