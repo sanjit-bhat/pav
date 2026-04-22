@@ -7,9 +7,11 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
   advrpc auditor cryptoffi hashchain ktcore merkle server.
 
 From New.proof.github_com.sanjit_bhat.pav.client_proof Require Import
-  base.
+  base rpc.
 
 Module client.
+Import rpc.client rpc.server.
+
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : client.Assumptions}.
@@ -249,13 +251,13 @@ Proof.
   iFrame "#".
 Qed.
 
-Lemma wp_Client_Put ptr_c c sl_pk pk :
+Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
   {{{
     is_pkg_init client ∗
-    "Hclient" ∷ Client.own ptr_c c ∗
+    "Hclient" ∷ Client.own γ ptr_c σ ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
     "%Heq_pend" ∷
-      ⌜match c.(Client.pend).(nextVer.pendingPk) with
+      ⌜match σ.(state.pending_pk) with
       | None => True
       | Some pk' => pk = pk'
       end⌝
@@ -263,19 +265,13 @@ Lemma wp_Client_Put ptr_c c sl_pk pk :
   ptr_c @! (go.PointerType client.Client) @! "Put" #sl_pk
   {{{
     RET #();
-    let c' := set Client.pend (λ p, set nextVer.pendingPk (λ _, Some pk) p) c in
-    "Hclient" ∷ Client.own ptr_c c'
+    let σ' := set state.pending_pk (λ _, Some pk) σ in
+    "Hclient" ∷ Client.own γ ptr_c σ'
   }}}.
 Proof.
   wp_start as "@".
-  iNamed "Hclient".
-  destruct c.
-  iNamed "Hown_pend".
-  destruct pend.
-  iNamed "Hown_serv".
-  destruct serv.
-  simplify_eq/=.
-  (* destruct last0. *)
+  iNamed "Hclient". iNamed "Hown_pend". iNamed "Hown_serv".
+  destruct γ, σ. simpl in *.
   wp_auto. simpl.
   iPersist "c pk".
   wp_bind (If _ _ _).
@@ -284,22 +280,22 @@ Proof.
     ∃ sl_pendingPk',
     "->" ∷ ⌜v = execute_val⌝ ∗
     "Hstr_client" ∷ ptr_c ↦ {|
-                                 client.Client.uid' := uid;
-                                 client.Client.pend' := ptr_pend;
-                                 client.Client.last' := ptr_last;
-                                 client.Client.serv' := ptr_serv
-                               |} ∗
+                          client.Client.uid' := uid;
+                          client.Client.pend' := ptr_pend;
+                          client.Client.last' := ptr_last;
+                          client.Client.serv' := ptr_serv
+                        |} ∗
     "Hstr_nextVer" ∷ ptr_pend ↦ {|
-                                     client.nextVer.ver' := ver;
-                                     client.nextVer.isPending' := true;
-                                     client.nextVer.pendingPk' := sl_pendingPk'
-                                   |} ∗
+                              client.nextVer.ver' := w_ver;
+                              client.nextVer.isPending' := true;
+                              client.nextVer.pendingPk' := sl_pendingPk'
+                            |} ∗
     "#Hsl_pendingPk'" ∷ sl_pendingPk' ↦*□ pk
     )%I
     with "[Hstr_client Hstr_nextVer]"
   ) as "* @".
   { wp_if_destruct.
-    - destruct pendingPk; iNamed "HpendingPk"; try done.
+    - destruct pending_pk; iNamed "HpendingPk"; try done.
       simplify_eq/=.
       wp_apply bytes.wp_Equal as "_".
       { iFrame "#". }
@@ -308,35 +304,38 @@ Proof.
       by iFrame "∗#".
     - by iFrame "∗#". }
 
-  destruct good; iNamed "Halign_pend_pend".
+  destruct serv_good; iNamed "Halign_pend_pend".
   2: {
-    wp_apply (server.wp_CallPut _ None).
+    wp_apply server.wp_CallPut.
     { iFrame "#". }
-    iApply "HΦ". by iFrame "∗ Hown_last #". }
-  simpl in *. destruct isGoodClis; iNamed "HgoodCli".
-  + iMod (mono_list_auth_own_update_app [(ver, pk)] with "Hputs") as "[Hputs #Hlb]".
+    iApply "HΦ".
+    by iFrame "∗ Hstr_serv #%". }
+  simpl in *. destruct clis_good; iNamed "HgoodCli".
+  - iMod (mono_list_auth_own_update_app [(pend.(nextVer.ver), pk)]
+      with "Hputs") as "[Hputs #Hlb]".
     iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "#Hidx".
     { by rewrite lookup_snoc. }
     wp_apply (server.wp_CallPut _ (Some _)).
-    { iFrame "#%". }
+    { rewrite Heq_ver. iFrame "#%". }
     iApply "HΦ".
-    iFrame "∗ Hown_last #%". simpl in *.
+    iFrame "∗ Hstr_serv #%". simpl in *.
     iPureIntro. repeat split; try done.
-    * intros. decompose_list_elem_of; [naive_solver|].
+    + intros. decompose_list_elem_of; [naive_solver|].
       by simplify_eq/=.
-    * intros. decompose_list_elem_of; [naive_solver|].
+    + intros. decompose_list_elem_of; [naive_solver|].
       by simplify_eq/=.
-  + iApply fupd_wp.
+  - iApply fupd_wp.
     iInv "Huid_inv" as ">@" "Hclose".
-    iMod (mono_list_auth_own_update_app [(ver, pk)] with "Hputs") as "[Hputs #Hlb]".
+    iMod (mono_list_auth_own_update_app [(pend.(nextVer.ver), pk)]
+      with "Hputs") as "[Hputs #Hlb]".
     iMod ("Hclose" with "[Hputs]") as "_"; [iFrame|].
     iModIntro.
     iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "#Hidx".
     { by rewrite lookup_snoc. }
     wp_apply (server.wp_CallPut _ (Some _)).
-    { iFrame "#%". }
+    { rewrite Heq_ver. iFrame "#%". }
     iApply "HΦ".
-    by iFrame "∗ Hown_last #%".
+    by iFrame "∗ Hstr_serv #%".
 Qed.
 
 Lemma wp_Client_Get ptr_c c (uid : w64) :
