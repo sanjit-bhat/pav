@@ -1,4 +1,4 @@
-From New.generatedproof.github_com.sanjit_bhat.pav Require Import advrpc server.
+From New.generatedproof.github_com.sanjit_bhat.pav Require Import server.
 From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 From New.proof.github_com.sanjit_bhat.pav Require Import
@@ -179,6 +179,7 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
         let pks := ktcore.to_pks (vrf_pkγ γ) uid lastDig in
         "#Hlb_servHist" ∷ mono_list_lb_own (digsγ γ) servHist ∗
         "%Hlt_prevEpoch" ∷ ⌜uint.nat prevEpoch < numEps⌝ ∗
+        "%Hnoof_epochs" ∷ ⌜numEps = sint.nat (W64 numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
         "%Hlast_servHist" ∷ ⌜last servHist = Some lastDig⌝ ∗
         "%His_lastLink" ∷ ⌜hashchain.valid servHist None lastLink numEps⌝ ∗
