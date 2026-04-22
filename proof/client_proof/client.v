@@ -28,112 +28,109 @@ Lemma wp_checkMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_memb memb :
     (err : bool), RET #err;
     "Hgenie" ∷
       match err with
-      | true => ¬ ktcore.wish_Memb pk uid ver dig memb
+      | true => ¬ ktcore.wish_Memb pk uid (uint.nat ver) dig memb
       | false =>
-        "#Hwish_Memb" ∷ ktcore.wish_Memb pk uid ver dig memb
+        "#Hwish_Memb" ∷ ktcore.wish_Memb pk uid (uint.nat ver) dig memb
       end
   }}}.
 Proof.
   wp_start as "@".
-  iNamed "Hown_memb".
+  iNamed "Hown_memb". iNamed "Hown_PkOpen".
   wp_auto.
   wp_apply ktcore.wp_CheckMapLabel as "* @".
   { iFrame "#". }
   wp_if_destruct.
-  { iApply "HΦ". iIntros "@". by iApply "Hgenie". }
+  { iApply "HΦ". iIntros "@".
+    rewrite w64_to_nat_id. by iApply "Hgenie". }
   iNamed "Hgenie".
   iPersist "Hsl_label".
   wp_apply ktcore.wp_GetMapVal as "* @".
   { iFrame "#". }
-  iPersist "Hsl_MapVal".
+  iPersist "Hsl_mapVal".
   wp_apply merkle.wp_VerifyMemb as "* @".
   { iFrame "#". }
   wp_if_destruct.
-  { iApply "HΦ". iIntros "@". iApply "Hgenie".
-    iDestruct (cryptoffi.is_vrf_out_det with "His_out His_vrf_out") as %->.
-    iDestruct (cryptoffi.is_hash_det with "His_MapVal His_mapVal") as %->.
+  { iApply "HΦ". iNamedSuffix 1 "0". iApply "Hgenie".
+    opose proof (ktcore.map_label_det His_Label His_Label0) as ->.
+    opose proof (ktcore.map_val_det His_MapVal His_MapVal0) as ->.
     iFrame "#". }
   iNamedSuffix "Hgenie" "_merk".
   wp_apply bytes.wp_Equal as "_".
   { iFrame "#". }
   wp_if_destruct.
-  2: { iApply "HΦ". iIntros "@".
-    iDestruct (cryptoffi.is_vrf_out_det with "His_out His_vrf_out") as %->.
-    iDestruct (cryptoffi.is_hash_det with "His_MapVal His_mapVal") as %->.
-    iDestruct (merkle.wish_Memb_det with "His_proof_merk Hwish_memb") as %->.
-    done. }
+  2: { iApply "HΦ". iNamedSuffix 1 "0".
+    opose proof (ktcore.map_label_det His_Label His_Label0) as ->.
+    opose proof (ktcore.map_val_det His_MapVal His_MapVal0) as ->.
+    by iDestruct (merkle.wish_Memb_det with "His_proof_merk Hwish_memb0") as %->. }
   iApply "HΦ".
-  iFrame "#".
+  iFrame "#%".
+  by rewrite w64_to_nat_id.
 Qed.
 
 Lemma wp_checkHist ptr_pk pk (uid prefixLen : w64) sl_dig dig sl_hist sl0_hist hist :
+  let num_vers := (uint.nat prefixLen + length hist)%nat in
   {{{
     is_pkg_init client ∗
     "#Hown_vrf_pk" ∷ cryptoffi.own_vrf_pk ptr_pk pk ∗
     "#Hsl_dig" ∷ sl_dig ↦*□ dig ∗
     "#Hsl_hist" ∷ sl_hist ↦*□ sl0_hist ∗
     "#Hown_hist" ∷ ([∗ list] ptr;memb ∈ sl0_hist;hist,
-      ktcore.Memb.own ptr memb (□))
+      ktcore.Memb.own ptr memb (□)) ∗
+    "%Hnoof_ver" ∷ ⌜num_vers = uint.nat (W64 num_vers)⌝
   }}}
   @! client.checkHist #ptr_pk #uid #prefixLen #sl_dig #sl_hist
   {{{
     (err : bool), RET #err;
     "Hgenie" ∷
       match err with
-      | true => ¬ ktcore.wish_ListMemb pk uid prefixLen dig hist
+      | true => ¬ ktcore.wish_ListMemb pk uid (uint.nat prefixLen) dig hist
       | false =>
-        "#Hwish_ListMemb" ∷ ktcore.wish_ListMemb pk uid prefixLen dig hist
+        "#Hwish_ListMemb" ∷ ktcore.wish_ListMemb pk uid (uint.nat prefixLen) dig hist
       end
   }}}.
 Proof.
-  wp_start as "@". wp_auto.
+  simpl. wp_start as "@". wp_auto.
   iDestruct (own_slice_len with "Hsl_hist") as %[? _].
   iDestruct (big_sepL2_length with "Hown_hist") as %?.
   iAssert (
     ∃ (i : w64) (x0 : loc) (x1 : w64),
-    "err" ∷ err_ptr ↦ into_val_typed_bool.(default_val bool) ∗
-    "hist" ∷ hist_ptr ↦ sl_hist ∗
-    "dig" ∷ dig_ptr ↦ sl_dig ∗
-    "prefixLen" ∷ prefixLen_ptr ↦ prefixLen ∗
-    "uid" ∷ uid_ptr ↦ uid ∗
-    "vrfPk" ∷ vrfPk_ptr ↦ ptr_pk ∗
+    "err" ∷ err_ptr ↦ false ∗
     "memb" ∷ memb_ptr ↦ x0 ∗
     "ver" ∷ ver_ptr ↦ x1 ∗
     "i" ∷ i_ptr ↦ i ∗
 
     "%Hlt_i" ∷ ⌜0%Z ≤ sint.Z i ≤ length hist⌝ ∗
     "#Hwish" ∷ ([∗ list] ver ↦ memb ∈ take (sint.nat i) hist,
-      ktcore.wish_Memb pk uid (uint.Z prefixLen + ver) dig memb)
-  )%I with "[-HΦ]" as "IH".
+      ktcore.wish_Memb pk uid (uint.nat prefixLen + ver) dig memb)
+  )%I with "[err memb ver i]" as "IH".
   { iFrame. iSplit; [word|naive_solver]. }
   wp_for "IH".
   wp_if_destruct.
-  { list_elem sl0_hist (sint.Z i) as ptr_memb.
-    list_elem hist (sint.Z i) as memb.
-    iDestruct (big_sepL2_lookup with "Hown_hist") as "#Hown_memb"; [done..|].
-    wp_pure; [word|].
-    wp_apply wp_load_slice_elem as "_"; [word|..].
-    { by iFrame "#". }
-    wp_apply wp_checkMemb as "* @".
-    { iFrame "#". }
-    wp_if_destruct; wp_for_post.
-    { iApply "HΦ". iIntros "#H0". iApply "Hgenie".
-      iDestruct (big_sepL_lookup with "H0") as "#H1"; [done|].
-      iExactEq "H1". repeat f_equal. word. }
-    iNamed "Hgenie".
-    iFrame "∗#".
-    iSplit; [word|].
-    replace (sint.nat (word.add _ _)) with (S (sint.nat i)) by word.
-    erewrite take_S_r; [|done].
-    rewrite big_sepL_snoc.
-    iFrame "#".
-    iExactEq "Hwish_Memb".
-    repeat f_equal. len. }
+  2: {
+    iApply "HΦ".
+    assert (sint.nat i = length hist) as -> by word.
+    by rewrite take_ge; [|word]. }
 
-  iApply "HΦ".
-  assert (i = length hist) as -> by word.
-  rewrite take_ge; [|word].
+  list_elem sl0_hist (sint.Z i) as ptr_memb.
+  list_elem hist (sint.Z i) as memb.
+  iDestruct (big_sepL2_lookup with "Hown_hist") as "#Hown_memb"; [done..|].
+  case_decide as Ht; [|word]. clear Ht.
+  wp_apply (wp_load_slice_index with "[$Hsl_hist]") as "_"; [word|done|].
+  wp_apply wp_checkMemb as "* @".
+  { iFrame "#". }
+  wp_if_destruct; wp_for_post.
+  { iApply "HΦ". iIntros "#H0". iApply "Hgenie".
+    iDestruct (big_sepL_lookup with "H0") as "#H1"; [done|].
+    iExactEq "H1". repeat f_equal. word. }
+  iNamed "Hgenie".
+  iFrame "∗#".
+  iSplit; [word|].
+  replace (sint.nat (word.add _ _)) with (S (sint.nat i)) by word.
+  erewrite take_S_r; [|done].
+  rewrite big_sepL_snoc.
   iFrame "#".
+  iExactEq "Hwish_Memb".
+  repeat f_equal. len.
 Qed.
 
 Lemma wp_checkNonMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_nonMemb nonMemb :
@@ -148,9 +145,9 @@ Lemma wp_checkNonMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_nonMemb nonMemb :
     (err : bool), RET #err;
     "Hgenie" ∷
       match err with
-      | true => ¬ ktcore.wish_NonMemb pk uid ver dig nonMemb
+      | true => ¬ ktcore.wish_NonMemb pk uid (uint.nat ver) dig nonMemb
       | false =>
-        "#Hwish_NonMemb" ∷ ktcore.wish_NonMemb pk uid ver dig nonMemb
+        "#Hwish_NonMemb" ∷ ktcore.wish_NonMemb pk uid (uint.nat ver) dig nonMemb
       end
   }}}.
 Proof.
@@ -160,25 +157,26 @@ Proof.
   wp_apply ktcore.wp_CheckMapLabel as "* @".
   { iFrame "#". }
   wp_if_destruct.
-  { iApply "HΦ". iIntros "@". by iApply "Hgenie". }
+  { iApply "HΦ". iIntros "@".
+    rewrite w64_to_nat_id. by iApply "Hgenie". }
   iNamed "Hgenie".
   iPersist "Hsl_label".
   wp_apply merkle.wp_VerifyNonMemb as "* @".
   { iFrame "#". }
   wp_if_destruct.
-  { iApply "HΦ". iIntros "@". iApply "Hgenie".
-    iDestruct (cryptoffi.is_vrf_out_det with "His_out His_vrf_out") as %->.
+  { iApply "HΦ". iNamedSuffix 1 "0". iApply "Hgenie".
+    opose proof (ktcore.map_label_det His_Label His_Label0) as ->.
     iFrame "#". }
   iNamedSuffix "Hgenie" "_merk".
   wp_apply bytes.wp_Equal as "_".
   { iFrame "#". }
   wp_if_destruct.
-  2: { iApply "HΦ". iIntros "@".
-    iDestruct (cryptoffi.is_vrf_out_det with "His_out His_vrf_out") as %->.
-    iDestruct (merkle.wish_NonMemb_det with "His_proof_merk Hwish_nonMemb") as %->.
-    done. }
+  2: { iApply "HΦ". iNamedSuffix 1 "0".
+    opose proof (ktcore.map_label_det His_Label His_Label0) as ->.
+    by iDestruct (merkle.wish_NonMemb_det with "His_proof_merk Hwish_nonMemb0") as %->. }
   iApply "HΦ".
-  iFrame "#".
+  iFrame "#%".
+  by rewrite w64_to_nat_id.
 Qed.
 
 Lemma wp_checkAuditLink sl_servPk servPk sl_adtrPk adtrPk (ep : w64) ptr_link link :

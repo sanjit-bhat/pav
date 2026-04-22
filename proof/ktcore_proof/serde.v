@@ -58,7 +58,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_VrfPk,
-  "Hstruct" ∷ ptr ↦{d} (ktcore.VrfSig.mk obj.(SigTag) sl_VrfPk) ∗
+  "Hstr_VrfSig" ∷ ptr ↦{d} (ktcore.VrfSig.mk obj.(SigTag) sl_VrfPk) ∗
 
   "Hsl_VrfPk" ∷ sl_VrfPk ↦*{d} obj.(VrfPk).
 
@@ -136,7 +136,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_Link,
-  "Hstruct" ∷ ptr ↦{d} (ktcore.LinkSig.mk obj.(SigTag) obj.(Epoch) sl_Link) ∗
+  "Hstr_LinkSig" ∷ ptr ↦{d} (ktcore.LinkSig.mk obj.(SigTag) obj.(Epoch) sl_Link) ∗
 
   "Hsl_Link" ∷ sl_Link ↦*{d} obj.(Link).
 
@@ -282,7 +282,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_Val sl_Rand,
-  "Hstruct" ∷ ptr ↦{d} (ktcore.CommitOpen.mk sl_Val sl_Rand) ∗
+  "Hstr_CommitOpen" ∷ ptr ↦{d} (ktcore.CommitOpen.mk sl_Val sl_Rand) ∗
 
   "Hsl_Val" ∷ sl_Val ↦*{d} obj.(Val) ∗
   "Hsl_Rand" ∷ sl_Rand ↦*{d} obj.(Rand).
@@ -363,7 +363,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_LabelProof ptr_PkOpen sl_MerkleProof,
-  "Hstruct" ∷ ptr ↦{d} (ktcore.Memb.mk sl_LabelProof ptr_PkOpen sl_MerkleProof) ∗
+  "Hstr_Memb" ∷ ptr ↦{d} (ktcore.Memb.mk sl_LabelProof ptr_PkOpen sl_MerkleProof) ∗
 
   "Hsl_LabelProof" ∷ sl_LabelProof ↦*{d} obj.(LabelProof) ∗
   "Hown_PkOpen" ∷ CommitOpen.own ptr_PkOpen obj.(PkOpen) d ∗
@@ -514,7 +514,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_LabelProof sl_MerkleProof,
-  "Hstruct" ∷ ptr ↦{d} (ktcore.NonMemb.mk sl_LabelProof sl_MerkleProof) ∗
+  "Hstr_NonMemb" ∷ ptr ↦{d} (ktcore.NonMemb.mk sl_LabelProof sl_MerkleProof) ∗
 
   "Hsl_LabelProof" ∷ sl_LabelProof ↦*{d} obj.(LabelProof) ∗
   "Hsl_MerkleProof" ∷ sl_MerkleProof ↦*{d} obj.(MerkleProof).
@@ -595,7 +595,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_MapLabel sl_MapVal sl_NonMembProof,
-  "Hstruct" ∷ ptr ↦{d} (ktcore.UpdateProof.mk sl_MapLabel sl_MapVal sl_NonMembProof) ∗
+  "Hstr_UpdateProof" ∷ ptr ↦{d} (ktcore.UpdateProof.mk sl_MapLabel sl_MapVal sl_NonMembProof) ∗
 
   "Hsl_MapLabel" ∷ sl_MapLabel ↦*{d} obj.(MapLabel) ∗
   "Hsl_MapVal" ∷ sl_MapVal ↦*{d} obj.(MapVal) ∗
@@ -746,7 +746,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ ptr_Updates sl_LinkSig,
-  "Hstruct" ∷ ptr ↦{d} (ktcore.AuditProof.mk ptr_Updates sl_LinkSig) ∗
+  "Hstr_AuditProof" ∷ ptr ↦{d} (ktcore.AuditProof.mk ptr_Updates sl_LinkSig) ∗
 
   "Hsl_Updates" ∷ UpdateProofSlice1D.own ptr_Updates obj.(Updates) d ∗
   "Hsl_LinkSig" ∷ sl_LinkSig ↦*{d} obj.(LinkSig).

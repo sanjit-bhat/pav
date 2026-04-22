@@ -165,6 +165,12 @@ Lemma map_val_iff {kt_pk rand map_val} :
   map_val_inv_fn map_val = Some (kt_pk, rand).
 Proof. Admitted.
 
+Lemma map_val_det {kt_pk rand map_val0 map_val1} :
+  map_val_fn kt_pk rand map_val0 →
+  map_val_fn kt_pk rand map_val1 →
+  map_val0 = map_val1.
+Proof. rewrite /map_val_fn. intros. destruct_and?. by simplify_eq/=. Qed.
+
 (** [plain_inv_fn] definition. *)
 
 (* easier to reason in list form bc map_label_inv_fn not inj.
