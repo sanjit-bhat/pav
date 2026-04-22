@@ -63,12 +63,10 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-(* a simpler (but too weak for multi-auditor) way to state this is with
-(γsigpred, ep, uid, opt_pk). *)
-Definition kt_ptsto γdigs vrf_pk digs_start_ep ep uid opt_pk : iProp Σ :=
+Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
   ∃ dig,
-  "#Hidx_dig" ∷ mono_list_idx_own γdigs (ep - digs_start_ep) dig ∗
-  "%Heq_pk" ∷ ⌜last $ ktcore.to_pks vrf_pk uid dig = opt_pk⌝.
+  "#Hidx_dig" ∷ mono_list_idx_own γ.(cfg.digs) (ep - start_epγ γ) dig ∗
+  "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(cfg.vrf_pk) uid dig = opt_pk⌝.
 
 (* (ab)use sigpred.cfg for Client, even tho it's not an Auditor.
 audit_offset is when Client started tracking its own key. *)
@@ -93,9 +91,9 @@ Definition is_audit γcli γadtr ep : iProp Σ :=
 
 End proof.
 
-Global Notation "γdigs ↪KT[ vrf_pk , digs_start_ep , ep , uid ] opt_pk" :=
-  (kt_ptsto γdigs vrf_pk digs_start_ep ep uid opt_pk)
-  (at level 20, format "γdigs  ↪KT[ vrf_pk ,  digs_start_ep ,  ep ,  uid ]  opt_pk").
+Global Notation "γ ↪KT[ ep , uid ] opt_pk" :=
+  (kt_ptsto γ ep uid opt_pk)
+  (at level 20, format "γ  ↪KT[ ep ,  uid ]  opt_pk").
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -103,22 +101,28 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Lemma kt_ptsto_agree γdigs vrf_pk digs_start_ep ep uid opt_pk0 opt_pk1 :
-  γdigs ↪KT[vrf_pk, digs_start_ep, ep, uid] opt_pk0 -∗
-  γdigs ↪KT[vrf_pk, digs_start_ep, ep, uid] opt_pk1 -∗
+(* when two Clients use diff Auditors up until the final one,
+[combine_audits] leaves them with γsigpred's that have diff [audit_offset]'s.
+as such, we strengthen this lemma to only require γ equality on specific fields. *)
+Lemma kt_ptsto_agree γ0 γ1 ep uid opt_pk0 opt_pk1 :
+  γ0.(cfg.digs) = γ1.(cfg.digs) →
+  γ0.(cfg.vrf_pk) = γ1.(cfg.vrf_pk) →
+  start_epγ γ0 = start_epγ γ1 →
+  γ0 ↪KT[ep, uid] opt_pk0 -∗
+  γ1 ↪KT[ep, uid] opt_pk1 -∗
   ⌜opt_pk0 = opt_pk1⌝.
 Proof.
-  iNamedSuffix 1 "0". iNamedSuffix 1 "1".
+  intros. iNamedSuffix 1 "0". iNamedSuffix 1 "1".
+  destruct γ0, info, γ1, info. simplify_eq/=.
   iDestruct (mono_list_idx_agree with "Hidx_dig0 Hidx_dig1") as %->.
   by subst.
 Qed.
 
 Lemma kt_ptsto_txfer γcli γadtr ep uid opt_pk audit_ep :
-  γcli.(cfg.digs) ↪KT[γcli.(cfg.vrf_pk), start_epγ γcli, ep, uid] opt_pk -∗
+  γcli ↪KT[ep, uid] opt_pk -∗
   is_audit γcli γadtr audit_ep -∗
-  ⌜γadtr.(cfg.info).(digs_info.start_ep) +
-    γadtr.(cfg.info).(digs_info.audit_offset) ≤ ep ≤ audit_ep⌝ -∗
-  γadtr.(cfg.digs) ↪KT[γadtr.(cfg.vrf_pk), start_epγ γadtr, ep, uid] opt_pk.
+  ⌜start_epγ γadtr + audit_offsetγ γadtr ≤ ep ≤ audit_ep⌝ -∗
+  γadtr ↪KT[ep, uid] opt_pk.
 Proof.
   iIntros "@@%". rewrite /kt_ptsto.
   eremember (ep - _)%nat as ep_t.
@@ -140,7 +144,7 @@ Lemma commit_staged γcli uid keys γadtr audit_ep :
   (∀ i opt_pk,
     let ep := (keys_start_ep + i)%nat in
     ⌜keys !! i = Some opt_pk⌝ -∗
-    γadtr.(cfg.digs) ↪KT[γadtr.(cfg.vrf_pk), start_epγ γadtr, ep, uid] opt_pk).
+    γadtr ↪KT[ep, uid] opt_pk).
 Proof.
   simpl. iIntros "@ #Haudit %% * %Hlook_keys".
   apply lookup_lt_Some in Hlook_keys as ?.
@@ -181,7 +185,7 @@ Qed.
 return new γadtr bc we need audit_offset of γadtr0 and digs of γadtr1.
 NOTE: for two clients to agree, they need the same γdigs.
 therefore, their combine sequences need to end with same auditor.
-without hashchain inversion, not sure how to do multi-auditor agreement.
+NOTE: without hashchain inversion, not sure how to do multi-auditor agreement.
 there's no final Auditor with all the digs. *)
 Lemma combine_audits γcli γadtr0 γadtr1 audit_ep0 audit_ep1 :
   is_audit γcli γadtr0 audit_ep0 -∗
