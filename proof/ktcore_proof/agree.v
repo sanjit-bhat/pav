@@ -91,7 +91,7 @@ Definition is_audit γcli γadtr ep : iProp Σ :=
 
 End proof.
 
-Global Notation "γ ↪KT[ ep , uid ] opt_pk" :=
+Local Notation "γ ↪KT[ ep , uid ] opt_pk" :=
   (kt_ptsto γ ep uid opt_pk)
   (at level 20, format "γ  ↪KT[ ep ,  uid ]  opt_pk").
 
@@ -229,3 +229,7 @@ Qed.
 
 End proof.
 End ktcore.
+
+Global Notation "γ ↪KT[ ep , uid ] opt_pk" :=
+  (ktcore.kt_ptsto γ ep uid opt_pk)
+  (at level 20, format "γ  ↪KT[ ep ,  uid ]  opt_pk").
