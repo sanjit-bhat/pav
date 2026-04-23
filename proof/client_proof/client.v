@@ -32,7 +32,9 @@ Lemma wp_checkMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_memb memb :
       match err with
       | true => ¬ ktcore.wish_Memb pk uid (uint.nat ver) dig memb
       | false =>
-        "#Hwish_Memb" ∷ ktcore.wish_Memb pk uid (uint.nat ver) dig memb
+        "#Hwish_Memb" ∷ ktcore.wish_Memb pk uid (uint.nat ver) dig memb ∗
+        "%Hsome_hidden" ∷ ⌜ktcore.in_hidden pk (merkle.inv_fn dig) uid
+          (uint.nat ver) (Some memb.(ktcore.Memb.PkOpen).(ktcore.CommitOpen.Val))⌝
       end
   }}}.
 Proof.
@@ -66,7 +68,11 @@ Proof.
     by iDestruct (merkle.wish_Memb_det with "His_proof_merk Hwish_memb0") as %->. }
   iApply "HΦ".
   iFrame "#%".
-  by rewrite w64_to_nat_id.
+  rewrite w64_to_nat_id. iFrame "#".
+  iPureIntro. rewrite /ktcore.in_hidden.
+  apply ktcore.map_label_iff in His_Label.
+  apply ktcore.map_val_iff in His_MapVal.
+  naive_solver.
 Qed.
 
 Lemma wp_checkHist ptr_pk pk (uid prefixLen : w64) sl_dig dig sl_hist sl0_hist hist :
@@ -87,7 +93,9 @@ Lemma wp_checkHist ptr_pk pk (uid prefixLen : w64) sl_dig dig sl_hist sl0_hist h
       match err with
       | true => ¬ ktcore.wish_ListMemb pk uid (uint.nat prefixLen) dig hist
       | false =>
-        "#Hwish_ListMemb" ∷ ktcore.wish_ListMemb pk uid (uint.nat prefixLen) dig hist
+        "#Hwish_ListMemb" ∷ ktcore.wish_ListMemb pk uid (uint.nat prefixLen) dig hist ∗
+        "%Hpks_hidden" ∷ ⌜ktcore.pks_in_hidden_from pk (merkle.inv_fn dig) uid
+          (uint.nat prefixLen) (ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist))⌝
       end
   }}}.
 Proof.
@@ -103,7 +111,9 @@ Proof.
 
     "%Hlt_i" ∷ ⌜0%Z ≤ sint.Z i ≤ length hist⌝ ∗
     "#Hwish" ∷ ([∗ list] ver ↦ memb ∈ take (sint.nat i) hist,
-      ktcore.wish_Memb pk uid (uint.nat prefixLen + ver) dig memb)
+      ktcore.wish_Memb pk uid (uint.nat prefixLen + ver) dig memb) ∗
+    "%Hpks" ∷ ⌜ktcore.pks_in_hidden_from pk (merkle.inv_fn dig) uid (uint.nat prefixLen)
+      (ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> (take (sint.nat i) hist)))⌝
   )%I with "[err memb ver i]" as "IH".
   { iFrame. iSplit; [word|naive_solver]. }
   wp_for "IH".
@@ -111,7 +121,9 @@ Proof.
   2: {
     iApply "HΦ".
     assert (sint.nat i = length hist) as -> by word.
-    by rewrite take_ge; [|word]. }
+    rewrite take_ge; [|word].
+    rewrite take_ge in Hpks; [|word].
+    iFrame "#%". }
 
   list_elem sl0_hist (sint.Z i) as ptr_memb.
   list_elem hist (sint.Z i) as memb.
@@ -129,10 +141,14 @@ Proof.
   iSplit; [word|].
   replace (sint.nat (word.add _ _)) with (S (sint.nat i)) by word.
   erewrite take_S_r; [|done].
-  rewrite big_sepL_snoc.
-  iFrame "#".
-  iExactEq "Hwish_Memb".
-  repeat f_equal. len.
+  iSplit.
+  - rewrite big_sepL_snoc.
+    iFrame "#".
+    iExactEq "Hwish_Memb".
+    repeat f_equal. len.
+  - iPureIntro. rewrite !fmap_app /=.
+    apply ktcore.pks_in_hidden_from_snoc; try done.
+    exact_eq Hsome_hidden. len.
 Qed.
 
 Lemma wp_checkNonMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_nonMemb nonMemb :
@@ -149,7 +165,9 @@ Lemma wp_checkNonMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_nonMemb nonMemb :
       match err with
       | true => ¬ ktcore.wish_NonMemb pk uid (uint.nat ver) dig nonMemb
       | false =>
-        "#Hwish_NonMemb" ∷ ktcore.wish_NonMemb pk uid (uint.nat ver) dig nonMemb
+        "#Hwish_NonMemb" ∷ ktcore.wish_NonMemb pk uid (uint.nat ver) dig nonMemb ∗
+        "%Hnone_hidden" ∷ ⌜ktcore.in_hidden pk (merkle.inv_fn dig) uid
+          (uint.nat ver) None⌝
       end
   }}}.
 Proof.
@@ -178,7 +196,10 @@ Proof.
     by iDestruct (merkle.wish_NonMemb_det with "His_proof_merk Hwish_nonMemb0") as %->. }
   iApply "HΦ".
   iFrame "#%".
-  by rewrite w64_to_nat_id.
+  rewrite w64_to_nat_id. iFrame "#".
+  iPureIntro. rewrite /ktcore.in_hidden.
+  apply ktcore.map_label_iff in His_Label.
+  naive_solver.
 Qed.
 
 Lemma wp_checkAuditLink sl_servPk servPk sl_adtrPk adtrPk (ep : w64) ptr_link link :
@@ -338,40 +359,43 @@ Proof.
     by iFrame "∗ Hstr_serv #%".
 Qed.
 
-Lemma wp_Client_Get ptr_c c (uid : w64) :
+Lemma wp_Client_Get γ ptr_c σ (uid : w64) :
   {{{
     is_pkg_init client ∗
-    "Hclient" ∷ Client.own ptr_c c
+    "Hclient" ∷ Client.own γ ptr_c σ
   }}}
   ptr_c @! (go.PointerType client.Client) @! "Get" #uid
   {{{
-    (ep : w64) (isReg : bool) (sl_pk : slice.t) err,
-    (* TODO: pin down isReg and sl_pk. *)
-    RET (#ep, #isReg, #sl_pk, #(ktcore.blame_to_u64 err));
+    (ep : w64) is_reg (sl_pk : slice.t) err,
+    RET (#ep, #is_reg, #sl_pk, #(ktcore.blame_to_u64 err));
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
-      {[ktcore.BlameServFull:=option_bool c.(Client.serv).(serv.good)]}⌝ ∗
+      {[ktcore.BlameServFull:=option_bool γ.(cfg.serv_good)]}⌝ ∗
     "Herr" ∷
       (if decide (err ≠ ∅)
-      then "Hclient" ∷ Client.own ptr_c c
+      then "Hclient" ∷ Client.own γ ptr_c σ
       else
-        (* guarantee mono digs and ep match digs. *)
-        ∃ new_digs dig link sig,
-        let c' := set Client.last (λ e, epoch.mk' ep dig link sig
-          (e.(epoch.digs) ++ new_digs) e.(epoch.cut)) c in
-        "Hclient" ∷ Client.own ptr_c c' ∗
-        "%Heq_ep" ∷ ⌜uint.Z ep = (uint.Z c.(Client.last).(epoch.epoch) + length new_digs)%Z⌝)
+        ∃ new_digs opt_pk,
+        let σ' := set state.digs (.++ new_digs) σ in
+        "Hclient" ∷ Client.own γ ptr_c σ' ∗
+        "%Heq_ep" ∷ ⌜uint.Z ep = start_epγ γ + length σ'.(state.digs) - 1⌝ ∗
+        "#Hopt_pk" ∷
+          match opt_pk with
+          | None => "->" ∷ ⌜is_reg = false⌝
+          | Some pk =>
+            "->" ∷ ⌜is_reg = true⌝ ∗
+            "#Hsl_pk" ∷ sl_pk ↦*□ pk
+          end ∗
+        "#Hptr_kt" ∷ γ.(cfg.sigγ) ↪KT[uint.nat ep, uid] opt_pk)
   }}}.
 Proof.
   wp_start as "@".
-  iNamed "Hclient".
-  iNamed "Hown_serv".
-  iNamed "Hown_last".
+  iNamed "Hclient". iNamed "Hown_serv". iNamed "Hown_last".
   wp_auto.
   wp_apply wp_CallHistory as "* @".
   { iFrame "#".
     case_match; try done.
-    iNamed "Halign_last".
-    list_elem hist (uint.nat c.(Client.last).(epoch.epoch)) as e.
+    iNamed "His_last". iNamed "Halign_last".
+    list_elem σ.(state.digs) (uint.nat last0.(epoch.epoch)) as dig.
     iDestruct (mono_list_idx_own_get with "His_hist") as "$"; [done|].
     word. }
   case_bool_decide as Heq_err; wp_auto;
@@ -388,13 +412,13 @@ Proof.
   wp_if_destruct.
   { rewrite ktcore.rw_BlameServFull.
     iApply "HΦ".
-    iSplit. 2: { case_decide; try done. by iFrame "∗#%". }
+    iSplit. 2: { case_decide; try done. iFrame "∗ Hstr_epoch Hstr_serv #". }
     iApply ktcore.blame_one.
     iIntros (?).
     case_match; try done.
     iApply "Hgenie".
-    rewrite Heq_sig_pk.
-    iDestruct ("Hgood" with "Halign_last [//]") as "@".
+    iDestruct ("Hgood" with "[$][$][]") as "@".
+    { iNamed "His_last". iNamed "Halign_last". word. }
     iFrame "#". }
   iNamed "Hgenie".
   iNamedSuffix "Hown_next" "_next".
@@ -403,17 +427,17 @@ Proof.
   iDestruct (own_slice_len with "Hsl0_hist") as %[? ?].
   iDestruct (big_sepL2_length with "Hsl_hist") as %?.
   wp_apply wp_checkHist as "* @".
-  { iFrame "#". }
+  { iFrame "#". word. }
   wp_if_destruct.
   { rewrite ktcore.rw_BlameServFull.
     iApply "HΦ".
-    iSplit. 2: { case_decide; try done. by iFrame "∗#%". }
+    iSplit. 2: { case_decide; try done. iFrame "∗ Hstr_epoch Hstr_serv #". }
     iApply ktcore.blame_one.
     iIntros (?).
     case_match; try done.
     iApply "Hgenie".
-    rewrite Heq_sig_pk Heq_vrf_pk.
-    iDestruct ("Hgood" with "Halign_last [//]") as "H".
+    iDestruct ("Hgood" with "[$][$][]") as "H".
+    { iNamed "His_last". iNamed "Halign_last". word. }
     iNamedSuffix "H" "0".
     iDestruct (wish_getNextEp_det with "Hwish_getNextEp Hwish_getNextEp0") as %[-> ->].
     iFrame "#". }
@@ -423,20 +447,21 @@ Proof.
   wp_if_destruct.
   { rewrite ktcore.rw_BlameServFull.
     iApply "HΦ".
-    iSplit. 2: { case_decide; try done. by iFrame "∗#%". }
+    iSplit. 2: { case_decide; try done. iFrame "∗ Hstr_epoch Hstr_serv #". }
     iApply ktcore.blame_one.
     iIntros (?).
     case_match; try done.
     iApply "Hgenie".
-    rewrite Heq_sig_pk Heq_vrf_pk.
-    iDestruct ("Hgood" with "Halign_last [//]") as "H".
+    iDestruct ("Hgood" with "[$][$][]") as "H".
+    { iNamed "His_last". iNamed "Halign_last". word. }
     iNamedSuffix "H" "0".
     iDestruct (wish_getNextEp_det with "Hwish_getNextEp Hwish_getNextEp0") as %[-> ->].
-    apply Forall2_length in Heq_hist0.
+    apply (f_equal length) in Heq_hist0.
     autorewrite with len in *.
     iExactEq "Hwish_bound0". repeat f_equal. word. }
   iNamed "Hgenie".
   iPersist "hist boundVer".
+  rewrite -wp_fupd.
   wp_bind (If _ _ _).
   wp_apply (wp_wand _ _ _
     (λ v,
@@ -446,9 +471,9 @@ Proof.
     "pk" ∷ pk_ptr ↦ sl_pk ∗
     "#Hlast_hist" ∷
       match last hist with
-      | None => "%HisReg" ∷ ⌜isReg = false⌝
+      | None => "->" ∷ ⌜isReg = false⌝
       | Some x =>
-        "%HisReg" ∷ ⌜isReg = true⌝ ∗
+        "->" ∷ ⌜isReg = true⌝ ∗
         "#Hsl_pk" ∷ sl_pk ↦*□ x.(ktcore.Memb.PkOpen).(ktcore.CommitOpen.Val)
       end
     )%I
@@ -464,7 +489,7 @@ Proof.
       2: { apply last_None in Hlast.
         apply (f_equal length) in Hlast.
         simpl in *. word. }
-      remember (word.sub sl_hist.(slice.len_f) (W64 1)) as idx.
+      remember (word.sub sl_hist.(slice.len) (W64 1)) as idx.
       rewrite last_lookup in Hlast.
       replace (pred _) with (sint.nat idx) in Hlast by word.
       list_elem ptr0 (sint.nat idx) as ptr_memb.
@@ -472,25 +497,50 @@ Proof.
       iNamedSuffix "H" "0".
       iNamedSuffix "Hown_PkOpen0" "1".
 
-      wp_pure; [word|].
-      wp_apply wp_load_slice_elem as "_"; [word|..].
+      case_decide as Ht; [|word]. clear Ht.
+      wp_apply wp_load_slice_index; [word|..].
       { by iFrame "#". }
+      iIntros "_". wp_auto.
       by iFrame "∗#". }
 
-  iApply "HΦ".
+  iMod (mono_list_auth_own_update_app newDigs with "Hown_digs")
+    as "[Hown_digs #Hlb_digs]".
+  iModIntro. iApply "HΦ".
   iSplit. { iPureIntro. apply ktcore.blame_none. }
   case_decide; try done.
   iPoseProof "Hwish_getNextEp" as "@".
   simplify_eq/=.
-  iFrame "∗ Hstr_epoch_next #%". simpl in *.
-  case_match; try done.
-  rewrite Heq_sig_pk Heq_vrf_pk.
-  iDestruct ("Hgood" with "Halign_last [//]") as "H".
-  iNamedSuffix "H" "0".
-  iDestruct (wish_getNextEp_det with "Hwish_getNextEp Hwish_getNextEp0") as %[-> ->].
-  iNamed "Halign_pend_hist".
-  Opaque mono_list_idx_own.
-  iFrame "#%". word.
+  iFrame "∗". simpl.
+  iExists (ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> last hist)).
+  iSplitL.
+  { iExists (epoch.mk' _ _ _ _).
+    iFrame "Hstr_epoch_next Hstr_serv #".
+    case_match; try done.
+    iDestruct ("Hgood" with "[$][$][]") as "H".
+    { iNamed "His_last". iNamed "Halign_last". word. }
+    iNamedSuffix "H" "0".
+    iDestruct (wish_getNextEp_det with "Hwish_getNextEp Hwish_getNextEp0") as %[-> ->].
+    iFrame "#".
+    iNamed "Halign_pend_hist". iPureIntro.
+    simpl. repeat eexists; [|done].
+    by apply lookup_app_l_Some. }
+
+  iSplit.
+  { iNamedSuffix "His_next" "_next". simpl in *.
+    autorewrite with len in *. word. }
+  iSplit.
+  { destruct (last hist); iNamed "Hlast_hist"; simpl; [|done].
+    by iFrame "#". }
+  iFrame "#".
+  iNamedSuffix "His_next" "_next". simpl in *.
+  rewrite last_lookup in Hlast_dig_next.
+  iExists _.
+  iSplit. { iPureIntro. exact_eq Hlast_dig_next. f_equal. word. }
+  iPureIntro.
+  apply ktcore.pks_in_hidden_from_0 in Hpks_hidden.
+  erewrite ktcore.inv_fn_inp_pks_exact; cycle 1; [done|done|..].
+  { exact_eq Hnone_hidden. len. }
+  by rewrite !fmap_last.
 Qed.
 
 Lemma wp_Client_SelfMon ptr_c c :

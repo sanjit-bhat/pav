@@ -223,6 +223,10 @@ Definition in_hidden vrf_pk (hidden : gmap (list w8) (list w8)) uid ver opt_pk :
     hidden !! map_label = Some map_val
   end.
 
+(* TODO: de-duplicate with [pks_in_hidden]. *)
+Definition pks_in_hidden_from vrf_pk hidden uid from (pks : list _) :=
+  ∀ i pk, pks !! i = Some pk → in_hidden vrf_pk hidden uid (from + i) (Some pk).
+
 Definition pks_in_hidden vrf_pk hidden uid (pks : list _) :=
   ∀ ver pk, pks !! ver = Some pk → in_hidden vrf_pk hidden uid ver (Some pk).
 
@@ -275,6 +279,11 @@ Proof.
     destruct_exis; destruct_and?;
     by simplify_eq/=.
 Qed.
+
+Lemma pks_in_hidden_from_0 {vrf_pk hidden uid pks} :
+  pks_in_hidden_from vrf_pk hidden uid 0%nat pks →
+  pks_in_hidden vrf_pk hidden uid pks.
+Proof. naive_solver. Qed.
 
 (** out->in reasoning for [plain_inv_fn]. *)
 
@@ -449,6 +458,25 @@ Proof.
   by apply map_seq_approx_len.
 Qed.
 
+Lemma inv_fn_None_bound vrf_pk m uid ver :
+  in_hidden vrf_pk m uid ver None →
+  length $ plain_inv_fn vrf_pk m !!! uid ≤ ver.
+Proof.
+  intros Hnone.
+  eremember (_ !!! uid) as pks.
+  destruct (decide (length $ pks > ver)); try done.
+  exfalso.
+  list_elem pks ver as x.
+  rewrite lookup_total_alt in Heqpks.
+  destruct (_ !! uid) eqn:Hinv; simplify_eq/=.
+  eapply inv_fn_out_lookup in Hinv; [|done..].
+  destruct Hnone as (?&Hl0&?).
+  destruct Hinv as (?&Hl1&?&?&?).
+  destruct_and!.
+  opose proof (map_label_inv_inj Hl0 Hl1) as ->.
+  simplify_eq/=.
+Qed.
+
 Lemma inv_fn_inp_pks {vrf_pk plain hidden} uid pks0 :
   plain_inv_fn vrf_pk hidden = plain →
   pks_in_hidden vrf_pk hidden uid pks0 →
@@ -492,6 +520,27 @@ Proof.
   by replace (_ + _)%nat with 0%nat by lia.
 Qed.
 
+(* TODO: maybe make other lemmas use !!! as well. *)
+Lemma inv_fn_inp_pks_exact {vrf_pk plain hidden} uid pks :
+  plain_inv_fn vrf_pk hidden = plain →
+  pks_in_hidden vrf_pk hidden uid pks →
+  in_hidden vrf_pk hidden uid (length pks) None →
+  plain !!! uid = pks.
+Proof.
+  intros Hfn Hpks Hnone. subst.
+  apply inv_fn_None_bound in Hnone.
+  destruct (decide (length pks = 0%nat)).
+  { destruct pks; try done. by destruct (_ !!! _). }
+  rewrite lookup_total_alt in Hnone |-*.
+  opose proof (inv_fn_inp_pks uid pks _ _ _) as (?&Hlook&pks'&->); [done..|].
+  rewrite Hlook /= in Hnone |-*.
+  autorewrite with len in *.
+  destruct pks'.
+  { by list_simplifier. }
+  simpl in *. lia.
+Qed.
+
+(* TODO: re-prove with [inv_fn_inp_pks_exact]. *)
 Local Lemma inv_fn_inp_pks_weak {vrf_pk plain0 plain1 hidden} uid pks :
   is_plain vrf_pk plain0 hidden →
   plain_inv_fn vrf_pk hidden = plain1 →
@@ -511,25 +560,6 @@ Proof.
   simplify_eq/=.
   apply lookup_lt_Some in Hlook_pks.
   lia.
-Qed.
-
-Lemma inv_fn_None_bound vrf_pk m uid ver :
-  in_hidden vrf_pk m uid ver None →
-  length $ plain_inv_fn vrf_pk m !!! uid ≤ ver.
-Proof.
-  intros Hnone.
-  eremember (_ !!! uid) as pks.
-  destruct (decide (length $ pks > ver)); try done.
-  exfalso.
-  list_elem pks ver as x.
-  rewrite lookup_total_alt in Heqpks.
-  destruct (_ !! uid) eqn:Hinv; simplify_eq/=.
-  eapply inv_fn_out_lookup in Hinv; [|done..].
-  destruct Hnone as (?&Hl0&?).
-  destruct Hinv as (?&Hl1&?&?&?).
-  destruct_and!.
-  opose proof (map_label_inv_inj Hl0 Hl1) as ->.
-  simplify_eq/=.
 Qed.
 
 (** monotonicity. *)
@@ -609,6 +639,18 @@ Proof.
   - naive_solver.
   - apply list_lookup_singleton_Some in Hlook as [? ->].
     by replace ver with (length pks) by lia.
+Qed.
+
+Lemma pks_in_hidden_from_snoc {vrf_pk hidden uid from pks pk} :
+  pks_in_hidden_from vrf_pk hidden uid from pks →
+  in_hidden vrf_pk hidden uid (from + length pks) (Some pk) →
+  pks_in_hidden_from vrf_pk hidden uid from (pks ++ [pk]).
+Proof.
+  rewrite /pks_in_hidden_from.
+  intros Hpks Hsome * [Hlook|[? Hlook]]%lookup_app_Some.
+  - naive_solver.
+  - apply list_lookup_singleton_Some in Hlook as [? ->].
+    by replace i with (length pks) by lia.
 Qed.
 
 Local Lemma pks_in_hidden_insert_both {vrf_pk hidden uid pks} map_label map_val pk rand :
