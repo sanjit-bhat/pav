@@ -543,43 +543,51 @@ Proof.
   by rewrite !fmap_last.
 Qed.
 
-Lemma wp_Client_SelfMon ptr_c c :
+Lemma wp_Client_SelfMon γ ptr_c σ :
   {{{
     is_pkg_init client ∗
-    "Hclient" ∷ Client.own ptr_c c
+    "Hclient" ∷ Client.own γ ptr_c σ
   }}}
   ptr_c @! (go.PointerType client.Client) @! "SelfMon" #()
   {{{
     (ep : w64) (isChanged : bool) err,
     RET (#ep, #isChanged, #(ktcore.blame_to_u64 err));
+    (* TODO: in alicebob proof, BlameSpec won't work with mult Auditors.
+    there's only one place to plug in an Auditor trust param. *)
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
       ({[
-        ktcore.BlameServFull:=option_bool c.(Client.serv).(serv.good);
-        ktcore.BlameClients:=c.(Client.pend).(nextVer.isGoodClis)
+        ktcore.BlameServFull:=option_bool γ.(cfg.serv_good);
+        ktcore.BlameClients:=γ.(cfg.clis_good)
       ]})⌝ ∗
     "Herr" ∷
       (if decide (err ≠ ∅)
-      then "Hclient" ∷ Client.own ptr_c c
+      then "Hclient" ∷ Client.own γ ptr_c σ
       else
-        ∃ ver pendingPk new_digs dig link sig,
-        let lastPendVer := c.(Client.pend).(nextVer.ver) in
-        let lastPendPk := c.(Client.pend).(nextVer.pendingPk) in
-        let lastEp := c.(Client.last).(epoch.epoch) in
-        let c' :=
-          set Client.pend (λ x, set nextVer.ver (λ _, ver)
-            (set nextVer.pendingPk (λ _, pendingPk) x))
-          (set Client.last (λ x, epoch.mk' ep dig link sig
-            (x.(epoch.digs) ++ new_digs) x.(epoch.cut)) c) in
-        "Hclient" ∷ Client.own ptr_c c' ∗
-        "%Hpend" ∷
-          ⌜match lastPendPk with
-          | None => isChanged = false ∧ ver = lastPendVer ∧ pendingPk = lastPendPk
-          | Some pk =>
-            (isChanged = false ∧ ver = lastPendVer ∧ pendingPk = lastPendPk) ∨
-            (isChanged = true ∧ uint.Z ver = (uint.Z lastPendVer + 1)%Z ∧
-              pendingPk = None)
-          end⌝ ∗
-        "%Heq_ep" ∷ ⌜uint.Z ep = (uint.Z lastEp + length new_digs)%Z⌝)
+        ∃ new_digs prev_key,
+        let σ0 := set state.digs (.++ new_digs) σ in
+        let new_keys_len := (length σ0.(state.digs) - audit_offsetγ γ -
+          length σ.(state.keys))%nat in
+        "%Heq_ep" ∷ ⌜uint.Z ep = start_epγ γ + length σ0.(state.digs) - 1⌝ ∗
+        "%Hprev_key" ∷ ⌜last σ.(state.keys) = Some prev_key⌝ ∗
+        "Hchanged" ∷
+          match isChanged with
+          | false =>
+            let σ1 := set state.keys (.++ replicate new_keys_len prev_key) σ0 in
+            "Hclient" ∷ Client.own γ ptr_c σ1 ∗
+            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.sigγ) γ.(cfg.uid) σ1.(state.keys)
+          | true =>
+            ∃ (num_prev_keys : nat),
+            let num_next_keys := (new_keys_len - num_prev_keys)%nat in
+            let σ1 :=
+              set state.keys
+                (.++ replicate num_prev_keys prev_key ++
+                  replicate num_next_keys σ.(state.pending_pk))
+              (set state.pending_pk (λ _, None) σ0) in
+            "Hclient" ∷ Client.own γ ptr_c σ1 ∗
+            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.sigγ) γ.(cfg.uid) σ1.(state.keys) ∗
+            "%Hpend" ∷ ⌜is_Some σ.(state.pending_pk)⌝ ∗
+            "%Hsome_next_keys" ∷ ⌜num_next_keys > 0⌝
+          end)
   }}}.
 Proof.
   wp_start as "@".
