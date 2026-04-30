@@ -1,0 +1,49 @@
+Goal: why is hash inversion useful?
+
+- we've applied hash inversion 3 times:
+hashchain_invert : link -> fuel -> (vals, cut).
+merkle_invert : dig -> map (label : list w8) (val : list w8).
+plain_invert :
+  map (label : list w8) (val : list w8) ->
+  map (uid : w64) (list (pk : list w8)).
+- the high-level reason why inversion is useful: inversion gives the
+proof access to the data structure that underlies a crypto commitment.
+- but this alone is too abstract to convince a skeptic.
+- in one of our prior justifications, we argued that the "intuitive" spec
+for merkle.Verify ops provides info about the underlying map from hash inversion.
+but this also wouldn't convince a skeptic.
+there are other (arguably less clean) ways to specify those ops.
+- i'm in search of "stronger" justifications that make hash inversion
+less of a stylistic benefit, and more of a necessity.
+
+a stronger justification for hashchain inversion:
+- it's needed for agreement across multiple Auditors.
+- suppose:
+Alice: Aud0 + Aud2
+Bob: Aud1 + Aud2
+and that each User checks for overlap between the Auditor ranges.
+- ultimately, Alice and Bob only mutually contact Aud2,
+so all their agreement must be done over the digs of Aud2.
+but without hashchain inversion, Aud2 digs don't include
+the digs of Aud0 and Aud1!
+
+a stronger justification for merkle inversion:
+- it's needed for Client SelfMon spec to give key history at each epoch,
+under async Auditing that might occur much later.
+- suppose:
+the Client checked (Memb v0, Memb v1) at prior epochs and checked
+(Memb v2, NonMemb v3) at some new epoch.
+to prove key history spec, Client proof must fill in exact epoch of insertion.
+- with excluded middle (EM), proof might (haven't tried it) be able to
+apply EM on (∃ first epoch, has valid merkle hash path).
+- without EM, this is undecidable.
+hash inversion lets us take a different path,
+where we compute the merkle map that underlies a dig,
+and compute whether a (label, val) exists in that map.
+
+NOTE: i can't yet find a strong *necessity* for plain_invert.
+- it stylistically makes it a lot easier to talk about the
+sequence of pk's for a uid, and therefore the latest pk.
+- but in all use cases i've looked at (e.g., SelfMon, Get),
+the proof already knows the (map_label, map_val) that commits a (uid, ver, pk).
+it can look that up directly in the hidden merkle map.
