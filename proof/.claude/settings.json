@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(./**)",
+      "Write(./**)",
+      "Edit(//tmp/**)",
+      "Write(//tmp/**)",
+      "Read(//tmp/**)",
+      "Bash(git *)",
+      "mcp__rocq",
+      "Bash(make *)"
+    ],
+    "additionalDirectories": [
+      "~/src/pav",
+      "~/src/peren",
+      "~/src/iris",
+      "~/src/stdpp"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "filesystem": {
+      "allowRead": ["~/.opam", "~/src/pav", "~/src/peren", "~/src/iris", "~/src/stdpp"]
+    }
+  },
+  "enabledMcpjsonServers": [
+    "rocq"
+  ]
+}

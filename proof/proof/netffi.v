@@ -1,0 +1,15 @@
+From New.generatedproof.github_com.sanjit_bhat.pav Require Import netffi.
+From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
+
+Module netffi.
+Section proof.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : netffi.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
+
+#[global] Instance : IsPkgInit (iProp Σ) netffi := define_is_pkg_init True%I.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) netffi := build_get_is_pkg_init_wf.
+
+End proof.
+End netffi.

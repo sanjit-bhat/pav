@@ -1,0 +1,2 @@
+translate = ["HashLen", "*Hasher*", "SigPublicKey"]
+imports = ["!*", "crypto/ed25519", "github.com/sanjit-bhat/pav/cryptoffi/ffi"]
