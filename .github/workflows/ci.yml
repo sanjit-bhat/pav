@@ -28,7 +28,8 @@ jobs:
           go-version-file: 'go.mod'
       - run: go vet ./...
       - run: gofmt -w -s . && git diff --exit-code
-      - run: go fix ./... && git diff --exit-code
+      # TODO: goose doesn't support all the latest fixes.
+      # - run: go fix ./... && git diff --exit-code
       - name: compiled RPC
         run: |
           go run ./serde --in ktcore/serde.go && git diff --exit-code
