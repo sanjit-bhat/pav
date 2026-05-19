@@ -53,7 +53,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install Rocq
         uses: tchajed/setup-rocq@v1
-        rocq-version: 9.1
+        with:
+          rocq-version: 9.1
       - name: Install deps
         run: |
           opam pin add --no-action .
