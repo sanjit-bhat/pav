@@ -1,0 +1,16 @@
+rocq = "proof"
+packages = [
+  "./advrpc",
+  "./alicebob",
+  "./auditor",
+  "./client",
+  "./cryptoffi",
+  "./cryptoffi/ffi",
+  "./cryptoutil",
+  "./hashchain",
+  "./ktcore",
+  "./merkle",
+  "./netffi",
+  "./safemarshal",
+  "./server",
+]
