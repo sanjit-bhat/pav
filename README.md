@@ -1,5 +1,5 @@
 # Pav: a formally verified Key Transparency system
 
-WIP proof: https://github.com/sanjit-bhat/pav-proof.
+WIP proof in the `proof/` directory.
 
 More details to come...
