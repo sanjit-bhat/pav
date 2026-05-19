@@ -1,4 +1,3 @@
-rocq = "proof"
 packages = [
   "./advrpc",
   "./alicebob",
@@ -14,3 +13,4 @@ packages = [
   "./safemarshal",
   "./server",
 ]
+rocq = "proof"

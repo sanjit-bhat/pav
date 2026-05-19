@@ -6,85 +6,59 @@ on:
   pull_request:
     branches: ["main"]
   schedule:
-    # 08:00 UTC on Saturday.
-    - cron: "0 8 * * 6"
+    # every Monday at 9am UTC (4am EST).
+    - cron: '0 9 * * 1'
 
 jobs:
-  go:
-    strategy:
-      matrix:
-        go: ["1.24"]
+  go-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Setup
-        uses: actions/setup-go@v6
+      - uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go }}
+          go-version-file: 'go.mod'
+      - run: go test -v -skip=Bench ./...
 
-      - name: Test
-        run: go test -v -skip=Bench ./...
-
-      - name: Format
+  go-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+      - run: go vet ./...
+      - run: gofmt -w -s . && git diff --exit-code
+      - run: go fix ./... && git diff --exit-code
+      - name: compiled RPC
         run: |
-          gofmt -w -s .
-          git diff --exit-code
+          go run ./serde --in ktcore/serde.go && git diff --exit-code
+          go run ./serde --in merkle/serde.go && git diff --exit-code
+          go run ./serde --in auditor/serde.go && git diff --exit-code
 
-      - name: Vet
-        run: go vet ./...
-
-      - name: Lint
-        uses: dominikh/staticcheck-action@v1
-        with:
-          version: "latest"
-          min-go-version: ${{ matrix.go }}
-          install-go: false
-          cache-key: ${{ matrix.go }}
-
-  python:
+  goose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Format
-        uses: chartboost/ruff-action@v1
+      - uses: actions/setup-go@v6
         with:
-          args: "format --check"
+          go-version-file: 'go.mod'
+      - run: go tool perennial-cli goose && git diff --exit-code
 
-      - name: Lint
-        uses: chartboost/ruff-action@v1
-
-  other:
+  proof:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: proof
     steps:
       - uses: actions/checkout@v6
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.24"
-
-      - name: Run extra CI checks
-        run: python etc/ci-check.py
-
-  # Workaround for defining ruleset across matrix.
-  # See https://github.com/orgs/community/discussions/26822.
-  go-results:
-    needs: [go]
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check all job status
-        if: >-
-          ${{
-               contains(needs.*.result, 'failure')
-            || contains(needs.*.result, 'cancelled')
-            || contains(needs.*.result, 'skipped')
-          }}
-        run: exit 1
+      - name: Install Rocq
+        uses: tchajed/setup-rocq@v1
+        rocq-version: 9.1
+      - name: Install deps
+        run: |
+          opam pin add --no-action .
+          opam install --deps-only .
+      - name: Rocq build
+        run: make -j4
+      - run: opam install --assume-built .
+      - run: opam uninstall .
