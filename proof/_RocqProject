@@ -1,0 +1,23 @@
+-Q crypto_ffi Cryptoffi
+-Q prelude New
+-Q code New.code
+-Q generatedproof New.generatedproof
+-Q trusted_code New.trusted_code.github_com.sanjit_bhat.pav
+-Q manualproof New.manualproof.github_com.sanjit_bhat.pav
+-Q proof New.proof.github_com.sanjit_bhat.pav
+-arg -w -arg +deprecated-instance-without-locality
+# don't allow ambiguous coercions
+-arg -w -arg +ambiguous-paths
+-arg -w -arg +deprecated-hint-rewrite-without-locality
+-arg -w -arg +deprecated-field-instance-without-locality
+-arg -w -arg +deprecated-tactic-notation
+# for coqutil compatibility
+-arg -w -arg -deprecated-since-8.19,-deprecated-since-8.20
+-arg -w -arg -deprecated-since-9.0,-deprecated-since-9.1,-deprecated-since-9.2
+# false positives with our byte_string
+-arg -w -arg -via-type-remapping,-via-type-mismatch
+-arg -w -arg +deprecated-typeclasses-transparency-without-locality
+-arg -w -arg -overriding-logical-loadpath
+# Iris-disabled warnings
+-arg -w -arg -notation-overridden,-redundant-canonical-projection,-notation-incompatible-prefix
+-arg -w -arg -unknown-warning

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # every Monday at 9am UTC (4am EST).
+    - cron: '0 9 * * 1'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+      - name: Install Rocq
+        uses: tchajed/setup-rocq@v1
+      - name: Install dependencies
+        run: |
+          opam pin add --no-action .
+          opam install --deps-only .
+      - name: Rocq build
+        run: make -j4
+      - name: opam install
+        run: opam install --assume-built .
+      - name: opam uninstall
+        run: opam uninstall .
+
+  check-goose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+      - name: Check goose output
+        run: |
+          git clone --depth=1 https://github.com/sanjit-bhat/pav ~/pav
+          ./etc/update-goose.sh ~/pav
+          git diff --exit-code
