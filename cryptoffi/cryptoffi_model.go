@@ -6,8 +6,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 
-	"github.com/sanjit-bhat/pav/cryptoffi/vrf"
 	"github.com/sanjit-bhat/pav/cryptoffi/ffi"
+	"github.com/sanjit-bhat/pav/cryptoffi/vrf"
 )
 
 const (
