@@ -14,29 +14,6 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 Module server.
 Import serde.server.
 
-Section list.
-Context {PROP : bi}.
-
-(* TODO: upstream. *)
-Lemma big_sepL2_drop {A B} `{!BiAffine PROP} (n : nat)
-    (Φ : nat → A → B → PROP) (l1 : list A) (l2 : list B) :
-  ([∗ list] k ↦ y1;y2 ∈ l1;l2, Φ k y1 y2) ⊢
-  ([∗ list] k ↦ y1;y2 ∈ drop n l1;drop n l2, Φ (n + k)%nat y1 y2).
-Proof.
-  iIntros "H".
-  rewrite -{1}(take_drop n l1) -{1}(take_drop n l2).
-  iDestruct (big_sepL2_length with "H") as %?.
-  autorewrite with len in *.
-  iDestruct (big_sepL2_app_same_length with "H") as "[_ H]"; [len|].
-  destruct (decide (n ≥ length l1)).
-  - by rewrite !drop_ge; [|lia..].
-  - by replace (length (take n l1)) with n; [|len].
-Qed.
-End list.
-
-Lemma list_reln_singleton {A} (a : A) R : list_reln [a] R.
-Proof. by intros ?**. Qed.
-
 (** top-level server state and inv. *)
 
 Module cfg.
@@ -608,18 +585,6 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 (** fetch-side helper funcs. *)
-
-(* TODO: upstream. *)
-Lemma subslice_snoc {A} n m (l : list A) x :
-  l !! m = Some x →
-  (n ≤ m)%nat →
-  subslice n (S m) l = subslice n m l ++ [x].
-Proof.
-  (* TODO: rm [subslice_split_r], worse version of [subslice_app_contig]. *)
-  intros **.
-  rewrite -(subslice_app_contig _ m); [|lia].
-  by erewrite subslice_singleton; [|done].
-Qed.
 
 Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
   let pks := ktcore.to_pks (vrf_pkγ γ) uid last_dig in

@@ -606,7 +606,7 @@ Proof.
     eapply list_reln_snoc; [done|].
     intros * Hlast_hist.
     rewrite !fmap_last in Hlast_hist.
-    erewrite ktcore.last_drop_Some in Hlast_hist; [|done|word].
+    erewrite last_drop_Some in Hlast_hist; [|done|word].
     simplify_eq/=.
     by apply ktcore.plain_inv_mono. }
   clear Hmono_maps.
@@ -855,7 +855,7 @@ Proof.
     apply last_Some in Hlast_digs as (digs'&->).
     replace (pred _) with (length digs'); [|len].
     rewrite drop_app_length /ktcore.mono_plain.
-    apply server.list_reln_singleton. }
+    apply list_reln_singleton. }
   iAssert (⌜0 < length digs ≤ S $ uint.nat ep⌝)%I as %?.
   { rewrite last_lookup in Hlast_digs.
     apply lookup_lt_Some in Hlast_digs.

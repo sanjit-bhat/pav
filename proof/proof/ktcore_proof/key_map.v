@@ -7,55 +7,6 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
   serde.
 
-(* TODO: upstream. *)
-Lemma NoDup_omap {A B} (f : A → option B) l :
-  (∀ x1 x2 y, x1 ∈ l → x2 ∈ l → f x1 = Some y → f x2 = Some y → x1 = x2) →
-  NoDup l → NoDup (omap f l).
-Proof.
-  intros Hinj. induction 1 as [|x l ?? IH]; csimpl; [constructor|].
-  ospecialize (IH _).
-  { intros **.
-    eapply Hinj; [..|done|done]; auto using list_elem_of_further. }
-  destruct (f x) eqn:Hfx; [|done].
-  apply NoDup_cons. split_and!; [|done].
-  rewrite list_elem_of_omap. intros (?&?&Hfx').
-  ospecialize (Hinj _ _ _ _ _ Hfx Hfx');
-    auto using list_elem_of_here, list_elem_of_further.
-  set_solver.
-Qed.
-
-(* TODO: upstream. *)
-Lemma map_seq_subseteq {A} start (vs : list A) (m : gmap _ _) :
-  (∀ i v, vs !! i = Some v → m !! (start + i)%nat = Some v) ↔
-  map_seq start vs ⊆ m.
-Proof.
-  split.
-  - intros Hvs.
-    apply map_subseteq_spec.
-    intros ?? Hlook.
-    apply lookup_map_seq_Some in Hlook as [? Hlook].
-    ospecialize (Hvs _ _ _); [done|].
-    by replace (_ + _)%nat with i in Hvs by lia.
-  - intros Hseq ?? Hlook.
-    eapply lookup_weaken; [|done].
-    by apply lookup_map_seq_Some_inv.
-Qed.
-
-(* TODO: upstream. *)
-Lemma map_included_alt `{FinMap K M} {A B : Type}
-    (R : K → A → B → Prop) (m1 : M A) (m2 : M B) :
-  map_included R m1 m2 ↔
-  (∀ k a, m1 !! k = Some a → ∃ b, m2 !! k = Some b ∧ R k a b).
-Proof.
-  rewrite /map_included /map_relation /option_relation. split.
-  - intros Hincl ?? Hlook.
-    specialize (Hincl k).
-    rewrite Hlook in Hincl.
-    case_match; naive_solver.
-  - intros Hincl k.
-    repeat case_match; naive_solver.
-Qed.
-
 Module ktcore.
 Import serde.ktcore.
 
@@ -748,18 +699,6 @@ End proof.
 
 Global Notation to_plain vrf_pk dig := (plain_inv_fn vrf_pk (merkle.inv_fn dig)).
 Global Notation to_pks vrf_pk uid dig := (to_plain vrf_pk dig !!! uid).
-
-(* TODO: upstream. *)
-Lemma list_reln_box {A B} R0 R1 (f : A → B) (l0 : list A) :
-  list_reln l0 R0 →
-  (∀ x0 x1, R0 x0 x1 → R1 (f x0) (f x1)) →
-  list_reln (f <$> l0) R1.
-Proof.
-  rewrite /list_reln. intros H Hrel i x y.
-  rewrite !list_lookup_fmap.
-  intros [a [Ha ->]]%fmap_Some [b [Hb ->]]%fmap_Some.
-  exact (Hrel _ _ (H _ _ _ Ha Hb)).
-Qed.
 
 Section proof.
 Context `{!heapGS Σ}.

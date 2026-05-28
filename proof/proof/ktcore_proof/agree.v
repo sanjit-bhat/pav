@@ -9,54 +9,6 @@ From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
 Module ktcore.
 Import key_map.ktcore staged_keys.ktcore.
 
-(* TODO: upstream. *)
-Lemma last_drop_Some {A} (l : list A) x n :
-  last l = Some x →
-  (n < length l)%nat →
-  last (drop n l) = Some x.
-Proof.
-  intros (?&->)%last_Some ?.
-  autorewrite with len in *.
-  rewrite drop_app_le; [|lia].
-  by rewrite last_snoc.
-Qed.
-
-(* TODO: upstream. *)
-Lemma list_reln_snoc' {A} R (l : list A) a :
-  list_reln (l ++ [a]) R → list_reln l R.
-Proof.
-  rewrite /list_reln. intros Hr * Hlook0 Hlook1.
-  eapply lookup_app_l_Some in Hlook0, Hlook1.
-  by eapply Hr.
-Qed.
-
-(* TODO: upstream. *)
-Lemma list_reln_app' {A} R (l0 : list A) l1 :
-  list_reln l0 R →
-  list_reln l1 R →
-  (∀ x0 x1, last l0 = Some x0 → head l1 = Some x1 → R x0 x1) →
-  list_reln (l0 ++ l1) R.
-Proof.
-  intros Hl0. induction l1 using rev_ind; [by list_simplifier|].
-  intros Hl1 Hr.
-  rewrite (assoc _).
-  apply list_reln_snoc.
-  - apply IHl1.
-    + by eapply list_reln_snoc'.
-    + intros * ? Hhead. eapply Hr; [done|].
-      by rewrite head_snoc Hhead.
-  - clear IHl1.
-    destruct l1 using rev_ind; [|clear IHl1].
-    + list_simplifier.
-      intros **. by apply Hr.
-    + rewrite (assoc _) last_snoc.
-      intros **. simplify_eq/=.
-      rewrite -(assoc _) in Hl1.
-      apply list_reln_app in Hl1 as [_ Hl1].
-      rewrite /list_reln in Hl1.
-      by eapply (Hl1 0%nat).
-Qed.
-
 (* Agree has the core params needed for two parties to agree
 on the latest key at some (epoch, uid). *)
 Module Agree.

@@ -9,34 +9,6 @@ From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
 Module ktcore.
 Import key_map.ktcore.
 
-(* TODO: upstream. *)
-Lemma list_reln_app {A} R (l0 l1 : list A) :
-  list_reln (l0 ++ l1) R →
-  list_reln l0 R ∧ list_reln l1 R.
-Proof.
-  rewrite /list_reln. intros Happ. split.
-  - intros i x y Hx Hy.
-    eapply Happ.
-    + rewrite lookup_app_l; [done|eapply lookup_lt_Some; done].
-    + rewrite lookup_app_l; [done|eapply lookup_lt_Some; done].
-  - intros i x y Hx Hy.
-    apply (Happ (i + length l0)%nat).
-    + rewrite lookup_app_r; last lia.
-      replace (i + length l0 - length l0)%nat with i by lia. done.
-    + rewrite lookup_app_r; last lia.
-      replace (S (i + length l0) - length l0)%nat with (S i) by lia. done.
-Qed.
-
-Lemma lookup_app_r' {A} (l1 l2 : list A) i :
-  l2 !! i = (l1 ++ l2) !! (i + length l1)%nat.
-Proof. rewrite lookup_app_r; [|lia]. f_equal. lia. Qed.
-
-Lemma prefix_eq {A} (l1 l2 : list A) :
-  l1 `prefix_of` l2 →
-  l2 `prefix_of` l1 →
-  l1 = l2.
-Proof. intros ? ?%prefix_length. by apply prefix_length_eq. Qed.
-
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
