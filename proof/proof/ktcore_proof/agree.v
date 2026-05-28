@@ -4,10 +4,10 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
   cryptoffi hashchain merkle safemarshal.
 
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
-  key_map sigpred staged_keys.
+  key_map staged_keys.
 
 Module ktcore.
-Import key_map.ktcore sigpred.sigpred staged_keys.ktcore.
+Import key_map.ktcore staged_keys.ktcore.
 
 (* TODO: upstream. *)
 Lemma last_drop_Some {A} (l : list A) x n :
@@ -57,6 +57,42 @@ Proof.
       by eapply (Hl1 0%nat).
 Qed.
 
+(* Agree has the core params needed for two parties to agree
+on the latest key at some (epoch, uid). *)
+Module Agree.
+Record t :=
+  mk {
+    vrf_pk : list w8;
+    (* ptr to mono_list of digs. *)
+    digs : gname;
+    (* epoch of first dig. *)
+    digs_start : nat;
+  }.
+End Agree.
+
+Module AdtrAgree.
+Record t :=
+  mk {
+    agree : Agree.t;
+    (* hashchain cut prior to digs. *)
+    cut : option $ list w8;
+    (* offset into digs when auditor started monitoring. *)
+    audit_start : nat;
+  }.
+End AdtrAgree.
+
+Module CliAgree.
+Record t :=
+  mk {
+    agree : Agree.t;
+    cut : option $ list w8;
+    (* ptr to optional offset into digs when client started tracking its own uid.
+    a None corresponds to not having started.
+    ptr so that CliAgree can be static. *)
+    keys_start : gname;
+  }.
+End CliAgree.
+
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
@@ -65,29 +101,31 @@ Collection W := sem.
 
 Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
   ∃ dig,
-  "#Hidx_dig" ∷ mono_list_idx_own γ.(cfg.digs) (ep - start_epγ γ) dig ∗
-  "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(cfg.vrf_pk) uid dig = opt_pk⌝.
+  "#Hidx_dig" ∷ mono_list_idx_own γ.(Agree.digs) (ep - γ.(Agree.digs_start)) dig ∗
+  "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(Agree.vrf_pk) uid dig = opt_pk⌝.
 
-(* (ab)use sigpred.cfg for Client, even tho it's not an Auditor.
-audit_offset is when Client started tracking its own key. *)
 Definition is_staged_keys γcli uid keys : iProp Σ :=
-  ∃ digs next_ver,
-  "#Hlb_digs" ∷ mono_list_lb_own γcli.(cfg.digs) digs ∗
-  "%Hstaged" ∷ ⌜staged_keys γcli.(cfg.vrf_pk) (drop (audit_offsetγ γcli) digs)
+  ∃ digs keys_start next_ver,
+  let γ := γcli.(CliAgree.agree) in
+  "#Hlb_digs" ∷ mono_list_lb_own γ.(Agree.digs) digs ∗
+  "#His_keys_start" ∷ dghost_var γcli.(CliAgree.keys_start) (□) (Some keys_start) ∗
+  "%Hstaged" ∷ ⌜staged_keys γ.(Agree.vrf_pk) (drop keys_start digs)
     uid keys next_ver⌝.
 
+(* is_audit is an audit thru epoch [ep]. *)
 Definition is_audit γcli γadtr ep : iProp Σ :=
   ∃ (digs : list $ list w8),
-  "#Hcli_digs" ∷ mono_list_lb_own γcli.(cfg.digs) digs ∗
-  "#Hadtr_digs" ∷ mono_list_lb_own γadtr.(cfg.digs) digs ∗
-  "%Hlen_digs" ∷ ⌜Z.of_nat $ length digs = S ep - start_epγ γcli⌝ ∗
-  "%Hmono_plain" ∷ ⌜mono_plain γadtr.(cfg.vrf_pk)
-    (drop (audit_offsetγ γadtr) digs)⌝ ∗
+  let γcli' := γcli.(CliAgree.agree) in
+  let γadtr' := γadtr.(AdtrAgree.agree) in
+  "#Hcli_digs" ∷ mono_list_lb_own γcli'.(Agree.digs) digs ∗
+  "#Hadtr_digs" ∷ mono_list_lb_own γadtr'.(Agree.digs) digs ∗
+  "%Hlen_digs" ∷ ⌜Z.of_nat $ length digs = S ep - γcli'.(Agree.digs_start)⌝ ∗
+  "%Hmono_plain" ∷ ⌜mono_plain γadtr'.(Agree.vrf_pk)
+    (drop γadtr.(AdtrAgree.audit_start) digs)⌝ ∗
 
-  "%Heq_vrf" ∷ ⌜γcli.(cfg.vrf_pk) = γadtr.(cfg.vrf_pk)⌝ ∗
-  "%Heq_start" ∷ ⌜start_epγ γcli = start_epγ γadtr⌝ ∗
-  "%Heq_cut" ∷ ⌜γcli.(cfg.info).(digs_info.cut) =
-    γadtr.(cfg.info).(digs_info.cut)⌝.
+  "%Heq_vrf" ∷ ⌜γcli'.(Agree.vrf_pk) = γadtr'.(Agree.vrf_pk)⌝ ∗
+  "%Heq_start" ∷ ⌜γcli'.(Agree.digs_start) = γadtr'.(Agree.digs_start)⌝ ∗
+  "%Heq_cut" ∷ ⌜γcli.(CliAgree.cut) = γadtr.(AdtrAgree.cut)⌝.
 
 End proof.
 
@@ -101,30 +139,25 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-(* when two Clients use diff Auditors up until the final one,
-[combine_audits] leaves them with γsigpred's that have diff [audit_offset]'s.
-as such, we strengthen this lemma to only require γ equality on specific fields. *)
-Lemma kt_ptsto_agree γ0 γ1 ep uid opt_pk0 opt_pk1 :
-  γ0.(cfg.digs) = γ1.(cfg.digs) →
-  γ0.(cfg.vrf_pk) = γ1.(cfg.vrf_pk) →
-  start_epγ γ0 = start_epγ γ1 →
-  γ0 ↪KT[ep, uid] opt_pk0 -∗
-  γ1 ↪KT[ep, uid] opt_pk1 -∗
+Lemma kt_ptsto_agree γ ep uid opt_pk0 opt_pk1 :
+  γ ↪KT[ep, uid] opt_pk0 -∗
+  γ ↪KT[ep, uid] opt_pk1 -∗
   ⌜opt_pk0 = opt_pk1⌝.
 Proof.
   intros. iNamedSuffix 1 "0". iNamedSuffix 1 "1".
-  destruct γ0, info, γ1, info. simplify_eq/=.
   iDestruct (mono_list_idx_agree with "Hidx_dig0 Hidx_dig1") as %->.
   by subst.
 Qed.
 
 Lemma kt_ptsto_txfer γcli γadtr ep uid opt_pk audit_ep :
-  γcli ↪KT[ep, uid] opt_pk -∗
+  let γcli' := γcli.(CliAgree.agree) in
+  let γadtr' := γadtr.(AdtrAgree.agree) in
+  γcli' ↪KT[ep, uid] opt_pk -∗
   is_audit γcli γadtr audit_ep -∗
-  ⌜start_epγ γadtr + audit_offsetγ γadtr ≤ ep ≤ audit_ep⌝ -∗
-  γadtr ↪KT[ep, uid] opt_pk.
+  ⌜γadtr'.(Agree.digs_start) + γadtr.(AdtrAgree.audit_start) ≤ ep ≤ audit_ep⌝ -∗
+  γadtr' ↪KT[ep, uid] opt_pk.
 Proof.
-  iIntros "@@%". rewrite /kt_ptsto.
+  simpl. iIntros "@@%". rewrite /kt_ptsto.
   eremember (ep - _)%nat as ep_t.
   list_elem digs ep_t as dig'. subst.
   iDestruct (mono_list_idx_own_get with "Hcli_digs") as "Hlook"; [done|].
@@ -135,18 +168,23 @@ Proof.
   by iFrame "#".
 Qed.
 
-Lemma commit_staged γcli uid keys γadtr audit_ep :
-  let keys_start_ep := (start_epγ γcli + audit_offsetγ γcli)%nat in
+Lemma commit_staged γcli keys_start uid keys γadtr audit_ep :
+  let γcli' := γcli.(CliAgree.agree) in
+  let γadtr' := γadtr.(AdtrAgree.agree) in
+  let keys_start_ep := (γcli'.(Agree.digs_start) + keys_start)%nat in
+  γadtr.(AdtrAgree.audit_start) ≤ keys_start →
+  keys_start_ep + length keys ≤ S audit_ep →
   is_staged_keys γcli uid keys -∗
+  dghost_var γcli.(CliAgree.keys_start) (□) (Some keys_start) -∗
   is_audit γcli γadtr audit_ep -∗
-  ⌜audit_offsetγ γadtr ≤ audit_offsetγ γcli⌝ -∗
-  ⌜keys_start_ep + length keys ≤ S audit_ep⌝ -∗
   (∀ i opt_pk,
     let ep := (keys_start_ep + i)%nat in
     ⌜keys !! i = Some opt_pk⌝ -∗
-    γadtr ↪KT[ep, uid] opt_pk).
+    γadtr' ↪KT[ep, uid] opt_pk).
 Proof.
-  simpl. iIntros "@ #Haudit %% * %Hlook_keys".
+  simpl. iIntros "%% @ #Ht #Haudit * %Hlook_keys".
+  iCombine "His_keys_start Ht" gives %[_ ?].
+  simplify_eq/=. iClear "Ht".
   apply lookup_lt_Some in Hlook_keys as ?.
   iPoseProof "Haudit" as "@".
   iApply kt_ptsto_txfer; [|done|word].
@@ -164,9 +202,9 @@ Proof.
 
   odestruct (Hstaged _) as (_&->).
   { rewrite drop_app_le in Hmono_plain; [|word].
-    rewrite -(take_drop (audit_offsetγ γcli - audit_offsetγ γadtr) (drop _ _))
+    rewrite -(take_drop (keys_start - γadtr.(AdtrAgree.audit_start)) (drop _ _))
       drop_drop in Hmono_plain.
-    replace (_ + _)%nat with (audit_offsetγ γcli) in Hmono_plain; [|lia].
+    replace (_ + _)%nat with keys_start in Hmono_plain; [|lia].
     list_simplifier.
     rewrite /mono_plain !fmap_app in Hmono_plain |-*.
     apply list_reln_app in Hmono_plain as [_ Hmono].
@@ -181,23 +219,25 @@ Proof.
   exact_eq Hlook_digs. f_equal. lia.
 Qed.
 
-(* this lemma expects adtr0 to come before adtr1.
-return new γadtr bc we need audit_offset of γadtr0 and digs of γadtr1.
+(* combine_audits takes in adtr0 that started before adtr1,
+but still overlaps in auditing range.
+it returns new adtr with audit_start of adtr0 and digs of adtr1.
 NOTE: for two clients to agree, they need the same γdigs.
 therefore, their combine sequences need to end with same auditor.
 NOTE: without hashchain inversion, not sure how to do multi-auditor agreement.
 there's no final Auditor with all the digs. *)
 Lemma combine_audits γcli γadtr0 γadtr1 audit_ep0 audit_ep1 :
+  let γadtr1' := γadtr1.(AdtrAgree.agree) in
+  γadtr0.(AdtrAgree.audit_start) ≤ γadtr1.(AdtrAgree.audit_start) →
+  (γadtr1'.(Agree.digs_start) + γadtr1.(AdtrAgree.audit_start) ≤ audit_ep0)%nat →
+  (audit_ep0 ≤ audit_ep1)%nat →
   is_audit γcli γadtr0 audit_ep0 -∗
   is_audit γcli γadtr1 audit_ep1 -∗
-  ⌜audit_offsetγ γadtr0 ≤ audit_offsetγ γadtr1⌝ -∗
-  ⌜start_epγ γadtr1 + audit_offsetγ γadtr1 ≤ audit_ep0⌝ -∗
-  ⌜audit_ep0 ≤ audit_ep1⌝ -∗
   let new_γadtr :=
-    γadtr1 <| cfg.info; digs_info.audit_offset := audit_offsetγ γadtr0 |> in
+    γadtr1 <| AdtrAgree.audit_start := γadtr0.(AdtrAgree.audit_start) |> in
   is_audit γcli new_γadtr audit_ep1.
 Proof.
-  iNamedSuffix 1 "0". iNamedSuffix 1 "1". iIntros "%%%".
+  iIntros "%%%". iNamedSuffix 1 "0". iNamedSuffix 1 "1".
   rewrite /is_audit /=. iFrame "Hadtr_digs1 #%".
   iAssert (⌜digs `prefix_of` digs0⌝)%I as %(new_digs&->).
   { iDestruct (mono_list_lb_valid with "Hcli_digs0 Hcli_digs1")
@@ -213,10 +253,11 @@ Proof.
   apply list_reln_app'; [done..|].
 
   intros * Hlook0 Hlook1.
-  apply (last_drop_Some _ _ (audit_offsetγ γadtr1 - audit_offsetγ γadtr0))
+  apply (last_drop_Some _ _
+    (γadtr1.(AdtrAgree.audit_start) - γadtr0.(AdtrAgree.audit_start)))
     in Hlook0; [|len].
   rewrite -!fmap_drop drop_drop in Hlook0.
-  replace (_ + _)%nat with (audit_offsetγ γadtr1) in Hlook0 by word.
+  replace (_ + _)%nat with (γadtr1.(AdtrAgree.audit_start)) in Hlook0 by word.
   rewrite last_lookup in Hlook0.
   rewrite head_lookup in Hlook1.
   eapply list_reln_trans.
