@@ -7,12 +7,13 @@ or unintended name shadows. *)
 From RecordUpdate Require Export RecordSet.
 From iris_named_props Require Export custom_syntax.
 From Perennial.Helpers Require Export bytes condition Map.
-From New.proof.github_com.sanjit_bhat.pav.helpers Require Export
-  stdpp iris.
 
 (* set the right shadowed dependencies. *)
-(* note: stdpp overrides some Stdlib names. *)
+(* stdpp overrides some Stdlib names. *)
 From stdpp Require Export prelude.
+(* so do our helpers. *)
+From New.proof.github_com.sanjit_bhat.pav.helpers Require Export
+  stdpp iris.
 
 (* restore perennial's side-effects. *)
 Ltac obligation_tac :=
