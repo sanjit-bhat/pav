@@ -23,7 +23,8 @@ Collection W := sem + package_sem.
 
 (* 1/2 in Auditor pred, 1/2 in iris inv. *)
 Definition own_aux γ σ q : iProp Σ :=
-  "Hgs_digs" ∷ mono_list_auth_own (digsγ γ) q σ.(state.digs).
+  let agreeγ := γ.(cfg.adtrγ).(ktcore.AdtrAgree.agree) in
+  "Hgs_digs" ∷ mono_list_auth_own agreeγ.(ktcore.Agree.digs) q σ.(state.digs).
 
 Definition own γ σ := own_aux γ σ (1/2).
 
@@ -90,7 +91,7 @@ Definition align_serv γ servγ : iProp Σ :=
   (* trusted Auditor.New assumption. *)
   "%Heq_sig_pk" ∷ ⌜γ.(cfg.serv_sig_pk) = servγ.(server.cfg.sig_pk)⌝ ∗
   "#His_sig_pk" ∷ cryptoffi.is_sig_pk γ.(cfg.serv_sig_pk)
-    (sigpred.P servγ.(server.cfg.sigγ)).
+    (sigpred.P servγ.(server.cfg.adtrγ)).
 
 End proof.
 End serv.
@@ -103,6 +104,8 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own ptr γ σ q : iProp Σ :=
+  let adtrγ := γ.(cfg.adtrγ) in
+  let agreeγ := adtrγ.(ktcore.AdtrAgree.agree) in
   ∃ ptr_sk ptr_hist ptr_serv ptr_vrf vrf,
   "#Hfld_sk" ∷ ptr.[auditor.Auditor.t, "sk"] ↦□ ptr_sk ∗
   "#Hfld_hist" ∷ ptr.[auditor.Auditor.t, "hist"] ↦□ ptr_hist ∗
@@ -110,12 +113,12 @@ Definition own ptr γ σ q : iProp Σ :=
   "#Hfld_vrf" ∷ ptr.[auditor.Auditor.t, "vrf"] ↦□ ptr_vrf ∗
 
   "#Hown_sk" ∷ cryptoffi.own_sig_sk ptr_sk γ.(cfg.adtr_sig_pk)
-    (sigpred.P γ.(cfg.sigγ)) ∗
+    (sigpred.P adtrγ) ∗
 
   "Hown_hist" ∷ history.own ptr_hist γ σ q ∗
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
-  "%Hmono_maps" ∷ ⌜ktcore.mono_plain (vrf_pkγ γ)
-    (drop (audit_offsetγ γ) σ.(state.digs))⌝ ∗
+  "%Hmono_maps" ∷ ⌜ktcore.mono_plain agreeγ.(ktcore.Agree.vrf_pk)
+    (drop adtrγ.(ktcore.AdtrAgree.audit_start) σ.(state.digs))⌝ ∗
   "#Halign_hist" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
     history.align_serv σ γ servγ end ∗
 
@@ -126,7 +129,7 @@ Definition own ptr γ σ q : iProp Σ :=
   "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
   "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗
   (* from signed vrf_pk. *)
-  "%Heq_vrf_pk" ∷ ⌜vrf.(SignedVrf.VrfPk) = vrf_pkγ γ⌝.
+  "%Heq_vrf_pk" ∷ ⌜vrf.(SignedVrf.VrfPk) = agreeγ.(ktcore.Agree.vrf_pk)⌝.
 
 Definition own_aux ptr γ q : iProp Σ := ∃ σ, own ptr γ σ q.
 
@@ -386,10 +389,10 @@ Lemma wp_getNextLink γ σ sl_sigPk (prevEp : w64) sl_prevDig prevDig
     "#Hsl_prevLink" ∷ sl_prevLink ↦*□ prevLink ∗
     "#Hproof" ∷ ktcore.AuditProof.own ptr_p proof (□) ∗
 
-    "%Heq_prevEp" ∷ ⌜uint.Z prevEp = start_epγ γ + length σ.(state.digs) - 1⌝ ∗
+    "%Heq_prevEp" ∷ ⌜uint.Z prevEp = γ.(cfg.adtrγ).(ktcore.AdtrAgree.agree).(ktcore.Agree.digs_start) + length σ.(state.digs) - 1⌝ ∗
     "%Heq_prevDig" ∷ ⌜last σ.(state.digs) = Some prevDig⌝ ∗
     "#His_prevLink" ∷ ⌜hashchain.valid σ.(state.digs)
-      (cutγ γ) prevLink (S $ uint.nat prevEp)⌝
+      γ.(cfg.adtrγ).(ktcore.AdtrAgree.cut) prevLink (S $ uint.nat prevEp)⌝
   }}}
   @! auditor.getNextLink #sl_sigPk #prevEp #sl_prevDig #sl_prevLink #ptr_p
   {{{
@@ -449,9 +452,11 @@ Lemma wp_Auditor_Get a γ epoch Q :
     "Hlock" ∷ Auditor.lock_perm a γ ∗
     "HQ" ∷ Q σ ∗
     "#Herr" ∷
+      let adtrγ := γ.(cfg.adtrγ) in
+      let agreeγ := adtrγ.(ktcore.AdtrAgree.agree) in
       match err with
-      | true => ⌜uint.Z epoch < start_epγ γ + audit_offsetγ γ ∨
-        uint.Z epoch >= start_epγ γ + length σ.(state.digs)⌝
+      | true => ⌜uint.Z epoch < agreeγ.(ktcore.Agree.digs_start) + adtrγ.(ktcore.AdtrAgree.audit_start) ∨
+        uint.Z epoch >= agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs)⌝
       | false =>
         ∃ startLink currLink vrf,
         "#Hown_startLink" ∷ SignedLink.own ptr_startLink startLink (□) ∗
@@ -460,8 +465,8 @@ Lemma wp_Auditor_Get a γ epoch Q :
         "#Hwish_startLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) startEp startLink ∗
         "#Hwish_currLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) epoch currLink ∗
         "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗
-        "%Heq_vrf" ∷ ⌜vrf.(SignedVrf.VrfPk) = vrf_pkγ γ⌝ ∗
-        "%Heq_startEp" ∷ ⌜uint.nat startEp = (start_epγ γ + audit_offsetγ γ)%nat⌝
+        "%Heq_vrf" ∷ ⌜vrf.(SignedVrf.VrfPk) = agreeγ.(ktcore.Agree.vrf_pk)⌝ ∗
+        "%Heq_startEp" ∷ ⌜uint.nat startEp = (agreeγ.(ktcore.Agree.digs_start) + adtrγ.(ktcore.AdtrAgree.audit_start))%nat⌝
       end
   }}}.
 Proof.
@@ -598,8 +603,8 @@ Proof.
   iPoseProof "Hwish_getNextLink_n" as "H".
   iNamedSuffix "H" "_n".
   simplify_eq/=.
-  eassert (ktcore.mono_plain (vrf_pkγ γ)
-    (drop (audit_offsetγ γ) (digs ++ [_]))) as Hmono_plain'.
+  eassert (ktcore.mono_plain γ.(cfg.adtrγ).(ktcore.AdtrAgree.agree).(ktcore.Agree.vrf_pk)
+    (drop γ.(cfg.adtrγ).(ktcore.AdtrAgree.audit_start) (digs ++ [_]))) as Hmono_plain'.
   { rewrite drop_app_le; [|lia].
     unfold ktcore.mono_plain in *.
     rewrite !fmap_app.
@@ -782,7 +787,7 @@ Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
     "%Heq_servPk" ∷ ⌜match servGood with None => True | Some servγ =>
       servPk = servγ.(server.cfg.sig_pk) end⌝ ∗
     "#His_servPk" ∷ match servGood with None => True | Some servγ =>
-      cryptoffi.is_sig_pk servPk (sigpred.P servγ.(server.cfg.sigγ)) end
+      cryptoffi.is_sig_pk servPk (sigpred.P servγ.(server.cfg.adtrγ)) end
   }}}
   @! auditor.New #servAddr #sl_servPk
   {{{
@@ -798,7 +803,7 @@ Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
 
       "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.adtr_sig_pk) ∗
       "#His_sigPk" ∷ cryptoffi.is_sig_pk γ.(cfg.adtr_sig_pk)
-        (sigpred.P γ.(cfg.sigγ)))
+        (sigpred.P γ.(cfg.adtrγ)))
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -845,12 +850,13 @@ Proof.
 
   wp_apply wp_alloc as "* Hmu".
   iMod (mono_list_own_alloc digs) as (digsγ) "[Hauth_digs #Hlb_digs]".
-  remember (sigpred.cfg.mk vrf.(server.StartVrf.VrfPk) digsγ
-    (sigpred.digs_info.mk (S (uint.nat ep) - length digs)%nat cut
-      (pred $ length digs)))
-    as sigγ.
-  assert (ktcore.mono_plain sigγ.(sigpred.cfg.vrf_pk)
-    (drop sigγ.(sigpred.cfg.info).(sigpred.digs_info.audit_offset) digs)).
+  remember (ktcore.AdtrAgree.mk
+    (ktcore.Agree.mk vrf.(server.StartVrf.VrfPk) digsγ
+      (S (uint.nat ep) - length digs)%nat)
+    cut (pred $ length digs))
+    as adtrγ.
+  assert (ktcore.mono_plain adtrγ.(ktcore.AdtrAgree.agree).(ktcore.Agree.vrf_pk)
+    (drop adtrγ.(ktcore.AdtrAgree.audit_start) digs)).
   { simplify_eq/=.
     apply last_Some in Hlast_digs as (digs'&->).
     replace (pred _) with (length digs'); [|len].
@@ -862,7 +868,7 @@ Proof.
     iNamed "Hwish_CheckStartChain".
     apply hashchain.fuel_bound' in His_chain_start as ?.
     word. }
-  wp_apply (cryptoffi.wp_SigGenerateKey (sigpred.P sigγ)) as "* @".
+  wp_apply (cryptoffi.wp_SigGenerateKey (sigpred.P adtrγ)) as "* @".
   iPersist "Hsl_sigPk".
   iNamed "Hptr_chain".
   wp_apply ktcore.wp_SignLink as "* @".
@@ -886,7 +892,7 @@ Proof.
   iPersist "sk serv vrf mu hist".
   iPersist "Hstr_epoch Hstr_serv Hstr_signedVrf".
 
-  remember (cfg.mk servPk sigPk sigγ servGood) as γ.
+  remember (cfg.mk servPk sigPk adtrγ servGood) as γ.
   remember (state.mk digs) as σ.
   iDestruct "Hauth_digs" as "[Hauth_digs0 Hauth_digs1]".
   iMod (inv_alloc nroot _ (∃ σ, own γ σ) with "[Hauth_digs0]") as "#Ht".
