@@ -377,7 +377,8 @@ Lemma wp_Client_Get γ ptr_c σ (uid : w64) :
         ∃ new_digs opt_pk,
         let σ' := set state.digs (.++ new_digs) σ in
         "Hclient" ∷ Client.own γ ptr_c σ' ∗
-        "%Heq_ep" ∷ ⌜uint.Z ep = start_epγ γ + length σ'.(state.digs) - 1⌝ ∗
+        let agreeγ := γ.(cfg.cliγ).(ktcore.CliAgree.agree) in
+        "%Heq_ep" ∷ ⌜uint.Z ep = agreeγ.(ktcore.Agree.digs_start) + length σ'.(state.digs) - 1⌝ ∗
         "#Hopt_pk" ∷
           match opt_pk with
           | None => "->" ∷ ⌜is_reg = false⌝
@@ -385,7 +386,7 @@ Lemma wp_Client_Get γ ptr_c σ (uid : w64) :
             "->" ∷ ⌜is_reg = true⌝ ∗
             "#Hsl_pk" ∷ sl_pk ↦*□ pk
           end ∗
-        "#Hptr_kt" ∷ γ.(cfg.sigγ) ↪KT[uint.nat ep, uid] opt_pk)
+        "#Hptr_kt" ∷ agreeγ ↪KT[uint.nat ep, uid] opt_pk)
   }}}.
 Proof.
   wp_start as "@".
@@ -563,18 +564,21 @@ Lemma wp_Client_SelfMon γ ptr_c σ :
       (if decide (err ≠ ∅)
       then "Hclient" ∷ Client.own γ ptr_c σ
       else
-        ∃ new_digs prev_key,
+        ∃ new_digs prev_key (keys_start : nat),
+        let cliγ := γ.(cfg.cliγ) in
+        let agreeγ := cliγ.(ktcore.CliAgree.agree) in
         let σ0 := set state.digs (.++ new_digs) σ in
-        let new_keys_len := (length σ0.(state.digs) - audit_offsetγ γ -
+        let new_keys_len := (length σ0.(state.digs) - keys_start -
           length σ.(state.keys))%nat in
-        "%Heq_ep" ∷ ⌜uint.Z ep = start_epγ γ + length σ0.(state.digs) - 1⌝ ∗
+        "%Heq_ep" ∷ ⌜uint.Z ep = agreeγ.(ktcore.Agree.digs_start) + length σ0.(state.digs) - 1⌝ ∗
         "%Hprev_key" ∷ ⌜last σ.(state.keys) = Some prev_key⌝ ∗
+        "#Hkeys_start" ∷ dghost_var cliγ.(ktcore.CliAgree.keys_start) (□) (Some keys_start) ∗
         "Hchanged" ∷
           match isChanged with
           | false =>
             let σ1 := set state.keys (.++ replicate new_keys_len prev_key) σ0 in
             "Hclient" ∷ Client.own γ ptr_c σ1 ∗
-            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.sigγ) γ.(cfg.uid) σ1.(state.keys)
+            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.cliγ) γ.(cfg.uid) σ1.(state.keys)
           | true =>
             ∃ (num_prev_keys : nat),
             let num_next_keys := (new_keys_len - num_prev_keys)%nat in
@@ -584,7 +588,7 @@ Lemma wp_Client_SelfMon γ ptr_c σ :
                   replicate num_next_keys σ.(state.pending_pk))
               (set state.pending_pk (λ _, None) σ0) in
             "Hclient" ∷ Client.own γ ptr_c σ1 ∗
-            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.sigγ) γ.(cfg.uid) σ1.(state.keys) ∗
+            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.cliγ) γ.(cfg.uid) σ1.(state.keys) ∗
             "%Hpend" ∷ ⌜is_Some σ.(state.pending_pk)⌝ ∗
             "%Hsome_next_keys" ∷ ⌜num_next_keys > 0⌝
           end)

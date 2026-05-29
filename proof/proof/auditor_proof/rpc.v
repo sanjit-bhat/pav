@@ -27,16 +27,10 @@ Record t :=
     it unconditionally. *)
     serv_sig_pk: list w8;
     adtr_sig_pk: list w8;
-    sigγ: sigpred.cfg.t;
+    adtrγ: ktcore.AdtrAgree.t;
     serv_good: option $ server.cfg.t;
   }.
 End cfg.
-
-Notation vrf_pkγ γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
-Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
-Notation start_epγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.start_ep)).
-Notation cutγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.cut)).
-Notation audit_offsetγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.audit_offset)).
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -66,19 +60,23 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_ep ptr σ (ep : nat) γ : iProp Σ :=
+  let adtrγ := γ.(cfg.adtrγ) in
+  let agreeγ := adtrγ.(ktcore.AdtrAgree.agree) in
   ∃ sig_link,
   "#Hown_epoch" ∷ SignedLink.own ptr sig_link (□) ∗
   "#His_epoch" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk)
     (W64 ep) sig_link ∗
   (* could derive this from LinkSig, but it's easier to state explicitly. *)
-  "%His_link" ∷ ⌜hashchain.valid (take (S ep - start_epγ γ) σ.(state.digs))
-    (cutγ γ) sig_link.(SignedLink.Link) (S ep)⌝.
+  "%His_link" ∷ ⌜hashchain.valid (take (S ep - agreeγ.(ktcore.Agree.digs_start)) σ.(state.digs))
+    adtrγ.(ktcore.AdtrAgree.cut) sig_link.(SignedLink.Link) (S ep)⌝.
 
 (* TODO: in-mem startEp and sigpred startEp are diff values.
 we should give them diff names. *)
 Definition own ptr γ σ q : iProp Σ :=
+  let adtrγ := γ.(cfg.adtrγ) in
+  let agreeγ := adtrγ.(ktcore.AdtrAgree.agree) in
   ∃ sl_lastDig lastDig start_ep sl_epochs sl0_epochs,
-  let last_ep := start_epγ γ + length σ.(state.digs) - 1 in
+  let last_ep := agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs) - 1 in
   "Hstr_history" ∷ ptr ↦{#q} (auditor.history.mk sl_lastDig start_ep sl_epochs) ∗
   "#Hsl_lastDig" ∷ sl_lastDig ↦*□ lastDig ∗
   "%Heq_lastDig" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
@@ -90,16 +88,19 @@ Definition own ptr γ σ q : iProp Σ :=
   "%Hsome_digs" ∷ ⌜length σ.(state.digs) > 0⌝ ∗
   "%Hsome_epochs" ∷ ⌜length sl0_epochs > 0⌝ ∗
   "%Hnoof_ep" ∷ ⌜last_ep = uint.Z $ W64 last_ep⌝ ∗
-  "%Heq_audit_start" ∷ ⌜uint.nat start_ep = (start_epγ γ + audit_offsetγ γ)%nat⌝ ∗
+  "%Heq_audit_start" ∷ ⌜uint.nat start_ep = (agreeγ.(ktcore.Agree.digs_start) + adtrγ.(ktcore.AdtrAgree.audit_start))%nat⌝ ∗
   "%Heq_audit_end" ∷ ⌜(uint.nat start_ep + length sl0_epochs =
-    start_epγ γ + length σ.(state.digs))%nat⌝.
+    agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs))%nat⌝.
 
 Definition align_serv σ γ servγ : iProp Σ :=
+  let adtrγ := γ.(cfg.adtrγ) in
+  let agreeγ := adtrγ.(ktcore.AdtrAgree.agree) in
+  let servAgreeγ := servγ.(server.cfg.adtrγ).(ktcore.AdtrAgree.agree) in
   ∃ hist,
-  "#His_hist" ∷ mono_list_lb_own (server.digsγ servγ) hist ∗
+  "#His_hist" ∷ mono_list_lb_own servAgreeγ.(ktcore.Agree.digs) hist ∗
   "%Heq_digs" ∷ ⌜σ.(state.digs) = hist⌝ ∗
-  "%Heq_start_ep" ∷ ⌜start_epγ γ = 0%nat⌝ ∗
-  "%Heq_cut" ∷ ⌜cutγ γ = None⌝.
+  "%Heq_start_ep" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
+  "%Heq_cut" ∷ ⌜adtrγ.(ktcore.AdtrAgree.cut) = None⌝.
 
 #[global] Instance own_aux_combine_sep_as ptr γ σ0 σ1 q0 q1 :
   CombineSepAs (own ptr γ σ0 q0) (own ptr γ σ1 q1) (own ptr γ σ0 (q0 + q1)) | 60.
@@ -145,12 +146,14 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition wish_getNextLink γ σ proof (ep : w64) dig link : iProp Σ :=
+  let adtrγ := γ.(cfg.adtrγ) in
+  let agreeγ := adtrγ.(ktcore.AdtrAgree.agree) in
   ∃ prevDig,
-  "%Heq_ep" ∷ ⌜uint.Z ep = (start_epγ γ + length σ.(state.digs))%Z⌝ ∗
+  "%Heq_ep" ∷ ⌜uint.Z ep = (agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs))%Z⌝ ∗
   "%Heq_prevDig" ∷ ⌜last σ.(state.digs) = Some prevDig⌝ ∗
   "#His_upd" ∷ ktcore.wish_ListUpdate prevDig
     proof.(ktcore.AuditProof.Updates) dig ∗
-  "%His_link" ∷ ⌜hashchain.valid (σ.(state.digs) ++ [dig]) (cutγ γ)
+  "%His_link" ∷ ⌜hashchain.valid (σ.(state.digs) ++ [dig]) adtrγ.(ktcore.AdtrAgree.cut)
     link (S $ uint.nat ep)⌝ ∗
   "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.serv_sig_pk) ep link
     proof.(ktcore.AuditProof.LinkSig).
@@ -176,8 +179,9 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
     is_pkg_init server ∗
     "#His_serv" ∷ is_rpc_cli c good ∗
     "#His_args" ∷ match good with None => True | Some γ =>
+      let servAgreeγ := γ.(server.cfg.adtrγ).(ktcore.AdtrAgree.agree) in
       ∃ entry : list w8,
-      "#Hidx_ep" ∷ mono_list_idx_own (server.digsγ γ) (uint.nat prevEpoch) entry end
+      "#Hidx_ep" ∷ mono_list_idx_own servAgreeγ.(ktcore.Agree.digs) (uint.nat prevEpoch) entry end
   }}}
   @! server.CallAudit #c #prevEpoch
   {{{
@@ -192,8 +196,9 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
         than one trans across all epochs. epochs are indep. *)
         ([∗ list] idx ↦ proof ∈ proofs,
           □ ∀ adtrγ adtrσ,
+          let adtrAgreeγ := adtrγ.(cfg.adtrγ).(ktcore.AdtrAgree.agree) in
           history.align_serv adtrσ adtrγ γ -∗
-          ⌜start_epγ adtrγ + length adtrσ.(state.digs) - 1 =
+          ⌜adtrAgreeγ.(ktcore.Agree.digs_start) + length adtrσ.(state.digs) - 1 =
             (uint.Z prevEpoch + idx)%Z⌝ -∗
           ⌜adtrγ.(cfg.serv_sig_pk) = γ.(cfg.sig_pk)⌝ -∗
 
