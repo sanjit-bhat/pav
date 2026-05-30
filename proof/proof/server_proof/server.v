@@ -507,8 +507,8 @@ Record t' := mk' {
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : server.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own γ secs ptr obj : iProp Σ :=
@@ -1409,7 +1409,7 @@ Proof.
   wp_apply wp_alloc as "* Hptr_mu".
   wp_apply cryptoffi.wp_VrfGenerateKey as "* @".
   iMod (mono_list_own_alloc []) as (digsγ) "[Hauth_digs _]".
-  remember (ktcore.Adtrktcore.Agree.mk (ktcore.Agree.mk vrfPk digsγ 0%nat) None 0%nat) as adtrγ.
+  remember (ktcore.AdtrAgree.mk (ktcore.Agree.mk vrfPk digsγ 0%nat) None 0%nat) as adtrγ.
   wp_apply (cryptoffi.wp_SigGenerateKey (sigpred.P adtrγ)) as "* @".
   wp_apply cryptoffi.wp_VrfPrivateKey_PublicKey as "* @".
   { iFrame "#". }

@@ -60,7 +60,7 @@ Definition is_staged_keys γcli uid keys : iProp Σ :=
   ∃ digs keys_start next_ver,
   let γ := γcli.(CliAgree.agree) in
   "#Hlb_digs" ∷ mono_list_lb_own γ.(Agree.digs) digs ∗
-  "#His_keys_start" ∷ dghost_var γcli.(CliAgree.keys_start) (□) (Some keys_start) ∗
+  "#His_start" ∷ dghost_var γcli.(CliAgree.keys_start) (□) (Some keys_start) ∗
   "%Hstaged" ∷ ⌜staged_keys γ.(Agree.vrf_pk) (drop keys_start digs)
     uid keys next_ver⌝.
 
@@ -135,7 +135,7 @@ Lemma commit_staged γcli keys_start uid keys γadtr audit_ep :
     γadtr' ↪KT[ep, uid] opt_pk).
 Proof.
   simpl. iIntros "%% @ #Ht #Haudit * %Hlook_keys".
-  iCombine "His_keys_start Ht" gives %[_ ?].
+  iCombine "His_start Ht" gives %[_ ?].
   simplify_eq/=. iClear "Ht".
   apply lookup_lt_Some in Hlook_keys as ?.
   iPoseProof "Haudit" as "@".
@@ -189,7 +189,7 @@ Lemma combine_audits γcli γadtr0 γadtr1 audit_ep0 audit_ep1 :
     γadtr1 <| AdtrAgree.audit_start := γadtr0.(AdtrAgree.audit_start) |> in
   is_audit γcli new_γadtr audit_ep1.
 Proof.
-  iIntros "%%%". iNamedSuffix 1 "0". iNamedSuffix 1 "1".
+  simpl. iIntros "%%%". iNamedSuffix 1 "0". iNamedSuffix 1 "1".
   rewrite /is_audit /=. iFrame "Hadtr_digs1 #%".
   iAssert (⌜digs `prefix_of` digs0⌝)%I as %(new_digs&->).
   { iDestruct (mono_list_lb_valid with "Hcli_digs0 Hcli_digs1")

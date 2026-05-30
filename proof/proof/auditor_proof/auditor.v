@@ -17,8 +17,8 @@ Import base.auditor rpc.auditor serde.auditor.
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 (* 1/2 in Auditor pred, 1/2 in iris inv. *)
@@ -77,8 +77,8 @@ End proof.
 Module serv.
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own ptr γ good : iProp Σ :=
@@ -99,8 +99,8 @@ End serv.
 Module Auditor.
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own ptr γ σ q : iProp Σ :=
@@ -557,6 +557,7 @@ Proof.
   list_elem sl0_epochs
     (sint.nat (word.sub sl_epochs.(slice.len) (W64 1))) as ptr_epoch.
   iDestruct (big_sepL_lookup with "Hepochs") as "@"; [done|].
+  iNamed "Hown_epoch".
   case_decide as Ht; [|word]. clear Ht.
   wp_apply (wp_load_slice_index with "[$Hsl_epochs]"); [word|done|].
   iIntros "Hsl_epochs". wp_auto.
@@ -641,12 +642,16 @@ Proof.
   - by rewrite last_snoc.
   - iApply big_sepL_impl; [done|].
     iIntros "!> * %Hlook H".
-    rewrite /epoch.own /=.
+    rewrite /history.own_ep /=.
     apply lookup_lt_Some in Hlook.
     rewrite take_app_le; [|word].
     iFrame.
-  - exact_eq His_link_n; [|word].
+  - iExists (SignedLink.mk' _ _ _).
+    iFrame "#%".
+    iPureIntro. simpl.
+    exact_eq His_link_n; [|word].
     rewrite take_ge; [done|len].
+  - done.
   - word.
   - word.
   - word.

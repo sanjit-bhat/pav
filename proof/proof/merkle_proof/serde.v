@@ -308,6 +308,7 @@ Definition own ptr obj d : iProp Σ :=
   "Hsl_LeafLabel" ∷ sl_LeafLabel ↦*{d} obj.(LeafLabel) ∗
   "Hsl_LeafVal" ∷ sl_LeafVal ↦*{d} obj.(LeafVal).
 
+(* TODO: other serde files have pure wishes. *)
 Definition wish b obj tail : iProp Σ :=
   ∃ enc,
   "%Henc_obj" ∷ ⌜encodes obj enc⌝ ∗

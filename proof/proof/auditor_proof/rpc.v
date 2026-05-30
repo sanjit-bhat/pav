@@ -34,8 +34,8 @@ End cfg.
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition wish_SignedLink servPk adtrPk ep link : iProp Σ :=
@@ -55,8 +55,8 @@ End proof.
 Module history.
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_ep ptr σ (ep : nat) γ : iProp Σ :=
