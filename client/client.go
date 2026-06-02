@@ -53,33 +53,17 @@ func (c *Client) Put(pk []byte) {
 }
 
 // Get a uid's pk.
-func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.Blame) {
-	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, uid, c.lastEp.epoch, 0)
+func (c *Client) Get(uid uint64) (ep uint64, hasPk bool, pk []byte, err ktcore.Blame) {
+	nextEp, pks, err := c.getHistory(uid, 0)
 	if err != ktcore.BlameNone {
 		return
 	}
-	// check.
-	next, errb := getNextEp(c.lastEp, c.serv.sigPk, chainProof, sig)
-	if errb {
-		err = ktcore.BlameServFull
-		return
-	}
-	if checkHist(c.serv.vrfPk, uid, 0, next.dig, hist) {
-		err = ktcore.BlameServFull
-		return
-	}
-	boundVer := uint64(len(hist))
-	if checkNonMemb(c.serv.vrfPk, uid, boundVer, next.dig, bound) {
-		err = ktcore.BlameServFull
-		return
-	}
 
-	// update.
-	c.lastEp = next
-	ep = next.epoch
-	if boundVer != 0 {
-		isReg = true
-		pk = hist[boundVer-1].PkOpen.Val
+	c.lastEp = nextEp
+	ep = nextEp.epoch
+	if len(pks) != 0 {
+		hasPk = true
+		pk = pks[len(pks)-1]
 	}
 	return
 }
@@ -87,49 +71,30 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 // SelfMon a client's own uid.
 // if isChanged, the key was added sometime from the last SelfMon.
 func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
-	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, c.uid, c.lastEp.epoch, c.nextVer.ver)
+	nextEp, pks, err := c.getHistory(c.uid, c.nextVer.ver)
 	if err != ktcore.BlameNone {
 		return
 	}
-	// check.
-	next, errb := getNextEp(c.lastEp, c.serv.sigPk, chainProof, sig)
+	ep = nextEp.epoch
+	isChanged, errb := checkPend(c.nextVer, pks)
 	if errb {
-		err = ktcore.BlameServFull
-		return
-	}
-	ep = next.epoch
-	boundVer := c.nextVer.ver + uint64(len(hist))
-	if !std.SumNoOverflow(c.nextVer.ver, uint64(len(hist))) {
-		err = ktcore.BlameServFull
-		return
-	}
-	if checkHist(c.serv.vrfPk, c.uid, c.nextVer.ver, next.dig, hist) {
-		err = ktcore.BlameServFull
-		return
-	}
-	if checkNonMemb(c.serv.vrfPk, c.uid, boundVer, next.dig, bound) {
-		err = ktcore.BlameServFull
-		return
-	}
-	if isChanged, errb = checkPend(c.nextVer, hist); errb {
 		// conflicting updates could also come from other bad clients.
 		err = ktcore.BlameServFull | ktcore.BlameClients
 		return
 	}
 
-	// update.
-	c.lastEp = next
+	c.lastEp = nextEp
 	if !isChanged {
 		return
 	}
 	c.nextVer.hasPendPk = false
 	c.nextVer.pendPk = nil
-	c.nextVer.ver = boundVer
+	c.nextVer.ver++
 	return
 }
 
-func checkPend(pend *ver, hist []*ktcore.Memb) (isChanged, err bool) {
-	histLen := uint64(len(hist))
+func checkPend(pend *ver, pks [][]byte) (isChanged, err bool) {
+	histLen := uint64(len(pks))
 	if !pend.hasPendPk {
 		// client hasn't given permission to do any updates.
 		if histLen != 0 {
@@ -147,9 +112,8 @@ func checkPend(pend *ver, hist []*ktcore.Memb) (isChanged, err bool) {
 	if histLen == 0 {
 		return
 	}
-	newKey := hist[0]
 	// update equals pending.
-	if !bytes.Equal(newKey.PkOpen.Val, pend.pendPk) {
+	if !bytes.Equal(pks[0], pend.pendPk) {
 		err = true
 		return
 	}
@@ -212,10 +176,50 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, ep uin
 	}
 
 	ver := &ver{}
-	last := &epoch{epoch: startEp, dig: startDig, link: startLink, sig: chain.LinkSig}
+	lastEp0 := &epoch{epoch: startEp, dig: startDig, link: startLink, sig: chain.LinkSig}
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: vrf.VrfSig}
-	c = &Client{uid: uid, nextVer: ver, lastEp: last, serv: serv}
-	// ep, _, err = c.SelfMon()
+	c = &Client{uid: uid, nextVer: ver, lastEp: lastEp0, serv: serv}
+
+	// certify starting ver = 0.
+	lastEp1, pks, err := c.getHistory(c.uid, 0)
+	if err != ktcore.BlameNone {
+		return
+	}
+	if len(pks) != 0 {
+		err = ktcore.BlameServFull | ktcore.BlameClients
+		return
+	}
+	c.lastEp = lastEp1
+	return
+}
+
+func (c *Client) getHistory(uid uint64, prevVerLen uint64) (nextEp *epoch, pks [][]byte, err ktcore.Blame) {
+	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, uid, c.lastEp.epoch, prevVerLen)
+	if err != ktcore.BlameNone {
+		return
+	}
+	nextEp, errb := getNextEp(c.lastEp, c.serv.sigPk, chainProof, sig)
+	if errb {
+		err = ktcore.BlameServFull
+		return
+	}
+	boundVer := prevVerLen + uint64(len(hist))
+	if !std.SumNoOverflow(prevVerLen, uint64(len(hist))) {
+		err = ktcore.BlameServFull
+		return
+	}
+	if checkMembs(c.serv.vrfPk, uid, prevVerLen, nextEp.dig, hist) {
+		err = ktcore.BlameServFull
+		return
+	}
+	if checkNonMemb(c.serv.vrfPk, uid, boundVer, nextEp.dig, bound) {
+		err = ktcore.BlameServFull
+		return
+	}
+	pks = make([][]byte, 0, len(hist))
+	for _, x := range hist {
+		pks = append(pks, x.PkOpen.Val)
+	}
 	return
 }
 
@@ -240,6 +244,15 @@ func getNextEp(prev *epoch, sigPk cryptoffi.SigPublicKey, chainProof, sig []byte
 	return
 }
 
+func checkMembs(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte, hist []*ktcore.Memb) (err bool) {
+	for ver, memb := range hist {
+		if err = checkMemb(vrfPk, uid, prefixLen+uint64(ver), dig, memb); err {
+			return
+		}
+	}
+	return
+}
+
 func checkMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb *ktcore.Memb) (err bool) {
 	label, err := ktcore.CheckMapLabel(vrfPk, uid, ver, memb.LabelProof)
 	if err {
@@ -253,15 +266,6 @@ func checkMemb(vrfPk *cryptoffi.VrfPublicKey, uid, ver uint64, dig []byte, memb 
 	if !bytes.Equal(dig, dig0) {
 		err = true
 		return
-	}
-	return
-}
-
-func checkHist(vrfPk *cryptoffi.VrfPublicKey, uid, prefixLen uint64, dig []byte, hist []*ktcore.Memb) (err bool) {
-	for ver, memb := range hist {
-		if err = checkMemb(vrfPk, uid, prefixLen+uint64(ver), dig, memb); err {
-			return
-		}
 	}
 	return
 }
