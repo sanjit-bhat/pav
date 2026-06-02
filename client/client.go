@@ -14,16 +14,16 @@ import (
 )
 
 type Client struct {
-	uid  uint64
-	pend *nextVer
-	last *epoch
-	serv *serv
+	uid     uint64
+	nextVer *ver
+	lastEp  *epoch
+	serv    *serv
 }
 
-type nextVer struct {
+type ver struct {
 	ver       uint64
-	isPending bool
-	pendingPk []byte
+	hasPendPk bool
+	pendPk    []byte
 }
 
 type epoch struct {
@@ -43,23 +43,23 @@ type serv struct {
 // Put queues pk for insertion.
 // if we have a pending Put, it requires the pk to be the same.
 func (c *Client) Put(pk []byte) {
-	if c.pend.isPending {
-		std.Assert(bytes.Equal(c.pend.pendingPk, pk))
+	if c.nextVer.hasPendPk {
+		std.Assert(bytes.Equal(c.nextVer.pendPk, pk))
 	} else {
-		c.pend.isPending = true
-		c.pend.pendingPk = pk
+		c.nextVer.hasPendPk = true
+		c.nextVer.pendPk = pk
 	}
-	server.CallPut(c.serv.cli, c.uid, pk, c.pend.ver)
+	server.CallPut(c.serv.cli, c.uid, pk, c.nextVer.ver)
 }
 
 // Get a uid's pk.
 func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.Blame) {
-	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, uid, c.last.epoch, 0)
+	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, uid, c.lastEp.epoch, 0)
 	if err != ktcore.BlameNone {
 		return
 	}
 	// check.
-	next, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
+	next, errb := getNextEp(c.lastEp, c.serv.sigPk, chainProof, sig)
 	if errb {
 		err = ktcore.BlameServFull
 		return
@@ -75,7 +75,7 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 	}
 
 	// update.
-	c.last = next
+	c.lastEp = next
 	ep = next.epoch
 	if boundVer != 0 {
 		isReg = true
@@ -87,23 +87,23 @@ func (c *Client) Get(uid uint64) (ep uint64, isReg bool, pk []byte, err ktcore.B
 // SelfMon a client's own uid.
 // if isChanged, the key was added sometime from the last SelfMon.
 func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
-	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, c.uid, c.last.epoch, c.pend.ver)
+	chainProof, sig, hist, bound, err := server.CallHistory(c.serv.cli, c.uid, c.lastEp.epoch, c.nextVer.ver)
 	if err != ktcore.BlameNone {
 		return
 	}
 	// check.
-	next, errb := getNextEp(c.last, c.serv.sigPk, chainProof, sig)
+	next, errb := getNextEp(c.lastEp, c.serv.sigPk, chainProof, sig)
 	if errb {
 		err = ktcore.BlameServFull
 		return
 	}
 	ep = next.epoch
-	boundVer := c.pend.ver + uint64(len(hist))
-	if !std.SumNoOverflow(c.pend.ver, uint64(len(hist))) {
+	boundVer := c.nextVer.ver + uint64(len(hist))
+	if !std.SumNoOverflow(c.nextVer.ver, uint64(len(hist))) {
 		err = ktcore.BlameServFull
 		return
 	}
-	if checkHist(c.serv.vrfPk, c.uid, c.pend.ver, next.dig, hist) {
+	if checkHist(c.serv.vrfPk, c.uid, c.nextVer.ver, next.dig, hist) {
 		err = ktcore.BlameServFull
 		return
 	}
@@ -111,26 +111,26 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 		err = ktcore.BlameServFull
 		return
 	}
-	if isChanged, errb = checkPend(c.pend, hist); errb {
+	if isChanged, errb = checkPend(c.nextVer, hist); errb {
 		// conflicting updates could also come from other bad clients.
 		err = ktcore.BlameServFull | ktcore.BlameClients
 		return
 	}
 
 	// update.
-	c.last = next
+	c.lastEp = next
 	if !isChanged {
 		return
 	}
-	c.pend.isPending = false
-	c.pend.pendingPk = nil
-	c.pend.ver = boundVer
+	c.nextVer.hasPendPk = false
+	c.nextVer.pendPk = nil
+	c.nextVer.ver = boundVer
 	return
 }
 
-func checkPend(pend *nextVer, hist []*ktcore.Memb) (isChanged, err bool) {
+func checkPend(pend *ver, hist []*ktcore.Memb) (isChanged, err bool) {
 	histLen := uint64(len(hist))
-	if !pend.isPending {
+	if !pend.hasPendPk {
 		// client hasn't given permission to do any updates.
 		if histLen != 0 {
 			err = true
@@ -149,7 +149,7 @@ func checkPend(pend *nextVer, hist []*ktcore.Memb) (isChanged, err bool) {
 	}
 	newKey := hist[0]
 	// update equals pending.
-	if !bytes.Equal(newKey.PkOpen.Val, pend.pendingPk) {
+	if !bytes.Equal(newKey.PkOpen.Val, pend.pendPk) {
 		err = true
 		return
 	}
@@ -159,8 +159,7 @@ func checkPend(pend *nextVer, hist []*ktcore.Memb) (isChanged, err bool) {
 
 func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp uint64, err ktcore.Blame, evid *ktcore.Evid) {
 	cli := advrpc.Dial(adtrAddr)
-	last := c.last
-	startEp, startLink, currLink, vrf, err := auditor.CallGet(cli, last.epoch)
+	startEp, startLink, currLink, vrf, err := auditor.CallGet(cli, c.lastEp.epoch)
 	if err != ktcore.BlameNone {
 		return
 	}
@@ -170,7 +169,7 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp 
 		err = ktcore.BlameAdtrFull
 		return
 	}
-	if checkAuditLink(c.serv.sigPk, adtrPk, last.epoch, currLink) {
+	if checkAuditLink(c.serv.sigPk, adtrPk, c.lastEp.epoch, currLink) {
 		err = ktcore.BlameAdtrFull
 		return
 	}
@@ -187,8 +186,8 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp 
 		return
 	}
 	// link evidence.
-	if !bytes.Equal(last.link, currLink.Link) {
-		evid = &ktcore.Evid{Link: &ktcore.EvidLink{Epoch: last.epoch, Link0: last.link, Sig0: last.sig, Link1: currLink.Link, Sig1: currLink.ServSig}}
+	if !bytes.Equal(c.lastEp.link, currLink.Link) {
+		evid = &ktcore.Evid{Link: &ktcore.EvidLink{Epoch: c.lastEp.epoch, Link0: c.lastEp.link, Sig0: c.lastEp.sig, Link1: currLink.Link, Sig1: currLink.ServSig}}
 		err = ktcore.BlameServSig
 		return
 	}
@@ -212,11 +211,11 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, ep uin
 		return
 	}
 
-	pendingPut := &nextVer{}
+	ver := &ver{}
 	last := &epoch{epoch: startEp, dig: startDig, link: startLink, sig: chain.LinkSig}
 	serv := &serv{cli: cli, sigPk: servPk, vrfPk: vrfPk, vrfSig: vrf.VrfSig}
-	c = &Client{uid: uid, pend: pendingPut, last: last, serv: serv}
-	ep, _, err = c.SelfMon()
+	c = &Client{uid: uid, nextVer: ver, lastEp: last, serv: serv}
+	// ep, _, err = c.SelfMon()
 	return
 }
 
