@@ -28,16 +28,15 @@ Definition staged_keys vrf_pk digs uid keys next_ver :=
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
     keys = (λ x, last $ to_pks vrf_pk uid x) <$> digs ).
 
-Lemma is_staged_init vrf_pk dig uid :
-  in_hidden vrf_pk (merkle.inv_fn dig) uid 0 None →
-  staged_keys vrf_pk [dig] uid [None] 0.
+Lemma staged_init vrf_pk dig uid pks :
+  pks_in_hidden vrf_pk (merkle.inv_fn dig) uid pks →
+  in_hidden vrf_pk (merkle.inv_fn dig) uid (length pks) None →
+  staged_keys vrf_pk [dig] uid [last pks] (length pks).
 Proof.
-  rewrite /staged_keys /=. intros Hnone.
+  rewrite /staged_keys /=. intros Hpks Hnone.
   eexists. repeat (split; [done|]).
   intros Hmono.
-  assert (to_pks vrf_pk uid dig = []) as ->; [|done].
-  eapply inv_fn_None_bound in Hnone as ?.
-  by destruct (plain_inv_fn _ _ !!! _).
+  by erewrite inv_fn_inp_pks_exact.
 Qed.
 
 (* grow staged keys by replicating the last existing key. *)
