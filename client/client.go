@@ -167,6 +167,7 @@ func New(uid, servAddr uint64, servPk cryptoffi.SigPublicKey) (c *Client, ep uin
 	if err != ktcore.BlameNone {
 		return
 	}
+	ep = lastEp1.epoch
 	if len(pks) != 0 {
 		err = ktcore.BlameServFull | ktcore.BlameClients
 		return
