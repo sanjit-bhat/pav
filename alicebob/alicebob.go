@@ -29,8 +29,8 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (err ktcore.Blame, evid *ktc
 	servRpc.Serve(servAddr)
 	time.Sleep(time.Millisecond)
 
-	// TODO: show works even when stitching multiple auditors together.
-	// TODO: show works even with just good server and no auditors.
+	// TODO: example stitching multiple auditors together.
+	// TODO: example with just good server and no auditors.
 	adtr, adtrPk, err := auditor.New(servAddr, servSigPk)
 	if err != ktcore.BlameNone {
 		return
@@ -88,12 +88,12 @@ func testAliceBob(servAddr uint64, adtrAddr uint64) (err ktcore.Blame, evid *ktc
 	if err = adtr.Update(); err != ktcore.BlameNone {
 		return
 	}
-	adtrStartEp0, err, evid := alice.Audit(adtrAddr, adtrPk)
+	adtrStartEp0, _, err, evid := alice.Audit(adtrAddr, adtrPk)
 	if err != ktcore.BlameNone {
 		return
 	}
 	primitive.Assume(adtrStartEp0 == 0)
-	adtrStartEp1, err, evid := bob.Audit(adtrAddr, adtrPk)
+	adtrStartEp1, _, err, evid := bob.Audit(adtrAddr, adtrPk)
 	if err != ktcore.BlameNone {
 		return
 	}

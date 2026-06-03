@@ -103,7 +103,7 @@ func checkPend(pend *ver, pks [][]byte) (isChanged, err bool) {
 	return
 }
 
-func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp uint64, err ktcore.Blame, evid *ktcore.Evid) {
+func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp, ep uint64, err ktcore.Blame, evid *ktcore.Evid) {
 	cli := advrpc.Dial(adtrAddr)
 	startEp, startLink, currLink, vrf, err := auditor.CallGet(cli, c.lastEp.epoch)
 	if err != ktcore.BlameNone {
@@ -137,6 +137,7 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp 
 		err = ktcore.BlameServSig
 		return
 	}
+	ep = c.lastEp.epoch
 	return
 }
 
