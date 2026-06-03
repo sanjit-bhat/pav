@@ -93,31 +93,13 @@ func (c *Client) SelfMon() (ep uint64, isChanged bool, err ktcore.Blame) {
 	return
 }
 
+// checkPend validates that pks align with pend.
 func checkPend(pend *ver, pks [][]byte) (isChanged, err bool) {
-	histLen := uint64(len(pks))
-	if !pend.hasPendPk {
-		// client hasn't given permission to do any updates.
-		if histLen != 0 {
-			err = true
-			return
-		}
-		return
-	}
-	// client has up to one pending update at a time.
-	if histLen > 1 {
-		err = true
-		return
-	}
-	// update hasn't yet fired.
-	if histLen == 0 {
-		return
-	}
-	// update equals pending.
-	if !bytes.Equal(pks[0], pend.pendPk) {
-		err = true
+	if len(pks) == 0 {
 		return
 	}
 	isChanged = true
+	err = len(pks) > 1 || !pend.hasPendPk || !bytes.Equal(pks[0], pend.pendPk)
 	return
 }
 
