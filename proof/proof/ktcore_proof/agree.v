@@ -71,12 +71,16 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Lemma kt_ptsto_agree γ ep uid opt_pk0 opt_pk1 :
-  γ ↪KT[ep, uid] opt_pk0 -∗
-  γ ↪KT[ep, uid] opt_pk1 -∗
+Lemma kt_ptsto_agree γ0 γ1 ep uid opt_pk0 opt_pk1 :
+  γ0.(Agree.vrf_pk) = γ1.(Agree.vrf_pk) →
+  γ0.(Agree.digs) = γ1.(Agree.digs) →
+  γ0.(Agree.digs_start) = γ1.(Agree.digs_start) →
+  γ0 ↪KT[ep, uid] opt_pk0 -∗
+  γ1 ↪KT[ep, uid] opt_pk1 -∗
   ⌜opt_pk0 = opt_pk1⌝.
 Proof.
-  intros. iNamedSuffix 1 "0". iNamedSuffix 1 "1".
+  intros. destruct γ0, γ1. simplify_eq/=.
+  iNamedSuffix 1 "0". iNamedSuffix 1 "1".
   iDestruct (mono_list_idx_agree with "Hidx_dig0 Hidx_dig1") as %->.
   by subst.
 Qed.
