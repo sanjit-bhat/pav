@@ -278,7 +278,7 @@ Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
     "Hclient" ∷ Client.own γ ptr_c σ ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
     "%Heq_pend" ∷
-      ⌜match σ.(state.pending_pk) with
+      ⌜match σ.(state.pend_pk) with
       | None => True
       | Some pk' => pk = pk'
       end⌝
@@ -286,7 +286,7 @@ Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
   ptr_c @! (go.PointerType client.Client) @! "Put" #sl_pk
   {{{
     RET #();
-    let σ' := set state.pending_pk (λ _, Some pk) σ in
+    let σ' := set state.pend_pk (λ _, Some pk) σ in
     "Hclient" ∷ Client.own γ ptr_c σ'
   }}}.
 Proof.
@@ -316,7 +316,7 @@ Proof.
     with "[Hstr_client Hstr_nextVer]"
   ) as "* @".
   { wp_if_destruct.
-    - destruct pending_pk; iNamed "HpendingPk"; try done.
+    - destruct pend_pk; iNamed "HpendingPk"; try done.
       simplify_eq/=.
       wp_apply bytes.wp_Equal as "_".
       { iFrame "#". }
@@ -377,7 +377,7 @@ Lemma wp_Client_Get γ ptr_c σ (uid : w64) :
         ∃ new_digs opt_pk,
         let σ' := set state.digs (.++ new_digs) σ in
         "Hclient" ∷ Client.own γ ptr_c σ' ∗
-        let agreeγ := γ.(cfg.cliγ).(ktcore.CliAgree.agree) in
+        let agreeγ := γ.(cfg.agreeγ) in
         "%Heq_ep" ∷ ⌜uint.Z ep = agreeγ.(ktcore.Agree.digs_start) + length σ'.(state.digs) - 1⌝ ∗
         "#Hopt_pk" ∷
           match opt_pk with
@@ -564,32 +564,30 @@ Lemma wp_Client_SelfMon γ ptr_c σ :
       (if decide (err ≠ ∅)
       then "Hclient" ∷ Client.own γ ptr_c σ
       else
-        ∃ new_digs prev_key (keys_start : nat),
-        let cliγ := γ.(cfg.cliγ) in
-        let agreeγ := cliγ.(ktcore.CliAgree.agree) in
+        ∃ new_digs prev_key,
+        let agreeγ := γ.(cfg.agreeγ) in
         let σ0 := set state.digs (.++ new_digs) σ in
-        let new_keys_len := (length σ0.(state.digs) - keys_start -
+        let new_keys_len := (length σ0.(state.digs) - agreeγ.(ktcore.Agree.func_start) -
           length σ.(state.keys))%nat in
         "%Heq_ep" ∷ ⌜uint.Z ep = agreeγ.(ktcore.Agree.digs_start) + length σ0.(state.digs) - 1⌝ ∗
         "%Hprev_key" ∷ ⌜last σ.(state.keys) = Some prev_key⌝ ∗
-        "#Hkeys_start" ∷ dghost_var cliγ.(ktcore.CliAgree.keys_start) (□) (Some keys_start) ∗
         "Hchanged" ∷
           match isChanged with
           | false =>
             let σ1 := set state.keys (.++ replicate new_keys_len prev_key) σ0 in
             "Hclient" ∷ Client.own γ ptr_c σ1 ∗
-            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.cliγ) γ.(cfg.uid) σ1.(state.keys)
+            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.agreeγ) γ.(cfg.uid) σ1.(state.keys)
           | true =>
             ∃ (num_prev_keys : nat),
             let num_next_keys := (new_keys_len - num_prev_keys)%nat in
             let σ1 :=
               set state.keys
                 (.++ replicate num_prev_keys prev_key ++
-                  replicate num_next_keys σ.(state.pending_pk))
-              (set state.pending_pk (λ _, None) σ0) in
+                  replicate num_next_keys σ.(state.pend_pk))
+              (set state.pend_pk (λ _, None) σ0) in
             "Hclient" ∷ Client.own γ ptr_c σ1 ∗
-            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.cliγ) γ.(cfg.uid) σ1.(state.keys) ∗
-            "%Hpend" ∷ ⌜is_Some σ.(state.pending_pk)⌝ ∗
+            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.agreeγ) γ.(cfg.uid) σ1.(state.keys) ∗
+            "%Hpend" ∷ ⌜is_Some σ.(state.pend_pk)⌝ ∗
             "%Hsome_next_keys" ∷ ⌜num_next_keys > 0⌝
           end)
   }}}.

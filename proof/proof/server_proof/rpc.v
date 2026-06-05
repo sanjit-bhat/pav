@@ -111,7 +111,7 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
     "Hsl_reply" ∷ sl_reply ↦* replyB ∗
 
     "Hgood" ∷ match good with None => True | Some γ =>
-    let agreeγ := γ.(cfg.adtrγ).(ktcore.AdtrAgree.agree) in
+    let agreeγ := γ.(cfg.agreeγ) in
     ∃ chainProof linkSig hist bound err1,
     "%His_reply" ∷ ⌜HistoryReply.wish replyB
       (HistoryReply.mk' chainProof linkSig hist bound err1) []⌝ ∗
@@ -157,7 +157,7 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
     is_pkg_init server ∗
     "#His_cli" ∷ is_rpc_cli c good ∗
     "#His_args" ∷ match good with None => True | Some γ =>
-      let agreeγ := γ.(cfg.adtrγ).(ktcore.AdtrAgree.agree) in
+      let agreeγ := γ.(cfg.agreeγ) in
       ∃ (dig : list w8),
       "#Hidx_ep" ∷ mono_list_idx_own (agreeγ.(ktcore.Agree.digs)) (uint.nat prevEpoch) dig ∗
       "%Hlt_ver" ∷ ⌜uint.nat prevVerLen ≤
@@ -176,7 +176,7 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
       "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
 
       "Hgood" ∷ match good with None => True | Some γ =>
-        let agreeγ := γ.(cfg.adtrγ).(ktcore.AdtrAgree.agree) in
+        let agreeγ := γ.(cfg.agreeγ) in
         ∃ servHist lastDig lastLink,
         let numEps := length servHist in
         let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid lastDig in
@@ -360,7 +360,7 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     "Hsl_reply" ∷ sl_reply ↦* replyB ∗
 
     "Hgood" ∷ match good with None => True | Some γ =>
-    let agreeγ := γ.(cfg.adtrγ).(ktcore.AdtrAgree.agree) in
+    let agreeγ := γ.(cfg.agreeγ) in
     ∃ chain vrf σ last_link,
     let numEps := length σ.(state.hist) in
     "%His_reply" ∷ ⌜StartReply.wish replyB (StartReply.mk' chain vrf) []⌝ ∗
@@ -449,7 +449,7 @@ Lemma wp_CallStart c good :
       "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
 
       "Hgood" ∷ match good with None => True | Some γ =>
-        let agreeγ := γ.(cfg.adtrγ).(ktcore.AdtrAgree.agree) in
+        let agreeγ := γ.(cfg.agreeγ) in
         ∃ servHist ep dig link,
         "#Hlb_servHist" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) servHist ∗
         (* epoch returned by CheckStartChain is only upper bound on (len digs).

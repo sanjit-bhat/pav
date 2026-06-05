@@ -41,27 +41,23 @@ Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
   "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(Agree.vrf_pk) uid dig = opt_pk⌝.
 
 Definition is_staged_keys γcli uid keys : iProp Σ :=
-  ∃ digs keys_start next_ver,
-  let γ := γcli.(CliAgree.agree) in
-  "#Hlb_digs" ∷ mono_list_lb_own γ.(Agree.digs) digs ∗
-  "#His_start" ∷ dghost_var γcli.(CliAgree.keys_start) (□) (Some keys_start) ∗
-  "%Hstaged" ∷ ⌜staged_keys γ.(Agree.vrf_pk) (drop keys_start digs)
+  ∃ digs next_ver,
+  "#Hlb_digs" ∷ mono_list_lb_own γcli.(Agree.digs) digs ∗
+  "%Hstaged" ∷ ⌜staged_keys γcli.(Agree.vrf_pk) (drop γcli.(Agree.func_start) digs)
     uid keys next_ver⌝.
 
 (* is_audit is an audit thru epoch [ep]. *)
 Definition is_audit γcli γadtr ep : iProp Σ :=
   ∃ (digs : list $ list w8),
-  let γcli' := γcli.(CliAgree.agree) in
-  let γadtr' := γadtr.(AdtrAgree.agree) in
-  "#Hcli_digs" ∷ mono_list_lb_own γcli'.(Agree.digs) digs ∗
-  "#Hadtr_digs" ∷ mono_list_lb_own γadtr'.(Agree.digs) digs ∗
-  "%Hlen_digs" ∷ ⌜Z.of_nat $ length digs = S ep - γcli'.(Agree.digs_start)⌝ ∗
-  "%Hmono_plain" ∷ ⌜mono_plain γadtr'.(Agree.vrf_pk)
-    (drop γadtr.(AdtrAgree.audit_start) digs)⌝ ∗
+  "#Hcli_digs" ∷ mono_list_lb_own γcli.(Agree.digs) digs ∗
+  "#Hadtr_digs" ∷ mono_list_lb_own γadtr.(Agree.digs) digs ∗
+  "%Hlen_digs" ∷ ⌜Z.of_nat $ length digs = S ep - γcli.(Agree.digs_start)⌝ ∗
+  "%Hmono_plain" ∷ ⌜mono_plain γadtr.(Agree.vrf_pk)
+    (drop γadtr.(Agree.func_start) digs)⌝ ∗
 
-  "%Heq_vrf" ∷ ⌜γcli'.(Agree.vrf_pk) = γadtr'.(Agree.vrf_pk)⌝ ∗
-  "%Heq_start" ∷ ⌜γcli'.(Agree.digs_start) = γadtr'.(Agree.digs_start)⌝ ∗
-  "%Heq_cut" ∷ ⌜γcli.(CliAgree.cut) = γadtr.(AdtrAgree.cut)⌝.
+  "%Heq_vrf" ∷ ⌜γcli.(Agree.vrf_pk) = γadtr.(Agree.vrf_pk)⌝ ∗
+  "%Heq_start" ∷ ⌜γcli.(Agree.digs_start) = γadtr.(Agree.digs_start)⌝ ∗
+  "%Heq_cut" ∷ ⌜γcli.(Agree.cut) = γadtr.(Agree.cut)⌝.
 
 End proof.
 
@@ -86,12 +82,10 @@ Proof.
 Qed.
 
 Lemma kt_ptsto_txfer γcli γadtr ep uid opt_pk audit_ep :
-  let γcli' := γcli.(CliAgree.agree) in
-  let γadtr' := γadtr.(AdtrAgree.agree) in
-  γcli' ↪KT[ep, uid] opt_pk -∗
+  γcli ↪KT[ep, uid] opt_pk -∗
   is_audit γcli γadtr audit_ep -∗
-  ⌜γadtr'.(Agree.digs_start) + γadtr.(AdtrAgree.audit_start) ≤ ep ≤ audit_ep⌝ -∗
-  γadtr' ↪KT[ep, uid] opt_pk.
+  ⌜γadtr.(Agree.digs_start) + γadtr.(Agree.func_start) ≤ ep ≤ audit_ep⌝ -∗
+  γadtr ↪KT[ep, uid] opt_pk.
 Proof.
   simpl. iIntros "@@%". rewrite /kt_ptsto.
   eremember (ep - _)%nat as ep_t.
@@ -104,23 +98,18 @@ Proof.
   by iFrame "#".
 Qed.
 
-Lemma commit_staged γcli keys_start uid keys γadtr audit_ep :
-  let γcli' := γcli.(CliAgree.agree) in
-  let γadtr' := γadtr.(AdtrAgree.agree) in
-  let keys_start_ep := (γcli'.(Agree.digs_start) + keys_start)%nat in
-  γadtr.(AdtrAgree.audit_start) ≤ keys_start →
+Lemma commit_staged γcli uid keys γadtr audit_ep :
+  let keys_start_ep := (γcli.(Agree.digs_start) + γcli.(Agree.func_start))%nat in
+  γadtr.(Agree.func_start) ≤ γcli.(Agree.func_start) →
   keys_start_ep + length keys ≤ S audit_ep →
   is_staged_keys γcli uid keys -∗
-  dghost_var γcli.(CliAgree.keys_start) (□) (Some keys_start) -∗
   is_audit γcli γadtr audit_ep -∗
   (∀ i opt_pk,
     let ep := (keys_start_ep + i)%nat in
     ⌜keys !! i = Some opt_pk⌝ -∗
-    γadtr' ↪KT[ep, uid] opt_pk).
+    γadtr ↪KT[ep, uid] opt_pk).
 Proof.
-  simpl. iIntros "%% @ #Ht #Haudit * %Hlook_keys".
-  iCombine "His_start Ht" gives %[_ ?].
-  simplify_eq/=. iClear "Ht".
+  simpl. iIntros "%% @ #Haudit * %Hlook_keys".
   apply lookup_lt_Some in Hlook_keys as ?.
   iPoseProof "Haudit" as "@".
   iApply kt_ptsto_txfer; [|done|word].
@@ -138,9 +127,9 @@ Proof.
 
   odestruct (Hstaged _) as (_&->).
   { rewrite drop_app_le in Hmono_plain; [|word].
-    rewrite -(take_drop (keys_start - γadtr.(AdtrAgree.audit_start)) (drop _ _))
+    rewrite -(take_drop (γcli.(Agree.func_start) - γadtr.(Agree.func_start)) (drop _ _))
       drop_drop in Hmono_plain.
-    replace (_ + _)%nat with keys_start in Hmono_plain; [|lia].
+    replace (_ + _)%nat with (γcli.(Agree.func_start)) in Hmono_plain; [|lia].
     list_simplifier.
     rewrite /mono_plain !fmap_app in Hmono_plain |-*.
     apply list_reln_app in Hmono_plain as [_ Hmono].
@@ -163,14 +152,13 @@ therefore, their combine sequences need to end with same auditor.
 NOTE: without hashchain inversion, not sure how to do multi-auditor agreement.
 there's no final Auditor with all the digs. *)
 Lemma combine_audits γcli γadtr0 γadtr1 audit_ep0 audit_ep1 :
-  let γadtr1' := γadtr1.(AdtrAgree.agree) in
-  γadtr0.(AdtrAgree.audit_start) ≤ γadtr1.(AdtrAgree.audit_start) →
-  (γadtr1'.(Agree.digs_start) + γadtr1.(AdtrAgree.audit_start) ≤ audit_ep0)%nat →
+  γadtr0.(Agree.func_start) ≤ γadtr1.(Agree.func_start) →
+  (γadtr1.(Agree.digs_start) + γadtr1.(Agree.func_start) ≤ audit_ep0)%nat →
   (audit_ep0 ≤ audit_ep1)%nat →
   is_audit γcli γadtr0 audit_ep0 -∗
   is_audit γcli γadtr1 audit_ep1 -∗
   let new_γadtr :=
-    γadtr1 <| AdtrAgree.audit_start := γadtr0.(AdtrAgree.audit_start) |> in
+    γadtr1 <| Agree.func_start := γadtr0.(Agree.func_start) |> in
   is_audit γcli new_γadtr audit_ep1.
 Proof.
   simpl. iIntros "%%%". iNamedSuffix 1 "0". iNamedSuffix 1 "1".
@@ -190,10 +178,10 @@ Proof.
 
   intros * Hlook0 Hlook1.
   apply (last_drop_Some _ _
-    (γadtr1.(AdtrAgree.audit_start) - γadtr0.(AdtrAgree.audit_start)))
+    (γadtr1.(Agree.func_start) - γadtr0.(Agree.func_start)))
     in Hlook0; [|len].
   rewrite -!fmap_drop drop_drop in Hlook0.
-  replace (_ + _)%nat with (γadtr1.(AdtrAgree.audit_start)) in Hlook0 by word.
+  replace (_ + _)%nat with (γadtr1.(Agree.func_start)) in Hlook0 by word.
   rewrite last_lookup in Hlook0.
   rewrite head_lookup in Hlook1.
   eapply list_reln_trans.
