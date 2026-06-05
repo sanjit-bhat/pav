@@ -9,41 +9,25 @@ From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
 Module ktcore.
 Import key_map.ktcore staged_keys.ktcore.
 
-(* Agree has the core params needed for two parties to agree
-on the latest key at some (epoch, uid). *)
 Module Agree.
 Record t :=
   mk {
+    (* core params needed for two parties to agree on the latest key
+    at some (epoch, uid). *)
     vrf_pk : list w8;
     (* ptr to mono_list of digs. *)
     digs : gname;
     (* epoch of first dig. *)
     digs_start : nat;
-  }.
-End Agree.
 
-Module AdtrAgree.
-Record t :=
-  mk {
-    agree : Agree.t;
     (* hashchain cut prior to digs. *)
     cut : option $ list w8;
-    (* offset into digs when auditor started monitoring. *)
-    audit_start : nat;
+    (* offset into digs when a party started its functionality.
+    for Auditors, when they started checking map mono.
+    for Clients, when they started checking their own key history. *)
+    func_start : nat;
   }.
-End AdtrAgree.
-
-Module CliAgree.
-Record t :=
-  mk {
-    agree : Agree.t;
-    cut : option $ list w8;
-    (* ptr to optional offset into digs when client started tracking its own uid.
-    a None corresponds to not having started.
-    ptr so that CliAgree can be static. *)
-    keys_start : gname;
-  }.
-End CliAgree.
+End Agree.
 
 Section proof.
 Context `{!heapGS Σ}.
