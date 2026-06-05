@@ -180,30 +180,34 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #()));;;
     let: "adtrStartEp0" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.uint64] "adtrAddr") in
+    let: ((("$ret0", "$ret1"), "$ret2"), "$ret3") := (let: "$a0" := (![go.uint64] "adtrAddr") in
     let: "$a1" := (![cryptoffi.SigPublicKey] "adtrPk") in
     (MethodResolve (go.PointerType client.Client) "Audit"%go (![go.PointerType client.Client] "alice")) "$a0" "$a1") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
+    let: "$r3" := "$ret3" in
     do:  ("adtrStartEp0" <-[go.uint64] "$r0");;;
-    do:  ("err" <-[ktcore.Blame] "$r1");;;
-    do:  ("evid" <-[go.PointerType ktcore.Evid] "$r2");;;
+    do:  "$r1";;;
+    do:  ("err" <-[ktcore.Blame] "$r2");;;
+    do:  ("evid" <-[go.PointerType ktcore.Evid] "$r3");;;
     (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     do:  (let: "$a0" := ((![go.uint64] "adtrStartEp0") =⟨go.uint64⟩ #(W64 0)) in
     (FuncResolve primitive.Assume [] #()) "$a0");;;
     let: "adtrStartEp1" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.uint64] "adtrAddr") in
+    let: ((("$ret0", "$ret1"), "$ret2"), "$ret3") := (let: "$a0" := (![go.uint64] "adtrAddr") in
     let: "$a1" := (![cryptoffi.SigPublicKey] "adtrPk") in
     (MethodResolve (go.PointerType client.Client) "Audit"%go (![go.PointerType client.Client] "bob")) "$a0" "$a1") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
+    let: "$r3" := "$ret3" in
     do:  ("adtrStartEp1" <-[go.uint64] "$r0");;;
-    do:  ("err" <-[ktcore.Blame] "$r1");;;
-    do:  ("evid" <-[go.PointerType ktcore.Evid] "$r2");;;
+    do:  "$r1";;;
+    do:  ("err" <-[ktcore.Blame] "$r2");;;
+    do:  ("evid" <-[go.PointerType ktcore.Evid] "$r3");;;
     (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;

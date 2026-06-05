@@ -21,9 +21,9 @@ Definition Client {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go
 
 #[global] Opaque Client.
 
-Definition nextVer {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/client.nextVer"%go [].
+Definition ver {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/client.ver"%go [].
 
-#[global] Opaque nextVer.
+#[global] Opaque ver.
 
 Definition epoch {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/client.epoch"%go [].
 
@@ -39,9 +39,9 @@ Definition New {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "gi
 
 Definition getNextEp {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/client.getNextEp"%go.
 
-Definition checkMemb {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/client.checkMemb"%go.
+Definition checkMembs {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/client.checkMembs"%go.
 
-Definition checkHist {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/client.checkHist"%go.
+Definition checkMemb {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/client.checkMemb"%go.
 
 Definition checkNonMemb {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/client.checkNonMemb"%go.
 
@@ -57,21 +57,21 @@ Definition Client__Putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
   λ: "c" "pk",
     exception_do (let: "c" := (GoAlloc (go.PointerType Client) "c") in
     let: "pk" := (GoAlloc (go.SliceType go.byte) "pk") in
-    (if: ![go.bool] (StructFieldRef nextVer "isPending"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))))
+    (if: ![go.bool] (StructFieldRef ver "hasPendPk"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c"))))
     then
-      do:  (let: "$a0" := (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef nextVer "pendingPk"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))))) in
+      do:  (let: "$a0" := (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef ver "pendPk"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c"))))) in
       let: "$a1" := (![go.SliceType go.byte] "pk") in
       (FuncResolve bytes.Equal [] #()) "$a0" "$a1") in
       (FuncResolve std.Assert [] #()) "$a0")
     else
       let: "$r0" := #true in
-      do:  ((StructFieldRef nextVer "isPending"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c")))) <-[go.bool] "$r0");;;
+      do:  ((StructFieldRef ver "hasPendPk"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c")))) <-[go.bool] "$r0");;;
       let: "$r0" := (![go.SliceType go.byte] "pk") in
-      do:  ((StructFieldRef nextVer "pendingPk"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c")))) <-[go.SliceType go.byte] "$r0"));;;
+      do:  ((StructFieldRef ver "pendPk"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c")))) <-[go.SliceType go.byte] "$r0"));;;
     do:  (let: "$a0" := (![go.PointerType advrpc.Client] (StructFieldRef serv "cli"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
     let: "$a1" := (![go.uint64] (StructFieldRef Client "uid"%go (![go.PointerType Client] "c"))) in
     let: "$a2" := (![go.SliceType go.byte] "pk") in
-    let: "$a3" := (![go.uint64] (StructFieldRef nextVer "ver"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))))) in
+    let: "$a3" := (![go.uint64] (StructFieldRef ver "ver"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c"))))) in
     (FuncResolve server.CallPut [] #()) "$a0" "$a1" "$a2" "$a3");;;
     return: #()).
 
@@ -82,176 +82,68 @@ Definition Client__Getⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
   λ: "c" "uid",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
     let: "pk" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "isReg" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "hasPk" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "ep" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: "c" := (GoAlloc (go.PointerType Client) "c") in
     let: "uid" := (GoAlloc go.uint64 "uid") in
-    let: "bound" := (GoAlloc (go.PointerType ktcore.NonMemb) (GoZeroVal (go.PointerType ktcore.NonMemb) #())) in
-    let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) (GoZeroVal (go.SliceType (go.PointerType ktcore.Memb)) #())) in
-    let: "sig" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "chainProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: (((("$ret0", "$ret1"), "$ret2"), "$ret3"), "$ret4") := (let: "$a0" := (![go.PointerType advrpc.Client] (StructFieldRef serv "cli"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
-    let: "$a1" := (![go.uint64] "uid") in
-    let: "$a2" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] (StructFieldRef Client "last"%go (![go.PointerType Client] "c"))))) in
-    let: "$a3" := #(W64 0) in
-    (FuncResolve server.CallHistory [] #()) "$a0" "$a1" "$a2" "$a3") in
+    let: "pks" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "nextEp" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.uint64] "uid") in
+    let: "$a1" := #(W64 0) in
+    (MethodResolve (go.PointerType Client) "getHistory"%go (![go.PointerType Client] "c")) "$a0" "$a1") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    let: "$r3" := "$ret3" in
-    let: "$r4" := "$ret4" in
-    do:  ("chainProof" <-[go.SliceType go.byte] "$r0");;;
-    do:  ("sig" <-[go.SliceType go.byte] "$r1");;;
-    do:  ("hist" <-[go.SliceType (go.PointerType ktcore.Memb)] "$r2");;;
-    do:  ("bound" <-[go.PointerType ktcore.NonMemb] "$r3");;;
-    do:  ("err" <-[ktcore.Blame] "$r4");;;
+    do:  ("nextEp" <-[go.PointerType epoch] "$r0");;;
+    do:  ("pks" <-[go.SliceType (go.SliceType go.byte)] "$r1");;;
+    do:  ("err" <-[ktcore.Blame] "$r2");;;
     (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
-    then return: (![go.uint64] "ep", ![go.bool] "isReg", ![go.SliceType go.byte] "pk", ![ktcore.Blame] "err")
+    then return: (![go.uint64] "ep", ![go.bool] "hasPk", ![go.SliceType go.byte] "pk", ![ktcore.Blame] "err")
     else do:  #());;;
-    let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "next" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
-    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType epoch] (StructFieldRef Client "last"%go (![go.PointerType Client] "c"))) in
-    let: "$a1" := (![cryptoffi.SigPublicKey] (StructFieldRef serv "sigPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
-    let: "$a2" := (![go.SliceType go.byte] "chainProof") in
-    let: "$a3" := (![go.SliceType go.byte] "sig") in
-    (FuncResolve getNextEp [] #()) "$a0" "$a1" "$a2" "$a3") in
-    let: "$r0" := "$ret0" in
-    let: "$r1" := "$ret1" in
-    do:  ("next" <-[go.PointerType epoch] "$r0");;;
-    do:  ("errb" <-[go.bool] "$r1");;;
-    (if: ![go.bool] "errb"
-    then
-      let: "$r0" := ktcore.BlameServFull in
-      do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "ep", ![go.bool] "isReg", ![go.SliceType go.byte] "pk", ![ktcore.Blame] "err")
-    else do:  #());;;
-    (if: let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
-    let: "$a1" := (![go.uint64] "uid") in
-    let: "$a2" := #(W64 0) in
-    let: "$a3" := (![go.SliceType go.byte] (StructFieldRef epoch "dig"%go (![go.PointerType epoch] "next"))) in
-    let: "$a4" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
-    (FuncResolve checkHist [] #()) "$a0" "$a1" "$a2" "$a3" "$a4"
-    then
-      let: "$r0" := ktcore.BlameServFull in
-      do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "ep", ![go.bool] "isReg", ![go.SliceType go.byte] "pk", ![ktcore.Blame] "err")
-    else do:  #());;;
-    let: "boundVer" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: "$r0" := (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
-    (FuncResolve go.len [go.SliceType (go.PointerType ktcore.Memb)] #()) "$a0")) in
-    do:  ("boundVer" <-[go.uint64] "$r0");;;
-    (if: let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
-    let: "$a1" := (![go.uint64] "uid") in
-    let: "$a2" := (![go.uint64] "boundVer") in
-    let: "$a3" := (![go.SliceType go.byte] (StructFieldRef epoch "dig"%go (![go.PointerType epoch] "next"))) in
-    let: "$a4" := (![go.PointerType ktcore.NonMemb] "bound") in
-    (FuncResolve checkNonMemb [] #()) "$a0" "$a1" "$a2" "$a3" "$a4"
-    then
-      let: "$r0" := ktcore.BlameServFull in
-      do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "ep", ![go.bool] "isReg", ![go.SliceType go.byte] "pk", ![ktcore.Blame] "err")
-    else do:  #());;;
-    let: "$r0" := (![go.PointerType epoch] "next") in
-    do:  ((StructFieldRef Client "last"%go (![go.PointerType Client] "c")) <-[go.PointerType epoch] "$r0");;;
-    let: "$r0" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] "next"))) in
+    let: "$r0" := (![go.PointerType epoch] "nextEp") in
+    do:  ((StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c")) <-[go.PointerType epoch] "$r0");;;
+    let: "$r0" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] "nextEp"))) in
     do:  ("ep" <-[go.uint64] "$r0");;;
-    (if: Convert go.untyped_bool go.bool ((![go.uint64] "boundVer") ≠⟨go.uint64⟩ #(W64 0))
+    (if: Convert go.untyped_bool go.bool ((let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "pks") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0") ≠⟨go.int⟩ #(W64 0))
     then
       let: "$r0" := #true in
-      do:  ("isReg" <-[go.bool] "$r0");;;
-      let: "$r0" := (![go.SliceType go.byte] (StructFieldRef ktcore.CommitOpen "Val"%go (![go.PointerType ktcore.CommitOpen] (StructFieldRef ktcore.Memb "PkOpen"%go (![go.PointerType ktcore.Memb] (IndexRef (go.SliceType (go.PointerType ktcore.Memb)) (![go.SliceType (go.PointerType ktcore.Memb)] "hist", Convert go.uint64 go.int ((![go.uint64] "boundVer") -⟨go.uint64⟩ #(W64 1))))))))) in
+      do:  ("hasPk" <-[go.bool] "$r0");;;
+      let: "$r0" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "pks", (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "pks") in
+       (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0") -⟨go.int⟩ #(W64 1)))) in
       do:  ("pk" <-[go.SliceType go.byte] "$r0")
     else do:  #());;;
-    return: (![go.uint64] "ep", ![go.bool] "isReg", ![go.SliceType go.byte] "pk", ![ktcore.Blame] "err")).
+    return: (![go.uint64] "ep", ![go.bool] "hasPk", ![go.SliceType go.byte] "pk", ![ktcore.Blame] "err")).
 
 (* SelfMon a client's own uid.
    if isChanged, the key was added sometime from the last SelfMon.
 
-   go: client.go:89:18 *)
+   go: client.go:73:18 *)
 Definition Client__SelfMonⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "c" <>,
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
     let: "isChanged" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "ep" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: "c" := (GoAlloc (go.PointerType Client) "c") in
-    let: "bound" := (GoAlloc (go.PointerType ktcore.NonMemb) (GoZeroVal (go.PointerType ktcore.NonMemb) #())) in
-    let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) (GoZeroVal (go.SliceType (go.PointerType ktcore.Memb)) #())) in
-    let: "sig" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "chainProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: (((("$ret0", "$ret1"), "$ret2"), "$ret3"), "$ret4") := (let: "$a0" := (![go.PointerType advrpc.Client] (StructFieldRef serv "cli"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
-    let: "$a1" := (![go.uint64] (StructFieldRef Client "uid"%go (![go.PointerType Client] "c"))) in
-    let: "$a2" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] (StructFieldRef Client "last"%go (![go.PointerType Client] "c"))))) in
-    let: "$a3" := (![go.uint64] (StructFieldRef nextVer "ver"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))))) in
-    (FuncResolve server.CallHistory [] #()) "$a0" "$a1" "$a2" "$a3") in
+    let: "pks" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "nextEp" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.uint64] (StructFieldRef Client "uid"%go (![go.PointerType Client] "c"))) in
+    let: "$a1" := (![go.uint64] (StructFieldRef ver "ver"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c"))))) in
+    (MethodResolve (go.PointerType Client) "getHistory"%go (![go.PointerType Client] "c")) "$a0" "$a1") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    let: "$r3" := "$ret3" in
-    let: "$r4" := "$ret4" in
-    do:  ("chainProof" <-[go.SliceType go.byte] "$r0");;;
-    do:  ("sig" <-[go.SliceType go.byte] "$r1");;;
-    do:  ("hist" <-[go.SliceType (go.PointerType ktcore.Memb)] "$r2");;;
-    do:  ("bound" <-[go.PointerType ktcore.NonMemb] "$r3");;;
-    do:  ("err" <-[ktcore.Blame] "$r4");;;
+    do:  ("nextEp" <-[go.PointerType epoch] "$r0");;;
+    do:  ("pks" <-[go.SliceType (go.SliceType go.byte)] "$r1");;;
+    do:  ("err" <-[ktcore.Blame] "$r2");;;
     (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
     then return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
     else do:  #());;;
-    let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "next" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
-    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType epoch] (StructFieldRef Client "last"%go (![go.PointerType Client] "c"))) in
-    let: "$a1" := (![cryptoffi.SigPublicKey] (StructFieldRef serv "sigPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
-    let: "$a2" := (![go.SliceType go.byte] "chainProof") in
-    let: "$a3" := (![go.SliceType go.byte] "sig") in
-    (FuncResolve getNextEp [] #()) "$a0" "$a1" "$a2" "$a3") in
-    let: "$r0" := "$ret0" in
-    let: "$r1" := "$ret1" in
-    do:  ("next" <-[go.PointerType epoch] "$r0");;;
-    do:  ("errb" <-[go.bool] "$r1");;;
-    (if: ![go.bool] "errb"
-    then
-      let: "$r0" := ktcore.BlameServFull in
-      do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
-    else do:  #());;;
-    let: "$r0" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] "next"))) in
+    let: "$r0" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] "nextEp"))) in
     do:  ("ep" <-[go.uint64] "$r0");;;
-    let: "boundVer" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: "$r0" := ((![go.uint64] (StructFieldRef nextVer "ver"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))))) +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
-    (FuncResolve go.len [go.SliceType (go.PointerType ktcore.Memb)] #()) "$a0"))) in
-    do:  ("boundVer" <-[go.uint64] "$r0");;;
-    (if: (⟨go.bool⟩! (let: "$a0" := (![go.uint64] (StructFieldRef nextVer "ver"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))))) in
-    let: "$a1" := (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
-    (FuncResolve go.len [go.SliceType (go.PointerType ktcore.Memb)] #()) "$a0")) in
-    (FuncResolve std.SumNoOverflow [] #()) "$a0" "$a1"))
-    then
-      let: "$r0" := ktcore.BlameServFull in
-      do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
-    else do:  #());;;
-    (if: let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
-    let: "$a1" := (![go.uint64] (StructFieldRef Client "uid"%go (![go.PointerType Client] "c"))) in
-    let: "$a2" := (![go.uint64] (StructFieldRef nextVer "ver"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))))) in
-    let: "$a3" := (![go.SliceType go.byte] (StructFieldRef epoch "dig"%go (![go.PointerType epoch] "next"))) in
-    let: "$a4" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
-    (FuncResolve checkHist [] #()) "$a0" "$a1" "$a2" "$a3" "$a4"
-    then
-      let: "$r0" := ktcore.BlameServFull in
-      do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
-    else do:  #());;;
-    (if: let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
-    let: "$a1" := (![go.uint64] (StructFieldRef Client "uid"%go (![go.PointerType Client] "c"))) in
-    let: "$a2" := (![go.uint64] "boundVer") in
-    let: "$a3" := (![go.SliceType go.byte] (StructFieldRef epoch "dig"%go (![go.PointerType epoch] "next"))) in
-    let: "$a4" := (![go.PointerType ktcore.NonMemb] "bound") in
-    (FuncResolve checkNonMemb [] #()) "$a0" "$a1" "$a2" "$a3" "$a4"
-    then
-      let: "$r0" := ktcore.BlameServFull in
-      do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
-    else do:  #());;;
-    (let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c"))) in
-    let: "$a1" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
+    let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c"))) in
+    let: "$a1" := (![go.SliceType (go.SliceType go.byte)] "pks") in
     (FuncResolve checkPend [] #()) "$a0" "$a1") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
@@ -262,70 +154,47 @@ Definition Client__SelfMonⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
       let: "$r0" := (ktcore.BlameServFull |⟨ktcore.Blame⟩ ktcore.BlameClients) in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
       return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
-    else do:  #()));;;
-    let: "$r0" := (![go.PointerType epoch] "next") in
-    do:  ((StructFieldRef Client "last"%go (![go.PointerType Client] "c")) <-[go.PointerType epoch] "$r0");;;
+    else do:  #());;;
+    let: "$r0" := (![go.PointerType epoch] "nextEp") in
+    do:  ((StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c")) <-[go.PointerType epoch] "$r0");;;
     (if: (⟨go.bool⟩! (![go.bool] "isChanged"))
     then return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")
     else do:  #());;;
     let: "$r0" := #false in
-    do:  ((StructFieldRef nextVer "isPending"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c")))) <-[go.bool] "$r0");;;
+    do:  ((StructFieldRef ver "hasPendPk"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c")))) <-[go.bool] "$r0");;;
     let: "$r0" := (Convert go.untyped_nil (go.SliceType go.byte) UntypedNil) in
-    do:  ((StructFieldRef nextVer "pendingPk"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c")))) <-[go.SliceType go.byte] "$r0");;;
-    let: "$r0" := (![go.uint64] "boundVer") in
-    do:  ((StructFieldRef nextVer "ver"%go (![go.PointerType nextVer] (StructFieldRef Client "pend"%go (![go.PointerType Client] "c")))) <-[go.uint64] "$r0");;;
+    do:  ((StructFieldRef ver "pendPk"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c")))) <-[go.SliceType go.byte] "$r0");;;
+    do:  ((StructFieldRef ver "ver"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c")))) <-[go.uint64] ((![go.uint64] (StructFieldRef ver "ver"%go (![go.PointerType ver] (StructFieldRef Client "nextVer"%go (![go.PointerType Client] "c"))))) +⟨go.uint64⟩ #(W64 1)));;;
     return: (![go.uint64] "ep", ![go.bool] "isChanged", ![ktcore.Blame] "err")).
 
-(* go: client.go:131:6 *)
+(* checkPend validates that pks align with pend.
+
+   go: client.go:97:6 *)
 Definition checkPendⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "pend" "hist",
+  λ: "pend" "pks",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "isChanged" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) "hist") in
-    let: "pend" := (GoAlloc (go.PointerType nextVer) "pend") in
-    let: "histLen" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: "$r0" := (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
-    (FuncResolve go.len [go.SliceType (go.PointerType ktcore.Memb)] #()) "$a0")) in
-    do:  ("histLen" <-[go.uint64] "$r0");;;
-    (if: (⟨go.bool⟩! (![go.bool] (StructFieldRef nextVer "isPending"%go (![go.PointerType nextVer] "pend"))))
-    then
-      (if: Convert go.untyped_bool go.bool ((![go.uint64] "histLen") ≠⟨go.uint64⟩ #(W64 0))
-      then
-        let: "$r0" := #true in
-        do:  ("err" <-[go.bool] "$r0");;;
-        return: (![go.bool] "isChanged", ![go.bool] "err")
-      else do:  #());;;
-      return: (![go.bool] "isChanged", ![go.bool] "err")
-    else do:  #());;;
-    (if: Convert go.untyped_bool go.bool ((![go.uint64] "histLen") >⟨go.uint64⟩ #(W64 1))
-    then
-      let: "$r0" := #true in
-      do:  ("err" <-[go.bool] "$r0");;;
-      return: (![go.bool] "isChanged", ![go.bool] "err")
-    else do:  #());;;
-    (if: Convert go.untyped_bool go.bool ((![go.uint64] "histLen") =⟨go.uint64⟩ #(W64 0))
+    let: "pks" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "pks") in
+    let: "pend" := (GoAlloc (go.PointerType ver) "pend") in
+    (if: Convert go.untyped_bool go.bool ((let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "pks") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0") =⟨go.int⟩ #(W64 0))
     then return: (![go.bool] "isChanged", ![go.bool] "err")
-    else do:  #());;;
-    let: "newKey" := (GoAlloc (go.PointerType ktcore.Memb) (GoZeroVal (go.PointerType ktcore.Memb) #())) in
-    let: "$r0" := (![go.PointerType ktcore.Memb] (IndexRef (go.SliceType (go.PointerType ktcore.Memb)) (![go.SliceType (go.PointerType ktcore.Memb)] "hist", #(W64 0)))) in
-    do:  ("newKey" <-[go.PointerType ktcore.Memb] "$r0");;;
-    (if: (⟨go.bool⟩! (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef ktcore.CommitOpen "Val"%go (![go.PointerType ktcore.CommitOpen] (StructFieldRef ktcore.Memb "PkOpen"%go (![go.PointerType ktcore.Memb] "newKey"))))) in
-    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef nextVer "pendingPk"%go (![go.PointerType nextVer] "pend"))) in
-    (FuncResolve bytes.Equal [] #()) "$a0" "$a1"))
-    then
-      let: "$r0" := #true in
-      do:  ("err" <-[go.bool] "$r0");;;
-      return: (![go.bool] "isChanged", ![go.bool] "err")
     else do:  #());;;
     let: "$r0" := #true in
     do:  ("isChanged" <-[go.bool] "$r0");;;
+    let: "$r0" := ((((let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "pks") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0") >⟨go.int⟩ #(W64 1)) || (⟨go.bool⟩! (![go.bool] (StructFieldRef ver "hasPendPk"%go (![go.PointerType ver] "pend"))))) || (⟨go.bool⟩! (let: "$a0" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "pks", #(W64 0)))) in
+    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef ver "pendPk"%go (![go.PointerType ver] "pend"))) in
+    (FuncResolve bytes.Equal [] #()) "$a0" "$a1"))) in
+    do:  ("err" <-[go.bool] "$r0");;;
     return: (![go.bool] "isChanged", ![go.bool] "err")).
 
-(* go: client.go:160:18 *)
+(* go: client.go:106:18 *)
 Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "c" "adtrAddr" "adtrPk",
     exception_do (let: "evid" := (GoAlloc (go.PointerType ktcore.Evid) (GoZeroVal (go.PointerType ktcore.Evid) #())) in
     let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
+    let: "ep" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: "startEp" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
     let: "c" := (GoAlloc (go.PointerType Client) "c") in
     let: "adtrPk" := (GoAlloc cryptoffi.SigPublicKey "adtrPk") in
@@ -334,14 +203,11 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     let: "$r0" := (let: "$a0" := (![go.uint64] "adtrAddr") in
     (FuncResolve advrpc.Dial [] #()) "$a0") in
     do:  ("cli" <-[go.PointerType advrpc.Client] "$r0");;;
-    let: "last" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
-    let: "$r0" := (![go.PointerType epoch] (StructFieldRef Client "last"%go (![go.PointerType Client] "c"))) in
-    do:  ("last" <-[go.PointerType epoch] "$r0");;;
     let: "vrf" := (GoAlloc (go.PointerType auditor.SignedVrf) (GoZeroVal (go.PointerType auditor.SignedVrf) #())) in
     let: "currLink" := (GoAlloc (go.PointerType auditor.SignedLink) (GoZeroVal (go.PointerType auditor.SignedLink) #())) in
     let: "startLink" := (GoAlloc (go.PointerType auditor.SignedLink) (GoZeroVal (go.PointerType auditor.SignedLink) #())) in
     let: (((("$ret0", "$ret1"), "$ret2"), "$ret3"), "$ret4") := (let: "$a0" := (![go.PointerType advrpc.Client] "cli") in
-    let: "$a1" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] "last"))) in
+    let: "$a1" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))) in
     (FuncResolve auditor.CallGet [] #()) "$a0" "$a1") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
@@ -354,7 +220,7 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  ("vrf" <-[go.PointerType auditor.SignedVrf] "$r3");;;
     do:  ("err" <-[ktcore.Blame] "$r4");;;
     (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
-    then return: (![go.uint64] "startEp", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
+    then return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     (if: let: "$a0" := (![cryptoffi.SigPublicKey] (StructFieldRef serv "sigPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
     let: "$a1" := (![cryptoffi.SigPublicKey] "adtrPk") in
@@ -364,17 +230,17 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     then
       let: "$r0" := ktcore.BlameAdtrFull in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "startEp", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
+      return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     (if: let: "$a0" := (![cryptoffi.SigPublicKey] (StructFieldRef serv "sigPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
     let: "$a1" := (![cryptoffi.SigPublicKey] "adtrPk") in
-    let: "$a2" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] "last"))) in
+    let: "$a2" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))) in
     let: "$a3" := (![go.PointerType auditor.SignedLink] "currLink") in
     (FuncResolve checkAuditLink [] #()) "$a0" "$a1" "$a2" "$a3"
     then
       let: "$r0" := ktcore.BlameAdtrFull in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "startEp", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
+      return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     (if: let: "$a0" := (![cryptoffi.SigPublicKey] (StructFieldRef serv "sigPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
     let: "$a1" := (![cryptoffi.SigPublicKey] "adtrPk") in
@@ -383,7 +249,7 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     then
       let: "$r0" := ktcore.BlameAdtrFull in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "startEp", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
+      return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
     let: "vrfPkB" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "$r0" := (let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
@@ -402,15 +268,15 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
       do:  ("evid" <-[go.PointerType ktcore.Evid] "$r0");;;
       let: "$r0" := ktcore.BlameServSig in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "startEp", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
+      return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
-    (if: (⟨go.bool⟩! (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef epoch "link"%go (![go.PointerType epoch] "last"))) in
+    (if: (⟨go.bool⟩! (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef epoch "link"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))) in
     let: "$a1" := (![go.SliceType go.byte] (StructFieldRef auditor.SignedLink "Link"%go (![go.PointerType auditor.SignedLink] "currLink"))) in
     (FuncResolve bytes.Equal [] #()) "$a0" "$a1"))
     then
-      let: "$r0" := (GoAlloc ktcore.Evid (let: "$v0" := (GoAlloc ktcore.EvidLink (let: "$v0" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] "last"))) in
-      let: "$v1" := (![go.SliceType go.byte] (StructFieldRef epoch "link"%go (![go.PointerType epoch] "last"))) in
-      let: "$v2" := (![go.SliceType go.byte] (StructFieldRef epoch "sig"%go (![go.PointerType epoch] "last"))) in
+      let: "$r0" := (GoAlloc ktcore.Evid (let: "$v0" := (GoAlloc ktcore.EvidLink (let: "$v0" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))) in
+      let: "$v1" := (![go.SliceType go.byte] (StructFieldRef epoch "link"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))) in
+      let: "$v2" := (![go.SliceType go.byte] (StructFieldRef epoch "sig"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))) in
       let: "$v3" := (![go.SliceType go.byte] (StructFieldRef auditor.SignedLink "Link"%go (![go.PointerType auditor.SignedLink] "currLink"))) in
       let: "$v4" := (![go.SliceType go.byte] (StructFieldRef auditor.SignedLink "ServSig"%go (![go.PointerType auditor.SignedLink] "currLink"))) in
       CompositeLiteral ktcore.EvidLink (LiteralValue [KeyedElement (Some (KeyField "Epoch"%go)) (ElementExpression go.uint64 "$v0"); KeyedElement (Some (KeyField "Link0"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "Sig0"%go)) (ElementExpression (go.SliceType go.byte) "$v2"); KeyedElement (Some (KeyField "Link1"%go)) (ElementExpression (go.SliceType go.byte) "$v3"); KeyedElement (Some (KeyField "Sig1"%go)) (ElementExpression (go.SliceType go.byte) "$v4")]))) in
@@ -418,11 +284,13 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
       do:  ("evid" <-[go.PointerType ktcore.Evid] "$r0");;;
       let: "$r0" := ktcore.BlameServSig in
       do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "startEp", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
+      return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
-    return: (![go.uint64] "startEp", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")).
+    let: "$r0" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))) in
+    do:  ("ep" <-[go.uint64] "$r0");;;
+    return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")).
 
-(* go: client.go:198:6 *)
+(* go: client.go:144:6 *)
 Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "uid" "servAddr" "servPk",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -483,16 +351,16 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
       do:  ("err" <-[ktcore.Blame] "$r0");;;
       return: (![go.PointerType Client] "c", ![go.uint64] "ep", ![ktcore.Blame] "err")
     else do:  #());;;
-    let: "pendingPut" := (GoAlloc (go.PointerType nextVer) (GoZeroVal (go.PointerType nextVer) #())) in
-    let: "$r0" := (GoAlloc nextVer (CompositeLiteral nextVer (LiteralValue []))) in
-    do:  ("pendingPut" <-[go.PointerType nextVer] "$r0");;;
-    let: "last" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
+    let: "ver" := (GoAlloc (go.PointerType ver) (GoZeroVal (go.PointerType ver) #())) in
+    let: "$r0" := (GoAlloc ver (CompositeLiteral ver (LiteralValue []))) in
+    do:  ("ver" <-[go.PointerType ver] "$r0");;;
+    let: "lastEp0" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
     let: "$r0" := (GoAlloc epoch (let: "$v0" := (![go.uint64] "startEp") in
     let: "$v1" := (![go.SliceType go.byte] "startDig") in
     let: "$v2" := (![go.SliceType go.byte] "startLink") in
     let: "$v3" := (![go.SliceType go.byte] (StructFieldRef server.StartChain "LinkSig"%go (![go.PointerType server.StartChain] "chain"))) in
     CompositeLiteral epoch (LiteralValue [KeyedElement (Some (KeyField "epoch"%go)) (ElementExpression go.uint64 "$v0"); KeyedElement (Some (KeyField "dig"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "link"%go)) (ElementExpression (go.SliceType go.byte) "$v2"); KeyedElement (Some (KeyField "sig"%go)) (ElementExpression (go.SliceType go.byte) "$v3")]))) in
-    do:  ("last" <-[go.PointerType epoch] "$r0");;;
+    do:  ("lastEp0" <-[go.PointerType epoch] "$r0");;;
     let: "serv" := (GoAlloc (go.PointerType serv) (GoZeroVal (go.PointerType serv) #())) in
     let: "$r0" := (GoAlloc serv (let: "$v0" := (![go.PointerType advrpc.Client] "cli") in
     let: "$v1" := (![cryptoffi.SigPublicKey] "servPk") in
@@ -501,21 +369,136 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     CompositeLiteral serv (LiteralValue [KeyedElement (Some (KeyField "cli"%go)) (ElementExpression (go.PointerType advrpc.Client) "$v0"); KeyedElement (Some (KeyField "sigPk"%go)) (ElementExpression cryptoffi.SigPublicKey "$v1"); KeyedElement (Some (KeyField "vrfPk"%go)) (ElementExpression (go.PointerType cryptoffi.VrfPublicKey) "$v2"); KeyedElement (Some (KeyField "vrfSig"%go)) (ElementExpression (go.SliceType go.byte) "$v3")]))) in
     do:  ("serv" <-[go.PointerType serv] "$r0");;;
     let: "$r0" := (GoAlloc Client (let: "$v0" := (![go.uint64] "uid") in
-    let: "$v1" := (![go.PointerType nextVer] "pendingPut") in
-    let: "$v2" := (![go.PointerType epoch] "last") in
+    let: "$v1" := (![go.PointerType ver] "ver") in
+    let: "$v2" := (![go.PointerType epoch] "lastEp0") in
     let: "$v3" := (![go.PointerType serv] "serv") in
-    CompositeLiteral Client (LiteralValue [KeyedElement (Some (KeyField "uid"%go)) (ElementExpression go.uint64 "$v0"); KeyedElement (Some (KeyField "pend"%go)) (ElementExpression (go.PointerType nextVer) "$v1"); KeyedElement (Some (KeyField "last"%go)) (ElementExpression (go.PointerType epoch) "$v2"); KeyedElement (Some (KeyField "serv"%go)) (ElementExpression (go.PointerType serv) "$v3")]))) in
+    CompositeLiteral Client (LiteralValue [KeyedElement (Some (KeyField "uid"%go)) (ElementExpression go.uint64 "$v0"); KeyedElement (Some (KeyField "nextVer"%go)) (ElementExpression (go.PointerType ver) "$v1"); KeyedElement (Some (KeyField "lastEp"%go)) (ElementExpression (go.PointerType epoch) "$v2"); KeyedElement (Some (KeyField "serv"%go)) (ElementExpression (go.PointerType serv) "$v3")]))) in
     do:  ("c" <-[go.PointerType Client] "$r0");;;
-    let: (("$ret0", "$ret1"), "$ret2") := ((MethodResolve (go.PointerType Client) "SelfMon"%go (![go.PointerType Client] "c")) #()) in
+    let: "pks" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "lastEp1" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.uint64] (StructFieldRef Client "uid"%go (![go.PointerType Client] "c"))) in
+    let: "$a1" := #(W64 0) in
+    (MethodResolve (go.PointerType Client) "getHistory"%go (![go.PointerType Client] "c")) "$a0" "$a1") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    do:  ("ep" <-[go.uint64] "$r0");;;
-    do:  "$r1";;;
+    do:  ("lastEp1" <-[go.PointerType epoch] "$r0");;;
+    do:  ("pks" <-[go.SliceType (go.SliceType go.byte)] "$r1");;;
     do:  ("err" <-[ktcore.Blame] "$r2");;;
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
+    then return: (![go.PointerType Client] "c", ![go.uint64] "ep", ![ktcore.Blame] "err")
+    else do:  #());;;
+    let: "$r0" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] "lastEp1"))) in
+    do:  ("ep" <-[go.uint64] "$r0");;;
+    (if: Convert go.untyped_bool go.bool ((let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "pks") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0") ≠⟨go.int⟩ #(W64 0))
+    then
+      let: "$r0" := (ktcore.BlameServFull |⟨ktcore.Blame⟩ ktcore.BlameClients) in
+      do:  ("err" <-[ktcore.Blame] "$r0");;;
+      return: (![go.PointerType Client] "c", ![go.uint64] "ep", ![ktcore.Blame] "err")
+    else do:  #());;;
+    let: "$r0" := (![go.PointerType epoch] "lastEp1") in
+    do:  ((StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c")) <-[go.PointerType epoch] "$r0");;;
     return: (![go.PointerType Client] "c", ![go.uint64] "ep", ![ktcore.Blame] "err")).
 
-(* go: client.go:223:6 *)
+(* go: client.go:180:18 *)
+Definition Client__getHistoryⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "c" "uid" "prevVerLen",
+    exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
+    let: "pks" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "nextEp" := (GoAlloc (go.PointerType epoch) (GoZeroVal (go.PointerType epoch) #())) in
+    let: "c" := (GoAlloc (go.PointerType Client) "c") in
+    let: "prevVerLen" := (GoAlloc go.uint64 "prevVerLen") in
+    let: "uid" := (GoAlloc go.uint64 "uid") in
+    let: "bound" := (GoAlloc (go.PointerType ktcore.NonMemb) (GoZeroVal (go.PointerType ktcore.NonMemb) #())) in
+    let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) (GoZeroVal (go.SliceType (go.PointerType ktcore.Memb)) #())) in
+    let: "sig" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "chainProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: (((("$ret0", "$ret1"), "$ret2"), "$ret3"), "$ret4") := (let: "$a0" := (![go.PointerType advrpc.Client] (StructFieldRef serv "cli"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
+    let: "$a1" := (![go.uint64] "uid") in
+    let: "$a2" := (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))) in
+    let: "$a3" := (![go.uint64] "prevVerLen") in
+    (FuncResolve server.CallHistory [] #()) "$a0" "$a1" "$a2" "$a3") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    let: "$r3" := "$ret3" in
+    let: "$r4" := "$ret4" in
+    do:  ("chainProof" <-[go.SliceType go.byte] "$r0");;;
+    do:  ("sig" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("hist" <-[go.SliceType (go.PointerType ktcore.Memb)] "$r2");;;
+    do:  ("bound" <-[go.PointerType ktcore.NonMemb] "$r3");;;
+    do:  ("err" <-[ktcore.Blame] "$r4");;;
+    (if: Convert go.untyped_bool go.bool ((![ktcore.Blame] "err") ≠⟨ktcore.Blame⟩ ktcore.BlameNone)
+    then return: (![go.PointerType epoch] "nextEp", ![go.SliceType (go.SliceType go.byte)] "pks", ![ktcore.Blame] "err")
+    else do:  #());;;
+    let: "errb" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))) in
+    let: "$a1" := (![cryptoffi.SigPublicKey] (StructFieldRef serv "sigPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
+    let: "$a2" := (![go.SliceType go.byte] "chainProof") in
+    let: "$a3" := (![go.SliceType go.byte] "sig") in
+    (FuncResolve getNextEp [] #()) "$a0" "$a1" "$a2" "$a3") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    do:  ("nextEp" <-[go.PointerType epoch] "$r0");;;
+    do:  ("errb" <-[go.bool] "$r1");;;
+    (if: ![go.bool] "errb"
+    then
+      let: "$r0" := ktcore.BlameServFull in
+      do:  ("err" <-[ktcore.Blame] "$r0");;;
+      return: (![go.PointerType epoch] "nextEp", ![go.SliceType (go.SliceType go.byte)] "pks", ![ktcore.Blame] "err")
+    else do:  #());;;
+    let: "boundVer" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+    let: "$r0" := ((![go.uint64] "prevVerLen") +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
+    (FuncResolve go.len [go.SliceType (go.PointerType ktcore.Memb)] #()) "$a0"))) in
+    do:  ("boundVer" <-[go.uint64] "$r0");;;
+    (if: (⟨go.bool⟩! (let: "$a0" := (![go.uint64] "prevVerLen") in
+    let: "$a1" := (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
+    (FuncResolve go.len [go.SliceType (go.PointerType ktcore.Memb)] #()) "$a0")) in
+    (FuncResolve std.SumNoOverflow [] #()) "$a0" "$a1"))
+    then
+      let: "$r0" := ktcore.BlameServFull in
+      do:  ("err" <-[ktcore.Blame] "$r0");;;
+      return: (![go.PointerType epoch] "nextEp", ![go.SliceType (go.SliceType go.byte)] "pks", ![ktcore.Blame] "err")
+    else do:  #());;;
+    (if: let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
+    let: "$a1" := (![go.uint64] "uid") in
+    let: "$a2" := (![go.uint64] "prevVerLen") in
+    let: "$a3" := (![go.SliceType go.byte] (StructFieldRef epoch "dig"%go (![go.PointerType epoch] "nextEp"))) in
+    let: "$a4" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
+    (FuncResolve checkMembs [] #()) "$a0" "$a1" "$a2" "$a3" "$a4"
+    then
+      let: "$r0" := ktcore.BlameServFull in
+      do:  ("err" <-[ktcore.Blame] "$r0");;;
+      return: (![go.PointerType epoch] "nextEp", ![go.SliceType (go.SliceType go.byte)] "pks", ![ktcore.Blame] "err")
+    else do:  #());;;
+    (if: let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
+    let: "$a1" := (![go.uint64] "uid") in
+    let: "$a2" := (![go.uint64] "boundVer") in
+    let: "$a3" := (![go.SliceType go.byte] (StructFieldRef epoch "dig"%go (![go.PointerType epoch] "nextEp"))) in
+    let: "$a4" := (![go.PointerType ktcore.NonMemb] "bound") in
+    (FuncResolve checkNonMemb [] #()) "$a0" "$a1" "$a2" "$a3" "$a4"
+    then
+      let: "$r0" := ktcore.BlameServFull in
+      do:  ("err" <-[ktcore.Blame] "$r0");;;
+      return: (![go.PointerType epoch] "nextEp", ![go.SliceType (go.SliceType go.byte)] "pks", ![ktcore.Blame] "err")
+    else do:  #());;;
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType (go.SliceType go.byte)] #()) #(W64 0) (let: "$a0" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
+    (FuncResolve go.len [go.SliceType (go.PointerType ktcore.Memb)] #()) "$a0")) in
+    do:  ("pks" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
+    let: "$range" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
+    (let: "x" := (GoAlloc (go.PointerType ktcore.Memb) (GoZeroVal (go.PointerType ktcore.Memb) #())) in
+    slice.for_range (go.PointerType ktcore.Memb) "$range" (λ: "$key" "$value",
+      do:  ("x" <-[go.PointerType ktcore.Memb] "$value");;;
+      do:  "$key";;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "pks") in
+      let: "$a1" := ((let: "$sl0" := (![go.SliceType go.byte] (StructFieldRef ktcore.CommitOpen "Val"%go (![go.PointerType ktcore.CommitOpen] (StructFieldRef ktcore.Memb "PkOpen"%go (![go.PointerType ktcore.Memb] "x"))))) in
+      CompositeLiteral (go.SliceType (go.SliceType go.byte)) (LiteralValue [KeyedElement None (ElementExpression (go.SliceType go.byte) "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType (go.SliceType go.byte)] #()) "$a0" "$a1") in
+      do:  ("pks" <-[go.SliceType (go.SliceType go.byte)] "$r0")));;;
+    return: (![go.PointerType epoch] "nextEp", ![go.SliceType (go.SliceType go.byte)] "pks", ![ktcore.Blame] "err")).
+
+(* go: client.go:210:6 *)
 Definition getNextEpⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "prev" "sigPk" "chainProof" "sig",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -575,7 +558,34 @@ Definition getNextEpⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
     do:  ("next" <-[go.PointerType epoch] "$r0");;;
     return: (![go.PointerType epoch] "next", ![go.bool] "err")).
 
-(* go: client.go:244:6 *)
+(* go: client.go:231:6 *)
+Definition checkMembsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "vrfPk" "uid" "prefixLen" "dig" "hist",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) "hist") in
+    let: "dig" := (GoAlloc (go.SliceType go.byte) "dig") in
+    let: "prefixLen" := (GoAlloc go.uint64 "prefixLen") in
+    let: "uid" := (GoAlloc go.uint64 "uid") in
+    let: "vrfPk" := (GoAlloc (go.PointerType cryptoffi.VrfPublicKey) "vrfPk") in
+    let: "$range" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
+    (let: "memb" := (GoAlloc (go.PointerType ktcore.Memb) (GoZeroVal (go.PointerType ktcore.Memb) #())) in
+    let: "ver" := (GoAlloc go.int (GoZeroVal go.int #())) in
+    slice.for_range (go.PointerType ktcore.Memb) "$range" (λ: "$key" "$value",
+      do:  ("memb" <-[go.PointerType ktcore.Memb] "$value");;;
+      do:  ("ver" <-[go.int] "$key");;;
+      (let: "$r0" := (let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] "vrfPk") in
+      let: "$a1" := (![go.uint64] "uid") in
+      let: "$a2" := ((![go.uint64] "prefixLen") +⟨go.uint64⟩ (Convert go.int go.uint64 (![go.int] "ver"))) in
+      let: "$a3" := (![go.SliceType go.byte] "dig") in
+      let: "$a4" := (![go.PointerType ktcore.Memb] "memb") in
+      (FuncResolve checkMemb [] #()) "$a0" "$a1" "$a2" "$a3" "$a4") in
+      do:  ("err" <-[go.bool] "$r0");;;
+      (if: ![go.bool] "err"
+      then return: (![go.bool] "err")
+      else do:  #()))));;;
+    return: (![go.bool] "err")).
+
+(* go: client.go:240:6 *)
 Definition checkMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "vrfPk" "uid" "ver" "dig" "memb",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -624,34 +634,7 @@ Definition checkMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
     else do:  #());;;
     return: (![go.bool] "err")).
 
-(* go: client.go:261:6 *)
-Definition checkHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "vrfPk" "uid" "prefixLen" "dig" "hist",
-    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) "hist") in
-    let: "dig" := (GoAlloc (go.SliceType go.byte) "dig") in
-    let: "prefixLen" := (GoAlloc go.uint64 "prefixLen") in
-    let: "uid" := (GoAlloc go.uint64 "uid") in
-    let: "vrfPk" := (GoAlloc (go.PointerType cryptoffi.VrfPublicKey) "vrfPk") in
-    let: "$range" := (![go.SliceType (go.PointerType ktcore.Memb)] "hist") in
-    (let: "memb" := (GoAlloc (go.PointerType ktcore.Memb) (GoZeroVal (go.PointerType ktcore.Memb) #())) in
-    let: "ver" := (GoAlloc go.int (GoZeroVal go.int #())) in
-    slice.for_range (go.PointerType ktcore.Memb) "$range" (λ: "$key" "$value",
-      do:  ("memb" <-[go.PointerType ktcore.Memb] "$value");;;
-      do:  ("ver" <-[go.int] "$key");;;
-      (let: "$r0" := (let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] "vrfPk") in
-      let: "$a1" := (![go.uint64] "uid") in
-      let: "$a2" := ((![go.uint64] "prefixLen") +⟨go.uint64⟩ (Convert go.int go.uint64 (![go.int] "ver"))) in
-      let: "$a3" := (![go.SliceType go.byte] "dig") in
-      let: "$a4" := (![go.PointerType ktcore.Memb] "memb") in
-      (FuncResolve checkMemb [] #()) "$a0" "$a1" "$a2" "$a3" "$a4") in
-      do:  ("err" <-[go.bool] "$r0");;;
-      (if: ![go.bool] "err"
-      then return: (![go.bool] "err")
-      else do:  #()))));;;
-    return: (![go.bool] "err")).
-
-(* go: client.go:270:6 *)
+(* go: client.go:257:6 *)
 Definition checkNonMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "vrfPk" "uid" "ver" "dig" "nonMemb",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -694,7 +677,7 @@ Definition checkNonMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     else do:  #());;;
     return: (![go.bool] "err")).
 
-(* go: client.go:286:6 *)
+(* go: client.go:273:6 *)
 Definition checkAuditLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "adtrPk" "ep" "link",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -718,7 +701,7 @@ Definition checkAuditLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     else do:  #());;;
     return: (![go.bool] "err")).
 
-(* go: client.go:296:6 *)
+(* go: client.go:283:6 *)
 Definition checkAuditVrfⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "adtrPk" "vrf",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -764,8 +747,8 @@ Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
 Record t :=
 mk {
   uid' : w64;
-  pend' : loc;
-  last' : loc;
+  nextVer' : loc;
+  lastEp' : loc;
   serv' : loc;
 }.
 
@@ -777,8 +760,8 @@ End Client.
 
 Definition Client'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
   (go.FieldDecl "uid"%go go.uint64);
-  (go.FieldDecl "pend"%go (go.PointerType nextVer));
-  (go.FieldDecl "last"%go (go.PointerType epoch));
+  (go.FieldDecl "nextVer"%go (go.PointerType ver));
+  (go.FieldDecl "lastEp"%go (go.PointerType epoch));
   (go.FieldDecl "serv"%go (go.PointerType serv))
 ].
 Program Definition Client'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (Client'fds_unsealed).
@@ -793,55 +776,56 @@ Class Client_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContex
   #[global] Client_underlying :: (Client) <u (Clientⁱᵐᵖˡ);
   #[global] Client_get_uid (x : Client.t) :: ⟦StructFieldGet (Clientⁱᵐᵖˡ) "uid", #x⟧ ⤳[under] #x.(Client.uid');
   #[global] Client_set_uid (x : Client.t) y :: ⟦StructFieldSet (Clientⁱᵐᵖˡ) "uid", (#x, #y)⟧ ⤳[under] #(x <|Client.uid' := y|>);
-  #[global] Client_get_pend (x : Client.t) :: ⟦StructFieldGet (Clientⁱᵐᵖˡ) "pend", #x⟧ ⤳[under] #x.(Client.pend');
-  #[global] Client_set_pend (x : Client.t) y :: ⟦StructFieldSet (Clientⁱᵐᵖˡ) "pend", (#x, #y)⟧ ⤳[under] #(x <|Client.pend' := y|>);
-  #[global] Client_get_last (x : Client.t) :: ⟦StructFieldGet (Clientⁱᵐᵖˡ) "last", #x⟧ ⤳[under] #x.(Client.last');
-  #[global] Client_set_last (x : Client.t) y :: ⟦StructFieldSet (Clientⁱᵐᵖˡ) "last", (#x, #y)⟧ ⤳[under] #(x <|Client.last' := y|>);
+  #[global] Client_get_nextVer (x : Client.t) :: ⟦StructFieldGet (Clientⁱᵐᵖˡ) "nextVer", #x⟧ ⤳[under] #x.(Client.nextVer');
+  #[global] Client_set_nextVer (x : Client.t) y :: ⟦StructFieldSet (Clientⁱᵐᵖˡ) "nextVer", (#x, #y)⟧ ⤳[under] #(x <|Client.nextVer' := y|>);
+  #[global] Client_get_lastEp (x : Client.t) :: ⟦StructFieldGet (Clientⁱᵐᵖˡ) "lastEp", #x⟧ ⤳[under] #x.(Client.lastEp');
+  #[global] Client_set_lastEp (x : Client.t) y :: ⟦StructFieldSet (Clientⁱᵐᵖˡ) "lastEp", (#x, #y)⟧ ⤳[under] #(x <|Client.lastEp' := y|>);
   #[global] Client_get_serv (x : Client.t) :: ⟦StructFieldGet (Clientⁱᵐᵖˡ) "serv", #x⟧ ⤳[under] #x.(Client.serv');
   #[global] Client_set_serv (x : Client.t) y :: ⟦StructFieldSet (Clientⁱᵐᵖˡ) "serv", (#x, #y)⟧ ⤳[under] #(x <|Client.serv' := y|>);
   #[global] Client'ptr_Audit_unfold :: MethodUnfold (go.PointerType (Client)) "Audit" (Client__Auditⁱᵐᵖˡ);
   #[global] Client'ptr_Get_unfold :: MethodUnfold (go.PointerType (Client)) "Get" (Client__Getⁱᵐᵖˡ);
   #[global] Client'ptr_Put_unfold :: MethodUnfold (go.PointerType (Client)) "Put" (Client__Putⁱᵐᵖˡ);
   #[global] Client'ptr_SelfMon_unfold :: MethodUnfold (go.PointerType (Client)) "SelfMon" (Client__SelfMonⁱᵐᵖˡ);
+  #[global] Client'ptr_getHistory_unfold :: MethodUnfold (go.PointerType (Client)) "getHistory" (Client__getHistoryⁱᵐᵖˡ);
 }.
 
-Module nextVer.
+Module ver.
 Section def.
 Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
 Record t :=
 mk {
   ver' : w64;
-  isPending' : bool;
-  pendingPk' : slice.t;
+  hasPendPk' : bool;
+  pendPk' : slice.t;
 }.
 
 #[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _)|}.
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
-End nextVer.
+End ver.
 
-Definition nextVer'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
+Definition ver'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
   (go.FieldDecl "ver"%go go.uint64);
-  (go.FieldDecl "isPending"%go go.bool);
-  (go.FieldDecl "pendingPk"%go (go.SliceType go.byte))
+  (go.FieldDecl "hasPendPk"%go go.bool);
+  (go.FieldDecl "pendPk"%go (go.SliceType go.byte))
 ].
-Program Definition nextVer'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (nextVer'fds_unsealed).
-Global Instance equals_unfold_nextVer {ext : ffi_syntax} {go_gctx : GoGlobalContext} : nextVer'fds =→ nextVer'fds_unsealed.
-Proof. rewrite /nextVer'fds seal_eq //. Qed.
+Program Definition ver'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (ver'fds_unsealed).
+Global Instance equals_unfold_ver {ext : ffi_syntax} {go_gctx : GoGlobalContext} : ver'fds =→ ver'fds_unsealed.
+Proof. rewrite /ver'fds seal_eq //. Qed.
 
-Definition nextVerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.StructType (nextVer'fds).
+Definition verⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.StructType (ver'fds).
 
-Class nextVer_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
+Class ver_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
-  #[global] nextVer_type_repr  :: go.TypeReprUnderlying nextVerⁱᵐᵖˡ nextVer.t;
-  #[global] nextVer_underlying :: (nextVer) <u (nextVerⁱᵐᵖˡ);
-  #[global] nextVer_get_ver (x : nextVer.t) :: ⟦StructFieldGet (nextVerⁱᵐᵖˡ) "ver", #x⟧ ⤳[under] #x.(nextVer.ver');
-  #[global] nextVer_set_ver (x : nextVer.t) y :: ⟦StructFieldSet (nextVerⁱᵐᵖˡ) "ver", (#x, #y)⟧ ⤳[under] #(x <|nextVer.ver' := y|>);
-  #[global] nextVer_get_isPending (x : nextVer.t) :: ⟦StructFieldGet (nextVerⁱᵐᵖˡ) "isPending", #x⟧ ⤳[under] #x.(nextVer.isPending');
-  #[global] nextVer_set_isPending (x : nextVer.t) y :: ⟦StructFieldSet (nextVerⁱᵐᵖˡ) "isPending", (#x, #y)⟧ ⤳[under] #(x <|nextVer.isPending' := y|>);
-  #[global] nextVer_get_pendingPk (x : nextVer.t) :: ⟦StructFieldGet (nextVerⁱᵐᵖˡ) "pendingPk", #x⟧ ⤳[under] #x.(nextVer.pendingPk');
-  #[global] nextVer_set_pendingPk (x : nextVer.t) y :: ⟦StructFieldSet (nextVerⁱᵐᵖˡ) "pendingPk", (#x, #y)⟧ ⤳[under] #(x <|nextVer.pendingPk' := y|>);
+  #[global] ver_type_repr  :: go.TypeReprUnderlying verⁱᵐᵖˡ ver.t;
+  #[global] ver_underlying :: (ver) <u (verⁱᵐᵖˡ);
+  #[global] ver_get_ver (x : ver.t) :: ⟦StructFieldGet (verⁱᵐᵖˡ) "ver", #x⟧ ⤳[under] #x.(ver.ver');
+  #[global] ver_set_ver (x : ver.t) y :: ⟦StructFieldSet (verⁱᵐᵖˡ) "ver", (#x, #y)⟧ ⤳[under] #(x <|ver.ver' := y|>);
+  #[global] ver_get_hasPendPk (x : ver.t) :: ⟦StructFieldGet (verⁱᵐᵖˡ) "hasPendPk", #x⟧ ⤳[under] #x.(ver.hasPendPk');
+  #[global] ver_set_hasPendPk (x : ver.t) y :: ⟦StructFieldSet (verⁱᵐᵖˡ) "hasPendPk", (#x, #y)⟧ ⤳[under] #(x <|ver.hasPendPk' := y|>);
+  #[global] ver_get_pendPk (x : ver.t) :: ⟦StructFieldGet (verⁱᵐᵖˡ) "pendPk", #x⟧ ⤳[under] #x.(ver.pendPk');
+  #[global] ver_set_pendPk (x : ver.t) y :: ⟦StructFieldSet (verⁱᵐᵖˡ) "pendPk", (#x, #y)⟧ ⤳[under] #(x <|ver.pendPk' := y|>);
 }.
 
 Module epoch.
@@ -933,14 +917,14 @@ Class serv_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext}
 Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
 {
   #[global] Client_instance :: Client_Assumptions;
-  #[global] nextVer_instance :: nextVer_Assumptions;
+  #[global] ver_instance :: ver_Assumptions;
   #[global] epoch_instance :: epoch_Assumptions;
   #[global] serv_instance :: serv_Assumptions;
   #[global] checkPend_unfold :: FuncUnfold checkPend [] (checkPendⁱᵐᵖˡ);
   #[global] New_unfold :: FuncUnfold New [] (Newⁱᵐᵖˡ);
   #[global] getNextEp_unfold :: FuncUnfold getNextEp [] (getNextEpⁱᵐᵖˡ);
+  #[global] checkMembs_unfold :: FuncUnfold checkMembs [] (checkMembsⁱᵐᵖˡ);
   #[global] checkMemb_unfold :: FuncUnfold checkMemb [] (checkMembⁱᵐᵖˡ);
-  #[global] checkHist_unfold :: FuncUnfold checkHist [] (checkHistⁱᵐᵖˡ);
   #[global] checkNonMemb_unfold :: FuncUnfold checkNonMemb [] (checkNonMembⁱᵐᵖˡ);
   #[global] checkAuditLink_unfold :: FuncUnfold checkAuditLink [] (checkAuditLinkⁱᵐᵖˡ);
   #[global] checkAuditVrf_unfold :: FuncUnfold checkAuditVrf [] (checkAuditVrfⁱᵐᵖˡ);
