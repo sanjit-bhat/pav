@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "rocq": {
-      "command": "./etc/run-rocq-mcp.sh"
-    }
-  }
-}
