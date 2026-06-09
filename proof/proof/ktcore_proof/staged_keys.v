@@ -28,6 +28,19 @@ Definition staged_keys vrf_pk digs uid keys next_ver :=
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
     keys = (λ x, last $ to_pks vrf_pk uid x) <$> digs ).
 
+Lemma staged_eq_len vrf_pk digs uid keys next_ver :
+  staged_keys vrf_pk digs uid keys next_ver →
+  length digs = length keys.
+Proof. intros (?&?). naive_solver. Qed.
+
+Lemma staged_next_ver vrf_pk digs uid keys next_ver :
+  staged_keys vrf_pk digs uid keys next_ver →
+  mono_plain vrf_pk digs →
+  ∃ last_dig,
+    last digs = Some last_dig ∧
+    length $ to_pks vrf_pk uid last_dig = next_ver.
+Proof. intros (?&?). naive_solver. Qed.
+
 Lemma staged_init vrf_pk dig uid pks :
   pks_in_hidden vrf_pk (merkle.inv_fn dig) uid pks →
   in_hidden vrf_pk (merkle.inv_fn dig) uid (length pks) None →

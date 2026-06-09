@@ -20,7 +20,7 @@ Record t :=
     (* epoch of first dig. *)
     digs_start : nat;
 
-    (* hashchain cut prior to digs. *)
+    (* hashchain cut prior to digs. used by sigpred. *)
     cut : option $ list w8;
     (* offset into digs when a party started its functionality.
     for Auditors, when they started checking map mono.
@@ -43,21 +43,20 @@ Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
 Definition is_staged_keys γcli uid keys : iProp Σ :=
   ∃ digs next_ver,
   "#Hlb_digs" ∷ mono_list_lb_own γcli.(Agree.digs) digs ∗
-  "%Hstaged" ∷ ⌜staged_keys γcli.(Agree.vrf_pk) (drop γcli.(Agree.func_start) digs)
-    uid keys next_ver⌝.
+  "%Hstaged" ∷ ⌜staged_keys γcli.(Agree.vrf_pk)
+    (drop γcli.(Agree.func_start) digs) uid keys next_ver⌝.
 
 (* is_audit is an audit thru epoch [ep]. *)
 Definition is_audit γcli γadtr ep : iProp Σ :=
   ∃ (digs : list $ list w8),
   "#Hcli_digs" ∷ mono_list_lb_own γcli.(Agree.digs) digs ∗
   "#Hadtr_digs" ∷ mono_list_lb_own γadtr.(Agree.digs) digs ∗
-  "%Hlen_digs" ∷ ⌜Z.of_nat $ length digs = S ep - γcli.(Agree.digs_start)⌝ ∗
+  "%Hlen_digs" ∷ ⌜S ep = (γcli.(Agree.digs_start) + length digs)%nat⌝ ∗
   "%Hmono_plain" ∷ ⌜mono_plain γadtr.(Agree.vrf_pk)
     (drop γadtr.(Agree.func_start) digs)⌝ ∗
 
   "%Heq_vrf" ∷ ⌜γcli.(Agree.vrf_pk) = γadtr.(Agree.vrf_pk)⌝ ∗
-  "%Heq_start" ∷ ⌜γcli.(Agree.digs_start) = γadtr.(Agree.digs_start)⌝ ∗
-  "%Heq_cut" ∷ ⌜γcli.(Agree.cut) = γadtr.(Agree.cut)⌝.
+  "%Heq_start" ∷ ⌜γcli.(Agree.digs_start) = γadtr.(Agree.digs_start)⌝.
 
 End proof.
 
