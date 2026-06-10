@@ -113,32 +113,9 @@ Lemma wish_EvidVrf_sigpred e pk γ :
   ¬ cryptoffi.is_sig_pk pk (sigpred.P γ).
 Proof.
   iIntros "@ #His_pk".
-  iNamedSuffix "Hwish0" "0".
-  iNamedSuffix "Hwish1" "1".
-  iDestruct (cryptoffi.is_sig_to_pred with "His_pk His_sig0") as "#HP0".
-  iDestruct (cryptoffi.is_sig_to_pred with "His_pk His_sig1") as "#HP1".
-  iDestruct "HP0" as "[H|H]"; [|by iNamed "H"].
-  iNamedSuffix "H" "0".
-  iDestruct "HP1" as "[H|H]"; [|by iNamed "H"].
-  iNamedSuffix "H" "1".
-  remember (VrfSig.mk' _ _) as o0 in Henc0.
-  remember (VrfSig.mk' _ _) as o1 in Henc0.
-  opose proof (VrfSig.wish_det [] [] o0 o1 _ _) as [? _].
-  { by list_simplifier. }
-  { rewrite /VrfSig.wish.
-    list_simplifier.
-    intuition.
-    by f_equal. }
-  remember (VrfSig.mk' _ _) as o2 in Henc1.
-  remember (VrfSig.mk' _ _) as o3 in Henc1.
-  opose proof (VrfSig.wish_det [] [] o2 o3 _ _) as [? _].
-  { by list_simplifier. }
-  { rewrite /VrfSig.wish.
-    list_simplifier.
-    intuition.
-    by f_equal. }
-  iDestruct (sigpred.vrfP_evid with "Hsigpred0 Hsigpred1") as %->.
-  simplify_eq/=.
+  iDestruct (get_vrf_sigpred with "His_pk Hwish0") as "#HP0".
+  iDestruct (get_vrf_sigpred with "His_pk Hwish1") as "#HP1".
+  by iDestruct (sigpred.vrfP_evid with "HP0 HP1") as %?.
 Qed.
 
 Lemma wp_EvidVrf_check ptr_e e sl_pk pk :
@@ -189,34 +166,9 @@ Lemma wish_EvidLink_sigpred e pk γ :
   ¬ cryptoffi.is_sig_pk pk (sigpred.P γ).
 Proof.
   iIntros "@ #His_pk".
-  destruct e. simpl in *.
-  iNamedSuffix "Hwish0" "0".
-  iNamedSuffix "Hwish1" "1".
-  iDestruct (cryptoffi.is_sig_to_pred with "His_pk His_sig0") as "#HP0".
-  iDestruct (cryptoffi.is_sig_to_pred with "His_pk His_sig1") as "#HP1".
-  iDestruct "HP0" as "[H|H]"; [by iNamed "H"|].
-  iNamedSuffix "H" "0".
-  iDestruct "HP1" as "[H|H]"; [by iNamed "H"|].
-  iNamedSuffix "H" "1".
-  remember (LinkSig.mk' _ _ _) as o0 in Henc0.
-  remember (LinkSig.mk' _ _ _) as o1 in Henc0.
-  opose proof (LinkSig.wish_det [] [] o0 o1 _ _) as [? _].
-  { by list_simplifier. }
-  { rewrite /LinkSig.wish.
-    list_simplifier.
-    intuition.
-    by f_equal. }
-  remember (LinkSig.mk' _ _ _) as o2 in Henc1.
-  remember (LinkSig.mk' _ _ _) as o3 in Henc1.
-  opose proof (LinkSig.wish_det [] [] o2 o3 _ _) as [? _].
-  { by list_simplifier. }
-  { rewrite /LinkSig.wish.
-    list_simplifier.
-    intuition.
-    by f_equal. }
-  simplify_eq/=.
-  iDestruct (sigpred.linkP_evid with "Hsigpred0 Hsigpred1") as %->.
-  simplify_eq/=.
+  iDestruct (get_link_sigpred with "His_pk Hwish0") as "#HP0".
+  iDestruct (get_link_sigpred with "His_pk Hwish1") as "#HP1".
+  by iDestruct (sigpred.linkP_evid with "HP0 HP1") as %?.
 Qed.
 
 Lemma wp_EvidLink_check ptr_e e sl_pk pk :

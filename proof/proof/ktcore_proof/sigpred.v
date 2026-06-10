@@ -22,8 +22,9 @@ Definition vrfP γ (vrfPk : list w8) : iProp Σ :=
 
 Definition vrfP_aux γ enc : iProp Σ :=
   ∃ vrfPk,
-  "%Henc" ∷ ⌜enc = VrfSig.pure_enc (VrfSig.mk' (W8 VrfSigTag) vrfPk)⌝ ∗
-  "%Hvalid" ∷ ⌜safemarshal.Slice1D.valid vrfPk⌝ ∗
+  let obj := VrfSig.mk' (W8 VrfSigTag) vrfPk in
+  "%Henc" ∷ ⌜enc = VrfSig.pure_enc obj⌝ ∗
+  "%Hvalid" ∷ ⌜VrfSig.valid obj⌝ ∗
   "#Hsigpred" ∷ vrfP γ vrfPk.
 
 Lemma vrfP_evid γ vrfPk0 vrfPk1 :
@@ -49,8 +50,9 @@ Definition linkP γ (ep : w64) link : iProp Σ :=
 
 Definition linkP_aux γ enc : iProp Σ :=
   ∃ ep link,
-  "%Henc" ∷ ⌜enc = LinkSig.pure_enc (LinkSig.mk' (W8 LinkSigTag) ep link)⌝ ∗
-  "%Hvalid" ∷ ⌜safemarshal.Slice1D.valid link⌝ ∗
+  let obj := LinkSig.mk' (W8 LinkSigTag) ep link in
+  "%Henc" ∷ ⌜enc = LinkSig.pure_enc obj⌝ ∗
+  "%Hvalid" ∷ ⌜LinkSig.valid obj⌝ ∗
   "#Hsigpred" ∷ linkP γ ep link.
 
 Definition P γ enc : iProp Σ :=
