@@ -156,3 +156,13 @@ Proof.
   intros [a [Ha ->]]%fmap_Some [b [Hb ->]]%fmap_Some.
   exact (Hrel _ _ (H _ _ _ Ha Hb)).
 Qed.
+
+Lemma prefix_or_length_eq {A} (l0 l1 : list A) :
+  l0 `prefix_of` l1 ∨ l1 `prefix_of` l0 →
+  length l0 = length l1 →
+  l0 = l1.
+Proof.
+  intros [?|?] ?.
+  - apply prefix_length_eq; [done|lia].
+  - symmetry. apply prefix_length_eq; [done|lia].
+Qed.
