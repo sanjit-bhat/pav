@@ -128,14 +128,14 @@ Definition valid γ digs obj : iProp Σ :=
   "%His_chain" ∷ ⌜hashchain.valid digs agreeγ.(ktcore.Agree.cut) obj.(link) num_eps⌝ ∗
   "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) obj.(epoch) obj.(link) obj.(sig).
 
-Definition align_serv γserv (digs : list $ list w8) : iProp Σ :=
-  let agreeγ := γserv.(server.cfg.agreeγ) in
-  "#Hlb_digs" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) digs.
+Definition align_serv γ γserv digs : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
+  let servAgreeγ := γserv.(server.cfg.agreeγ) in
+  "#Hserv_digs" ∷ mono_list_lb_own servAgreeγ.(ktcore.Agree.digs) digs ∗
+  "%Hmono_plain" ∷ ⌜ktcore.mono_plain agreeγ.(ktcore.Agree.vrf_pk) digs⌝.
 
 End proof.
 End epoch.
-
-(* TODO: prove Client.own can give is_audit for servγ. *)
 
 Module serv.
 Section proof.
@@ -191,7 +191,7 @@ Definition own γ ptr σ : iProp Σ :=
   "#Hown_lastEp" ∷ epoch.own ptr_lastEp lastEp ∗
   "#His_lastEp" ∷ epoch.valid γ digs lastEp ∗
   "#Halign_lastEp" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    epoch.align_serv γserv digs end ∗
+    epoch.align_serv γ γserv digs end ∗
   "#Hown_serv" ∷ serv.own γ ptr_serv ∗
   "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
     serv.align_serv γ γserv end ∗
@@ -207,6 +207,27 @@ Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : client.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
+
+Lemma serv_is_adtr γ servγ ptr σ :
+  let agreeγ := γ.(cfg.agreeγ) in
+  let servAgreeγ := servγ.(server.cfg.agreeγ) in
+  γ.(cfg.serv_good) = Some servγ →
+  Client.own γ ptr σ -∗
+  ktcore.is_audit agreeγ servAgreeγ σ.(state.epoch) ∗
+    ⌜servAgreeγ.(ktcore.Agree.func_start) = 0%nat⌝.
+Proof.
+  simpl. iIntros (Hgood) "@".
+  rewrite Hgood /ktcore.is_audit.
+  rewrite /own. iNamed "Hown_gs".
+  iDestruct (mono_list_lb_own_get with "Hown_digs") as "$".
+  iNamed "Halign_serv".
+  iFrame "%".
+  iNamed "Halign_lastEp".
+  rewrite Heq_func_start drop_0.
+  rewrite -Heq_serv_vrf_pk.
+  iFrame "#%".
+  word.
+Qed.
 
 (* arg order: Client state + getNextEp args + new Client state.
 TODO: describe more once we finish proving related stuff.
