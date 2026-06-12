@@ -75,7 +75,7 @@ Proof.
   naive_solver.
 Qed.
 
-Lemma wp_checkHist ptr_pk pk (uid prefixLen : w64) sl_dig dig sl_hist sl0_hist hist :
+Lemma wp_checkMembs ptr_pk pk (uid prefixLen : w64) sl_dig dig sl_hist sl0_hist hist :
   let num_vers := (uint.nat prefixLen + length hist)%nat in
   {{{
     is_pkg_init client ∗
@@ -86,7 +86,7 @@ Lemma wp_checkHist ptr_pk pk (uid prefixLen : w64) sl_dig dig sl_hist sl0_hist h
       ktcore.Memb.own ptr memb (□)) ∗
     "%Hnoof_ver" ∷ ⌜num_vers = uint.nat (W64 num_vers)⌝
   }}}
-  @! client.checkHist #ptr_pk #uid #prefixLen #sl_dig #sl_hist
+  @! client.checkMembs #ptr_pk #uid #prefixLen #sl_dig #sl_hist
   {{{
     (err : bool), RET #err;
     "Hgenie" ∷
@@ -272,6 +272,52 @@ Proof.
   iFrame "#".
 Qed.
 
+(* Client.getHistory can run before New completes,
+so it only requires parts of the Client inv.
+for ease of use, it still takes in a full γ,
+even tho some of the γ fields may not be properly set. *)
+Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp lastEp digs ptr_serv :
+  let agreeγ := γ.(cfg.agreeγ) in
+  {{{
+    is_pkg_init client ∗
+    "Hstr_client" ∷ ptr_c ↦ (client.Client.mk x0 x1 ptr_lastEp ptr_serv) ∗
+    "#Hown_lastEp" ∷ epoch.own ptr_lastEp lastEp ∗
+    "#His_lastEp" ∷ epoch.valid γ digs lastEp ∗
+    "#Halign_lastEp" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
+      epoch.align_serv γ γserv digs end ∗
+    "#Hown_serv" ∷ serv.own γ ptr_serv ∗
+    "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
+      serv.align_serv γ γserv end ∗
+
+    "His_ver" ∷ match γ.(cfg.serv_good) with None => True | Some _ =>
+      ∃ i dig,
+      "%Hlook_dig" ∷ ⌜digs !! i = Some dig⌝ ∗
+      "%Hlt_ver" ∷ ⌜uint.nat prevVerLen ≤
+        length $ ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid dig⌝ end
+  }}}
+  ptr_c @! (go.PointerType client.Client) @! "getHistory" #uid #prevVerLen
+  {{{
+    ptr_nextEp sl_pks err,
+    RET (#ptr_nextEp, #sl_pks, #(ktcore.blame_to_u64 err));
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool γ.(cfg.serv_good)]}⌝ ∗
+    "Herr" ∷ (if decide (err ≠ ∅) then True else
+      ∃ nextEp new_digs last_dig sl0_pks pks,
+      "#Hown_nextEp" ∷ epoch.own ptr_nextEp nextEp ∗
+      "#His_nextEp" ∷ epoch.valid γ (digs ++ new_digs) nextEp ∗
+      "#Halign_nextEp" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
+        epoch.align_serv γ γserv (digs ++ new_digs) end ∗
+
+      "#Hsl_pks" ∷ sl_pks ↦*□ sl0_pks ∗
+      "#Hsl0_pks" ∷ ([∗ list] sl_pk;pk ∈ sl0_pks;pks,
+        "#Hsl_pk" ∷ sl_pk ↦*□ pk) ∗
+      "%Hlast_dig" ∷ ⌜last (digs ++ new_digs) = Some last_dig⌝ ∗
+      "%Hmembs" ∷ ⌜ktcore.pks_in_hidden_from agreeγ.(ktcore.Agree.vrf_pk)
+        (merkle.inv_fn last_dig) uid (uint.nat prevVerLen) pks⌝ ∗
+      "%HnonMemb" ∷ ⌜ktcore.in_hidden agreeγ.(ktcore.Agree.vrf_pk)
+        (merkle.inv_fn last_dig) uid (uint.nat prevVerLen + length pks) None⌝)
+  }}}.
+Proof. Admitted.
+
 Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
   {{{
     is_pkg_init client ∗
@@ -427,7 +473,7 @@ Proof.
   iDestruct "Hsl_hist" as (?) "[Hsl0_hist Hsl_hist]".
   iDestruct (own_slice_len with "Hsl0_hist") as %[? ?].
   iDestruct (big_sepL2_length with "Hsl_hist") as %?.
-  wp_apply wp_checkHist as "* @".
+  wp_apply wp_checkMembs as "* @".
   { iFrame "#". word. }
   wp_if_destruct.
   { rewrite ktcore.rw_BlameServFull.
@@ -664,7 +710,7 @@ Proof.
     apply Forall2_length in Heq_hist0.
     autorewrite with len in *.
     word. }
-  wp_apply wp_checkHist as "* @".
+  wp_apply wp_checkMembs as "* @".
   { iFrame "#". }
   wp_if_destruct.
   { rewrite ktcore.rw_BlameServFull.
