@@ -280,7 +280,7 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
   let agreeγ := γ.(cfg.agreeγ) in
   {{{
     is_pkg_init client ∗
-    "Hstr_client" ∷ ptr_c ↦ (client.Client.mk x0 x1 ptr_lastEp ptr_serv) ∗
+    "Hstr_Client" ∷ ptr_c ↦ (client.Client.mk x0 x1 ptr_lastEp ptr_serv) ∗
     "#Hown_lastEp" ∷ epoch.own ptr_lastEp lastEp ∗
     "#His_lastEp" ∷ epoch.valid γ digs lastEp ∗
     "#Halign_lastEp" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
@@ -351,7 +351,73 @@ Lemma wp_New serv_good clis_good uid (servAddr : w64) sl_servPk servPk :
         agreeγ.(ktcore.Agree.func_start))%nat = uint.nat ep⌝ ∗
       "Hclient" ∷ Client.own γ ptr_c (state.mk (uint.nat ep) [None] None))
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "@". wp_auto.
+  wp_apply server.wp_Dial as "* @".
+  wp_apply server.wp_CallStart as "* @".
+  { iFrame "#". }
+  case_bool_decide as Heq_err; wp_auto;
+    rewrite ktcore.rw_Blame0 in Heq_err; subst.
+  2: { iApply "HΦ". iFrame "%". by case_decide. }
+  case_decide as Ht; try done. clear Ht.
+  iNamed "Herr".
+  wp_apply auditor.wp_CheckStartChain as "* @".
+  { iFrame "#". }
+  wp_if_destruct.
+  { rewrite ktcore.rw_BlameServFull.
+    iApply "HΦ".
+    iSplit. 2: { by case_decide. }
+    iApply ktcore.blame_one.
+    iIntros (?).
+    case_match; try done.
+    simplify_eq/=.
+    iApply "Hgenie".
+    iNamed "Hgood".
+    iFrame "#". }
+  iNamed "Hgenie".
+  iDestruct (server.wish_CheckStartChain_extract with "Hwish_CheckStartChain") as "@".
+  wp_apply auditor.wp_CheckStartVrf as "* @".
+  { iFrame "#". }
+  wp_if_destruct.
+  { rewrite ktcore.rw_BlameServFull.
+    iApply "HΦ".
+    iSplit. 2: { by case_decide. }
+    iApply ktcore.blame_one.
+    iIntros (?).
+    case_match; try done.
+    simplify_eq/=.
+    iApply "Hgenie".
+    iNamed "Hgood".
+    iFrame "#". }
+  iNamed "Hgenie".
+
+  iNamed "Hptr_chain". iNamed "Hptr_vrf".
+  wp_apply wp_alloc as "%ptr_nextVer Hstr_ver".
+  wp_apply wp_alloc as "%ptr_lastEp Hstr_epoch".
+  wp_apply wp_alloc as "%ptr_serv Hstr_serv".
+  wp_apply wp_alloc as "%ptr_c Hstr_Client".
+  iPersist "Hstr_epoch Hstr_serv".
+  iMod (mono_list_own_alloc digs) as (digsγ) "[Hauth_digs #Hlb_digs]".
+  (* fake func_start out until later, so we can call getHistory. *)
+  set (ktcore.Agree.mk vrf.(server.StartVrf.VrfPk) digsγ
+    (S (uint.nat ep) - length digs) cut 0%nat) as fakeAgreeγ.
+  set (cfg.mk uid servPk fakeAgreeγ serv_good clis_good) as fakeγ.
+  iAssert (serv.own fakeγ ptr_serv)%I as "#Hown_serv".
+  { iNamed "Hwish_CheckStartVrf". iFrame "#". }
+  iAssert (match fakeγ.(cfg.serv_good) with None => True | Some γserv =>
+    serv.align_serv fakeγ γserv end)%I as "#Halign_serv".
+  { simpl. case_match; try done.
+    iNamed "Hgood".
+    iFrame "#". iPureIntro. simpl.
+    repeat split; try done.
+Admitted.
+(* TODO: curr serv.align has Server state = zero-init. e.g., serv.digs_start = 0.
+this is used to re-base the zero-init postconds onto Server state.
+a different approach that lets us remove zero-init from serv.align:
+- have server.is_inv/is_rpc_cli contain Server state = zero-init.
+- then, can keep zero-init Server-side specs (clean),
+but prove Client-side stubs that're based onto Server state.
+- serv.align just needs to remember that Client state = Server state. *)
 
 Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
   {{{

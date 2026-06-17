@@ -47,7 +47,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_PrevLink sl_ChainProof sl_LinkSig,
-  "Hstruct" ∷ ptr ↦{d} (server.StartChain.mk obj.(PrevEpochLen) sl_PrevLink sl_ChainProof sl_LinkSig) ∗
+  "Hstr_StartChain" ∷ ptr ↦{d} (server.StartChain.mk obj.(PrevEpochLen) sl_PrevLink sl_ChainProof sl_LinkSig) ∗
 
   "Hsl_PrevLink" ∷ sl_PrevLink ↦*{d} obj.(PrevLink) ∗
   "Hsl_ChainProof" ∷ sl_ChainProof ↦*{d} obj.(ChainProof) ∗
@@ -126,7 +126,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_VrfPk sl_VrfSig,
-  "Hstruct" ∷ ptr ↦{d} (server.StartVrf.mk sl_VrfPk sl_VrfSig) ∗
+  "Hstr_StartVrf" ∷ ptr ↦{d} (server.StartVrf.mk sl_VrfPk sl_VrfSig) ∗
 
   "Hsl_VrfPk" ∷ sl_VrfPk ↦*{d} obj.(VrfPk) ∗
   "Hsl_VrfSig" ∷ sl_VrfSig ↦*{d} obj.(VrfSig).
@@ -204,7 +204,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ ptr_Chain ptr_Vrf,
-  "Hstruct" ∷ ptr ↦{d} (server.StartReply.mk ptr_Chain ptr_Vrf) ∗
+  "Hstr_StartReply" ∷ ptr ↦{d} (server.StartReply.mk ptr_Chain ptr_Vrf) ∗
 
   "Hown_Chain" ∷ StartChain.own ptr_Chain obj.(Chain) d ∗
   "Hown_Vrf" ∷ StartVrf.own ptr_Vrf obj.(Vrf) d.
