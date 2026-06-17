@@ -54,8 +54,8 @@ Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own ptr (pend_pk : option $ list w8) obj : iProp Σ :=
-  ∃ w_ver hasPendPk pendPk,
-  "Hstr_ver" ∷ ptr ↦ (client.ver.mk w_ver hasPendPk pendPk) ∗
+  ∃ w_ver hasPendPk sl_pendPk,
+  "Hstr_ver" ∷ ptr ↦ (client.ver.mk w_ver hasPendPk sl_pendPk) ∗
   "%Heq_ver" ∷ ⌜uint.nat w_ver = obj.(ver)⌝ ∗
   "#HpendPk" ∷
     match pend_pk with
@@ -63,7 +63,7 @@ Definition own ptr (pend_pk : option $ list w8) obj : iProp Σ :=
       "%Heq_hasPendPk" ∷ ⌜hasPendPk = false⌝
     | Some pk =>
       "%Heq_hasPendPk" ∷ ⌜hasPendPk = true⌝ ∗
-      "#Heq_pendPk" ∷ pendPk ↦*□ pk
+      "#Heq_pendPk" ∷ sl_pendPk ↦*□ pk
     end.
 
 Definition valid γ keys obj : iProp Σ :=

@@ -318,6 +318,41 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
   }}}.
 Proof. Admitted.
 
+Lemma wp_New serv_good clis_good uid (servAddr : w64) sl_servPk servPk :
+  {{{
+    is_pkg_init client ∗
+    "Halign_uid" ∷ match serv_good with None => True | Some γserv =>
+      ∃ uidγ,
+      "%Hlook_uidγ" ∷ ⌜γserv.(server.cfg.uidγ) !! uid = Some uidγ⌝ ∗
+      "HgoodCli" ∷
+        match clis_good with
+        | true => "Hputs" ∷ mono_list_auth_own uidγ 1 ([] : list (nat * list w8))
+        | false => "#Huid_inv" ∷ ver.is_uid_inv uidγ
+        end end ∗
+    "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
+    "%Heq_servPk" ∷ ⌜match serv_good with None => True | Some servγ =>
+      servPk = servγ.(server.cfg.sig_pk) end⌝ ∗
+    "#His_servPk" ∷ match serv_good with None => True | Some servγ =>
+      cryptoffi.is_sig_pk servPk (sigpred.P servγ.(server.cfg.agreeγ)) end
+  }}}
+  @! client.New #uid #servAddr #sl_servPk
+  {{{
+    ptr_c (ep : w64) err, RET (#ptr_c, #ep, #(ktcore.blame_to_u64 err));
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err
+      {[ktcore.BlameServFull:=option_bool serv_good]}⌝ ∗
+    "Herr" ∷ (if decide (err ≠ ∅) then True else
+      ∃ γ,
+      let agreeγ := γ.(cfg.agreeγ) in
+      "%Heq_uid" ∷ ⌜γ.(cfg.uid) = uid⌝ ∗
+      "%Heq_sig_pk" ∷ ⌜γ.(cfg.sig_pk) = servPk⌝ ∗
+      "%Heq_serv_good" ∷ ⌜γ.(cfg.serv_good) = serv_good⌝ ∗
+      "%Heq_clis_good" ∷ ⌜γ.(cfg.clis_good) = clis_good⌝ ∗
+      "%Heq_agree_ep" ∷ ⌜(agreeγ.(ktcore.Agree.digs_start) +
+        agreeγ.(ktcore.Agree.func_start))%nat = uint.nat ep⌝ ∗
+      "Hclient" ∷ Client.own γ ptr_c (state.mk (uint.nat ep) [None] None))
+  }}}.
+Proof. Admitted.
+
 Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
   {{{
     is_pkg_init client ∗
@@ -337,32 +372,32 @@ Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
   }}}.
 Proof.
   wp_start as "@".
-  iNamed "Hclient". iNamed "Hown_pend". iNamed "Hown_serv".
+  iNamed "Hclient". iNamed "Hown_nextVer". iNamed "Hown_serv".
   destruct γ, σ. simpl in *.
   wp_auto. simpl.
   iPersist "c pk".
   wp_bind (If _ _ _).
   wp_apply (wp_wand _ _ _
     (λ v,
-    ∃ sl_pendingPk',
+    ∃ sl_pendPk',
     "->" ∷ ⌜v = execute_val⌝ ∗
     "Hstr_client" ∷ ptr_c ↦ {|
                           client.Client.uid' := uid;
-                          client.Client.pend' := ptr_pend;
-                          client.Client.last' := ptr_last;
+                          client.Client.nextVer' := ptr_nextVer;
+                          client.Client.lastEp' := ptr_lastEp;
                           client.Client.serv' := ptr_serv
                         |} ∗
-    "Hstr_nextVer" ∷ ptr_pend ↦ {|
-                              client.nextVer.ver' := w_ver;
-                              client.nextVer.isPending' := true;
-                              client.nextVer.pendingPk' := sl_pendingPk'
-                            |} ∗
-    "#Hsl_pendingPk'" ∷ sl_pendingPk' ↦*□ pk
+    "Hstr_ver" ∷ ptr_nextVer ↦ {|
+                             client.ver.ver' := w_ver;
+                             client.ver.hasPendPk' := true;
+                             client.ver.pendPk' := sl_pendPk'
+                           |} ∗
+    "#Hsl_pendPk'" ∷ sl_pendPk' ↦*□ pk
     )%I
-    with "[Hstr_client Hstr_nextVer]"
+    with "[Hstr_client Hstr_ver]"
   ) as "* @".
   { wp_if_destruct.
-    - destruct pend_pk; iNamed "HpendingPk"; try done.
+    - destruct pend_pk; iNamed "HpendPk"; try done.
       simplify_eq/=.
       wp_apply bytes.wp_Equal as "_".
       { iFrame "#". }
@@ -371,14 +406,14 @@ Proof.
       by iFrame "∗#".
     - by iFrame "∗#". }
 
-  destruct serv_good; iNamed "Halign_pend_pend".
+  destruct serv_good; iNamed "Halign_nextVer".
   2: {
     wp_apply server.wp_CallPut.
     { iFrame "#". }
     iApply "HΦ".
     by iFrame "∗ Hstr_serv #%". }
   simpl in *. destruct clis_good; iNamed "HgoodCli".
-  - iMod (mono_list_auth_own_update_app [(pend.(nextVer.ver), pk)]
+  - iMod (mono_list_auth_own_update_app [(nextVer.(ver.ver), pk)]
       with "Hputs") as "[Hputs #Hlb]".
     iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "#Hidx".
     { by rewrite lookup_snoc. }
@@ -393,7 +428,7 @@ Proof.
       by simplify_eq/=.
   - iApply fupd_wp.
     iInv "Huid_inv" as ">@" "Hclose".
-    iMod (mono_list_auth_own_update_app [(pend.(nextVer.ver), pk)]
+    iMod (mono_list_auth_own_update_app [(nextVer.(ver.ver), pk)]
       with "Hputs") as "[Hputs #Hlb]".
     iMod ("Hclose" with "[Hputs]") as "_"; [iFrame|].
     iModIntro.
