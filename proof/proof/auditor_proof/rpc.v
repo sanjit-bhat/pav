@@ -93,10 +93,10 @@ Definition own ptr γ σ q : iProp Σ :=
 Definition align_serv σ γ servγ : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
   let servAgreeγ := servγ.(server.cfg.agreeγ) in
-  ∃ hist,
-  "#His_hist" ∷ mono_list_lb_own servAgreeγ.(ktcore.Agree.digs) hist ∗
-  "%Heq_digs" ∷ ⌜σ.(state.digs) = hist⌝ ∗
-  "%Heq_start_ep" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
+  ∃ digs,
+  "#His_digs" ∷ mono_list_lb_own servAgreeγ.(ktcore.Agree.digs) digs ∗
+  "%Heq_digs" ∷ ⌜σ.(state.digs) = digs⌝ ∗
+  "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
   "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝.
 
 #[global] Instance own_aux_combine_sep_as ptr γ σ0 σ1 q0 q1 :
@@ -193,8 +193,7 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
         ([∗ list] idx ↦ proof ∈ proofs,
           □ ∀ agreeγ adtrσ,
           history.align_serv adtrσ agreeγ γ -∗
-          ⌜agreeγ.(cfg.agreeγ).(ktcore.Agree.digs_start) + length adtrσ.(state.digs) - 1 =
-            (uint.Z prevEpoch + idx)%Z⌝ -∗
+          ⌜length adtrσ.(state.digs) - 1 = (uint.Z prevEpoch + idx)%Z⌝ -∗
           ⌜agreeγ.(cfg.serv_sig_pk) = γ.(cfg.sig_pk)⌝ -∗
 
           ∃ ep dig link,
@@ -251,7 +250,7 @@ Proof.
     - iApply "Hgenie". naive_solver.
     - opose proof (AuditArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
       simplify_eq/=.
-      iDestruct "HQ" as "[#Hnew_hist %]".
+      iDestruct "HQ" as "[#Hnew_digs %]".
       iDestruct "Herr" as %?.
       lia. }
 
@@ -268,7 +267,7 @@ Proof.
   iDestruct "Hgood" as "[@|@]"; try done.
   opose proof (AuditArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
   simplify_eq/=.
-  iDestruct "HQ" as "[#Hnew_hist %]".
+  iDestruct "HQ" as "[#Hnew_digs %]".
   iNamed "Herr".
 
   iClear "His_args".
@@ -279,13 +278,13 @@ Proof.
   iDestruct (big_sepL_lookup with "His_upds") as "{His_upds} @"; [done|].
   iDestruct (big_sepL_lookup with "His_sigs") as "{His_sigs} @"; [done|].
   apply lookup_lt_Some in Hlook_proofs.
-  iDestruct (mono_list_lb_valid with "Hnew_hist His_hist") as %[[? Hpref]|[new_hist ?]].
+  iDestruct (mono_list_lb_valid with "Hnew_digs His_digs") as %[[? Hpref]|[new_digs ?]].
   { apply (f_equal length) in Hpref.
     autorewrite with len in *. word. }
   simplify_eq/=.
   autorewrite with len in *.
-  iDestruct (mono_list_lb_own_le (hist ++ [dig1]) with "Hnew_hist")
-    as "{Hnew_hist His_hist} Hlb".
+  iDestruct (mono_list_lb_own_le (digs ++ [dig1]) with "Hnew_digs")
+    as "{Hnew_digs His_digs} Hlb".
   { apply prefix_snoc.
     { by apply prefix_app_r. }
     rewrite -Hlook1. f_equal. word. }
@@ -295,7 +294,7 @@ Proof.
   repeat iSplit; try done; try iPureIntro.
   - word.
   - rewrite lookup_app_l in Hlook0; [|word].
-    replace (_ + _)%nat with (pred $ length hist) in Hlook0 by word.
+    replace (_ + _)%nat with (pred $ length digs) in Hlook0 by word.
     rewrite -last_lookup in Hlook0.
     rewrite Hlook0.
     naive_solver.

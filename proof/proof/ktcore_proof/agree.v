@@ -56,7 +56,7 @@ Definition is_audit γcli γadtr ep : iProp Σ :=
     (drop γadtr.(Agree.func_start) digs)⌝ ∗
 
   "%Heq_vrf" ∷ ⌜γcli.(Agree.vrf_pk) = γadtr.(Agree.vrf_pk)⌝ ∗
-  "%Heq_start" ∷ ⌜γcli.(Agree.digs_start) = γadtr.(Agree.digs_start)⌝.
+  "%Heq_digs_start" ∷ ⌜γcli.(Agree.digs_start) = γadtr.(Agree.digs_start)⌝.
 
 End proof.
 
@@ -97,7 +97,7 @@ Proof.
   iDestruct (mono_list_idx_agree with "Hidx_dig Hlook") as %<-.
   iClear "Hlook".
   iDestruct (mono_list_idx_own_get with "Hadtr_digs") as "Hlook"; [done|].
-  rewrite Heq_vrf Heq_start.
+  rewrite Heq_vrf Heq_digs_start.
   by iFrame "#".
 Qed.
 

@@ -121,12 +121,12 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
       "Hgenie" ∷ ¬ ⌜∃ obj tail, HistoryArg.wish arg obj tail⌝) ∨
 
     ∃ uid prevEpoch prevVerLen tail σ lastDig,
-    let numEps := length σ.(state.hist) in
+    let numEps := length σ.(state.digs) in
     let pks := ktcore.to_pks (agreeγ.(ktcore.Agree.vrf_pk)) uid lastDig in
     "%Hdec" ∷ ⌜HistoryArg.wish arg
       (HistoryArg.mk' uid prevEpoch prevVerLen) tail⌝ ∗
     "HQ" ∷ Q γ σ ∗
-    "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some lastDig⌝ ∗
+    "%Hlast_digs" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
 
     "#Herr_serv_args" ∷
       match err1 with
@@ -136,10 +136,10 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
         ∃ lastLink,
         "%Hnoof_epochs" ∷ ⌜numEps = sint.nat (W64 numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
-        "%His_lastLink" ∷ ⌜hashchain.valid (σ.(state.hist)) None lastLink numEps⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.valid (σ.(state.digs)) None lastLink numEps⌝ ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
-          (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
+          (drop (S (uint.nat prevEpoch)) σ.(state.digs))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
         "#Hwish_hist" ∷ ktcore.wish_ListMemb (agreeγ.(ktcore.Agree.vrf_pk)) uid
@@ -177,18 +177,18 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
 
       "Hgood" ∷ match good with None => True | Some γ =>
         let agreeγ := γ.(cfg.agreeγ) in
-        ∃ servHist lastDig lastLink,
-        let numEps := length servHist in
+        ∃ servDigs lastDig lastLink,
+        let numEps := length servDigs in
         let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid lastDig in
-        "#Hlb_servHist" ∷ mono_list_lb_own (agreeγ.(ktcore.Agree.digs)) servHist ∗
+        "#Hlb_servDigs" ∷ mono_list_lb_own (agreeγ.(ktcore.Agree.digs)) servDigs ∗
         "%Hlt_prevEpoch" ∷ ⌜uint.nat prevEpoch < numEps⌝ ∗
         "%Hnoof_epochs" ∷ ⌜numEps = sint.nat (W64 numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
-        "%Hlast_servHist" ∷ ⌜last servHist = Some lastDig⌝ ∗
-        "%His_lastLink" ∷ ⌜hashchain.valid servHist None lastLink numEps⌝ ∗
+        "%Hlast_servDigs" ∷ ⌜last servDigs = Some lastDig⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.valid servDigs None lastLink numEps⌝ ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
-          (drop (S (uint.nat prevEpoch)) servHist)⌝ ∗
+          (drop (S (uint.nat prevEpoch)) servDigs)⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
         "#Hwish_hist" ∷ ktcore.wish_ListMemb (agreeγ.(ktcore.Agree.vrf_pk)) uid
@@ -255,16 +255,16 @@ Proof.
     (* we gave valid decoded args. *)
     - opose proof (HistoryArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
       simplify_eq/=.
-      iDestruct "HQ" as "[#Hnew_hist %]".
+      iDestruct "HQ" as "[#Hnew_digs %]".
       iDestruct "Herr_serv_args" as %[?|?].
       (* good prevEpoch. *)
       1: lia.
       (* good prevVerLen. *)
       iNamed "His_args".
-      iMod (hist_pks_prefix uid0 with "His_cli Hidx_ep []") as %?%prefix_length.
+      iMod (digs_pks_prefix uid0 with "His_cli Hidx_ep []") as %?%prefix_length.
       2: {
-        rewrite last_lookup in Hlast_hist.
-        iDestruct (mono_list_idx_own_get with "Hnew_hist") as "H"; [done|].
+        rewrite last_lookup in Hlast_digs.
+        iDestruct (mono_list_idx_own_get with "Hnew_digs") as "H"; [done|].
         iFrame "H". }
       { word. }
       iPureIntro. simpl in *.
@@ -283,7 +283,7 @@ Proof.
   iDestruct "Hgood" as "[@|@]"; try done.
   opose proof (HistoryArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
   simplify_eq/=.
-  iDestruct "HQ" as "[#Hnew_hist %]".
+  iDestruct "HQ" as "[#Hnew_digs %]".
   iNamed "Herr_serv_args".
   by iFrame "#%".
 Qed.
@@ -315,12 +315,12 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
       "Hgenie" ∷ ¬ ⌜∃ obj tail, AuditArg.wish arg obj tail⌝) ∨
 
     ∃ prevEpoch tail σ,
-    let numEps := length σ.(state.hist) in
+    let numEps := length σ.(state.digs) in
     "%Hdec" ∷ ⌜AuditArg.wish arg (AuditArg.mk' prevEpoch) tail⌝ ∗
     "HQ" ∷ Q γ σ ∗
     "Herr" ∷
       match err1 with
-      | true => ⌜uint.nat prevEpoch ≥ length σ.(state.hist)⌝
+      | true => ⌜uint.nat prevEpoch ≥ length σ.(state.digs)⌝
       | false =>
         "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
         "%Hlen_proofs" ∷ ⌜(uint.Z prevEpoch + length proofs + 1)%Z = numEps⌝ ∗
@@ -328,13 +328,13 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
         "#His_upds" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ dig0 dig1,
           let predEp := (uint.nat prevEpoch + i)%nat in
-          "%Hlook0" ∷ ⌜σ.(state.hist) !! predEp = Some dig0⌝ ∗
-          "%Hlook1" ∷ ⌜σ.(state.hist) !! (S predEp) = Some dig1⌝ ∗
+          "%Hlook0" ∷ ⌜σ.(state.digs) !! predEp = Some dig0⌝ ∗
+          "%Hlook1" ∷ ⌜σ.(state.digs) !! (S predEp) = Some dig1⌝ ∗
           "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
           let ep := (S $ uint.nat prevEpoch + i)%nat in
-          "%His_link" ∷ ⌜hashchain.valid (take (S ep) σ.(state.hist)) None link (S ep)⌝ ∗
+          "%His_link" ∷ ⌜hashchain.valid (take (S ep) σ.(state.digs)) None link (S ep)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end) end end
   }}}.
@@ -362,27 +362,32 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     "Hgood" ∷ match good with None => True | Some γ =>
     let agreeγ := γ.(cfg.agreeγ) in
     ∃ chain vrf σ last_link,
-    let numEps := length σ.(state.hist) in
+    let numEps := length σ.(state.digs) in
     "%His_reply" ∷ ⌜StartReply.wish replyB (StartReply.mk' chain vrf) []⌝ ∗
 
     "HQ" ∷ Q γ σ ∗
-    "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 
+    "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
     "%His_PrevLink" ∷ ⌜hashchain.valid
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.digs))
       None chain.(StartChain.PrevLink)
       (uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
-      (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
-    "%His_last_link" ∷ ⌜hashchain.valid (σ.(state.hist)) None last_link numEps⌝ ∗
+      (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.digs))⌝ ∗
+    "%His_last_link" ∷ ⌜hashchain.valid σ.(state.digs) None last_link numEps⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
     "%Heq_VrfPk" ∷ ⌜agreeγ.(ktcore.Agree.vrf_pk) = vrf.(StartVrf.VrfPk)⌝ ∗
     "#His_VrfPk" ∷ cryptoffi.is_vrf_pk vrf.(StartVrf.VrfPk) ∗
     "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (agreeγ.(ktcore.Agree.vrf_pk))
-      vrf.(StartVrf.VrfSig)
+      vrf.(StartVrf.VrfSig) ∗
+
+    (* bootstrap caller's facts about our Agree state. *)
+    "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
+    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+    "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝
     end end
   }}}.
 Proof. Admitted.
@@ -450,15 +455,19 @@ Lemma wp_CallStart c good :
 
       "Hgood" ∷ match good with None => True | Some γ =>
         let agreeγ := γ.(cfg.agreeγ) in
-        ∃ servHist ep dig link,
-        "#Hlb_servHist" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) servHist ∗
+        ∃ servDigs ep dig link,
+        "#Hlb_servDigs" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) servDigs ∗
         (* epoch returned by CheckStartChain is only upper bound on (len digs).
         need exact equality so clients can certify their last ep. *)
-        "%Heq_ep" ∷ ⌜uint.nat ep = (length servHist - 1)%nat⌝ ∗
+        "%Heq_ep" ∷ ⌜uint.nat ep = (length servDigs - 1)%nat⌝ ∗
         "#Hwish_StartChain" ∷ wish_CheckStartChain γ.(cfg.sig_pk) chain
-          servHist None ep dig link ∗
+          servDigs None ep dig link ∗
         "%Heq_VrfPk" ∷ ⌜agreeγ.(ktcore.Agree.vrf_pk) = vrf.(StartVrf.VrfPk)⌝ ∗
-        "#Hwish_StartVrf" ∷ wish_CheckStartVrf γ.(cfg.sig_pk) vrf end)
+        "#Hwish_StartVrf" ∷ wish_CheckStartVrf γ.(cfg.sig_pk) vrf ∗
+
+        "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
+        "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+        "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝ end)
     }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -503,7 +512,7 @@ Proof.
   iNamed "Hgood".
   opose proof (StartReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
   simplify_eq/=.
-  iDestruct "HQ" as "[#Hnew_hist %]".
+  iDestruct "HQ" as "[#Hnew_digs %]".
   rewrite Heq_VrfPk.
   eremember (drop _ _) as digs1.
   list_elem digs1 (pred $ length digs1) as dig.

@@ -594,9 +594,9 @@ Proof.
   rewrite Qp.half_half.
   simplify_eq/=.
   rewrite /own_aux. iNamed "Hown_gs". simpl.
-  iMod (mono_list_auth_own_update_app [dig] with "Hgs_digs") as "[[Hhist Hhist'] #Hlb_hist]".
-  iMod ("Hfupd" with "[$Hhist']") as "HQ".
-  iAssert (own_aux _ (state.mk _) (1/2))%I with "[$Hhist]" as "Hown_gs".
+  iMod (mono_list_auth_own_update_app [dig] with "Hgs_digs") as "[[Hdigs Hdigs'] #Hlb_digs]".
+  iMod ("Hfupd" with "[$Hdigs']") as "HQ".
+  iAssert (own_aux _ (state.mk _) (1/2))%I with "[$Hdigs]" as "Hown_gs".
   iModIntro.
 
   iPoseProof "Hwish_getNextLink_n" as "H".
@@ -608,9 +608,9 @@ Proof.
     unfold ktcore.mono_plain in *.
     rewrite !fmap_app.
     eapply list_reln_snoc; [done|].
-    intros * Hlast_hist.
-    rewrite !fmap_last in Hlast_hist.
-    erewrite last_drop_Some in Hlast_hist; [|done|word].
+    intros * Hlast_digs.
+    rewrite !fmap_last in Hlast_digs.
+    erewrite last_drop_Some in Hlast_digs; [|done|word].
     simplify_eq/=.
     by apply ktcore.plain_inv_mono. }
   clear Hmono_maps.
@@ -695,8 +695,8 @@ Proof.
     case_match; try done.
     iNamed "Halign_hist".
     remember (uint.nat (word.sub _ _)) as ep.
-    list_elem hist ep as e.
-    iDestruct (mono_list_idx_own_get with "His_hist") as "Hidx"; [done|].
+    list_elem digs ep as e.
+    iDestruct (mono_list_idx_own_get with "His_digs") as "Hidx"; [done|].
     iFrame "#". }
   rewrite -ncfupd_wp.
   iPoseProof "Hfupd" as "H".
@@ -763,7 +763,9 @@ Proof.
     case_match; try done.
     iDestruct (big_sepL_lookup with "Hgood") as "{Hgood} Htrans"; [done|].
     iDestruct ("Htrans" with "Halign_hist0 [][]") as "{Htrans} $".
-    { simpl. len. }
+    { iNamed "Halign_hist".
+      rewrite Heq_digs_start in Hnoof_ep.
+      simpl. len. }
     by iNamed "Halign_serv0". }
   case_bool_decide as Heq_err; wp_auto;
     rewrite ktcore.rw_Blame0 in Heq_err; subst.

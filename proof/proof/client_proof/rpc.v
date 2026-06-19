@@ -123,7 +123,6 @@ Definition own ptr obj : iProp Σ :=
 Definition valid γ digs obj : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
   let num_eps := (agreeγ.(ktcore.Agree.digs_start) + length digs)%nat in
-  "#Hlb_digs" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) digs ∗
   "%Heq_ep" ∷ ⌜S $ uint.nat obj.(epoch) = num_eps⌝ ∗
   "%Hlast_dig" ∷ ⌜last digs = Some obj.(dig)⌝ ∗
   "%His_chain" ∷ ⌜hashchain.valid digs agreeγ.(ktcore.Agree.cut) obj.(link) num_eps⌝ ∗
@@ -164,13 +163,13 @@ Definition align_serv γcli γserv : iProp Σ :=
 
   "%Heq_vrf_pk" ∷ ⌜agreeγ.(ktcore.Agree.vrf_pk) =
     servAgreeγ.(ktcore.Agree.vrf_pk)⌝ ∗
-  "%Heq_serv_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) =
-    servAgreeγ.(ktcore.Agree.digs_start)⌝ ∗
-  "%Heq_serv_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = servAgreeγ.(ktcore.Agree.cut)⌝ ∗
-
   "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
   "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
-  "%Heq_func_start" ∷ ⌜servAgreeγ.(ktcore.Agree.func_start) = 0%nat⌝.
+  "%Heq_func_start" ∷ ⌜servAgreeγ.(ktcore.Agree.func_start) = 0%nat⌝ ∗
+
+  "%Heq_serv_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) =
+    servAgreeγ.(ktcore.Agree.digs_start)⌝ ∗
+  "%Heq_serv_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = servAgreeγ.(ktcore.Agree.cut)⌝.
 
 End proof.
 End serv.
@@ -230,7 +229,8 @@ Lemma serv_is_adtr γ servγ ptr σ :
 Proof.
   simpl. iIntros (Hgood) "@".
   rewrite Hgood /ktcore.is_audit.
-  iNamed "His_lastEp".
+  rewrite /own. iNamed "Hown_gs".
+  iDestruct (mono_list_lb_own_get with "Hown_digs") as "#Hlb_digs".
   iFrame "#".
   iNamed "Halign_serv".
   iFrame "%".
@@ -408,24 +408,22 @@ Proof.
   iFrame "#".
   case_match eqn:Ht; try done. clear Ht. iNamed "Hgood".
   iIntros (?) "*@@%".
-  iExists _, (epoch.mk' (W64 $ length servHist - 1) _ _ _). simpl.
+  iExists _, (epoch.mk' (W64 $ length servDigs - 1) _ _ _). simpl.
   rewrite /wish_getNextEp /epoch.valid /epoch.align_serv /=.
   rewrite Heq_sig_pk Heq_vrf_pk Heq_digs_start Heq_cut.
-  rewrite Heq_digs_start in Heq_serv_digs_start.
-  rewrite Heq_cut in Heq_serv_cut.
   iFrame "#%".
-  iAssert (⌜digs `prefix_of` servHist⌝)%I as %(?&?).
-  { iDestruct (mono_list_lb_valid with "Hserv_digs Hlb_servHist")
+  iAssert (⌜digs `prefix_of` servDigs⌝)%I as %(?&?).
+  { iDestruct (mono_list_lb_valid with "Hserv_digs Hlb_servDigs")
       as %[?|Hpref]; [done|].
     by apply prefix_length_eq in Hpref as ->; [|lia]. }
-  replace (digs ++ _) with servHist.
+  replace (digs ++ _) with servDigs.
   2: { subst. f_equal. by rewrite drop_app_length'. }
   iFrame "#%".
   iSplit.
   { repeat iExists _. iSplit; try done. word. }
   iDestruct (ktcore.get_link_sigpred with "His_sigPk Hwish_linkSig") as "@".
-  iAssert (⌜servHist = digs0⌝)%I as %?.
-  { iDestruct (mono_list_lb_valid with "Hlb_servHist Hlb_digs") as %?.
+  iAssert (⌜servDigs = digs0⌝)%I as %?.
+  { iDestruct (mono_list_lb_valid with "Hlb_servDigs Hlb_digs") as %?.
     iPureIntro.
     apply prefix_or_length_eq; [done|word]. }
   subst.

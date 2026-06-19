@@ -34,10 +34,10 @@ Record t :=
     client gives server permission to add to this.
     all writable post-conds only reference pending. *)
     pending : ktcore.plain_ty;
-    (* hist of digs.
+    (* digs of digs.
     server can update this by adding dig that corresponds to curr pending.
-    all read-only post-conds only reference hist. *)
-    hist : list (list w8);
+    all read-only post-conds only reference digs. *)
+    digs : list (list w8);
   }.
 End state.
 
@@ -54,7 +54,7 @@ Definition own_aux γ obj q : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
   "Hown_pend" ∷ dghost_var γ.(cfg.pendγ) (DfracOwn q) obj.(state.pending) ∗
   (* client remembers lb's of this. *)
-  "Hown_hist" ∷ mono_list_auth_own agreeγ.(ktcore.Agree.digs) q obj.(state.hist).
+  "Hown_digs" ∷ mono_list_auth_own agreeγ.(ktcore.Agree.digs) q obj.(state.digs).
 
 (* other 1/2 in server lock inv. *)
 Definition own γ obj : iProp Σ := own_aux γ obj (1/2).
@@ -65,13 +65,13 @@ Proof.
   intros ??. iSplit.
   - iIntros "@".
     iDestruct "Hown_pend" as "[? ?]".
-    iDestruct "Hown_hist" as "[? ?]".
+    iDestruct "Hown_digs" as "[? ?]".
     iFrame.
   - iIntros "[H0 H1]".
     iNamedSuffix "H0" "0".
     iNamedSuffix "H1" "1".
     iCombine "Hown_pend0 Hown_pend1" as "?".
-    iCombine "Hown_hist0 Hown_hist1" as "?".
+    iCombine "Hown_digs0 Hown_digs1" as "?".
     iFrame.
 Qed.
 
@@ -87,7 +87,7 @@ Proof.
   iNamedSuffix "H0" "0".
   iNamedSuffix "H1" "1".
   iCombine "Hown_pend0 Hown_pend1" gives %[? ?].
-  iDestruct (mono_list_auth_own_agree with "Hown_hist0 Hown_hist1") as %[? ?].
+  iDestruct (mono_list_auth_own_agree with "Hown_digs0 Hown_digs1") as %[? ?].
   iModIntro.
   destruct obj0, obj1. by simplify_eq/=.
 Qed.
@@ -112,9 +112,9 @@ Definition valid γ obj : iProp Σ :=
       for adversarial uid, auth in inv. *)
       mono_list_idx_own uidγ i (ver, pk))) ∗
   "%Hsub_pend" ∷ ⌜∀ last_dig,
-    last obj.(state.hist) = Some last_dig →
+    last obj.(state.digs) = Some last_dig →
     ktcore.plain_sub (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) last_dig) obj.(state.pending)⌝ ∗
-  "%Hsub_hist" ∷ ⌜ktcore.mono_plain agreeγ.(ktcore.Agree.vrf_pk) obj.(state.hist)⌝.
+  "%Hsub_digs" ∷ ⌜ktcore.mono_plain agreeγ.(ktcore.Agree.vrf_pk) obj.(state.digs)⌝.
 
 Definition inv_aux γ obj : iProp Σ :=
   "Hown_serv" ∷ own γ obj ∗
@@ -127,7 +127,7 @@ Definition is_inv γ := inv nroot (∃ obj, inv_aux γ obj).
 
 (** helpers for inv. *)
 
-Lemma hist_pks_prefix uid γ (i j : nat) (x y : list w8) :
+Lemma digs_pks_prefix uid γ (i j : nat) (x y : list w8) :
   let agreeγ := γ.(cfg.agreeγ) in
   (i ≤ j)%nat →
   is_inv γ -∗
@@ -139,15 +139,15 @@ Proof.
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
   iNamed "Hown_serv".
-  iDestruct (mono_list_auth_idx_lookup with "Hown_hist Hidx0") as %Hlook0.
-  iDestruct (mono_list_auth_idx_lookup with "Hown_hist Hidx1") as %Hlook1.
+  iDestruct (mono_list_auth_idx_lookup with "Hown_digs Hidx0") as %Hlook0.
+  iDestruct (mono_list_auth_idx_lookup with "Hown_digs Hidx1") as %Hlook1.
   iMod ("Hclose" with "[-]") as "_"; [iFrame "∗#"|].
   iNamed "His_serv".
   iIntros "!> !%".
   by eapply ktcore.mono_plain_lookup.
 Qed.
 
-Lemma hist_to_put_perms γ i x :
+Lemma digs_to_put_perms γ i x :
   let agreeγ := γ.(cfg.agreeγ) in
   is_inv γ -∗
   mono_list_idx_own agreeγ.(ktcore.Agree.digs) i x ={⊤}=∗
@@ -165,16 +165,16 @@ Proof.
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
   iNamed "Hown_serv".
-  iDestruct (mono_list_auth_idx_lookup with "Hown_hist Hidx") as %Hlook_hist.
+  iDestruct (mono_list_auth_idx_lookup with "Hown_digs Hidx") as %Hlook_digs.
   iMod ("Hclose" with "[-]") as "_"; [by iFrame "∗#"|].
   iNamed "His_serv".
   iModIntro.
 
   iIntros "* %Hlook_uid %Hlen_pks".
-  apply lookup_lt_Some in Hlook_hist as ?.
-  list_elem (obj.(state.hist)) (pred (length obj.(state.hist))) as last_dig.
+  apply lookup_lt_Some in Hlook_digs as ?.
+  list_elem (obj.(state.digs)) (pred (length obj.(state.digs))) as last_dig.
   opose proof (ktcore.mono_plain_lookup uid _
-    Hlook_hist Hlast_dig_lookup _) as Hsub0; [done|lia|].
+    Hlook_digs Hlast_dig_lookup _) as Hsub0; [done|lia|].
   rewrite -last_lookup in Hlast_dig_lookup.
   apply Hsub_pend in Hlast_dig_lookup as Hsub1.
   specialize (Hsub1 uid).
@@ -204,8 +204,8 @@ Definition perm_read γ Q : iProp Σ :=
 
 Definition Q_read_lb prev_lb γ obj : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
-  mono_list_lb_own agreeγ.(ktcore.Agree.digs) obj.(state.hist) ∗
-  ⌜prev_lb `prefix_of` obj.(state.hist)⌝.
+  mono_list_lb_own agreeγ.(ktcore.Agree.digs) obj.(state.digs) ∗
+  ⌜prev_lb `prefix_of` obj.(state.digs)⌝.
 
 Lemma op_read_lb γ prev_lb :
   let agreeγ := γ.(cfg.agreeγ) in
@@ -222,8 +222,8 @@ Proof.
   iFrame.
   iIntros "@".
   iMod "Hmask" as "_".
-  iDestruct (mono_list_lb_own_get with "Hown_hist") as "#Hlb'".
-  iDestruct (mono_list_auth_lb_valid with "Hown_hist Hlb") as %[_ ?].
+  iDestruct (mono_list_lb_own_get with "Hown_digs") as "#Hlb'".
+  iDestruct (mono_list_auth_lb_valid with "Hown_digs Hlb") as %[_ ?].
   iMod ("Hclose" with "[-]") as "_".
   - iFrame "∗#".
   - by iFrame "#%".
@@ -231,8 +231,8 @@ Qed.
 
 Definition Q_read_idx prev_idx γ obj : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
-  mono_list_lb_own agreeγ.(ktcore.Agree.digs) obj.(state.hist) ∗
-  ⌜prev_idx < length obj.(state.hist)⌝.
+  mono_list_lb_own agreeγ.(ktcore.Agree.digs) obj.(state.digs) ∗
+  ⌜prev_idx < length obj.(state.digs)⌝.
 
 (* op_read_idx necessary, even tho weaker than op_read_lb.
 cli_call takes in curried Q_read, since it's used in both pre and post.
@@ -308,17 +308,17 @@ Proof.
     by apply prefix_app_r.
 Qed.
 
-Definition perm_add_hist γ : iProp Σ :=
+Definition perm_add_digs γ : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
   □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
     ∀ dig,
     ⌜ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) dig = obj.(state.pending)⌝ -∗
-    let obj' := set (state.hist) (.++ [dig]) obj in
+    let obj' := set (state.digs) (.++ [dig]) obj in
     (own γ obj' ={∅,⊤}=∗ True)).
 
-Lemma op_add_hist γ : is_inv γ -∗ perm_add_hist γ.
+Lemma op_add_digs γ : is_inv γ -∗ perm_add_digs γ.
 Proof.
-  rewrite /perm_add_hist. iIntros "#Hinv".
+  rewrite /perm_add_digs. iIntros "#Hinv".
   iModIntro.
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
@@ -564,16 +564,16 @@ Definition own γ ptr σ obj q : iProp Σ :=
   "#Hfld_hist" ∷ ptr.[server.Server.t, "hist"] ↦□ ptr_hist ∗
 
   "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(secs) last_dig q ∗
-  "Hown_hist" ∷ history.own γ ptr_hist σ.(state.hist) q ∗
+  "Hown_hist" ∷ history.own γ ptr_hist σ.(state.digs) q ∗
 
   (* other 1/2 in server inv. *)
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
-  "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+  "%Hlast_dig" ∷ ⌜last σ.(state.digs) = Some last_dig⌝ ∗
   "%Heq_hist_pend" ∷ ⌜ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) last_dig = σ.(state.pending)⌝ ∗
-  "#Hperm_add_hist" ∷ perm_add_hist γ ∗
+  "#Hperm_add_digs" ∷ perm_add_digs γ ∗
   "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
   "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
-  "%Heq_audit_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝.
+  "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝.
 
 Definition own_aux γ ptr obj q : iProp Σ := ∃ σ, own γ ptr σ obj q.
 
@@ -602,7 +602,7 @@ Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
     is_pkg_init server ∗
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
-    "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+    "%Hlast_dig" ∷ ⌜last σ.(state.digs) = Some last_dig⌝ ∗
     "%Heq_prefixLen" ∷ ⌜uint.nat prefixLen ≤ length pks⌝
   }}}
   s @! (go.PointerType server.Server) @! "getHist" #uid #prefixLen
@@ -745,7 +745,7 @@ Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
     is_pkg_init server ∗
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
-    "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+    "%Hlast_dig" ∷ ⌜last σ.(state.digs) = Some last_dig⌝ ∗
     "%Heq_numVers" ∷ ⌜uint.nat numVers = length pks⌝
   }}}
   s @! (go.PointerType server.Server) @! "getBound" #uid #numVers
@@ -848,7 +848,7 @@ Proof.
     "%Hmono" ∷ ⌜ktcore.plain_sub (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) last_dig)
       (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) new_dig)⌝ ∗
     "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(Server.secs) new_dig 1 ∗
-    "Hown_gs" ∷ own_aux γ {| state.pending := new_pend; state.hist := hist |} (1/2)
+    "Hown_gs" ∷ own_aux γ {| state.pending := new_pend; state.digs := digs |} (1/2)
   )%I with "[Hown_keys Hown_gs upd Hsl_upd Hcap_upd w i]" as "IH".
   { iFrame "∗". iExists []. simpl.
     iSplit; [word|].
@@ -928,9 +928,9 @@ Proof.
     iNamedSuffix "Hown_gs" "_gs".
     simpl.
     iMod (dghost_var_update with "Hown_pend_gs") as "[Hpend Hpend']".
-    iDestruct "Hown_hist_gs" as "[Hhist Hhist']".
-    iMod ("Hperm" with "[$Hpend' $Hhist']") as "_".
-    iAssert (own_aux _ _ (1/2))%I with "[$Hpend $Hhist]" as "Hown_gs".
+    iDestruct "Hown_digs_gs" as "[Hdigs Hdigs']".
+    iMod ("Hperm" with "[$Hpend' $Hdigs']") as "_".
+    iAssert (own_aux _ _ (1/2))%I with "[$Hpend $Hdigs]" as "Hown_gs".
     iModIntro.
 
     wp_apply (merkle.wp_Map_Put with "[$Hown_hidden]") as "%%%new_dig @".
@@ -988,7 +988,7 @@ Proof.
 
   iApply ncfupd_wp.
   rewrite /own.
-  iPoseProof "Hperm_add_hist" as "Hperm".
+  iPoseProof "Hperm_add_digs" as "Hperm".
   iMod "Hperm" as "(%obj'&Hown_gs'&Hperm)".
   destruct obj'.
   iCombine "Hown_gs Hown_gs'" as "Hown_gs" gives %?.
@@ -998,10 +998,10 @@ Proof.
   iSpecialize ("Hperm" with "[]"); [done|].
   iNamedSuffix "Hown_gs" "_gs".
   simpl.
-  iMod (mono_list_auth_own_update_app [new_dig] with "Hown_hist_gs") as "[[Hhist Hhist'] #Hlb_hist]".
+  iMod (mono_list_auth_own_update_app [new_dig] with "Hown_digs_gs") as "[[Hdigs Hdigs'] #Hlb_digs]".
   iDestruct "Hown_pend_gs" as "[Hpend Hpend']".
-  iMod ("Hperm" with "[$Hpend' $Hhist']") as "_".
-  iAssert (own_aux _ (state.mk _ _) (1/2))%I with "[$Hpend $Hhist]" as "Hown_gs".
+  iMod ("Hperm" with "[$Hpend' $Hdigs']") as "_".
+  iAssert (own_aux _ (state.mk _ _) (1/2))%I with "[$Hpend $Hdigs]" as "Hown_gs".
   iModIntro.
 
   iDestruct (own_slice_len with "Hsl_audits") as %?.
@@ -1010,13 +1010,13 @@ Proof.
   { rewrite /ktcore.mono_plain in Hmono_plain |-*.
     rewrite !fmap_app.
     eapply list_reln_snoc; [done|].
-    intros * Hlast_hist.
-    rewrite !fmap_last Hlast_dig /= in Hlast_hist.
+    intros * Hlast_digs.
+    rewrite !fmap_last Hlast_dig /= in Hlast_digs.
     by simplify_eq/=. }
   clear Hmono_plain.
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". iPureIntro.
-    rewrite Heq_cut Heq_digs_start Heq_audit_start.
+    rewrite Heq_cut Heq_digs_start Heq_func_start.
     split; [|repeat split].
     - exact_eq His_chain. word.
     - len.
@@ -1100,11 +1100,11 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
     sl_chainProof sl_linkSig sl_hist ptr_bound err σ lastDig,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #err);
     let agreeγ := γ.(cfg.agreeγ) in
-    let numEps := length σ.(state.hist) in
+    let numEps := length σ.(state.digs) in
     let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid lastDig in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
-    "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some lastDig⌝ ∗
+    "%Hlast_digs" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
     "#Herr" ∷
       match err with
       | true => ⌜uint.nat prevEpoch ≥ numEps ∨
@@ -1113,7 +1113,7 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
         ∃ lastLink chainProof linkSig hist bound,
         "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 $ length pks)⌝ ∗
-        "%His_lastLink" ∷ ⌜hashchain.valid (σ.(state.hist)) None lastLink numEps⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.valid (σ.(state.digs)) None lastLink numEps⌝ ∗
 
         "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
         "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
@@ -1121,7 +1121,7 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
         "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
-          (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
+          (drop (S (uint.nat prevEpoch)) σ.(state.digs))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
         "#Hwish_hist" ∷ ktcore.wish_ListMemb agreeγ.(ktcore.Agree.vrf_pk) uid
@@ -1181,7 +1181,7 @@ Proof.
   wp_apply (hashchain.wp_HashChain_Prove with "[$Hown_chain]") as "* @"; [word|].
   iPersist "Hsl_proof".
   case_decide as Ht; [|word]. clear Ht.
-  list_elem audits (pred $ length σ.(state.hist)) as last_audit.
+  list_elem audits (pred $ length σ.(state.digs)) as last_audit.
   iDestruct (big_sepL2_lookup_r with "Hown_audits")
     as "(%ptr_audit&%Hlook_sl0_audits&@)"; [done|].
   iDestruct (big_sepL_lookup with "His_sigs") as "@"; [done|].
@@ -1199,7 +1199,7 @@ Proof.
   { iFrame "∗∗#%". }
   wp_end.
   iFrame (Hlast_dig) "∗ Hown_ro". iFrame "#%".
-  replace (length _ - 1) with (Z.of_nat $ pred $ length σ.(state.hist)) by lia.
+  replace (length _ - 1) with (Z.of_nat $ pred $ length σ.(state.digs)) by lia.
   iFrame "#".
   repeat iSplit; try iPureIntro.
   - word.
@@ -1218,7 +1218,7 @@ Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
   s @! (go.PointerType server.Server) @! "Audit" #prevEpoch
   {{{
     sl_proofs err σ, RET (#sl_proofs, #err);
-    let numEps := length σ.(state.hist) in
+    let numEps := length σ.(state.digs) in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
     "Herr" ∷
@@ -1238,13 +1238,13 @@ Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
         "#His_upds" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ dig0 dig1,
           let predEp := (uint.nat prevEpoch + i)%nat in
-          "%Hlook0" ∷ ⌜σ.(state.hist) !! predEp = Some dig0⌝ ∗
-          "%Hlook1" ∷ ⌜σ.(state.hist) !! (S predEp) = Some dig1⌝ ∗
+          "%Hlook0" ∷ ⌜σ.(state.digs) !! predEp = Some dig0⌝ ∗
+          "%Hlook1" ∷ ⌜σ.(state.digs) !! (S predEp) = Some dig1⌝ ∗
           "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
           let ep := (S $ uint.nat prevEpoch + i)%nat in
-          "%His_link" ∷ ⌜hashchain.valid (take (S ep) σ.(state.hist)) None link (S ep)⌝ ∗
+          "%His_link" ∷ ⌜hashchain.valid (take (S ep) σ.(state.digs)) None link (S ep)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end
   }}}.
@@ -1311,30 +1311,34 @@ Lemma wp_Server_Start s γ obj Q :
   {{{
     chain vrf ptr_chain ptr_vrf σ last_link, RET (#ptr_chain, #ptr_vrf);
     let agreeγ := γ.(cfg.agreeγ) in
-    let numEps := length σ.(state.hist) in
+    let numEps := length σ.(state.digs) in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
-    "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 
     "#Hptr_chain" ∷ StartChain.own ptr_chain chain (□) ∗
     "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
 
+    "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
-    (* PrevLink is the only "assumed" link. need to guarantee its length. *)
     "%His_PrevLink" ∷ ⌜hashchain.valid
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.digs))
       None chain.(StartChain.PrevLink)
       (uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
-      (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
-    "%His_last_link" ∷ ⌜hashchain.valid (σ.(state.hist)) None last_link numEps⌝ ∗
+      (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.digs))⌝ ∗
+    "%His_last_link" ∷ ⌜hashchain.valid σ.(state.digs) None last_link numEps⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
     "%Heq_VrfPk" ∷ ⌜agreeγ.(ktcore.Agree.vrf_pk) = vrf.(StartVrf.VrfPk)⌝ ∗
     "#His_VrfPk" ∷ cryptoffi.is_vrf_pk vrf.(StartVrf.VrfPk) ∗
     "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk)
-      agreeγ.(ktcore.Agree.vrf_pk) vrf.(StartVrf.VrfSig)
+      agreeγ.(ktcore.Agree.vrf_pk) vrf.(StartVrf.VrfSig) ∗
+
+    (* bootstrap caller's facts about our Agree state. *)
+    "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
+    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+    "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝
   }}}.
 Proof.
   wp_start as "@".
@@ -1360,7 +1364,7 @@ Proof.
   wp_apply (hashchain.wp_HashChain_Bootstrap with "[$Hown_chain]") as "* @"; [word|].
   case_decide as Ht; [|word]. clear Ht.
   wp_bind.
-  list_elem audits (pred $ length σ.(state.hist)) as last_audit.
+  list_elem audits (pred $ length σ.(state.digs)) as last_audit.
   iDestruct (big_sepL2_lookup_r with "Hown_audits")
     as "(%ptr_audit&%Hlook_sl0_audits&@)"; [done|].
   iDestruct (big_sepL_lookup with "His_sigs") as "@"; [done|].
@@ -1379,9 +1383,9 @@ Proof.
 
   iApply ("HΦ" $! (StartChain.mk' _ _ _ _) (StartVrf.mk' _ _)). simpl.
   simpl. iFrame "∗#".
-  replace (uint.nat (word.sub _ _)) with (pred $ length σ.(state.hist)); [|word].
+  replace (uint.nat (word.sub _ _)) with (pred $ length σ.(state.digs)); [|word].
   iFrame "%".
-  replace (_ - _) with (Z.of_nat $ pred $ length σ.(state.hist)); [|lia].
+  replace (_ - _) with (Z.of_nat $ pred $ length σ.(state.digs)); [|lia].
   iDestruct (cryptoffi.own_vrf_sk_to_pk with "[]") as "His_vrf_pk"; [done|].
   iFrame "#".
   repeat iSplit; try iPureIntro.
@@ -1476,7 +1480,7 @@ Proof.
     rewrite Hinv_merkle ktcore.plain_inv_empty.
     iModIntro. repeat iSplit; try iPureIntro; try done.
     { rewrite /keyStore.own_plain. naive_solver. }
-    2: { by iApply op_add_hist. }
+    2: { by iApply op_add_digs. }
     iExists [ktcore.AuditProof.mk' [] _].
     iFrame "Hptr_audit #". simpl. repeat iSplit; try done.
     by iDestruct own_slice_nil as "$". }
