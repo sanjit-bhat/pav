@@ -37,7 +37,28 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc /valid
+    /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc
+    /safemarshal.Slice1D.valid.
+  intros (-> & Hv0a & Hv0b & Hv0c) (Heq & Hv1a & Hv1b & Hv1c).
+  rewrite -!app_assoc in Heq.
+  apply app_inj_1 in Heq as [Hpe Heq]; [|len].
+  apply (inj u64_le) in Hpe.
+  apply app_inj_1 in Heq as [Hp1 Heq]; [|len].
+  apply (inj u64_le) in Hp1.
+  assert (length obj0.(PrevLink) = length obj1.(PrevLink)) by word.
+  apply app_inj_1 in Heq as [Hpl Heq]; [|done].
+  apply app_inj_1 in Heq as [Hp2 Heq]; [|len].
+  apply (inj u64_le) in Hp2.
+  assert (length obj0.(ChainProof) = length obj1.(ChainProof)) by word.
+  apply app_inj_1 in Heq as [Hcp Heq]; [|done].
+  apply app_inj_1 in Heq as [Hp3 Heq]; [|len].
+  apply (inj u64_le) in Hp3.
+  assert (length obj0.(LinkSig) = length obj1.(LinkSig)) by word.
+  apply app_inj_1 in Heq as [Hls Htail]; [|done].
+  destruct obj0, obj1. by simplify_eq/=.
+Qed.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -116,7 +137,22 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc /valid
+    /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc
+    /safemarshal.Slice1D.valid.
+  intros (-> & Hv0a & Hv0b) (Heq & Hv1a & Hv1b).
+  rewrite -!app_assoc in Heq.
+  apply app_inj_1 in Heq as [Hp1 Heq]; [|len].
+  apply (inj u64_le) in Hp1.
+  assert (length obj0.(VrfPk) = length obj1.(VrfPk)) by word.
+  apply app_inj_1 in Heq as [Hvk Heq]; [|done].
+  apply app_inj_1 in Heq as [Hp2 Heq]; [|len].
+  apply (inj u64_le) in Hp2.
+  assert (length obj0.(VrfSig) = length obj1.(VrfSig)) by word.
+  apply app_inj_1 in Heq as [Hvs Htail]; [|done].
+  destruct obj0, obj1. by simplify_eq/=.
+Qed.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -273,7 +309,22 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc /valid
+    /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc
+    /safemarshal.Slice1D.valid.
+  intros (-> & Hv0) (Heq & Hv1).
+  rewrite -!app_assoc in Heq.
+  apply app_inj_1 in Heq as [Huid Heq]; [|len].
+  apply (inj u64_le) in Huid.
+  apply app_inj_1 in Heq as [Hp Heq]; [|len].
+  apply (inj u64_le) in Hp.
+  assert (length obj0.(Pk) = length obj1.(Pk)) by word.
+  apply app_inj_1 in Heq as [Hpk Heq]; [|done].
+  apply app_inj_1 in Heq as [Hver Htail]; [|len].
+  apply (inj u64_le) in Hver.
+  destruct obj0, obj1. by simplify_eq/=.
+Qed.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -347,7 +398,18 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc /safemarshal.w64.pure_enc.
+  intros -> Heq.
+  rewrite -!app_assoc in Heq.
+  apply app_inj_1 in Heq as [Huid Heq]; [|len].
+  apply (inj u64_le) in Huid.
+  apply app_inj_1 in Heq as [Hpe Heq]; [|len].
+  apply (inj u64_le) in Hpe.
+  apply app_inj_1 in Heq as [Hpv Htail]; [|len].
+  apply (inj u64_le) in Hpv.
+  destruct obj0, obj1. by simplify_eq/=.
+Qed.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -502,7 +564,13 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc /safemarshal.w64.pure_enc.
+  intros -> Heq.
+  apply app_inj_1 in Heq as [Hpe Htail]; [|len].
+  apply (inj u64_le) in Hpe.
+  destruct obj0, obj1. by simplify_eq/=.
+Qed.
 
 Section proof.
 Context `{!heapGS Σ}.
