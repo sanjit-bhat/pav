@@ -66,10 +66,14 @@ Lemma wp_enc obj sl_b b :
     sl_b', RET #sl_b';
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
-    own_slice_cap w8 sl_b' 1 ∗
-    ⌜wish b' obj b⌝
+    own_slice_cap w8 sl_b' 1
   }}}.
-Proof. Admitted.
+Proof.
+  iIntros (Φ) "(Hinit & Hsl_b & Hcap_b) HΦ".
+  wp_apply (marshal.wp_WriteBool with "[$Hinit $Hsl_b $Hcap_b]").
+  iIntros (sl_b') "[Hsl' Hcap']".
+  iApply "HΦ". rewrite /pure_enc. iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -126,10 +130,15 @@ Lemma wp_enc obj sl_b b :
     sl_b', RET #sl_b';
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
-    own_slice_cap w8 sl_b' 1 ∗
-    ⌜wish b' obj b⌝
+    own_slice_cap w8 sl_b' 1
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "[Hsl_b Hcap_b]". wp_auto.
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Hdata _]". wp_auto.
+  wp_apply (marshal.wp_WriteBytes with "[$Hsl_b $Hcap_b $Hdata]").
+  iIntros (sl_b') "(Hsl' & Hcap' & _)". wp_auto.
+  iApply "HΦ". rewrite /pure_enc. iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -187,10 +196,14 @@ Lemma wp_enc obj sl_b b :
     sl_b', RET #sl_b';
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
-    own_slice_cap w8 sl_b' 1 ∗
-    ⌜wish b' obj b⌝
+    own_slice_cap w8 sl_b' 1
   }}}.
-Proof. Admitted.
+Proof.
+  iIntros (Φ) "(Hinit & Hsl_b & Hcap_b) HΦ".
+  wp_apply (marshal.wp_WriteInt with "[$Hinit $Hsl_b $Hcap_b]").
+  iIntros (sl_b') "[Hsl' Hcap']".
+  iApply "HΦ". rewrite /pure_enc. iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -273,10 +286,17 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    ptr_obj ↦*{d} obj ∗
-    ⌜wish b' obj b⌝
+    ptr_obj ↦*{d} obj
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hsl_obj)". wp_auto.
+  iDestruct (own_slice_len with "Hsl_obj") as %[Hlen ?].
+  wp_apply (marshal.wp_WriteInt with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  wp_apply (marshal.wp_WriteBytes with "[$Hsl_b $Hsl_obj $Hcap_b]") as "* (Hsl_b & Hcap_b & Hsl_obj)".
+  iApply "HΦ". iFrame "Hcap_b Hsl_obj".
+  rewrite /pure_enc /w64.pure_enc -!app_assoc.
+  iExactEq "Hsl_b". repeat (f_equal; try word).
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
