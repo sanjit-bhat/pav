@@ -109,10 +109,18 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (sl_VrfPk) "[Hstr_VrfSig Hsl_VrfPk]". wp_auto.
+  wp_apply (safemarshal.w8.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_VrfPk]") as "* (Hsl_b & Hcap_b & Hsl_VrfPk)".
+  iApply "HΦ".
+  iSplitL "Hsl_b".
+  { iExactEq "Hsl_b". rewrite /pure_enc -!app_assoc. done. }
+  iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -201,10 +209,19 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (sl_Link) "[Hstr_LinkSig Hsl_Link]". wp_auto.
+  wp_apply (safemarshal.w8.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  wp_apply (safemarshal.w64.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Link]") as "* (Hsl_b & Hcap_b & Hsl_Link)".
+  iApply "HΦ".
+  iSplitL "Hsl_b".
+  { iExactEq "Hsl_b". rewrite /pure_enc -!app_assoc. done. }
+  iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -279,10 +296,18 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as "Hstruct". wp_auto.
+  wp_apply (safemarshal.w64.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  wp_apply (safemarshal.w64.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  iApply "HΦ".
+  iSplitL "Hsl_b".
+  { iExactEq "Hsl_b". rewrite /pure_enc -!app_assoc. done. }
+  iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -372,10 +397,18 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (sl_Val sl_Rand) "(Hstr_CommitOpen & Hsl_Val & Hsl_Rand)". wp_auto.
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Val]") as "* (Hsl_b & Hcap_b & Hsl_Val)".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Rand]") as "* (Hsl_b & Hcap_b & Hsl_Rand)".
+  iApply "HΦ".
+  iSplitL "Hsl_b".
+  { iExactEq "Hsl_b". rewrite /pure_enc -!app_assoc. done. }
+  iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -479,10 +512,19 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (sl_LabelProof ptr_PkOpen sl_MerkleProof) "(Hstr_Memb & Hsl_LabelProof & Hown_PkOpen & Hsl_MerkleProof)". wp_auto.
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_LabelProof]") as "* (Hsl_b & Hcap_b & Hsl_LabelProof)".
+  wp_apply (CommitOpen.wp_enc with "[$Hsl_b $Hcap_b $Hown_PkOpen]") as "* (Hsl_b & Hcap_b & Hown_PkOpen)".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_MerkleProof]") as "* (Hsl_b & Hcap_b & Hsl_MerkleProof)".
+  iApply "HΦ".
+  iSplitL "Hsl_b".
+  { iExactEq "Hsl_b". rewrite /pure_enc -?app_assoc. done. }
+  iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -657,10 +699,18 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (sl_LabelProof sl_MerkleProof) "(Hstr_NonMemb & Hsl_LabelProof & Hsl_MerkleProof)". wp_auto.
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_LabelProof]") as "* (Hsl_b & Hcap_b & Hsl_LabelProof)".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_MerkleProof]") as "* (Hsl_b & Hcap_b & Hsl_MerkleProof)".
+  iApply "HΦ".
+  iSplitL "Hsl_b".
+  { iExactEq "Hsl_b". rewrite /pure_enc -!app_assoc. done. }
+  iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -758,10 +808,19 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (sl_MapLabel sl_MapVal sl_NonMembProof) "(Hstr_UpdateProof & Hsl_MapLabel & Hsl_MapVal & Hsl_NonMembProof)". wp_auto.
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_MapLabel]") as "* (Hsl_b & Hcap_b & Hsl_MapLabel)".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_MapVal]") as "* (Hsl_b & Hcap_b & Hsl_MapVal)".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_NonMembProof]") as "* (Hsl_b & Hcap_b & Hsl_NonMembProof)".
+  iApply "HΦ".
+  iSplitL "Hsl_b".
+  { iExactEq "Hsl_b". rewrite /pure_enc -!app_assoc. done. }
+  iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
