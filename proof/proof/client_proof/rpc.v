@@ -101,6 +101,7 @@ End ver.
 Module epoch.
 Record t :=
   mk' {
+    epoch : w64;
     dig : list w8;
     link : list w8;
     sig : list w8;
@@ -112,20 +113,20 @@ Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Definition own ptr (epoch : nat) obj : iProp Σ :=
+Definition own ptr obj : iProp Σ :=
   ∃ sl_dig sl_link sl_sig,
-  "#Hstr_epoch" ∷ ptr ↦□ (client.epoch.mk (W64 epoch) sl_dig sl_link sl_sig) ∗
+  "#Hstr_epoch" ∷ ptr ↦□ (client.epoch.mk obj.(epoch) sl_dig sl_link sl_sig) ∗
   "#Hsl_dig" ∷ sl_dig ↦*□ obj.(dig) ∗
   "#Hsl_link" ∷ sl_link ↦*□ obj.(link) ∗
   "#Hsl_sig" ∷ sl_sig ↦*□ obj.(sig).
 
-Definition valid γ epoch digs obj : iProp Σ :=
+Definition valid γ digs obj : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
   let num_eps := (agreeγ.(ktcore.Agree.digs_start) + length digs)%nat in
-  "%Heq_ep" ∷ ⌜S $ epoch = num_eps⌝ ∗
+  "%Heq_ep" ∷ ⌜S $ uint.nat obj.(epoch) = num_eps⌝ ∗
   "%Hlast_dig" ∷ ⌜last digs = Some obj.(dig)⌝ ∗
   "%His_chain" ∷ ⌜hashchain.valid digs agreeγ.(ktcore.Agree.cut) obj.(link) num_eps⌝ ∗
-  "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 epoch) obj.(link) obj.(sig).
+  "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) obj.(epoch) obj.(link) obj.(sig).
 
 Definition align_sigpred servAgreeγ digs : iProp Σ :=
   "#Hserv_digs" ∷ mono_list_lb_own servAgreeγ.(ktcore.Agree.digs) digs ∗
@@ -187,8 +188,8 @@ Definition own γ ptr σ : iProp Σ :=
   "#His_nextVer" ∷ ver.valid γ σ.(state.keys) nextVer ∗
   "Halign_nextVer" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
     ver.align_full γ γserv σ.(state.pend_pk) nextVer end ∗
-  "#Hown_lastEp" ∷ epoch.own ptr_lastEp σ.(state.epoch) lastEp ∗
-  "#His_lastEp" ∷ epoch.valid γ σ.(state.epoch) digs lastEp ∗
+  "#Hown_lastEp" ∷ epoch.own ptr_lastEp lastEp ∗
+  "#His_lastEp" ∷ epoch.valid γ digs lastEp ∗
   "#Halign_lastEp" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
     epoch.align_sigpred γserv digs end ∗
   "#Hown_serv" ∷ serv.own γ ptr_serv ∗
@@ -197,7 +198,8 @@ Definition own γ ptr σ : iProp Σ :=
   "#Halign_serv_full" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
     serv.align_full γ γserv end ∗
 
-  "Hown_gs" ∷ own γ digs.
+  "Hown_gs" ∷ own γ digs ∗
+  "%Heq_ep" ∷ ⌜S σ.(state.epoch) = (γ.(cfg.agreeγ).(ktcore.Agree.digs_start) + length digs)%nat⌝.
 
 End proof.
 End Client.
@@ -356,7 +358,7 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
   {{{
     is_pkg_init server ∗
     "#His_cli" ∷ is_rpc_cli c good ∗
-    "#His_args" ∷ match good with None => True | Some γ =>
+    "#His_args" ∷ match server.Trust.get_full good with None => True | Some γ =>
       let agreeγ := γ.(server.cfg.agreeγ) in
       ∃ (dig : list w8),
       "#Hidx_ep" ∷ mono_list_idx_own agreeγ.(ktcore.Agree.digs) (uint.nat prevEpoch) dig ∗
@@ -367,7 +369,7 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
   {{{
     sl_chainProof sl_linkSig sl_hist ptr_bound err,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #(ktcore.blame_to_u64 err));
-    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool good]}⌝ ∗
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ server.Trust.get_full good]}⌝ ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ chainProof linkSig hist bound,
       "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
@@ -375,18 +377,18 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
       "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
       "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
 
-      "Hgood" ∷ match good with None => True | Some γ =>
+      "Hgood" ∷ match server.Trust.get_full good with None => True | Some γ =>
         ∀ γcli digs,
-        epoch.align_serv γcli γ digs -∗
-        serv.align_serv γcli γ -∗
+        let agreeγ := γ.(server.cfg.agreeγ) in
+        epoch.align_sigpred agreeγ digs -∗
+        serv.align_sigpred γcli agreeγ -∗
+        serv.align_full γcli γ -∗
         ⌜length digs = S $ uint.nat prevEpoch⌝ -∗
 
         ∃ newDigs next,
-        let agreeγ := γcli.(cfg.agreeγ) in
         let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid next.(epoch.dig) in
         "#Hwish_getNextEp" ∷ wish_getNextEp γcli digs chainProof linkSig
           newDigs next ∗
-        "#Halign_next" ∷ epoch.align_serv γcli γ (digs ++ newDigs) ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
 
         "#Hwish_hist" ∷ ktcore.wish_ListMemb agreeγ.(ktcore.Agree.vrf_pk) uid
@@ -403,27 +405,26 @@ Proof.
   case_decide as Ht; try done. clear Ht. iNamed "Herr".
   iFrame "#".
   case_match eqn:Ht; try done. clear Ht. iNamed "Hgood".
-  iIntros (?) "*@@%".
+  iIntros (?) "*@@@%".
   iExists _, (epoch.mk' (W64 $ length servDigs - 1) _ _ _). simpl.
-  rewrite /wish_getNextEp /epoch.valid /epoch.align_serv /=.
-  rewrite Heq_sig_pk Heq_vrf_pk Heq_digs_start Heq_cut.
+  rewrite /wish_getNextEp /epoch.valid /=.
+  rewrite Heq_sig_pk Heq_serv_digs_start Heq_serv_cut.
   iFrame "#%".
+  iAssert (mono_list_lb_own t.(server.cfg.agreeγ).(ktcore.Agree.digs) servDigs)%I as "Hserv_digs'".
+  { iDestruct (ktcore.get_link_sigpred with "His_sigPk Hwish_linkSig") as "@".
+    opose proof (hashchain.inj His_lastLink _) as [-> _].
+    { exact_eq Hinv. word. }
+    done. }
   iAssert (⌜digs `prefix_of` servDigs⌝)%I as %(?&?).
-  { iDestruct (mono_list_lb_valid with "Hserv_digs Hlb_servDigs")
+  { iDestruct (mono_list_lb_valid with "Hserv_digs Hserv_digs'")
       as %[?|Hpref]; [done|].
     by apply prefix_length_eq in Hpref as ->; [|lia]. }
   replace (digs ++ _) with servDigs.
   2: { subst. f_equal. by rewrite drop_app_length'. }
-  iFrame "#%".
-  iSplit.
-  { repeat iExists _. iSplit; try done. word. }
-  iDestruct (ktcore.get_link_sigpred with "His_sigPk Hwish_linkSig") as "@".
-  iAssert (⌜servDigs = digs0⌝)%I as %?.
-  { iDestruct (mono_list_lb_valid with "Hlb_servDigs Hlb_digs") as %?.
-    iPureIntro.
-    apply prefix_or_length_eq; [done|word]. }
-  subst.
-  by rewrite Heq_func_start drop_0 in Hmono_plain0.
+  iFrame "%".
+  repeat iExists _.
+  iSplit; [done|].
+  word.
 Qed.
 
 End proof.
