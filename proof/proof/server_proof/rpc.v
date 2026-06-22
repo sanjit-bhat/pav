@@ -21,6 +21,31 @@ the specs capture this by not allowing errors from RPC serde. *)
 Module server.
 Import serde.server server.server.
 
+Module Trust.
+Inductive t :=
+  | No
+  | SigPred (γ : ktcore.Agree.t)
+  | Full (γ : cfg.t).
+
+Definition get_sigpred t :=
+  match t with
+  | SigPred γ => Some γ
+  | Full γ => Some γ.(cfg.agreeγ)
+  | _ => None
+  end.
+
+Definition get_full t := match t with Full γ => Some γ | _ => None end.
+
+Lemma full_to_sigpred t γ :
+  get_full t = Some γ →
+  get_sigpred t = Some γ.(cfg.agreeγ).
+Proof.
+  rewrite /get_full /get_sigpred. intros.
+  case_match; try done.
+  naive_solver.
+Qed.
+End Trust.
+
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : server.Assumptions}.
@@ -28,14 +53,14 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 (* TODO: make [is_rpc_cli] generic. currently, specialized to server. *)
-Definition is_rpc_cli (c : loc) (good : option cfg.t) : iProp Σ :=
-  match good with None => True | Some γ => is_inv γ end.
+Definition is_rpc_cli (c : loc) (good : Trust.t) : iProp Σ :=
+  match Trust.get_full good with None => True | Some γ => is_inv γ end.
 
 #[global] Instance is_rpc_cli_pers c good : Persistent (is_rpc_cli c good).
 Proof. apply _. Qed.
 
 (* TODO: trusted good param. *)
-Lemma wp_Dial (good : option cfg.t) (addr : w64) :
+Lemma wp_Dial (good : Trust.t) (addr : w64) :
   {{{ is_pkg_init advrpc }}}
   @! advrpc.Dial #addr
   {{{
@@ -51,7 +76,7 @@ Lemma wp_Put_cli_call c good uid pk ver sl_arg d0 arg ptr_reply (x : slice.t) :
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
     "Hptr_reply" ∷ ptr_reply ↦ x ∗
     "%His_arg" ∷ ⌜PutArg.wish arg (PutArg.mk' uid pk ver) []⌝ ∗
-    "#Hperm_put" ∷ match good with None => True | Some γ =>
+    "#Hperm_put" ∷ match Trust.get_full good with None => True | Some γ =>
       perm_put γ uid (uint.nat ver) pk end
   }}}
   c @! (go.PointerType advrpc.Client) @! "Call" server.PutRpc #sl_arg #ptr_reply
@@ -67,7 +92,7 @@ Lemma wp_CallPut c good uid sl_pk (pk : list w8) (ver : w64) :
     is_pkg_init server ∗
     "#His_cli" ∷ is_rpc_cli c good ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
-    "#His_put" ∷ match good with None => True | Some γ =>
+    "#His_put" ∷ match Trust.get_full good with None => True | Some γ =>
       ∃ i uidγ,
       "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
       "#Hidx" ∷ mono_list_idx_own uidγ i (uint.nat ver, pk) end
@@ -85,7 +110,9 @@ Proof.
   simpl in *.
   wp_apply wp_alloc as "* Hreply".
   wp_apply (wp_Put_cli_call with "[$Hsl_b $Hreply]") as "* @".
-  { iFrame "#%". case_match; [|done].
+  { iFrame "#%".
+    rewrite /is_rpc_cli.
+    case_match; [|done].
     iNamed "His_put".
     by iApply op_put. }
   wp_end.
@@ -98,7 +125,7 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#His_cli" ∷ is_rpc_cli c good ∗
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
     "Hptr_reply" ∷ ptr_reply ↦ x ∗
-    "#Hfupd" ∷ match good with None => True | Some γ => perm_read γ (Q γ) end
+    "#Hfupd" ∷ match Trust.get_full good with None => True | Some γ => perm_read γ (Q γ) end
   }}}
   c @! (go.PointerType advrpc.Client) @! "Call" server.HistoryRpc #sl_arg #ptr_reply
   {{{
@@ -110,7 +137,7 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
     ∃ replyB,
     "Hsl_reply" ∷ sl_reply ↦* replyB ∗
 
-    "Hgood" ∷ match good with None => True | Some γ =>
+    "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
     let agreeγ := γ.(cfg.agreeγ) in
     ∃ chainProof linkSig hist bound err1,
     "%His_reply" ∷ ⌜HistoryReply.wish replyB
@@ -156,7 +183,7 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
   {{{
     is_pkg_init server ∗
     "#His_cli" ∷ is_rpc_cli c good ∗
-    "#His_args" ∷ match good with None => True | Some γ =>
+    "#His_args" ∷ match Trust.get_full good with None => True | Some γ =>
       let agreeγ := γ.(cfg.agreeγ) in
       ∃ (dig : list w8),
       "#Hidx_ep" ∷ mono_list_idx_own (agreeγ.(ktcore.Agree.digs)) (uint.nat prevEpoch) dig ∗
@@ -167,7 +194,7 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
   {{{
     sl_chainProof sl_linkSig sl_hist ptr_bound err,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #(ktcore.blame_to_u64 err));
-    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool good]}⌝ ∗
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ Trust.get_full good]}⌝ ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ chainProof linkSig hist bound,
       "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
@@ -175,12 +202,11 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
       "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
       "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
 
-      "Hgood" ∷ match good with None => True | Some γ =>
+      "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
         let agreeγ := γ.(cfg.agreeγ) in
         ∃ servDigs lastDig lastLink,
         let numEps := length servDigs in
         let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid lastDig in
-        "#Hlb_servDigs" ∷ mono_list_lb_own (agreeγ.(ktcore.Agree.digs)) servDigs ∗
         "%Hlt_prevEpoch" ∷ ⌜uint.nat prevEpoch < numEps⌝ ∗
         "%Hnoof_epochs" ∷ ⌜numEps = sint.nat (W64 numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
@@ -208,7 +234,9 @@ Proof.
   wp_apply wp_alloc as "* Hreply".
   wp_apply (wp_History_cli_call (Q_read_idx (uint.nat prevEpoch))
     with "[$Hsl_b $Hreply]") as "* @".
-  { iFrame "#". case_match; [|done].
+  { iFrame "#".
+    rewrite /is_rpc_cli.
+    case_match; [|done].
     iNamed "His_args".
     by iApply op_read_idx. }
   wp_if_destruct.
@@ -245,6 +273,7 @@ Proof.
     [BlameSpec] to allow proving contra under fupd. *)
     rewrite -fupd_not_prop.
     iIntros (?).
+    rewrite /is_rpc_cli.
     case_match; try done.
     iNamed "Hgood".
     opose proof (HistoryReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
@@ -295,7 +324,7 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#His_cli" ∷ is_rpc_cli c good ∗
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
     "Hptr_reply" ∷ ptr_reply ↦ x ∗
-    "#Hfupd" ∷ match good with None => True | Some γ => perm_read γ (Q γ) end
+    "#Hfupd" ∷ match Trust.get_full good with None => True | Some γ => perm_read γ (Q γ) end
   }}}
   c @! (go.PointerType advrpc.Client) @! "Call" server.AuditRpc #sl_arg #ptr_reply
   {{{
@@ -307,7 +336,7 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
     ∃ replyB,
     "Hsl_reply" ∷ sl_reply ↦* replyB ∗
 
-    "Hgood" ∷ match good with None => True | Some γ =>
+    "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
     ∃ proofs err1,
     "%His_reply" ∷ ⌜AuditReply.wish replyB (AuditReply.mk' proofs err1) []⌝ ∗
 
@@ -347,7 +376,7 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     "#His_cli" ∷ is_rpc_cli c good ∗
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
     "Hptr_reply" ∷ ptr_reply ↦ x ∗
-    "#Hfupd" ∷ match good with None => True | Some γ => perm_read γ (Q γ) end
+    "#Hfupd" ∷ match Trust.get_full good with None => True | Some γ => perm_read γ (Q γ) end
   }}}
   c @! (go.PointerType advrpc.Client) @! "Call" server.StartRpc #sl_arg #ptr_reply
   {{{
@@ -359,7 +388,7 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     ∃ replyB,
     "Hsl_reply" ∷ sl_reply ↦* replyB ∗
 
-    "Hgood" ∷ match good with None => True | Some γ =>
+    "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
     let agreeγ := γ.(cfg.agreeγ) in
     ∃ chain vrf σ last_link,
     let numEps := length σ.(state.digs) in
@@ -386,8 +415,7 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
 
     (* bootstrap caller's facts about our Agree state. *)
     "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
-    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
-    "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝
+    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝
     end end
   }}}.
 Proof. Admitted.
@@ -447,16 +475,15 @@ Lemma wp_CallStart c good :
   @! server.CallStart #c
   {{{
     ptr_chain ptr_vrf err, RET (#ptr_chain, #ptr_vrf, #(ktcore.blame_to_u64 err));
-    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool good]}⌝ ∗
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ Trust.get_full good]}⌝ ∗
     "#Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ chain vrf,
       "#Hptr_chain" ∷ StartChain.own ptr_chain chain (□) ∗
       "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
 
-      "Hgood" ∷ match good with None => True | Some γ =>
+      "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
         let agreeγ := γ.(cfg.agreeγ) in
         ∃ servDigs ep dig link,
-        "#Hlb_servDigs" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) servDigs ∗
         (* epoch returned by CheckStartChain is only upper bound on (len digs).
         need exact equality so clients can certify their last ep. *)
         "%Heq_ep" ∷ ⌜uint.nat ep = (length servDigs - 1)%nat⌝ ∗
@@ -466,8 +493,7 @@ Lemma wp_CallStart c good :
         "#Hwish_StartVrf" ∷ wish_CheckStartVrf γ.(cfg.sig_pk) vrf ∗
 
         "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
-        "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
-        "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝ end)
+        "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ end)
     }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -477,6 +503,7 @@ Proof.
     with "[$Ha]") as "* @".
   { iFrame "#".
     iDestruct (own_slice_nil DfracDiscarded) as "$".
+    rewrite /is_rpc_cli.
     case_match; try done.
     rewrite /perm_read.
     iMod mono_list_lb_own_nil as "#?".
@@ -521,10 +548,10 @@ Proof.
   rewrite -last_lookup in Hdig_lookup.
   iFrame "#%".
 
-  repeat iSplit; try done.
-  - word.
-  - iPureIntro. exact_eq His_last_link. f_equal. len.
-  - by rewrite take_drop.
+  iExists _. repeat iSplit; try done.
+  - len.
+  - iPureIntro. exact_eq His_last_link; [|len].
+    by rewrite take_drop.
   - len.
 Qed.
 

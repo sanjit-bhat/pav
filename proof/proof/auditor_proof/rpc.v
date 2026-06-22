@@ -28,7 +28,7 @@ Record t :=
     serv_sig_pk: list w8;
     adtr_sig_pk: list w8;
     agreeγ: ktcore.Agree.t;
-    serv_good: option $ server.cfg.t;
+    serv_good: server.Trust.t;
   }.
 End cfg.
 
@@ -174,7 +174,7 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
   {{{
     is_pkg_init server ∗
     "#His_serv" ∷ is_rpc_cli c good ∗
-    "#His_args" ∷ match good with None => True | Some γ =>
+    "#His_args" ∷ match Trust.get_full good with None => True | Some γ =>
       let servAgreeγ := γ.(server.cfg.agreeγ) in
       ∃ entry : list w8,
       "#Hidx_ep" ∷ mono_list_idx_own servAgreeγ.(ktcore.Agree.digs) (uint.nat prevEpoch) entry end
@@ -182,12 +182,12 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
   @! server.CallAudit #c #prevEpoch
   {{{
     sl_proofs err, RET (#sl_proofs, #(ktcore.blame_to_u64 err));
-    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool good]}⌝ ∗
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ Trust.get_full good]}⌝ ∗
     "#Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ proofs,
       "#Hsl_proofs" ∷ ktcore.AuditProofSlice1D.own sl_proofs proofs (□) ∗
 
-      "Hgood" ∷ match good with None => True | Some γ =>
+      "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
         (* writing determ trans per epoch makes postcond easier to use
         than one trans across all epochs. epochs are indep. *)
         ([∗ list] idx ↦ proof ∈ proofs,
@@ -212,7 +212,9 @@ Proof.
   wp_apply wp_alloc as "* Hreply".
   wp_apply (wp_Audit_cli_call (Q_read_idx (uint.nat prevEpoch))
     with "[$Hsl_b $Hreply]") as "* @".
-  { iFrame "#". case_match; try done.
+  { iFrame "#".
+    rewrite /server.is_rpc_cli.
+    case_match; try done.
     iNamed "His_args".
     by iApply op_read_idx. }
   wp_if_destruct.

@@ -1337,8 +1337,7 @@ Lemma wp_Server_Start s γ obj Q :
 
     (* bootstrap caller's facts about our Agree state. *)
     "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
-    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
-    "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝
+    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝
   }}}.
 Proof.
   wp_start as "@".

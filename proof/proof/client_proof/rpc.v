@@ -12,38 +12,13 @@ it's in pkg server, but it's specialized to Client [wish_getNextEp]. *)
 
 Module client.
 
-Module ServTrust.
-Inductive t :=
-  | No
-  | SigPred (γ : ktcore.Agree.t)
-  | Full (γ : server.cfg.t).
-
-Definition get_sigpred t :=
-  match t with
-  | SigPred γ => Some γ
-  | Full γ => Some γ.(server.cfg.agreeγ)
-  | _ => None
-  end.
-
-Definition get_full t := match t with Full γ => Some γ | _ => None end.
-
-Lemma full_to_sigpred t γ :
-  get_full t = Some γ →
-  get_sigpred t = Some γ.(server.cfg.agreeγ).
-Proof.
-  rewrite /get_full /get_sigpred. intros.
-  case_match; try done.
-  naive_solver.
-Qed.
-End ServTrust.
-
 Module cfg.
 Record t :=
   mk {
     uid : w64;
     sig_pk : list w8;
     agreeγ : ktcore.Agree.t;
-    serv_good : ServTrust.t;
+    serv_good : server.Trust.t;
     clis_good : bool;
   }.
 End cfg.
@@ -210,16 +185,16 @@ Definition own γ ptr σ : iProp Σ :=
   "Hstr_client" ∷ ptr ↦ (client.Client.mk γ.(cfg.uid) ptr_nextVer ptr_lastEp ptr_serv) ∗
   "Hown_nextVer" ∷ ver.own ptr_nextVer σ.(state.pend_pk) nextVer ∗
   "#His_nextVer" ∷ ver.valid γ σ.(state.keys) nextVer ∗
-  "Halign_nextVer" ∷ match ServTrust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
+  "Halign_nextVer" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
     ver.align_full γ γserv σ.(state.pend_pk) nextVer end ∗
   "#Hown_lastEp" ∷ epoch.own ptr_lastEp σ.(state.epoch) lastEp ∗
   "#His_lastEp" ∷ epoch.valid γ σ.(state.epoch) digs lastEp ∗
-  "#Halign_lastEp" ∷ match ServTrust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
+  "#Halign_lastEp" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
     epoch.align_sigpred γserv digs end ∗
   "#Hown_serv" ∷ serv.own γ ptr_serv ∗
-  "#Halign_serv_sigpred" ∷ match ServTrust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
+  "#Halign_serv_sigpred" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
     serv.align_sigpred γ γserv end ∗
-  "#Halign_serv_full" ∷ match ServTrust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
+  "#Halign_serv_full" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
     serv.align_full γ γserv end ∗
 
   "Hown_gs" ∷ own γ digs.
@@ -246,7 +221,7 @@ Qed.
 
 Lemma serv_is_adtr γ servAgreeγ ptr σ :
   let agreeγ := γ.(cfg.agreeγ) in
-  ServTrust.get_sigpred γ.(cfg.serv_good) = Some servAgreeγ →
+  server.Trust.get_sigpred γ.(cfg.serv_good) = Some servAgreeγ →
   Client.own γ ptr σ -∗
   ktcore.is_audit agreeγ servAgreeγ σ.(state.epoch) ∗
     ⌜servAgreeγ.(ktcore.Agree.func_start) ≤ agreeγ.(ktcore.Agree.func_start)⌝.

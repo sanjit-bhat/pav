@@ -118,11 +118,11 @@ Definition own ptr γ σ q : iProp Σ :=
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
   "%Hmono_maps" ∷ ⌜ktcore.mono_plain agreeγ.(ktcore.Agree.vrf_pk)
     (drop agreeγ.(ktcore.Agree.func_start) σ.(state.digs))⌝ ∗
-  "#Halign_hist" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
+  "#Halign_hist" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
     history.align_serv σ γ servγ end ∗
 
   "#Hown_serv" ∷ serv.own ptr_serv γ γ.(cfg.serv_good) ∗
-  "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
+  "#Halign_serv" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
     serv.align_serv γ servγ end ∗
 
   "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
@@ -453,7 +453,8 @@ Lemma wp_Auditor_Get a γ epoch Q :
     "#Herr" ∷
       let agreeγ := γ.(cfg.agreeγ) in
       match err with
-      | true => ⌜uint.Z epoch < agreeγ.(ktcore.Agree.digs_start) + agreeγ.(ktcore.Agree.func_start) ∨
+      | true =>
+        ⌜uint.Z epoch < agreeγ.(ktcore.Agree.digs_start) + agreeγ.(ktcore.Agree.func_start) ∨
         uint.Z epoch >= agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs)⌝
       | false =>
         ∃ startLink currLink vrf,
@@ -526,7 +527,7 @@ Lemma wp_Auditor_updOnce ptr_a γ σ Q ptr_proof proof :
       own γ σ' ={∅,⊤}=∗ Q σ')) ∗
 
     "#Hproof" ∷ ktcore.AuditProof.own ptr_proof proof (□) ∗
-    "Hgood" ∷ match γ.(cfg.serv_good) with None => True | Some servγ =>
+    "Hgood" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
       ∃ ep dig link,
       let σ' := set state.digs (.++ [dig]) σ in
       "#Hwish_getNextLink" ∷ wish_getNextLink γ σ proof ep dig link ∗
@@ -536,7 +537,7 @@ Lemma wp_Auditor_updOnce ptr_a γ σ Q ptr_proof proof :
   {{{
     err, RET #(ktcore.blame_to_u64 err);
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
-      {[ktcore.BlameServFull:=option_bool γ.(cfg.serv_good)]}⌝ ∗
+      {[ktcore.BlameServFull:=option_bool $ server.Trust.get_full γ.(cfg.serv_good)]}⌝ ∗
     "Herr" ∷
       (if decide (err ≠ ∅)
       then
@@ -677,7 +678,7 @@ Lemma wp_Auditor_Update ptr_a γ Q :
     err σ, RET #(ktcore.blame_to_u64 err);
     "Hlock" ∷ Auditor.lock_perm ptr_a γ ∗
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
-      {[ktcore.BlameServFull:=option_bool γ.(cfg.serv_good)]}⌝ ∗
+      {[ktcore.BlameServFull:=option_bool $ server.Trust.get_full γ.(cfg.serv_good)]}⌝ ∗
     "HQ" ∷ Q σ
   }}}.
 Proof.
@@ -729,7 +730,7 @@ Proof.
              "Hlock" ∷ Auditor.lock_perm ptr_a γ ∗
              "%Hblame"
              ∷ ⌜ktcore.BlameSpec err
-                  {[ktcore.BlameServFull := option_bool γ.(cfg.serv_good)]}⌝ ∗
+                  {[ktcore.BlameServFull := option_bool $ server.Trust.get_full γ.(cfg.serv_good)]}⌝ ∗
              "HQ" ∷ Q σ0 -∗ Φ (# (ktcore.blame_to_u64 err))) ∗
     "Hlocked" ∷ own_RWMutex_Locked ptr_mu (Auditor.own_aux ptr_a γ) ∗
 
@@ -789,16 +790,16 @@ Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
   {{{
     is_pkg_init auditor ∗
     "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
-    "%Heq_servPk" ∷ ⌜match servGood with None => True | Some servγ =>
+    "%Heq_servPk" ∷ ⌜match server.Trust.get_full servGood with None => True | Some servγ =>
       servPk = servγ.(server.cfg.sig_pk) end⌝ ∗
-    "#His_servPk" ∷ match servGood with None => True | Some servγ =>
+    "#His_servPk" ∷ match server.Trust.get_full servGood with None => True | Some servγ =>
       cryptoffi.is_sig_pk servPk (sigpred.P servγ.(server.cfg.agreeγ)) end
   }}}
   @! auditor.New #servAddr #sl_servPk
   {{{
     ptr_a sl_sigPk err, RET (#ptr_a, #sl_sigPk, #(ktcore.blame_to_u64 err));
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
-      {[ktcore.BlameServFull:=option_bool servGood]}⌝ ∗
+      {[ktcore.BlameServFull:=option_bool $ server.Trust.get_full servGood]}⌝ ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ γ,
       "#His_inv" ∷ is_inv γ ∗
@@ -922,6 +923,13 @@ Proof.
     - word.
     - word.
     - case_match; try done.
+      (* TODO: refactor Auditor to give is_sig_pk under just
+      Server SigPred, not Server full. *)
+      iAssert (mono_list_lb_own t.(server.cfg.agreeγ).(ktcore.Agree.digs) digs)%I as "#Hserv_digs".
+      { iNamed "Hwish_CheckStartChain".
+        iDestruct (ktcore.get_link_sigpred with "His_servPk His_link_sig") as "H".
+        iNamedSuffix "H" "0".
+        by opose proof (hashchain.inj His_chain_start Hinv0) as [<- _]. }
       iNamedSuffix "Hgood" "0".
       subst.
       iDestruct (server.wish_CheckStartChain_det with
