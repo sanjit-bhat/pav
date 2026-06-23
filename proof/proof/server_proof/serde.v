@@ -230,7 +230,32 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc /valid
+    /StartChain.pure_enc /StartChain.valid /StartVrf.pure_enc /StartVrf.valid
+    /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc /safemarshal.Slice1D.valid.
+  intros (-> & (Hv0a & Hv0b & Hv0c) & (Hv0d & Hv0e))
+         (Heq & (Hv1a & Hv1b & Hv1c) & (Hv1d & Hv1e)).
+  rewrite -!app_assoc in Heq.
+  apply app_inj_1 in Heq as [Hpe Heq]; [|len]. apply (inj u64_le) in Hpe.
+  apply app_inj_1 in Heq as [Hp1 Heq]; [|len]. apply (inj u64_le) in Hp1.
+  assert (length obj0.(Chain).(StartChain.PrevLink) = length obj1.(Chain).(StartChain.PrevLink)) by word.
+  apply app_inj_1 in Heq as [Hpl Heq]; [|done].
+  apply app_inj_1 in Heq as [Hp2 Heq]; [|len]. apply (inj u64_le) in Hp2.
+  assert (length obj0.(Chain).(StartChain.ChainProof) = length obj1.(Chain).(StartChain.ChainProof)) by word.
+  apply app_inj_1 in Heq as [Hcp Heq]; [|done].
+  apply app_inj_1 in Heq as [Hp3 Heq]; [|len]. apply (inj u64_le) in Hp3.
+  assert (length obj0.(Chain).(StartChain.LinkSig) = length obj1.(Chain).(StartChain.LinkSig)) by word.
+  apply app_inj_1 in Heq as [Hls Heq]; [|done].
+  apply app_inj_1 in Heq as [Hp4 Heq]; [|len]. apply (inj u64_le) in Hp4.
+  assert (length obj0.(Vrf).(StartVrf.VrfPk) = length obj1.(Vrf).(StartVrf.VrfPk)) by word.
+  apply app_inj_1 in Heq as [Hvp Heq]; [|done].
+  apply app_inj_1 in Heq as [Hp5 Heq]; [|len]. apply (inj u64_le) in Hp5.
+  assert (length obj0.(Vrf).(StartVrf.VrfSig) = length obj1.(Vrf).(StartVrf.VrfSig)) by word.
+  apply app_inj_1 in Heq as [Hvs Htail]; [|done].
+  destruct obj0 as [[PEL0 PL0 CP0 LS0] [VP0 VS0]], obj1 as [[PEL1 PL1 CP1 LS1] [VP1 VS1]].
+  by simplify_eq/=.
+Qed.
 
 Section proof.
 Context `{!heapGS Σ}.

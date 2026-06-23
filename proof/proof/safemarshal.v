@@ -208,7 +208,20 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  iDestruct (own_slice_len with "Hsl_b") as %[Hlen ?].
+  wp_if_destruct.
+  - iApply "HΦ". iPureIntro.
+    intros (obj' & tail' & Heq). rewrite /wish /pure_enc in Heq.
+    apply (f_equal length) in Heq. rewrite length_app u64_le_length in Heq. word.
+  - assert (Hb : b = u64_le (le_to_u64 (take 8 b)) ++ drop 8 b).
+    { rewrite le_to_u64_le; [by rewrite take_drop|]. rewrite length_take. word. }
+    iEval (rewrite {1}Hb) in "Hsl_b".
+    wp_apply (marshal.wp_ReadInt with "[$Hsl_b]").
+    iIntros (s') "Hs'". wp_auto.
+    iApply "HΦ". iFrame "Hs'". iPureIntro. rewrite /wish /pure_enc. done.
+Qed.
 
 End proof.
 End w64.
