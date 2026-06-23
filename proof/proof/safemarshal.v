@@ -44,7 +44,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc. intros -> Heq.
+  destruct obj0, obj1; simplify_eq/=; try done; word.
+Qed.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
@@ -101,7 +104,10 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc. intros -> Heq.
+  by simplify_eq/=.
+Qed.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
@@ -158,7 +164,11 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc. intros -> Heq.
+  apply app_inj_1 in Heq as [Hlen Htail]; [|len].
+  apply (inj u64_le) in Hlen. by simplify_eq.
+Qed.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
@@ -220,7 +230,16 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-Proof. Admitted.
+Proof.
+  rewrite /wish /pure_enc /w64.pure_enc /valid.
+  intros (-> & Hvalid0) (Heq & Hvalid1).
+  rewrite -!app_assoc in Heq.
+  apply app_inj_1 in Heq as [Hlen Heq]; [|len].
+  apply (inj u64_le) in Hlen.
+  assert (length obj0 = length obj1) by word.
+  apply app_inj_1 in Heq as [-> ->]; [|done].
+  done.
+Qed.
 
 Section proof.
 Context `{hG: heapGS Σ, !ffi_semantics _ _}.
