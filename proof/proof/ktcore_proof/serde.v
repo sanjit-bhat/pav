@@ -48,6 +48,31 @@ Module ktcore.
 Notation VrfSigTag := 0 (only parsing).
 Notation LinkSigTag := 1 (only parsing).
 
+Section dfrac_valid.
+Context `{!heapGS Σ}.
+Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
+
+(* A non-empty byte slice owns at least one element heap-pointsto, from which
+   the dfrac's validity follows. (Empty slices own nothing, so this fails for
+   them — the root of the zero-sized-alloc issue, e.g. hashchain.v.) This is the
+   missing piece for decoders: the freshly-[GoAlloc]ed result struct is owned at
+   [DfracOwn 1] but [own _ d] needs it at the input dfrac [d]; downgrading via
+   [dfractional_update_to_dfrac] needs [✓ d]. *)
+Lemma own_slice_dfrac_valid (s : slice.t) (vs : list w8) dq :
+  0 < length vs →
+  s ↦*{dq} vs -∗ ⌜✓ dq⌝.
+Proof.
+  iIntros (Hlen) "Hsl".
+  destruct vs as [|v vs']; [simpl in Hlen; lia|].
+  iDestruct (own_slice_elem_acc 0 with "Hsl") as "[Helem _]"; [done|done|].
+  iEval (rewrite typed_pointsto_unseal_eq) in "Helem".
+  iDestruct "Helem" as "[Hdef _]".
+  iApply (heap_pointsto_valid with "Hdef").
+Qed.
+End dfrac_valid.
+
 Module VrfSig.
 Record t :=
   mk' {
@@ -139,7 +164,61 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - (* empty input: a valid encoding needs ≥ 9 bytes, so none exists *)
+    wp_apply (safemarshal.w8.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1".
+    destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /safemarshal.w8.pure_enc /safemarshal.Slice1D.pure_enc
+        /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (rem1) "[Hb1 %Hw8]".
+      rewrite /safemarshal.w8.wish /safemarshal.w8.pure_enc in Hw8.
+      iExFalso. iPureIntro. apply (f_equal length) in Hw8. rewrite /= in Hw8. lia.
+  - (* non-empty input: extract validity of [d] from the input slice. *)
+    iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.w8.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1".
+    destruct err1.
+    + (* SigTag read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iApply "Hpost1".
+      iExists obj.(SigTag), (safemarshal.Slice1D.pure_enc obj.(VrfPk) ++ tail).
+      iPureIntro. rewrite /safemarshal.w8.wish /safemarshal.w8.pure_enc.
+      rewrite /pure_enc /safemarshal.w8.pure_enc in Henc.
+      rewrite app_assoc. exact Henc.
+    + iDestruct "Hpost1" as (rem1) "[Hb1 %Hw8]".
+      rewrite /safemarshal.w8.wish /safemarshal.w8.pure_enc in Hw8.
+      wp_auto.
+      wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb1]").
+      iIntros (a2 b2 err2) "Hpost2".
+      destruct err2.
+      * (* VrfPk read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc Hvalid]. iApply "Hpost2".
+        iExists obj.(VrfPk), tail. iPureIntro.
+        rewrite /pure_enc /safemarshal.w8.pure_enc in Henc.
+        rewrite Hw8 in Henc. rewrite -app_assoc in Henc.
+        apply app_inj_1 in Henc as [_ Hrem1]; [|done].
+        rewrite /safemarshal.Slice1D.wish. split; [exact Hrem1|exact Hvalid].
+      * (* success *)
+        iDestruct "Hpost2" as (vrfpk rem2) "(Ha2 & Hb2 & %Hsl1)".
+        destruct Hsl1 as [Hrem1 Hvvalid].
+        wp_auto.
+        wp_alloc l as "Hptr".
+        iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+        wp_auto.
+        iApply "HΦ". iExists (VrfSig.mk' a1 vrfpk), rem2.
+        iFrame "Hb2". iSplitL "Hptr Ha2".
+        { iExists a2. iFrame "Hptr Ha2". }
+        iPureIntro. rewrite /wish /pure_enc /valid /safemarshal.w8.pure_enc. split.
+        -- rewrite Hw8 Hrem1 -app_assoc. done.
+        -- exact Hvvalid.
+Qed.
 
 End proof.
 End VrfSig.
@@ -240,7 +319,78 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - wp_apply (safemarshal.w8.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1".
+    destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /safemarshal.w8.pure_enc /safemarshal.w64.pure_enc
+        /safemarshal.Slice1D.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (rem1) "[Hb1 %Hw8]".
+      rewrite /safemarshal.w8.wish /safemarshal.w8.pure_enc in Hw8.
+      iExFalso. iPureIntro. apply (f_equal length) in Hw8. rewrite /= in Hw8. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.w8.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1".
+    destruct err1.
+    + (* SigTag read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iApply "Hpost1".
+      iExists obj.(SigTag), _.
+      iPureIntro. rewrite /safemarshal.w8.wish.
+      rewrite /pure_enc in Henc. rewrite -!app_assoc in Henc. exact Henc.
+    + iDestruct "Hpost1" as (rem1) "[Hb1 %Hw8]".
+      rewrite /safemarshal.w8.wish /safemarshal.w8.pure_enc in Hw8.
+      wp_auto.
+      wp_apply (safemarshal.w64.wp_dec with "[$Hb1]").
+      iIntros (ep b2 err2) "Hpost2".
+      destruct err2.
+      * (* Epoch read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc _]. iApply "Hpost2".
+        iExists obj.(Epoch), _.
+        iPureIntro. rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc.
+        rewrite /pure_enc /safemarshal.w8.pure_enc /safemarshal.w64.pure_enc in Henc.
+        rewrite Hw8 in Henc. rewrite -!app_assoc in Henc.
+        apply app_inj_1 in Henc as [_ Hrem1]; [|done]. exact Hrem1.
+      * iDestruct "Hpost2" as (rem2) "[Hb2 %Hw64]".
+        rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hw64.
+        wp_auto.
+        wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb2]").
+        iIntros (a3 b3 err3) "Hpost3".
+        destruct err3.
+        -- (* Link read failed *)
+           wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+           destruct Hwish as [Henc Hvalid]. iApply "Hpost3".
+           iExists obj.(Link), tail. iPureIntro.
+           rewrite /pure_enc /safemarshal.w8.pure_enc /safemarshal.w64.pure_enc in Henc.
+           rewrite Hw8 in Henc. rewrite -!app_assoc in Henc.
+           apply app_inj_1 in Henc as [_ Hrem1]; [|done].
+           rewrite Hw64 in Hrem1. rewrite -?app_assoc in Hrem1.
+           apply app_inj_1 in Hrem1 as [_ Hrem2]; [|len].
+           rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc -?app_assoc.
+            split; [exact Hrem2|exact Hvalid].
+        -- (* success *)
+           iDestruct "Hpost3" as (link rem3) "(Ha3 & Hb3 & %Hsl1)".
+           destruct Hsl1 as [Hrem2 Hvvalid].
+           wp_auto.
+           wp_alloc l as "Hptr".
+           iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+           wp_auto.
+           iApply "HΦ". iExists (LinkSig.mk' a1 ep link), rem3.
+           iFrame "Hb3". iSplitL "Hptr Ha3".
+           { iExists a3. iFrame "Hptr Ha3". }
+           iPureIntro. rewrite /wish /pure_enc /valid
+             /safemarshal.w8.pure_enc /safemarshal.w64.pure_enc
+             /safemarshal.Slice1D.pure_enc. split.
+           ++ rewrite /safemarshal.Slice1D.pure_enc in Hrem2.
+              rewrite Hw8 Hw64 Hrem2 -!app_assoc. done.
+           ++ exact Hvvalid.
+Qed.
 
 End proof.
 End LinkSig.
@@ -326,7 +476,54 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - wp_apply (safemarshal.w64.wp_dec with "[$Hsl_b]").
+    iIntros (uid b1 err1) "Hpost1".
+    destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      rewrite /wish /pure_enc /safemarshal.w64.pure_enc in Hwish.
+      iExFalso. iPureIntro. apply (f_equal length) in Hwish.
+      rewrite !length_app u64_le_length /= in Hwish. lia.
+    + iDestruct "Hpost1" as (rem1) "[Hb1 %Hw64a]".
+      rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hw64a.
+      iExFalso. iPureIntro. apply (f_equal length) in Hw64a.
+      rewrite /= length_app u64_le_length in Hw64a. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.w64.wp_dec with "[$Hsl_b]").
+    iIntros (uid b1 err1) "Hpost1".
+    destruct err1.
+    + (* Uid read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      iApply "Hpost1". iExists obj.(Uid), _. iPureIntro.
+      rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc.
+      rewrite /wish /pure_enc /safemarshal.w64.pure_enc in Hwish.
+      rewrite -?app_assoc in Hwish. exact Hwish.
+    + iDestruct "Hpost1" as (rem1) "[Hb1 %Hw64a]".
+      rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hw64a.
+      wp_auto.
+      wp_apply (safemarshal.w64.wp_dec with "[$Hb1]").
+      iIntros (ver b2 err2) "Hpost2".
+      destruct err2.
+      * (* Ver read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        iApply "Hpost2". iExists obj.(Ver), _. iPureIntro.
+        rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc.
+        rewrite /wish /pure_enc /safemarshal.w64.pure_enc in Hwish.
+        rewrite Hw64a in Hwish. rewrite -?app_assoc in Hwish.
+        apply app_inj_1 in Hwish as [_ Hrem1]; [|len]. exact Hrem1.
+      * iDestruct "Hpost2" as (rem2) "[Hb2 %Hw64b]".
+        rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hw64b.
+        wp_auto.
+        wp_alloc l as "Hptr".
+        iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+        wp_auto.
+        iApply "HΦ". iExists (MapLabel.mk' uid ver), rem2.
+        rewrite /own. iFrame "Hptr Hb2".
+        iPureIntro. rewrite /wish /pure_enc /safemarshal.w64.pure_enc.
+        rewrite Hw64a Hw64b -?app_assoc. done.
+Qed.
 
 End proof.
 End MapLabel.
@@ -427,7 +624,66 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1".
+    destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (val0 rem1) "(Ha1 & Hb1 & %Hsl1a)".
+      destruct Hsl1a as [Henc _]. iExFalso. iPureIntro.
+      rewrite /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1".
+    destruct err1.
+    + (* Val read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+      destruct Hvalid as [HvVal _]. iApply "Hpost1".
+      iExists obj.(CommitOpen.Val), _. iPureIntro.
+      rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc
+        -?app_assoc.
+      split; [|exact HvVal].
+      rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      rewrite -?app_assoc in Henc. exact Henc.
+    + iDestruct "Hpost1" as (val0 rem1) "(Ha1 & Hb1 & %Hsl1a)".
+      wp_auto.
+      wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb1]").
+      iIntros (a2 b2 err2) "Hpost2".
+      destruct err2.
+      * (* Rand read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+        destruct Hvalid as [HvVal HvRand]. iApply "Hpost2".
+        iExists obj.(CommitOpen.Rand), tail. iPureIntro.
+        assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(CommitOpen.Val)
+                  (safemarshal.Slice1D.pure_enc obj.(CommitOpen.Rand) ++ tail)) as Hw'.
+        { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
+            /safemarshal.w64.pure_enc -?app_assoc. split; [|exact HvVal].
+          rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+          rewrite -?app_assoc in Henc. exact Henc. }
+        destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1a Hw') as [_ Hrem1].
+        rewrite /safemarshal.Slice1D.wish. split; [exact Hrem1|exact HvRand].
+      * (* success *)
+        iDestruct "Hpost2" as (rand0 rem2) "(Ha2 & Hb2 & %Hsl1b)".
+        destruct Hsl1a as [Hb_eq HvVal0]. destruct Hsl1b as [Hrem1_eq HvRand0].
+        wp_auto.
+        wp_alloc l as "Hptr".
+        iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+        wp_auto.
+        iApply "HΦ". iExists (CommitOpen.mk' val0 rand0), rem2.
+        iFrame "Hb2". iSplitL "Hptr Ha1 Ha2".
+        { iExists a1, a2. iFrame "Hptr Ha1 Ha2". }
+        iPureIntro. rewrite /wish /pure_enc /valid. split.
+        -- rewrite Hb_eq Hrem1_eq -?app_assoc. done.
+        -- split; [exact HvVal0|exact HvRand0].
+Qed.
 
 End proof.
 End CommitOpen.
@@ -543,7 +799,87 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1". destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /CommitOpen.pure_enc /safemarshal.Slice1D.pure_enc
+        /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (lp0 rem1) "(Ha1 & Hb1 & %Hsl1a)".
+      destruct Hsl1a as [Henc _]. iExFalso. iPureIntro.
+      rewrite /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1". destruct err1.
+    + (* LabelProof read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+      destruct Hvalid as [HvLP _]. iApply "Hpost1".
+      iExists obj.(LabelProof), _. iPureIntro.
+      rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc
+        -?app_assoc. split; [|exact HvLP].
+      rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      rewrite -?app_assoc in Henc. exact Henc.
+    + iDestruct "Hpost1" as (lp0 rem1) "(Ha1 & Hb1 & %Hsl1a)".
+      wp_auto.
+      wp_apply (CommitOpen.wp_dec with "[$Hb1]").   (* nested PkOpen *)
+      iIntros (a2 b2 err2) "Hpost2". destruct err2.
+      * (* PkOpen read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+        destruct Hvalid as [HvLP [HvPk _]]. iApply "Hpost2".
+        iExists obj.(PkOpen), (safemarshal.Slice1D.pure_enc obj.(MerkleProof) ++ tail). iPureIntro.
+        assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(LabelProof)
+                  (CommitOpen.pure_enc obj.(PkOpen)
+                   ++ safemarshal.Slice1D.pure_enc obj.(MerkleProof) ++ tail)) as Hw1.
+        { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
+            /safemarshal.w64.pure_enc -?app_assoc. split; [|exact HvLP].
+          rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+          rewrite -?app_assoc in Henc. exact Henc. }
+        destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1a Hw1) as [_ Hrem1].
+        rewrite /CommitOpen.wish. split; [exact Hrem1|exact HvPk].
+      * iDestruct "Hpost2" as (pko0 rem2) "(Hown_pko & Hb2 & %Hsl1b)".
+        wp_auto.
+        wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb2]").
+        iIntros (a3 b3 err3) "Hpost3". destruct err3.
+        -- (* MerkleProof read failed *)
+           wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+           destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+           destruct Hvalid as [HvLP [HvPk HvMP]]. iApply "Hpost3".
+           iExists obj.(MerkleProof), tail. iPureIntro.
+           assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(LabelProof)
+                     (CommitOpen.pure_enc obj.(PkOpen)
+                      ++ safemarshal.Slice1D.pure_enc obj.(MerkleProof) ++ tail)) as Hw1.
+           { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
+               /safemarshal.w64.pure_enc -?app_assoc. split; [|exact HvLP].
+             rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+             rewrite -?app_assoc in Henc. exact Henc. }
+           destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1a Hw1) as [_ Hrem1].
+           assert (CommitOpen.wish rem1 obj.(PkOpen)
+                     (safemarshal.Slice1D.pure_enc obj.(MerkleProof) ++ tail)) as Hw2.
+           { rewrite /CommitOpen.wish. split; [exact Hrem1|exact HvPk]. }
+           destruct (CommitOpen.wish_det _ _ _ _ Hsl1b Hw2) as [_ Hrem2].
+           rewrite /safemarshal.Slice1D.wish. split; [exact Hrem2|exact HvMP].
+        -- (* success *)
+           iDestruct "Hpost3" as (mp0 rem3) "(Ha3 & Hb3 & %Hsl1c)".
+           destruct Hsl1a as [Hb_eq HvLP0]. destruct Hsl1b as [Hrem1_eq HvPk0].
+           destruct Hsl1c as [Hrem2_eq HvMP0].
+           wp_auto.
+           wp_alloc l as "Hptr".
+           iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+           wp_auto.
+           iApply "HΦ". iExists (Memb.mk' lp0 pko0 mp0), rem3.
+           iFrame "Hb3". iSplitL "Hptr Ha1 Hown_pko Ha3".
+           { iExists a1, a2, a3. iFrame "Hptr Ha1 Hown_pko Ha3". }
+           iPureIntro. rewrite /wish /pure_enc /valid. split.
+           ++ rewrite Hb_eq Hrem1_eq Hrem2_eq -?app_assoc. done.
+           ++ split; [exact HvLP0|split; [exact HvPk0|exact HvMP0]].
+Qed.
 
 End proof.
 End Memb.
@@ -729,7 +1065,66 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1".
+    destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (lp0 rem1) "(Ha1 & Hb1 & %Hsl1a)".
+      destruct Hsl1a as [Henc _]. iExFalso. iPureIntro.
+      rewrite /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1".
+    destruct err1.
+    + (* LabelProof read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+      destruct Hvalid as [HvLP _]. iApply "Hpost1".
+      iExists obj.(LabelProof), _. iPureIntro.
+      rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc
+        -?app_assoc.
+      split; [|exact HvLP].
+      rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      rewrite -?app_assoc in Henc. exact Henc.
+    + iDestruct "Hpost1" as (lp0 rem1) "(Ha1 & Hb1 & %Hsl1a)".
+      wp_auto.
+      wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb1]").
+      iIntros (a2 b2 err2) "Hpost2".
+      destruct err2.
+      * (* MerkleProof read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+        destruct Hvalid as [HvLP HvMP]. iApply "Hpost2".
+        iExists obj.(MerkleProof), tail. iPureIntro.
+        assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(LabelProof)
+                  (safemarshal.Slice1D.pure_enc obj.(MerkleProof) ++ tail)) as Hw'.
+        { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
+            /safemarshal.w64.pure_enc -?app_assoc. split; [|exact HvLP].
+          rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+          rewrite -?app_assoc in Henc. exact Henc. }
+        destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1a Hw') as [_ Hrem1].
+        rewrite /safemarshal.Slice1D.wish. split; [exact Hrem1|exact HvMP].
+      * (* success *)
+        iDestruct "Hpost2" as (mp0 rem2) "(Ha2 & Hb2 & %Hsl1b)".
+        destruct Hsl1a as [Hb_eq HvLP0]. destruct Hsl1b as [Hrem1_eq HvMP0].
+        wp_auto.
+        wp_alloc l as "Hptr".
+        iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+        wp_auto.
+        iApply "HΦ". iExists (NonMemb.mk' lp0 mp0), rem2.
+        iFrame "Hb2". iSplitL "Hptr Ha1 Ha2".
+        { iExists a1, a2. iFrame "Hptr Ha1 Ha2". }
+        iPureIntro. rewrite /wish /pure_enc /valid. split.
+        -- rewrite Hb_eq Hrem1_eq -?app_assoc. done.
+        -- split; [exact HvLP0|exact HvMP0].
+Qed.
 
 End proof.
 End NonMemb.
@@ -839,7 +1234,86 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1". destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (ml0 rem1) "(Ha1 & Hb1 & %Hsl1a)".
+      destruct Hsl1a as [Henc _]. iExFalso. iPureIntro.
+      rewrite /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1". destruct err1.
+    + (* MapLabel read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+      destruct Hvalid as [HvML _]. iApply "Hpost1".
+      iExists obj.(UpdateProof.MapLabel), _. iPureIntro.
+      rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc
+        -?app_assoc. split; [|exact HvML].
+      rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      rewrite -?app_assoc in Henc. exact Henc.
+    + iDestruct "Hpost1" as (ml0 rem1) "(Ha1 & Hb1 & %Hsl1a)".
+      wp_auto.
+      wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb1]").
+      iIntros (a2 b2 err2) "Hpost2". destruct err2.
+      * (* MapVal read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+        destruct Hvalid as [HvML [HvMV _]]. iApply "Hpost2".
+        iExists obj.(UpdateProof.MapVal), _. iPureIntro.
+        assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(UpdateProof.MapLabel)
+                  (safemarshal.Slice1D.pure_enc obj.(UpdateProof.MapVal)
+                   ++ safemarshal.Slice1D.pure_enc obj.(UpdateProof.NonMembProof) ++ tail)) as Hw1.
+        { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
+            /safemarshal.w64.pure_enc -?app_assoc. split; [|exact HvML].
+          rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+          rewrite -?app_assoc in Henc. exact Henc. }
+        destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1a Hw1) as [_ Hrem1].
+        rewrite /safemarshal.Slice1D.wish. split; [exact Hrem1|exact HvMV].
+      * iDestruct "Hpost2" as (mv0 rem2) "(Ha2 & Hb2 & %Hsl1b)".
+        wp_auto.
+        wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb2]").
+        iIntros (a3 b3 err3) "Hpost3". destruct err3.
+        -- (* NonMembProof read failed *)
+           wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+           destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+           destruct Hvalid as [HvML [HvMV HvNMP]]. iApply "Hpost3".
+           iExists obj.(UpdateProof.NonMembProof), tail. iPureIntro.
+           assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(UpdateProof.MapLabel)
+                     (safemarshal.Slice1D.pure_enc obj.(UpdateProof.MapVal)
+                      ++ safemarshal.Slice1D.pure_enc obj.(UpdateProof.NonMembProof) ++ tail)) as Hw1.
+           { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
+               /safemarshal.w64.pure_enc -?app_assoc. split; [|exact HvML].
+             rewrite /pure_enc /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+             rewrite -?app_assoc in Henc. exact Henc. }
+           destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1a Hw1) as [_ Hrem1].
+           assert (safemarshal.Slice1D.wish rem1 obj.(UpdateProof.MapVal)
+                     (safemarshal.Slice1D.pure_enc obj.(UpdateProof.NonMembProof) ++ tail)) as Hw2.
+           { rewrite /safemarshal.Slice1D.wish. split; [exact Hrem1|exact HvMV]. }
+           destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1b Hw2) as [_ Hrem2].
+           rewrite /safemarshal.Slice1D.wish. split; [exact Hrem2|exact HvNMP].
+        -- (* success *)
+           iDestruct "Hpost3" as (nmp0 rem3) "(Ha3 & Hb3 & %Hsl1c)".
+           destruct Hsl1a as [Hb_eq HvML0]. destruct Hsl1b as [Hrem1_eq HvMV0].
+           destruct Hsl1c as [Hrem2_eq HvNMP0].
+           wp_auto.
+           wp_alloc l as "Hptr".
+           iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+           wp_auto.
+           iApply "HΦ". iExists (UpdateProof.mk' ml0 mv0 nmp0), rem3.
+           iFrame "Hb3". iSplitL "Hptr Ha1 Ha2 Ha3".
+           { iExists a1, a2, a3. iFrame "Hptr Ha1 Ha2 Ha3". }
+           iPureIntro. rewrite /wish /pure_enc /valid. split.
+           ++ rewrite Hb_eq Hrem1_eq Hrem2_eq -?app_assoc. done.
+           ++ split; [exact HvML0|split; [exact HvMV0|exact HvNMP0]].
+Qed.
 
 End proof.
 End UpdateProof.

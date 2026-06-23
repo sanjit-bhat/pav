@@ -156,7 +156,32 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  iDestruct (own_slice_len with "Hsl_b") as %[Hlen ?].
+  wp_if_destruct.
+  - iApply "HΦ". iPureIntro.
+    intros (obj' & tail' & Heq). rewrite /wish /pure_enc in Heq.
+    apply (f_equal length) in Heq. rewrite length_app /= in Heq. word.
+  - assert (Hb : b = take 1 b ++ drop 1 b) by (by rewrite take_drop).
+    assert (Hlen1 : length (take 1 b) = uint.nat (W64 1)) by (rewrite length_take; word).
+    assert (∃ x, take 1 b = [x]) as [x Htk].
+    { destruct (take 1 b) as [|x rest] eqn:E; [ simpl in Hlen1; word |].
+      destruct rest; [ by exists x | simpl in Hlen1; word ]. }
+    iEval (rewrite {1}Hb) in "Hsl_b".
+    wp_apply (marshal.wp_ReadBytes with "[$Hsl_b]"); first done.
+    iIntros (data0 s') "[Hdata0 Hs']".
+    iEval (rewrite Htk) in "Hdata0".
+    iDestruct (own_slice_len with "Hdata0") as %[Hdlen Hdpos].
+    simpl in Hdlen.
+    wp_auto.
+    assert (0 ≤ sint.Z (W64 0) < sint.Z data0.(slice.len)) as Hbound by word.
+    rewrite (decide_True _ _ Hbound).
+    wp_apply (wp_load_slice_index with "[$Hdata0]") as "Hdata0"; [word|done|].
+    wp_auto.
+    iApply "HΦ". iFrame "Hs'". iPureIntro.
+    rewrite /wish /pure_enc -Htk take_drop. done.
+Qed.
 
 End proof.
 End w8.
@@ -298,6 +323,39 @@ Proof.
   iExactEq "Hsl_b". repeat (f_equal; try word).
 Qed.
 
+(* Spec for the helper [safemarshal.ReadBytes], which reads [len] bytes off the
+   front. No [wish]/[valid] here — it just splits [b] into the first [len] bytes
+   and the rest. *)
+Lemma wp_ReadBytes sl_b d b (len : w64) :
+  {{{
+    is_pkg_init safemarshal ∗
+    "Hsl_b" ∷ sl_b ↦*{d} b
+  }}}
+  @! safemarshal.ReadBytes #sl_b #len
+  {{{
+    ptr_obj sl_tail err, RET (#ptr_obj, #sl_tail, #err);
+    match err with
+    | true => ⌜length b < uint.Z len⌝
+    | false =>
+      ∃ (obj tail : list w8),
+      ptr_obj ↦*{d} obj ∗
+      sl_tail ↦*{d} tail ∗
+      ⌜b = obj ++ tail ∧ length obj = uint.nat len⌝
+    end
+  }}}.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  iDestruct (own_slice_len with "Hsl_b") as %[Hlen Hpos].
+  wp_if_destruct.
+  - iApply "HΦ". iPureIntro. word.
+  - assert (Hb : b = take (uint.nat len) b ++ drop (uint.nat len) b) by (by rewrite take_drop).
+    assert (Hlen2 : length (take (uint.nat len) b) = uint.nat len) by (rewrite length_take; word).
+    iEval (rewrite {1}Hb) in "Hsl_b".
+    wp_apply (marshal.wp_ReadBytes with "[$Hsl_b]"); first done.
+    iIntros (data0 s') "[Hdata0 Hs']". wp_auto.
+    iApply "HΦ". iFrame "Hdata0 Hs'". iPureIntro. split; [by rewrite take_drop|done].
+Qed.
+
 Lemma wp_dec sl_b d b :
   {{{
     is_pkg_init safemarshal ∗
@@ -315,7 +373,50 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  wp_apply (w64.wp_dec with "[$Hsl_b]").
+  iIntros (length0 sl_rem err0) "Hpost".
+  destruct err0.
+  - (* ReadInt failed: no valid encoding (it would give a w64 prefix). *)
+    wp_auto.
+    iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+    iApply "Hpost". iExists (W64 (length obj)), (obj ++ tail). iPureIntro.
+    destruct Hwish as [Henc _].
+    rewrite /Slice1D.pure_enc in Henc.
+    rewrite /w64.wish app_assoc. exact Henc.
+  - (* ReadInt succeeded, reading length0 and leaving rem. *)
+    iDestruct "Hpost" as (rem) "[Hrem %Hw64]".
+    rewrite /w64.wish /w64.pure_enc in Hw64.
+    wp_auto.
+    wp_apply (wp_ReadBytes with "[$Hrem]").
+    iIntros (ptr_obj sl_tail err1) "Hpost2".
+    destruct err1.
+    + (* ReadBytes failed: rem too short for length0 — contradicts any wish. *)
+      iDestruct "Hpost2" as "%Hlt".
+      wp_auto.
+      iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc Hvalid].
+      rewrite /Slice1D.pure_enc /w64.pure_enc in Henc.
+      (* both decompositions share the 8-byte prefix, so length0 = W64 (length obj) *)
+      rewrite -app_assoc Hw64 in Henc.
+      apply app_inj_1 in Henc as [Hpre Hrest]; [|len].
+      apply (inj u64_le) in Hpre. subst length0.
+      rewrite /Slice1D.valid in Hvalid.
+      apply (f_equal length) in Hrest. rewrite length_app in Hrest.
+      exfalso. word.
+    + (* ReadBytes succeeded. *)
+      iDestruct "Hpost2" as (obj tail) "(Hobj & Htail & %Hbytes)".
+      destruct Hbytes as [Hrem_eq Hobjlen].
+      iDestruct (own_slice_len with "Hobj") as %[Hlen2 _].
+      wp_auto.
+      iApply "HΦ". iFrame "Hobj Htail". iPureIntro.
+      assert (Hww : W64 (length obj) = length0) by word.
+      rewrite /wish /Slice1D.pure_enc /w64.pure_enc.
+      split.
+      * rewrite -app_assoc -Hrem_eq Hww. exact Hw64.
+      * rewrite /Slice1D.valid. word.
+Qed.
 
 End proof.
 End Slice1D.
