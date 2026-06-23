@@ -283,13 +283,15 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
     "Hstr_Client" ∷ ptr_c ↦ (client.Client.mk x0 x1 ptr_lastEp ptr_serv) ∗
     "#Hown_lastEp" ∷ epoch.own ptr_lastEp lastEp ∗
     "#His_lastEp" ∷ epoch.valid γ digs lastEp ∗
-    "#Halign_lastEp" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-      epoch.align_serv γ γserv digs end ∗
+    "#Halign_lastEp" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
+      epoch.align_sigpred γserv digs end ∗
     "#Hown_serv" ∷ serv.own γ ptr_serv ∗
-    "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-      serv.align_serv γ γserv end ∗
+    "#Halign_serv_sigpred" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
+      serv.align_sigpred γ γserv end ∗
+    "#Halign_serv_full" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
+      serv.align_full γ γserv end ∗
 
-    "His_ver" ∷ match γ.(cfg.serv_good) with None => True | Some _ =>
+    "His_ver" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some _ =>
       ∃ i dig,
       "%Hlook_dig" ∷ ⌜digs !! i = Some dig⌝ ∗
       "%Hlt_ver" ∷ ⌜uint.nat prevVerLen ≤
@@ -299,13 +301,13 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
   {{{
     ptr_nextEp sl_pks err,
     RET (#ptr_nextEp, #sl_pks, #(ktcore.blame_to_u64 err));
-    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool γ.(cfg.serv_good)]}⌝ ∗
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ server.Trust.get_full γ.(cfg.serv_good)]}⌝ ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ nextEp new_digs last_dig sl0_pks pks,
       "#Hown_nextEp" ∷ epoch.own ptr_nextEp nextEp ∗
       "#His_nextEp" ∷ epoch.valid γ (digs ++ new_digs) nextEp ∗
-      "#Halign_nextEp" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-        epoch.align_serv γ γserv (digs ++ new_digs) end ∗
+      "#Halign_nextEp" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
+        epoch.align_sigpred γserv (digs ++ new_digs) end ∗
 
       "#Hsl_pks" ∷ sl_pks ↦*□ sl0_pks ∗
       "#Hsl0_pks" ∷ ([∗ list] sl_pk;pk ∈ sl0_pks;pks,
@@ -321,7 +323,7 @@ Proof. Admitted.
 Lemma wp_New serv_good clis_good uid (servAddr : w64) sl_servPk servPk :
   {{{
     is_pkg_init client ∗
-    "Halign_uid" ∷ match serv_good with None => True | Some γserv =>
+    "Halign_uid" ∷ match server.Trust.get_full serv_good with None => True | Some γserv =>
       ∃ uidγ,
       "%Hlook_uidγ" ∷ ⌜γserv.(server.cfg.uidγ) !! uid = Some uidγ⌝ ∗
       "HgoodCli" ∷
@@ -330,16 +332,17 @@ Lemma wp_New serv_good clis_good uid (servAddr : w64) sl_servPk servPk :
         | false => "#Huid_inv" ∷ ver.is_uid_inv uidγ
         end end ∗
     "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
-    "%Heq_servPk" ∷ ⌜match serv_good with None => True | Some servγ =>
+    "%Heq_servPk" ∷ ⌜match server.Trust.get_full serv_good with None => True | Some servγ =>
       servPk = servγ.(server.cfg.sig_pk) end⌝ ∗
-    "#His_servPk" ∷ match serv_good with None => True | Some servγ =>
-      cryptoffi.is_sig_pk servPk (sigpred.P servγ.(server.cfg.agreeγ)) end
+    "#His_servPk" ∷ match server.Trust.get_sigpred serv_good with None => True | Some servγ =>
+      cryptoffi.is_sig_pk servPk (sigpred.P servγ) end
   }}}
   @! client.New #uid #servAddr #sl_servPk
   {{{
     ptr_c (ep : w64) err, RET (#ptr_c, #ep, #(ktcore.blame_to_u64 err));
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
-      {[ktcore.BlameServFull:=option_bool serv_good]}⌝ ∗
+      {[ktcore.BlameServFull:=option_bool $ server.Trust.get_full serv_good;
+        ktcore.BlameClients:=clis_good]}⌝ ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ γ,
       let agreeγ := γ.(cfg.agreeγ) in
@@ -358,7 +361,13 @@ Proof.
   { iFrame "#". }
   case_bool_decide as Heq_err; wp_auto;
     rewrite ktcore.rw_Blame0 in Heq_err; subst.
-  2: { iApply "HΦ". iFrame "%". by case_decide. }
+  2: {
+    iApply "HΦ".
+    iSplit; [|by case_decide].
+    iPureIntro.
+    eapply ktcore.blame_add_interp; [done|].
+    apply map_singleton_subseteq_l.
+    by simpl_map. }
   case_decide as Ht; try done. clear Ht.
   iNamed "Herr".
   wp_apply auditor.wp_CheckStartChain as "* @".
@@ -369,7 +378,7 @@ Proof.
     iSplit. 2: { by case_decide. }
     iApply ktcore.blame_one.
     iIntros (?).
-    case_match; try done.
+    destruct (server.Trust.get_full _); try done.
     simplify_eq/=.
     iApply "Hgenie".
     iNamed "Hgood".
@@ -384,7 +393,7 @@ Proof.
     iSplit. 2: { by case_decide. }
     iApply ktcore.blame_one.
     iIntros (?).
-    case_match; try done.
+    destruct (server.Trust.get_full _); try done.
     simplify_eq/=.
     iApply "Hgenie".
     iNamed "Hgood".
@@ -393,31 +402,115 @@ Proof.
 
   iNamed "Hptr_chain". iNamed "Hptr_vrf".
   wp_apply wp_alloc as "%ptr_nextVer Hstr_ver".
-  wp_apply wp_alloc as "%ptr_lastEp Hstr_epoch".
+  wp_apply wp_alloc as "%ptr_lastEp0 Hstr_epoch".
   wp_apply wp_alloc as "%ptr_serv Hstr_serv".
   wp_apply wp_alloc as "%ptr_c Hstr_Client".
   iPersist "Hstr_epoch Hstr_serv".
   iMod (mono_list_own_alloc digs) as (digsγ) "[Hauth_digs #Hlb_digs]".
   (* fake func_start out until later, so we can call getHistory. *)
   set (ktcore.Agree.mk vrf.(server.StartVrf.VrfPk) digsγ
-    (S (uint.nat ep) - length digs) cut 0%nat) as fakeAgreeγ.
+    (S (uint.nat ep) - length digs) cut (length digs)) as fakeAgreeγ.
   set (cfg.mk uid servPk fakeAgreeγ serv_good clis_good) as fakeγ.
   iAssert (serv.own fakeγ ptr_serv)%I as "#Hown_serv".
   { iNamed "Hwish_CheckStartVrf". iFrame "#". }
-  iAssert (match fakeγ.(cfg.serv_good) with None => True | Some γserv =>
-    serv.align_serv fakeγ γserv end)%I as "#Halign_serv".
-  { simpl. case_match; try done.
-    iNamed "Hgood".
-    iFrame "#". iPureIntro. simpl.
-    repeat split; try done.
+  iAssert (match server.Trust.get_sigpred serv_good with None => True | Some γserv =>
+    serv.align_sigpred fakeγ γserv end)%I as "#Halign_serv_sigpred".
+  { destruct (server.Trust.get_sigpred _); try done.
+    rewrite /serv.align_sigpred /=.
+    iFrame "#".
+    iNamed "Hwish_CheckStartVrf".
+    iDestruct (ktcore.get_vrf_sigpred with "His_servPk His_vrf_sig") as "H".
+    rewrite /vrfP. iNamed "H".
+    iFrame "%".
+    iNamed "Hwish_CheckStartChain".
+    iDestruct (ktcore.get_link_sigpred with "His_servPk His_link_sig") as "H".
+    iNamedSuffix "H" "0".
+    opose proof (hashchain.inj His_chain_start Hinv0) as [<- ->].
+    iPureIntro. repeat split; word. }
+  iAssert (match server.Trust.get_full serv_good with None => True | Some γserv =>
+    serv.align_full fakeγ γserv end)%I as "#Halign_serv_full".
+  { destruct (server.Trust.get_full _) eqn:?; try done.
+    erewrite server.Trust.full_to_sigpred; [|done].
+    iFrame "%".
+    iNamed "Halign_serv_sigpred". iNamed "Hgood".
+    iPureIntro. simplify_eq/=. split; try done. word. }
+  iClear "Hgood".
+
+  wp_apply (wp_Client_getHistory with "[$Hstr_Client]") as "* @".
+  { iFrame "#".
+    instantiate (1:=digs).
+    instantiate (1:=epoch.mk' _ _ _ _).
+    iFrame "#".
+    iSplitL; [|iSplitL].
+    - rewrite /epoch.valid /=.
+      iNamed "Hwish_CheckStartChain".
+      eapply hashchain.fuel_bound' in His_chain_start as ?.
+      ereplace (?[x] - _ + _)%nat with ?x by word.
+      by iFrame "#%".
+    - rewrite /epoch.align_sigpred.
+      destruct (server.Trust.get_sigpred _); try done.
+      iNamed "Hwish_CheckStartChain".
+      iDestruct (ktcore.get_link_sigpred with "His_servPk His_link_sig") as "H".
+      iNamedSuffix "H" "0".
+      opose proof (hashchain.inj His_chain_start Hinv0) as [<- _].
+      iFrame "#%".
+    - destruct (server.Trust.get_full _); try done.
+      rewrite last_lookup in Hlast_digs.
+      iFrame "%".
+      word. }
+  case_bool_decide as Heq_err; wp_auto;
+    rewrite ktcore.rw_Blame0 in Heq_err; subst.
+  2: {
+    iApply "HΦ".
+    iSplit; [|by case_decide].
+    iPureIntro.
+    eapply ktcore.blame_add_interp; [done|].
+    apply map_singleton_subseteq_l.
+    by simpl_map. }
+  case_decide as Ht; try done. clear Ht.
+  iNamed "Herr".
+  iNamedSuffix "Hown_nextEp" "1".
+  wp_auto.
+  wp_if_destruct.
+  2: {
+    rewrite ktcore.rw_BlameServClients.
+    iApply "HΦ".
+    iSplitL. 2: { case_decide; try done. set_solver. }
+    iApply ktcore.blame_two.
+    iSplit; [done|].
+    iIntros ([? ->]).
+    case_match; try done.
+    simplify_eq/=.
+    (*
+    iNamed "Halign_pend_pend".
+    iNamed "HgoodCli".
+    iDestruct ("Hgood" with "Halign_last [//]") as "H".
+    iNamedSuffix "H" "0".
+
+    apply Forall2_length in Heq_hist0.
+    autorewrite with len in *.
+    remember (lastKeys !!! _) as pks.
+    list_elem pks (S $ uint.nat ver) as pk.
+    case_decide.
+    { apply lookup_lt_Some in Hpk_lookup. word. }
+    iNamed "Hpend_gs0".
+    simplify_eq/=.
+    iDestruct (big_sepL_lookup with "Hidx_pks") as "[% #Hidx_bad]"; [done|].
+    iDestruct (mono_list_auth_idx_lookup with "Hputs Hidx_bad") as %Hlook_bad.
+    iPureIntro.
+    apply list_elem_of_lookup_2 in Hlook_bad.
+    eapply Hbound in Hlook_bad.
+    word. } *)
 Admitted.
-(* TODO: curr serv.align has Server state = zero-init. e.g., serv.digs_start = 0.
-this is used to re-base the zero-init postconds onto Server state.
-a different approach that lets us remove zero-init from serv.align:
-- have server.is_inv/is_rpc_cli contain Server state = zero-init.
-- then, can keep zero-init Server-side specs (clean),
-but prove Client-side stubs that're based onto Server state.
-- serv.align just needs to remember that Client state = Server state. *)
+(* TODO: same issue as before: for contra, need put records from inv.
+for producer of put records:
+- need to be under Server guard to see Server inv.
+- under guard, need fupd to open inv.
+- it may be possible to "bring fupd from higher up into lower level".
+for consumer of put records:
+- if there's a fupd under Server guard, that causes issues.
+need fupd above BlameSpec, which no longer makes it pers.
+this blocks us from sending excl rsrc to both BameSpec and err=true proof branches. *)
 
 Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
   {{{
