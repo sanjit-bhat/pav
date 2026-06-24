@@ -75,23 +75,42 @@ Proof.
   iApply "HΦ". rewrite /pure_enc. iFrame.
 Qed.
 
+(* RESPEC (2026-06-23): the original statement was over [safemarshal.ReadByte]
+   (which returns a w8), so its [obj : bool] could never match the returned byte
+   — unprovable as written. It now reads [safemarshal.ReadBool]. Note the decoder
+   maps any non-zero byte to [true] (marshal.ReadBool = [bool_decide (bit ≠ 0)]),
+   so the round-trip [wish b obj tail] (= [b = pure_enc obj ++ tail]) is FALSE for
+   non-canonical bytes (e.g. byte 2 decodes to true but pure_enc true = [1]); the
+   success case therefore states exactly what the decoder guarantees. *)
 Lemma wp_dec sl_b d b :
   {{{
     is_pkg_init safemarshal ∗
     "Hsl_b" ∷ sl_b ↦*{d} b
   }}}
-  @! safemarshal.ReadByte #sl_b
+  @! safemarshal.ReadBool #sl_b
   {{{
     obj sl_tail err, RET (#obj, #sl_tail, #err);
     match err with
     | true => ¬ ∃ obj' tail', ⌜wish b obj' tail'⌝
     | false =>
-      ∃ tail,
+      ∃ first tail,
       sl_tail ↦*{d} tail ∗
-      ⌜wish b obj tail⌝
+      ⌜b = first :: tail ∧ obj = bool_decide (uint.Z first ≠ 0)⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  iDestruct (own_slice_len with "Hsl_b") as %[Hlen ?].
+  wp_if_destruct.
+  - iApply "HΦ". iPureIntro.
+    intros (obj' & tail' & Heq). rewrite /wish /pure_enc in Heq.
+    apply (f_equal length) in Heq. rewrite length_app /= in Heq. word.
+  - destruct b as [|bit btail].
+    { simpl in Hlen. word. }
+    wp_apply (marshal.wp_ReadBool with "[$Hsl_b]").
+    iIntros (obj0 s') "[%Hobj Hs']". wp_auto.
+    iApply "HΦ". iExists bit, btail. iFrame "Hs'". iPureIntro. split; [done|exact Hobj].
+Qed.
 
 End proof.
 End bool.
