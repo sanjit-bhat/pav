@@ -301,6 +301,7 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
   {{{
     ptr_nextEp sl_pks err,
     RET (#ptr_nextEp, #sl_pks, #(ktcore.blame_to_u64 err));
+    "Hstr_Client" ∷ ptr_c ↦ (client.Client.mk x0 x1 ptr_lastEp ptr_serv) ∗
     "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ server.Trust.get_full γ.(cfg.serv_good)]}⌝ ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ nextEp new_digs last_dig sl0_pks pks,
@@ -316,7 +317,16 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
       "%Hmembs" ∷ ⌜ktcore.pks_in_hidden_from agreeγ.(ktcore.Agree.vrf_pk)
         (merkle.inv_fn last_dig) uid (uint.nat prevVerLen) pks⌝ ∗
       "%HnonMemb" ∷ ⌜ktcore.in_hidden agreeγ.(ktcore.Agree.vrf_pk)
-        (merkle.inv_fn last_dig) uid (uint.nat prevVerLen + length pks) None⌝)
+        (merkle.inv_fn last_dig) uid (uint.nat prevVerLen + length pks) None⌝ ∗
+
+      "#Hperm_pks" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
+        if decide (length pks = 0%nat) then True else
+          ∃ uidγ,
+          "%Hlook_uidγ" ∷ ⌜servγ.(server.cfg.uidγ) !! uid = Some uidγ⌝ ∗
+          "#Hidx_pks" ∷ ([∗ list] off ↦ pk ∈ pks,
+            ∃ i,
+            let ver := (uint.nat prevVerLen + off)%nat in
+            mono_list_idx_own uidγ i (ver, pk)) end)
   }}}.
 Proof. Admitted.
 
@@ -326,10 +336,10 @@ Lemma wp_New serv_good clis_good uid (servAddr : w64) sl_servPk servPk :
     "Halign_uid" ∷ match server.Trust.get_full serv_good with None => True | Some γserv =>
       ∃ uidγ,
       "%Hlook_uidγ" ∷ ⌜γserv.(server.cfg.uidγ) !! uid = Some uidγ⌝ ∗
-      "HgoodCli" ∷
+      "Hclis_good" ∷
         match clis_good with
-        | true => "Hputs" ∷ mono_list_auth_own uidγ 1 ([] : list (nat * list w8))
-        | false => "#Huid_inv" ∷ ver.is_uid_inv uidγ
+        | true => "Hown_uid" ∷ mono_list_auth_own uidγ 1 ([] : list (nat * list w8))
+        | false => "#Hinv_uid" ∷ ver.is_uid_inv uidγ
         end end ∗
     "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
     "%Heq_servPk" ∷ ⌜match server.Trust.get_full serv_good with None => True | Some servγ =>
@@ -469,48 +479,79 @@ Proof.
     by simpl_map. }
   case_decide as Ht; try done. clear Ht.
   iNamed "Herr".
-  iNamedSuffix "Hown_nextEp" "1".
+
+  iPoseProof "Hown_nextEp" as "H".
+  iNamedSuffix "H" "1".
   wp_auto.
+  iDestruct (own_slice_len with "Hsl_pks") as %?.
+  iDestruct (big_sepL2_length with "Hsl0_pks") as %?.
+  rewrite -wp_fupd.
   wp_if_destruct.
   2: {
+    iModIntro.
     rewrite ktcore.rw_BlameServClients.
     iApply "HΦ".
-    iSplitL. 2: { case_decide; try done. set_solver. }
+    iSplit.
+    2: { destruct (decide (_ ≠ ∅)); try done. set_solver. }
     iApply ktcore.blame_two.
     iSplit; [done|].
     iIntros ([? ->]).
-    case_match; try done.
+    destruct (server.Trust.get_full _); try done.
+    iNamed "Halign_uid". iNamed "Hclis_good".
+    case_decide; [word|].
+    iNamed "Hperm_pks".
+    list_elem pks 0%nat as pk.
+    iDestruct (big_sepL_lookup with "Hidx_pks") as (?) "#Hidx_pk"; [done|].
     simplify_eq/=.
-    (*
-    iNamed "Halign_pend_pend".
-    iNamed "HgoodCli".
-    iDestruct ("Hgood" with "Halign_last [//]") as "H".
-    iNamedSuffix "H" "0".
+    by iDestruct (mono_list_auth_idx_lookup with "Hown_uid Hidx_pk") as %?. }
+  iClear "Hperm_pks".
+  assert (pks = []) as ->.
+  { apply nil_length_inv. word. }
+  replace (_ + _)%nat with 0%nat in HnonMemb by word.
 
-    apply Forall2_length in Heq_hist0.
-    autorewrite with len in *.
-    remember (lastKeys !!! _) as pks.
-    list_elem pks (S $ uint.nat ver) as pk.
-    case_decide.
-    { apply lookup_lt_Some in Hpk_lookup. word. }
-    iNamed "Hpend_gs0".
+  iApply "HΦ".
+  iClear "Hlb_digs".
+  iMod (mono_list_auth_own_update_app new_digs with "Hauth_digs") as "[Hauth_digs #Hlb_digs]".
+  iModIntro.
+  iSplit. { iPureIntro. apply ktcore.blame_none. }
+  case_decide as Ht; try done. clear Ht.
+  set (set ktcore.Agree.func_start
+    (λ _, uint.nat nextEp.(epoch.epoch) - fakeAgreeγ.(ktcore.Agree.digs_start))%nat
+    fakeAgreeγ) as agreeγ.
+  set (set cfg.agreeγ (λ _, agreeγ) fakeγ) as γ.
+  iClear "Hwish_CheckStartChain Hwish_CheckStartVrf Hstr_serv Hstr_epoch Hstr_epoch1".
+  iExists γ. simpl.
+  iPoseProof "His_nextEp" as "@".
+  simpl in *. autorewrite with len in *.
+  repeat iSplit; try done.
+  { iPureIntro.
+    opose proof (last_length_Some digs _) as ?; [done|].
+    simpl in *. word. }
+  iFrame "∗".
+  iFrame "∗ Hown_serv Hown_nextEp His_nextEp #". simpl.
+  iExists (ver.mk' 0).
+  repeat iSplit; try done; try iPureIntro.
+  - simpl.
+    replace (_ - (_ - _))%nat with (pred $ length (digs ++ new_digs)); [|len].
+    erewrite last_drop_Some'; [|done].
+    rewrite Hlast_dig in Hlast_dig0.
     simplify_eq/=.
-    iDestruct (big_sepL_lookup with "Hidx_pks") as "[% #Hidx_bad]"; [done|].
-    iDestruct (mono_list_auth_idx_lookup with "Hputs Hidx_bad") as %Hlook_bad.
-    iPureIntro.
-    apply list_elem_of_lookup_2 in Hlook_bad.
-    eapply Hbound in Hlook_bad.
-    word. } *)
-Admitted.
-(* TODO: same issue as before: for contra, need put records from inv.
-for producer of put records:
-- need to be under Server guard to see Server inv.
-- under guard, need fupd to open inv.
-- it may be possible to "bring fupd from higher up into lower level".
-for consumer of put records:
-- if there's a fupd under Server guard, that causes issues.
-need fupd above BlameSpec, which no longer makes it pers.
-this blocks us from sending excl rsrc to both BameSpec and err=true proof branches. *)
+    by eapply (ktcore.staged_init _ _ _ []).
+  - destruct (server.Trust.get_full _); try done.
+    iNamed "Halign_uid".
+    rewrite /ver.align_full.
+    iFrame "%". simpl.
+    destruct clis_good; [|done].
+    iFrame.
+    iPureIntro. set_solver.
+  - destruct (server.Trust.get_sigpred _); try done.
+    iNamed "Halign_serv_sigpred".
+    iFrame "#%". simpl in *.
+    iDestruct (ktcore.get_link_sigpred with "His_sigPk His_sig") as "H".
+    iNamedSuffix "H" "0".
+    word.
+  - len.
+Qed.
 
 Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
   {{{

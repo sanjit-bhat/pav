@@ -166,3 +166,16 @@ Proof.
   - apply prefix_length_eq; [done|lia].
   - symmetry. apply prefix_length_eq; [done|lia].
 Qed.
+
+Lemma last_length_Some {A} (l : list A) :
+  is_Some $ last l →
+  length l ≠ 0.
+Proof. destruct l; naive_solver. Qed.
+
+Lemma last_drop_Some' {A} (l : list A) x :
+  last l = Some x →
+  drop (pred $ length l) l = [x].
+Proof.
+  intros [? ->]%last_Some.
+  len. rewrite drop_app_length'; [done|lia].
+Qed.
