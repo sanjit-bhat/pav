@@ -1426,11 +1426,32 @@ Lemma wish_det tail0 tail1 obj0 obj1 {b} :
   wish b obj0 tail0 →
   wish b obj1 tail1 →
   obj0 = obj1 ∧ tail0 = tail1.
-(* TODO: nested struct embedding a list-encoded field [Updates].
-   composition via [UpdateProofSlice1D.wish_det] needs the [Updates ++ LinkSig]
-   split exposed without [app_assoc] reassociating through the folded inner
-   encoders ([rewrite -!app_assoc] sees through definitions). unsolved. *)
-Proof. Admitted.
+(* Compose the sub-encoders' [wish_det] (keeping them FOLDED in the wish
+   statements so the lemmas apply) instead of peeling the raw bytes. Each step
+   needs only a single OUTER [app_assoc] to expose [enc field ++ rest]. *)
+Proof.
+  intros [Henc0 Hvld0] [Henc1 Hvld1].
+  rewrite /valid in Hvld0 Hvld1.
+  destruct Hvld0 as [Hv0a Hv0b]. destruct Hvld1 as [Hv1a Hv1b].
+  assert (UpdateProofSlice1D.wish b obj0.(Updates)
+            (safemarshal.Slice1D.pure_enc obj0.(LinkSig) ++ tail0)) as Hw0.
+  { split; [|exact Hv0a]. rewrite Henc0 /pure_enc -app_assoc //. }
+  assert (UpdateProofSlice1D.wish b obj1.(Updates)
+            (safemarshal.Slice1D.pure_enc obj1.(LinkSig) ++ tail1)) as Hw1.
+  { split; [|exact Hv1a]. rewrite Henc1 /pure_enc -app_assoc //. }
+  destruct (UpdateProofSlice1D.wish_det _ _ _ _ Hw0 Hw1) as [HUp Hrest].
+  assert (safemarshal.Slice1D.wish
+            (safemarshal.Slice1D.pure_enc obj0.(LinkSig) ++ tail0)
+            obj0.(LinkSig) tail0) as Hs0.
+  { split; [done|exact Hv0b]. }
+  assert (safemarshal.Slice1D.wish
+            (safemarshal.Slice1D.pure_enc obj0.(LinkSig) ++ tail0)
+            obj1.(LinkSig) tail1) as Hs1.
+  { split; [rewrite Hrest //|exact Hv1b]. }
+  destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hs0 Hs1) as [HLS Htail].
+  split; [|exact Htail].
+  destruct obj0, obj1. simpl in *. by subst.
+Qed.
 
 Section proof.
 Context `{!heapGS Σ}.
