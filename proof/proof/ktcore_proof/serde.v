@@ -1611,7 +1611,56 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - wp_apply (UpdateProofSlice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1". destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /UpdateProofSlice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (up0 rem1) "(Hown_up & Hb1 & %Hsl1a)".
+      destruct Hsl1a as [Henc _]. iExFalso. iPureIntro.
+      rewrite /UpdateProofSlice1D.pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (UpdateProofSlice1D.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1". destruct err1.
+    + (* Updates read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+      destruct Hvalid as [HvUp _]. iApply "Hpost1".
+      iExists obj.(Updates), (safemarshal.Slice1D.pure_enc obj.(AuditProof.LinkSig) ++ tail).
+      iPureIntro. split; [|exact HvUp]. rewrite Henc /pure_enc -app_assoc //.
+    + iDestruct "Hpost1" as (up0 rem1) "(Hown_up & Hb1 & %Hsl1a)".
+      wp_auto.
+      wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb1]").
+      iIntros (a2 b2 err2) "Hpost2". destruct err2.
+      * (* LinkSig read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+        destruct Hvalid as [HvUp HvLS]. iApply "Hpost2".
+        iExists obj.(AuditProof.LinkSig), tail. iPureIntro.
+        assert (UpdateProofSlice1D.wish (b0 :: brest) obj.(Updates)
+                  (safemarshal.Slice1D.pure_enc obj.(AuditProof.LinkSig) ++ tail)) as Hw1.
+        { split; [|exact HvUp]. rewrite Henc /pure_enc -app_assoc //. }
+        destruct (UpdateProofSlice1D.wish_det _ _ _ _ Hsl1a Hw1) as [_ Hrem1].
+        split; [exact Hrem1|exact HvLS].
+      * (* success *)
+        iDestruct "Hpost2" as (ls0 rem2) "(Ha2 & Hb2 & %Hsl1b)".
+        destruct Hsl1a as [Hb_eq HvUp0]. destruct Hsl1b as [Hrem1_eq HvLS0].
+        wp_auto.
+        wp_alloc l as "Hptr".
+        iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+        wp_auto.
+        iApply "HΦ". iExists (AuditProof.mk' up0 ls0), rem2.
+        iFrame "Hb2". iSplitL "Hptr Hown_up Ha2".
+        { iExists a1, a2. iFrame "Hptr Hown_up Ha2". }
+        iPureIntro. rewrite /wish /pure_enc /valid. split.
+        ++ rewrite Hb_eq Hrem1_eq -?app_assoc. done.
+        ++ split; [exact HvUp0|exact HvLS0].
+Qed.
 
 End proof.
 End AuditProof.
