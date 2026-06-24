@@ -1427,10 +1427,61 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (ptr0) "[Hsl_obj Hbig]".
+  iDestruct (own_slice_len with "Hsl_obj") as %[Hlen0 ?].
+  iDestruct (big_sepL2_length with "Hbig") as %Hlen_eq.
+  wp_auto.
+  wp_apply (marshal.wp_WriteInt with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  iAssert (∃ (j : w64) (sl_cur : slice.t) (ev : loc),
+    "i" ∷ i_ptr ↦ j ∗
+    "%Hj" ∷ ⌜0 ≤ sint.Z j ≤ length obj⌝ ∗
+    "e" ∷ e_ptr ↦ ev ∗
+    "b" ∷ b_ptr ↦ sl_cur ∗
+    "Hsl_b" ∷ sl_cur ↦* (b ++ u64_le ptr_obj.(slice.len)
+                          ++ mjoin (UpdateProof.pure_enc <$> take (sint.nat j) obj)) ∗
+    "Hcap_b" ∷ own_slice_cap w8 sl_cur 1 ∗
+    "Hsl_obj" ∷ ptr_obj ↦*{d} ptr0 ∗
+    "Hbig" ∷ ([∗ list] ptr;o ∈ ptr0;obj, UpdateProof.own ptr o d))%I
+    with "[-HΦ]" as "IH".
+  { iExists (W64 0), s', null. rewrite take_0 /= app_nil_r. iFrame "∗". iPureIntro. word. }
+  wp_for "IH".
+  case_bool_decide.
+  2: { wp_auto.
+       iApply "HΦ".
+       iFrame "Hcap_b".
+       iSplitL "Hsl_b".
+       { iExactEq "Hsl_b".
+         replace (sint.nat j) with (length obj) by word.
+         rewrite take_ge; [|lia].
+         rewrite /pure_enc /safemarshal.w64.pure_enc.
+         replace (W64 (length obj)) with ptr_obj.(slice.len) by word.
+         done. }
+       iExists ptr0. iFrame "Hsl_obj Hbig". }
+  (* body *)
+  list_elem ptr0 (sint.Z j) as pj.
+  list_elem obj (sint.Z j) as oj.
+  wp_auto.
+  rewrite decide_True; last word.
+  wp_apply (wp_load_slice_index with "[$Hsl_obj]") as "Hsl_obj".
+  { word. }
+  { eauto. }
+  iDestruct (big_sepL2_lookup_acc with "Hbig") as "[Hown_j Hbig_close]";
+    [exact Hpj_lookup | exact Hoj_lookup |].
+  wp_apply (UpdateProof.wp_enc with "[$Hsl_b $Hcap_b $Hown_j]") as "* (Hsl_b & Hcap_b & Hown_j)".
+  iDestruct ("Hbig_close" with "Hown_j") as "Hbig".
+  wp_for_post.
+  iFrame.
+  iSplitR; [iPureIntro; word|].
+  iExactEq "Hsl_b".
+  replace (sint.nat (word.add j (W64 1))) with (S (sint.nat j)) by word.
+  rewrite (take_S_r _ _ oj); [|exact Hoj_lookup].
+  rewrite fmap_app join_app /= app_nil_r -!app_assoc.
+  done.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -1530,10 +1581,18 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (ptr_Updates sl_LinkSig) "(Hstr_AuditProof & Hsl_Updates & Hsl_LinkSig)". wp_auto.
+  wp_apply (UpdateProofSlice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Updates]") as "* (Hsl_b & Hcap_b & Hsl_Updates)".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_LinkSig]") as "* (Hsl_b & Hcap_b & Hsl_LinkSig)".
+  iApply "HΦ".
+  iSplitL "Hsl_b".
+  { iExactEq "Hsl_b". rewrite /pure_enc -?app_assoc. done. }
+  iFrame.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
@@ -1615,10 +1674,61 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d ∗
-    ⌜wish b' obj b⌝
+    own ptr_obj obj d
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (ptr0) "[Hsl_obj Hbig]".
+  iDestruct (own_slice_len with "Hsl_obj") as %[Hlen0 ?].
+  iDestruct (big_sepL2_length with "Hbig") as %Hlen_eq.
+  wp_auto.
+  wp_apply (marshal.wp_WriteInt with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  iAssert (∃ (j : w64) (sl_cur : slice.t) (ev : loc),
+    "i" ∷ i_ptr ↦ j ∗
+    "%Hj" ∷ ⌜0 ≤ sint.Z j ≤ length obj⌝ ∗
+    "e" ∷ e_ptr ↦ ev ∗
+    "b" ∷ b_ptr ↦ sl_cur ∗
+    "Hsl_b" ∷ sl_cur ↦* (b ++ u64_le ptr_obj.(slice.len)
+                          ++ mjoin (AuditProof.pure_enc <$> take (sint.nat j) obj)) ∗
+    "Hcap_b" ∷ own_slice_cap w8 sl_cur 1 ∗
+    "Hsl_obj" ∷ ptr_obj ↦*{d} ptr0 ∗
+    "Hbig" ∷ ([∗ list] ptr;o ∈ ptr0;obj, ktcore.AuditProof.own ptr o d))%I
+    with "[-HΦ]" as "IH".
+  { iExists (W64 0), s', null. rewrite take_0 /= app_nil_r. iFrame "∗". iPureIntro. word. }
+  wp_for "IH".
+  case_bool_decide.
+  2: { wp_auto.
+       iApply "HΦ".
+       iFrame "Hcap_b".
+       iSplitL "Hsl_b".
+       { iExactEq "Hsl_b".
+         replace (sint.nat j) with (length obj) by word.
+         rewrite take_ge; [|lia].
+         rewrite /pure_enc /safemarshal.w64.pure_enc.
+         replace (W64 (length obj)) with ptr_obj.(slice.len) by word.
+         done. }
+       iExists ptr0. iFrame "Hsl_obj Hbig". }
+  (* body *)
+  list_elem ptr0 (sint.Z j) as pj.
+  list_elem obj (sint.Z j) as oj.
+  wp_auto.
+  rewrite decide_True; last word.
+  wp_apply (wp_load_slice_index with "[$Hsl_obj]") as "Hsl_obj".
+  { word. }
+  { eauto. }
+  iDestruct (big_sepL2_lookup_acc with "Hbig") as "[Hown_j Hbig_close]";
+    [exact Hpj_lookup | exact Hoj_lookup |].
+  wp_apply (AuditProof.wp_enc with "[$Hsl_b $Hcap_b $Hown_j]") as "* (Hsl_b & Hcap_b & Hown_j)".
+  iDestruct ("Hbig_close" with "Hown_j") as "Hbig".
+  wp_for_post.
+  iFrame.
+  iSplitR; [iPureIntro; word|].
+  iExactEq "Hsl_b".
+  replace (sint.nat (word.add j (W64 1))) with (S (sint.nat j)) by word.
+  rewrite (take_S_r _ _ oj); [|exact Hoj_lookup].
+  rewrite fmap_app join_app /= app_nil_r -!app_assoc.
+  done.
+Qed.
 
 Lemma wp_dec sl_b d b :
   {{{
