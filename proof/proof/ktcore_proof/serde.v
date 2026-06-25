@@ -1017,31 +1017,44 @@ Lemma wp_dec sl_b d b :
   }}}.
 Proof.
   wp_start as "Hsl_b". wp_auto.
-  wp_apply (safemarshal.w64.wp_dec with "[$Hsl_b]").
-  iIntros (length0 b1 err1) "Hpost1". destruct err1.
-  - (* ReadInt failed *)
-    wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
-    destruct Hwish as [Henc _]. iApply "Hpost1".
-    iExists (W64 (length obj)), (mjoin (Memb.pure_enc <$> obj) ++ tail). iPureIntro.
-    rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc Henc /pure_enc
-      /safemarshal.w64.pure_enc -app_assoc //.
-  - iDestruct "Hpost1" as (tail1) "(Hb1 & %Hwish1)".
-    wp_auto.
-    wp_if_destruct.
-    + (* length0 < 0 : invalid length, error *)
+  destruct b as [|b0 brest].
+  - (* empty input: ReadInt cannot read a length prefix *)
+    wp_apply (safemarshal.w64.wp_dec with "[$Hsl_b]").
+    iIntros (length0 b1 err1) "Hpost1". destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (tail1) "(Hb1 & %Hwish1)".
       rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hwish1.
-      iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
-      destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid. destruct Hvalid as [Hvlen _].
-      exfalso.
-      rewrite /pure_enc /safemarshal.w64.pure_enc -app_assoc in Henc.
-      rewrite Hwish1 in Henc.
-      apply app_inj_1 in Henc as [Hpre _]; [|len].
-      apply (inj u64_le) in Hpre.
-      word.
-    + (* length0 >= 0 : decode loop *)
-      wp_apply wp_slice_make3; first word.
-      iIntros (lo_sl) "(Hlo & Hcap & %Hlocap)".
+      iExFalso. iPureIntro.
+      apply (f_equal length) in Hwish1. rewrite length_app u64_le_length /= in Hwish1. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.w64.wp_dec with "[$Hsl_b]").
+    iIntros (length0 b1 err1) "Hpost1". destruct err1.
+    + (* ReadInt failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iApply "Hpost1".
+      iExists (W64 (length obj)), (mjoin (Memb.pure_enc <$> obj) ++ tail). iPureIntro.
+      rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc Henc /pure_enc
+        /safemarshal.w64.pure_enc -app_assoc //.
+    + iDestruct "Hpost1" as (tail1) "(Hb1 & %Hwish1)".
       wp_auto.
+      wp_if_destruct.
+      * (* length0 < 0 : invalid length, error *)
+        rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hwish1.
+        iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid. destruct Hvalid as [Hvlen _].
+        exfalso.
+        rewrite /pure_enc /safemarshal.w64.pure_enc -app_assoc in Henc.
+        rewrite Hwish1 in Henc.
+        apply app_inj_1 in Henc as [Hpre _]; [|len].
+        apply (inj u64_le) in Hpre.
+        word.
+      * (* length0 >= 0 : decode loop *)
+        wp_apply wp_slice_make3; first word.
+        iIntros (lo_sl) "(Hlo & Hcap & %Hlocap)".
+        wp_auto.
       iAssert (∃ (j : w64) (decoded : list Memb.t) (ptrs : list loc)
                  (cur_lo cur_lb : slice.t) (rest : list w8),
         "i" ∷ i_ptr ↦ j ∗
@@ -1068,14 +1081,91 @@ Proof.
               | iPureIntro; by constructor | iPureIntro; done]. }
       wp_for "IH".
       case_bool_decide as Hcond.
-      2: { (* exit: j = length0, decoded all elements; loopErr=false → success.
-              TODO: reconstruct [own]+[wish] (downgrade loopO DfracOwn 1 → d). *)
-        wp_auto. admit. }
-      (* body: uint.Z j < uint.Z length0. TODO: MembDecode the next element;
-         break-on-error (prove ¬∃wish via mjoin injectivity); else append + reloop. *)
+      2: { (* exit: j = length0, decoded all elements; loopErr=false → success *)
+        iMod (dfractional_update_to_dfrac _ d with "Hlo") as "Hlo".
+        { apply (own_slice_dfractional cur_lo ptrs). }
+        { exact Hvd. }
+        wp_auto.
+        rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hwish1.
+        assert (Hlen : W64 (length decoded) = length0) by word.
+        iApply "HΦ".
+        iExists decoded, rest.
+        iSplitL "Hlo Hbig".
+        { iExists ptrs. iFrame "Hlo Hbig". }
+        iFrame "Hlb".
+        iPureIntro. rewrite /wish /pure_enc /valid /safemarshal.w64.pure_enc.
+        split.
+        - rewrite Hlen Hwish1 Hcons -app_assoc //.
+        - split; [word | exact Hvf]. }
+      (* body: uint.Z j < uint.Z length0 *)
       wp_auto.
-      admit.
-Admitted.
+      wp_apply (Memb.wp_dec with "[$Hlb]").
+      iIntros (a2 lb1 err2) "Hpost2".
+      wp_auto.
+      destruct err2.
+      -- (* Memb decode failed → set loopErr, break, return error *)
+         iDestruct "Hpost2" as "Hno".
+         wp_auto.
+         wp_for_post.
+         iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+         destruct Hwish as [Henc Hvalid].
+         rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hwish1.
+         rewrite /pure_enc /safemarshal.w64.pure_enc -app_assoc in Henc.
+         rewrite Hwish1 in Henc.
+         apply app_inj_1 in Henc as [Hlen_eq Hrest_eq]; [|len].
+         apply (inj u64_le) in Hlen_eq.
+         destruct Hvalid as [Hvlen Hvforall].
+         assert (Hjlt : (uint.nat j < length obj)%nat) by word.
+         destruct (lookup_lt_is_Some_2 obj (uint.nat j) Hjlt) as [oj Hoj].
+         pose proof (take_drop_middle obj (uint.nat j) oj Hoj) as Hsplit.
+         assert (Hinj : ∀ a0 a1 s0 s1, Memb.valid a0 → Memb.valid a1 →
+           Memb.pure_enc a0 ++ s0 = Memb.pure_enc a1 ++ s1 → a0 = a1 ∧ s0 = s1).
+         { intros a0 a1 s0 s1 Hva0 Hva1 He.
+           apply (Memb.wish_det s0 s1 a0 a1 (b := Memb.pure_enc a0 ++ s0));
+             rewrite /Memb.wish; by split. }
+         rewrite Hcons in Hrest_eq.
+         assert (Hmjobj : mjoin (Memb.pure_enc <$> obj)
+                          = mjoin (Memb.pure_enc <$> take (uint.nat j) obj)
+                            ++ Memb.pure_enc oj
+                            ++ mjoin (Memb.pure_enc <$> drop (S (uint.nat j)) obj)).
+         { rewrite -{1}Hsplit fmap_app fmap_cons join_app join_cons -app_assoc //. }
+         rewrite Hmjobj -!app_assoc in Hrest_eq.
+         assert (Hleneq : length decoded = length (take (uint.nat j) obj)).
+         { rewrite length_take Nat.min_l; [word | lia]. }
+         assert (Hforalltake : Forall Memb.valid (take (uint.nat j) obj))
+           by (apply Forall_take; exact Hvforall).
+         destruct (mjoin_enc_inj _ _ _ _ _ _ Hinj Hleneq Hvf Hforalltake Hrest_eq)
+           as [_ Hrest_split].
+         iApply "Hno".
+         iExists oj, (mjoin (Memb.pure_enc <$> drop (S (uint.nat j)) obj) ++ tail).
+         iPureIntro. rewrite /Memb.wish. split.
+         { rewrite Hrest_split /Memb.pure_enc /CommitOpen.pure_enc
+             /safemarshal.Slice1D.pure_enc -!app_assoc //. }
+         rewrite Forall_forall in Hvforall.
+         apply Hvforall. by eapply list_elem_of_lookup_2.
+      -- (* success: append the decoded element and continue *)
+         iDestruct "Hpost2" as (m t) "(Hown_m & Hlb1 & %Hwm)".
+         destruct Hwm as [Hrest_eq Hvm].
+         wp_auto.
+         wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Hlit _]". wp_auto.
+         wp_apply (wp_slice_append with "[$Hlo $Hcap $Hlit]").
+         iIntros (lo2) "(Hlo & Hcap & _)".
+         wp_auto.
+         iAssert ([∗ list] p;o ∈ (ptrs ++ [a2]);(decoded ++ [m]), Memb.own p o d)%I
+           with "[Hbig Hown_m]" as "Hbig2".
+         { iApply big_sepL2_snoc. iFrame. }
+         assert (Hcons' : tail1 = mjoin (Memb.pure_enc <$> (decoded ++ [m])) ++ t).
+         { rewrite fmap_app join_app /= app_nil_r Hcons Hrest_eq -app_assoc //. }
+         assert (Hvf' : Forall Memb.valid (decoded ++ [m])).
+         { apply Forall_app; split; [exact Hvf|by apply Forall_singleton]. }
+         assert (Hj' : uint.Z (word.add j (W64 1)) ≤ uint.Z length0) by word.
+         assert (Hdeclen' : Z.of_nat (length (decoded ++ [m])) = uint.Z (word.add j (W64 1))).
+         { rewrite length_app /=. word. }
+         wp_for_post.
+         iFrame "HΦ length".
+         iExists (word.add j (W64 1)), (decoded ++ [m]), (ptrs ++ [a2]), lo2, lb1, t.
+         iFrame "i loopO Hlo Hcap Hbig2 loopErr loopB Hlb1 %".
+Qed.
 
 End proof.
 End MembSlice1D.
