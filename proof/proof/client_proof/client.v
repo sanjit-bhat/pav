@@ -859,7 +859,7 @@ Lemma wp_Client_Get γ ptr_c σ (uid : w64) :
         let agreeγ := γ.(cfg.agreeγ) in
         let σ' := set state.epoch (λ _, uint.nat ep) σ in
         "Hclient" ∷ Client.own γ ptr_c σ' ∗
-        "%Heq_ep" ∷ ⌜(σ.(state.epoch) ≤ uint.nat ep)%nat⌝ ∗
+        "%Heq_ep" ∷ ⌜(σ.(state.epoch) ≤ σ'.(state.epoch))%nat⌝ ∗
         "#Hopt_pk" ∷
           match opt_pk with
           | None => "->" ∷ ⌜hasPk = false⌝
@@ -867,7 +867,7 @@ Lemma wp_Client_Get γ ptr_c σ (uid : w64) :
             "->" ∷ ⌜hasPk = true⌝ ∗
             "#Hsl_pk" ∷ sl_pk ↦*□ pk
           end ∗
-        "#Hptr_kt" ∷ agreeγ ↪KT[uint.nat ep, uid] opt_pk)
+        "#Hptr_kt" ∷ agreeγ ↪KT[σ'.(state.epoch), uid] opt_pk)
   }}}.
 Proof.
   wp_start as "@". wp_auto.
@@ -960,42 +960,38 @@ Lemma wp_Client_SelfMon γ ptr_c σ :
   {{{
     (ep : w64) (isChanged : bool) err,
     RET (#ep, #isChanged, #(ktcore.blame_to_u64 err));
-    (* TODO: in alicebob proof, BlameSpec won't work with mult Auditors.
-    there's only one place to plug in an Auditor trust param. *)
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
       ({[
-        ktcore.BlameServFull:=option_bool γ.(cfg.serv_good);
+        ktcore.BlameServFull:=option_bool $ server.Trust.get_full γ.(cfg.serv_good);
         ktcore.BlameClients:=γ.(cfg.clis_good)
       ]})⌝ ∗
     "Herr" ∷
       (if decide (err ≠ ∅)
       then "Hclient" ∷ Client.own γ ptr_c σ
       else
-        ∃ new_digs prev_key,
+        ∃ last_key num_new_keys,
         let agreeγ := γ.(cfg.agreeγ) in
-        let σ0 := set state.digs (.++ new_digs) σ in
-        let new_keys_len := (length σ0.(state.digs) - agreeγ.(ktcore.Agree.func_start) -
-          length σ.(state.keys))%nat in
-        "%Heq_ep" ∷ ⌜uint.Z ep = agreeγ.(ktcore.Agree.digs_start) + length σ0.(state.digs) - 1⌝ ∗
-        "%Hprev_key" ∷ ⌜last σ.(state.keys) = Some prev_key⌝ ∗
+        let σ0 := set state.epoch (λ _, uint.nat ep) σ in
+        "%Heq_ep" ∷ ⌜(σ.(state.epoch) ≤ σ0.(state.epoch))%nat⌝ ∗
+        "%Hlast_key" ∷ ⌜last σ.(state.keys) = Some last_key⌝ ∗
+        "%Heq_keys_len" ∷ ⌜S σ0.(state.epoch) = (agreeγ.(ktcore.Agree.digs_start) +
+          agreeγ.(ktcore.Agree.func_start) + length σ.(state.keys) + num_new_keys)%nat⌝ ∗
         "Hchanged" ∷
           match isChanged with
           | false =>
-            let σ1 := set state.keys (.++ replicate new_keys_len prev_key) σ0 in
-            "Hclient" ∷ Client.own γ ptr_c σ1 ∗
-            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.agreeγ) γ.(cfg.uid) σ1.(state.keys)
+            let σ1 := set state.keys (.++ replicate num_new_keys last_key) σ0 in
+            "Hclient" ∷ Client.own γ ptr_c σ1
           | true =>
-            ∃ (num_prev_keys : nat),
-            let num_next_keys := (new_keys_len - num_prev_keys)%nat in
+            ∃ num_last_key num_pend_key,
+            (* [S num_pend_key] guarantees at least one pend key. *)
             let σ1 :=
               set state.keys
-                (.++ replicate num_prev_keys prev_key ++
-                  replicate num_next_keys σ.(state.pend_pk))
+                (.++ replicate num_last_key last_key ++
+                  replicate (S num_pend_key) σ.(state.pend_pk))
               (set state.pend_pk (λ _, None) σ0) in
             "Hclient" ∷ Client.own γ ptr_c σ1 ∗
-            "#His_staged" ∷ ktcore.is_staged_keys γ.(cfg.agreeγ) γ.(cfg.uid) σ1.(state.keys) ∗
-            "%Hpend" ∷ ⌜is_Some σ.(state.pend_pk)⌝ ∗
-            "%Hsome_next_keys" ∷ ⌜num_next_keys > 0⌝
+            "%Hnum_new_keys" ∷ ⌜num_new_keys = (num_last_key + S num_pend_key)%nat⌝ ∗
+            "%HSome_pend" ∷ ⌜is_Some σ.(state.pend_pk)⌝
           end)
   }}}.
 Proof.
