@@ -147,12 +147,12 @@ Proof.
   by eapply ktcore.mono_plain_lookup.
 Qed.
 
-Lemma digs_to_put_perms γ i x :
+Lemma digs_to_put_perms γ i dig :
   let agreeγ := γ.(cfg.agreeγ) in
   is_inv γ -∗
-  mono_list_idx_own agreeγ.(ktcore.Agree.digs) i x ={⊤}=∗
-  ∀ uid pks,
-    ⌜ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) x !! uid = Some pks⌝ -∗
+  mono_list_idx_own agreeγ.(ktcore.Agree.digs) i dig ={⊤}=∗
+  ∀ uid,
+    let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid dig in
     (* if empty pks, might not have uidγ. *)
     ⌜length pks > 0%nat⌝ -∗
     ∃ uidγ,
@@ -170,7 +170,7 @@ Proof.
   iNamed "His_serv".
   iModIntro.
 
-  iIntros "* %Hlook_uid %Hlen_pks".
+  iIntros "* %Hlen_pks".
   apply lookup_lt_Some in Hlook_digs as ?.
   list_elem (obj.(state.digs)) (pred (length obj.(state.digs))) as last_dig.
   opose proof (ktcore.mono_plain_lookup uid _
@@ -178,12 +178,20 @@ Proof.
   rewrite -last_lookup in Hlast_dig_lookup.
   apply Hsub_pend in Hlast_dig_lookup as Hsub1.
   specialize (Hsub1 uid).
-  rewrite !lookup_total_alt in Hsub0.
-  rewrite Hlook_uid /= in Hsub0.
-  destruct (ktcore.to_plain _ last_dig !! uid) eqn:?.
-  2: { apply prefix_length in Hsub0. simpl in *. lia. }
-  simpl in *.
-  case_match; try done.
+
+  eassert (_ `prefix_of` obj.(state.pending) !!! uid) as Hsub2.
+  { etrans; [exact Hsub0|].
+    rewrite /option_relation in Hsub1.
+    rewrite !lookup_total_alt.
+    repeat case_match; try done.
+    apply prefix_nil. }
+  rewrite (lookup_total_alt obj.(state.pending)) in Hsub2.
+  destruct (obj.(state.pending) !! uid) as [pks|] eqn:Hlook_obj.
+  2: {
+    rewrite Hlook_obj in Hsub2.
+    apply prefix_length in Hsub2.
+    simpl in *. lia. }
+  rewrite Hlook_obj /= in Hsub2.
 
   iDestruct (big_sepM_lookup with "Hperm_uids") as "@"; [done|].
   iFrame "%".
