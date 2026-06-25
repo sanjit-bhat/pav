@@ -16,7 +16,7 @@ func UpdateProofSlice1DEncode(b0 []byte, o []*UpdateProof) []byte {
 
 func UpdateProofSlice1DDecode(b0 []byte) ([]*UpdateProof, []byte, bool) {
 	length, b1, err1 := safemarshal.ReadInt(b0)
-	if err1 {
+	if err1 || int(length) < 0 {
 		return nil, nil, true
 	}
 	var loopO = make([]*UpdateProof, 0, length)
@@ -48,7 +48,7 @@ func MembSlice1DEncode(b0 []byte, o []*Memb) []byte {
 
 func MembSlice1DDecode(b0 []byte) ([]*Memb, []byte, bool) {
 	length, b1, err1 := safemarshal.ReadInt(b0)
-	if err1 {
+	if err1 || int(length) < 0 {
 		return nil, nil, true
 	}
 	var loopO = make([]*Memb, 0, length)
@@ -80,7 +80,7 @@ func AuditProofSlice1DEncode(b0 []byte, o []*AuditProof) []byte {
 
 func AuditProofSlice1DDecode(b0 []byte) ([]*AuditProof, []byte, bool) {
 	length, b1, err1 := safemarshal.ReadInt(b0)
-	if err1 {
+	if err1 || int(length) < 0 {
 		return nil, nil, true
 	}
 	var loopO = make([]*AuditProof, 0, length)
