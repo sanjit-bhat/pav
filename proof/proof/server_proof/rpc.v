@@ -415,7 +415,8 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
 
     (* bootstrap caller's facts about our Agree state. *)
     "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
-    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝
+    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+    "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝
     end end
   }}}.
 Proof. Admitted.
@@ -493,7 +494,8 @@ Lemma wp_CallStart c good :
         "#Hwish_StartVrf" ∷ wish_CheckStartVrf γ.(cfg.sig_pk) vrf ∗
 
         "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
-        "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ end)
+        "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+        "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝ end)
     }}}.
 Proof.
   wp_start as "@". wp_auto.

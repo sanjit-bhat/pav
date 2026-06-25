@@ -296,8 +296,7 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
       let servAgreeγ := servγ.(server.cfg.agreeγ) in
       "%Hlook_dig" ∷ ⌜digs !! i = Some dig⌝ ∗
       "%Hlt_ver" ∷ ⌜uint.nat prevVerLen ≤
-        length $ ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid dig⌝ ∗
-      "%Hlb_func_start" ∷ ⌜(servAgreeγ.(ktcore.Agree.func_start) ≤ i)%nat⌝ end
+        length $ ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid dig⌝ end
   }}}
   ptr_c @! (go.PointerType client.Client) @! "getHistory" #uid #prevVerLen
   {{{
@@ -344,8 +343,7 @@ Proof.
     replace (pred _) with (uint.nat lastEp.(epoch.epoch)) in Hlast_dig; [|word].
     iDestruct (mono_list_idx_own_get with "Hserv_digs") as "$"; [done|].
     apply lookup_lt_Some in Hlook_dig as ?.
-    eapply (lookup_drop_Some t.(server.cfg.agreeγ).(ktcore.Agree.func_start)) in Hlook_dig; [|word].
-    eapply (lookup_drop_Some t.(server.cfg.agreeγ).(ktcore.Agree.func_start)) in Hlast_dig; [|word].
+    rewrite Heq_serv_func_start drop_0 in Hmono_plain.
     opose proof (ktcore.mono_plain_lookup uid _ Hlook_dig Hlast_dig _) as Hpref; [done|word|].
     apply prefix_length in Hpref.
     rewrite Heq_vrf_pk in Hlt_ver.
@@ -449,8 +447,7 @@ Proof.
       replace (pred _) with (uint.nat next.(epoch.epoch)) in Hlast_dig; [|word].
       apply lookup_lt_Some in Hlook_dig as ?.
       apply (lookup_app_l_Some _ newDigs) in Hlook_dig.
-      eapply (lookup_drop_Some t.(server.cfg.agreeγ).(ktcore.Agree.func_start)) in Hlook_dig; [|word].
-      eapply (lookup_drop_Some t.(server.cfg.agreeγ).(ktcore.Agree.func_start)) in Hlast_dig; [|word].
+      rewrite Heq_serv_func_start drop_0 in Hmono_plain.
       opose proof (ktcore.mono_plain_lookup uid _ Hlook_dig Hlast_dig _) as Hpref; [done|word|].
       apply prefix_length in Hpref.
       word. }
@@ -650,15 +647,14 @@ Proof.
     instantiate (1:=digs).
     instantiate (1:=epoch.mk' _ _ _ _).
     iFrame "#".
+    iNamed "Hwish_CheckStartChain".
     iSplitL; [|iSplitL].
     - rewrite /epoch.valid /=.
-      iNamed "Hwish_CheckStartChain".
       eapply hashchain.fuel_bound' in His_chain_start as ?.
       ereplace (?[x] - _ + _)%nat with ?x by word.
       by iFrame "#%".
     - rewrite /epoch.align_sigpred.
       destruct (server.Trust.get_sigpred _); try done.
-      iNamed "Hwish_CheckStartChain".
       iDestruct (ktcore.get_link_sigpred with "His_servPk His_link_sig") as "H".
       iNamedSuffix "H" "0".
       opose proof (hashchain.inj His_chain_start Hinv0) as [<- _].
@@ -667,6 +663,7 @@ Proof.
       rewrite last_lookup in Hlast_digs.
       iFrame "%".
       word. }
+
   case_bool_decide as Heq_err; wp_auto;
     rewrite ktcore.rw_Blame0 in Heq_err; subst.
   2: {

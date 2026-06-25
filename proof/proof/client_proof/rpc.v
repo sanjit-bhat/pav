@@ -166,9 +166,12 @@ Definition align_sigpred γcli servAgreeγ : iProp Σ :=
 
 Definition align_full γcli γserv : iProp Σ :=
   let agreeγ := γcli.(cfg.agreeγ) in
+  let servAgreeγ := γserv.(server.cfg.agreeγ) in
   "%Heq_sig_pk" ∷ ⌜γcli.(cfg.sig_pk) = γserv.(server.cfg.sig_pk)⌝ ∗
   "%Heq_serv_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
-  "%Heq_serv_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝.
+  "%Heq_serv_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+  (* not required, but makes life easier. *)
+  "%Heq_serv_func_start" ∷ ⌜servAgreeγ.(ktcore.Agree.func_start) = 0%nat⌝.
 
 End proof.
 End serv.
