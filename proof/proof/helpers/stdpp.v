@@ -179,3 +179,13 @@ Proof.
   intros [? ->]%last_Some.
   len. rewrite drop_app_length'; [done|lia].
 Qed.
+
+Lemma lookup_drop_Some {A} n (l : list A) i x :
+  l !! i = Some x →
+  n ≤ i →
+  drop n l !! (i - n) = Some x.
+Proof.
+  intros Hl ?.
+  rewrite lookup_drop.
+  exact_eq Hl. f_equal. lia.
+Qed.

@@ -147,8 +147,7 @@ Definition own γ ptr : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
   ∃ ptr_cli sl_sigPk ptr_vrfPk sl_vrfSig vrfSig,
   "#Hstr_serv" ∷ ptr ↦□ (client.serv.mk ptr_cli sl_sigPk ptr_vrfPk sl_vrfSig) ∗
-  (* TODO *)
-  (* "#His_rpc" ∷ server.is_rpc_cli ptr_cli γ.(cfg.serv_good) ∗ *)
+  "#His_rpc" ∷ server.is_rpc_cli ptr_cli γ.(cfg.serv_good) ∗
   "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.sig_pk) ∗
   "#Hown_vrfPk" ∷ cryptoffi.own_vrf_pk ptr_vrfPk agreeγ.(ktcore.Agree.vrf_pk) ∗
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
