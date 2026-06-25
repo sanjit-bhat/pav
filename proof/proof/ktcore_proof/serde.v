@@ -1015,7 +1015,67 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  wp_apply (safemarshal.w64.wp_dec with "[$Hsl_b]").
+  iIntros (length0 b1 err1) "Hpost1". destruct err1.
+  - (* ReadInt failed *)
+    wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+    destruct Hwish as [Henc _]. iApply "Hpost1".
+    iExists (W64 (length obj)), (mjoin (Memb.pure_enc <$> obj) ++ tail). iPureIntro.
+    rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc Henc /pure_enc
+      /safemarshal.w64.pure_enc -app_assoc //.
+  - iDestruct "Hpost1" as (tail1) "(Hb1 & %Hwish1)".
+    wp_auto.
+    wp_if_destruct.
+    + (* length0 < 0 : invalid length, error *)
+      rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hwish1.
+      iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid. destruct Hvalid as [Hvlen _].
+      exfalso.
+      rewrite /pure_enc /safemarshal.w64.pure_enc -app_assoc in Henc.
+      rewrite Hwish1 in Henc.
+      apply app_inj_1 in Henc as [Hpre _]; [|len].
+      apply (inj u64_le) in Hpre.
+      word.
+    + (* length0 >= 0 : decode loop *)
+      wp_apply wp_slice_make3; first word.
+      iIntros (lo_sl) "(Hlo & Hcap & %Hlocap)".
+      wp_auto.
+      iAssert (∃ (j : w64) (decoded : list Memb.t) (ptrs : list loc)
+                 (cur_lo cur_lb : slice.t) (rest : list w8),
+        "i" ∷ i_ptr ↦ j ∗
+        "%Hj" ∷ ⌜uint.Z j ≤ uint.Z length0⌝ ∗
+        "%Hdeclen" ∷ ⌜Z.of_nat (length decoded) = uint.Z j⌝ ∗
+        "loopO" ∷ loopO_ptr ↦ cur_lo ∗
+        "Hlo" ∷ cur_lo ↦* ptrs ∗
+        "Hcap" ∷ own_slice_cap loc cur_lo (DfracOwn 1) ∗
+        "Hbig" ∷ ([∗ list] p;o ∈ ptrs;decoded, Memb.own p o d) ∗
+        "loopErr" ∷ loopErr_ptr ↦ false ∗
+        "loopB" ∷ loopB_ptr ↦ cur_lb ∗
+        "Hlb" ∷ cur_lb ↦*{d} rest ∗
+        "%Hcons" ∷ ⌜tail1 = mjoin (Memb.pure_enc <$> decoded) ++ rest⌝ ∗
+        "%Hvf" ∷ ⌜Forall Memb.valid decoded⌝)%I
+        with "[i loopO Hlo Hcap loopErr loopB Hb1]" as "IH".
+      { assert (Hrep : replicate (sint.nat (W64 0)) (zero_val loc) = (@nil loc)).
+        { replace (sint.nat (W64 0)) with 0%nat by word. done. }
+        iEval (rewrite Hrep) in "Hlo".
+        iExists (W64 0), [], [], lo_sl, b1, tail1.
+        iFrame "i loopO Hlo Hcap loopErr loopB Hb1".
+        repeat (iSplit; [solve [iPureIntro; word | by iApply big_sepL2_nil'
+                                | iPureIntro; by constructor | iPureIntro; done]|]).
+        solve [iPureIntro; word | by iApply big_sepL2_nil'
+              | iPureIntro; by constructor | iPureIntro; done]. }
+      wp_for "IH".
+      case_bool_decide as Hcond.
+      2: { (* exit: j = length0, decoded all elements; loopErr=false → success.
+              TODO: reconstruct [own]+[wish] (downgrade loopO DfracOwn 1 → d). *)
+        wp_auto. admit. }
+      (* body: uint.Z j < uint.Z length0. TODO: MembDecode the next element;
+         break-on-error (prove ¬∃wish via mjoin injectivity); else append + reloop. *)
+      wp_auto.
+      admit.
+Admitted.
 
 End proof.
 End MembSlice1D.

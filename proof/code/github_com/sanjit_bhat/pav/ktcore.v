@@ -922,7 +922,7 @@ Definition UpdateProofSlice1DDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoG
     do:  ("length" <-[go.uint64] "$r0");;;
     do:  ("b1" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err1" <-[go.bool] "$r2");;;
-    (if: ![go.bool] "err1"
+    (if: (![go.bool] "err1") || ((Convert go.uint64 go.int (![go.uint64] "length")) <⟨go.int⟩ #(W64 0))
     then return: (Convert go.untyped_nil (go.SliceType (go.PointerType UpdateProof)) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
     else do:  #());;;
     let: "loopO" := (GoAlloc (go.SliceType (go.PointerType UpdateProof)) (GoZeroVal (go.SliceType (go.PointerType UpdateProof)) #())) in
@@ -1004,7 +1004,7 @@ Definition MembSlice1DDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCo
     do:  ("length" <-[go.uint64] "$r0");;;
     do:  ("b1" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err1" <-[go.bool] "$r2");;;
-    (if: ![go.bool] "err1"
+    (if: (![go.bool] "err1") || ((Convert go.uint64 go.int (![go.uint64] "length")) <⟨go.int⟩ #(W64 0))
     then return: (Convert go.untyped_nil (go.SliceType (go.PointerType Memb)) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
     else do:  #());;;
     let: "loopO" := (GoAlloc (go.SliceType (go.PointerType Memb)) (GoZeroVal (go.SliceType (go.PointerType Memb)) #())) in
@@ -1086,7 +1086,7 @@ Definition AuditProofSlice1DDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGl
     do:  ("length" <-[go.uint64] "$r0");;;
     do:  ("b1" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err1" <-[go.bool] "$r2");;;
-    (if: ![go.bool] "err1"
+    (if: (![go.bool] "err1") || ((Convert go.uint64 go.int (![go.uint64] "length")) <⟨go.int⟩ #(W64 0))
     then return: (Convert go.untyped_nil (go.SliceType (go.PointerType AuditProof)) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
     else do:  #());;;
     let: "loopO" := (GoAlloc (go.SliceType (go.PointerType AuditProof)) (GoZeroVal (go.SliceType (go.PointerType AuditProof)) #())) in
