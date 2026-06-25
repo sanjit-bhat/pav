@@ -802,20 +802,23 @@ Proof.
       by iFrame "∗#".
     - by iFrame "∗#". }
 
-  destruct serv_good; iNamed "Halign_nextVer".
+  destruct (server.Trust.get_full _) eqn:Heq_good; iNamed "Halign_nextVer".
   2: {
     wp_apply server.wp_CallPut.
-    { iFrame "#". }
+    { iFrame "#". rewrite Heq_good //. }
     iApply "HΦ".
+    rewrite /Client.own Heq_good /=.
     by iFrame "∗ Hstr_serv #%". }
+
   simpl in *. destruct clis_good; iNamed "HgoodCli".
   - iMod (mono_list_auth_own_update_app [(nextVer.(ver.ver), pk)]
       with "Hputs") as "[Hputs #Hlb]".
     iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "#Hidx".
     { by rewrite lookup_snoc. }
-    wp_apply (server.wp_CallPut _ (Some _)).
-    { rewrite Heq_ver. iFrame "#%". }
+    wp_apply server.wp_CallPut.
+    { iFrame "#". rewrite Heq_good Heq_ver. iFrame "#%". }
     iApply "HΦ".
+    rewrite /Client.own Heq_good /=.
     iFrame "∗ Hstr_serv #%". simpl in *.
     iPureIntro. repeat split; try done.
     + intros. decompose_list_elem_of; [naive_solver|].
@@ -830,9 +833,10 @@ Proof.
     iModIntro.
     iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "#Hidx".
     { by rewrite lookup_snoc. }
-    wp_apply (server.wp_CallPut _ (Some _)).
-    { rewrite Heq_ver. iFrame "#%". }
+    wp_apply server.wp_CallPut.
+    { iFrame "#". rewrite Heq_good Heq_ver. iFrame "#%". }
     iApply "HΦ".
+    rewrite /Client.own Heq_good /=.
     by iFrame "∗ Hstr_serv #%".
 Qed.
 
