@@ -1196,5 +1196,38 @@ Proof.
   - word.
 Qed.
 
+Lemma wp_Client_Audit γ ptr_c σ adtr_good sl_adtrPk adtrPk :
+  {{{
+    is_pkg_init client ∗
+    "Hclient" ∷ Client.own γ ptr_c σ
+    "#Hsl_adtrPk" ∷ sl_adtrPk ↦*□ adtrPk ∗
+    "%Heq_adtrPk" ∷ ⌜match auditor.Trust.get_full adtr_good with None => True | Some adtrγ =>
+      adtrPk = adtrγ.(auditor.cfg.sig_pk) end⌝
+  }}}
+  ptr_c @! (go.PointerType client.Client) @! "Audit" #adtrAddr #sl_adtrPk
+  {{{
+    (startEp ep : w64) err ptr_evid,
+    RET (#startEp, #ep, #(ktcore.blame_to_u64 err), #ptr_evid);
+    "Hclient" ∷ Client.own γ ptr_c σ ∗
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err
+      ({[
+        ktcore.BlameServSig:=option_bool $ server.Trust.get_sigpred γ.(cfg.serv_good);
+        ktcore.BlameServFull:=option_bool $ server.Trust.get_full γ.(cfg.serv_good);
+        ktcore.BlameAdtrSig:=option_bool $ auditor.Trust.get_sigpred adtr_good;
+        ktcore.BlameAdtrFull:=option_bool $ auditor.Trust.get_full adtr_good
+      ]})⌝ ∗
+    "#Hevid" ∷ match ptr_evid with null => True | _ =>
+      ∃ evid,
+      "#Hown_evid" ∷ ktcore.Evid.own ptr_evid evid (□) end ∗
+    "Herr" ∷ (if decide (err ≠ ∅) then True else
+      "%Heq_startEp" ∷ ⌜match auditor.Trust.get_sigpred adtr_good with None => True | Some adtrγ =>
+        uint.nat startEp = (adtrγ.(ktcore.Agree.digs_start) +
+          adtrγ.(ktcore.Agree.func_start))%nat end⌝ ∗
+      "%Heq_ep" ∷ ⌜uint.nat ep = σ.(state.epoch)⌝ ∗
+      "#His_audit" ∷ match auditor.Trust.get_sigpred adtr_good with None => True | Some adtrγ =>
+        ktcore.is_audit γ.(cfg.agreeγ) adtrγ (uint.nat ep) end)
+  }}}.
+Proof. Admitted.
+
 End proof.
 End client.
