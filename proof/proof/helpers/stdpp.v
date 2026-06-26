@@ -84,6 +84,36 @@ Proof.
       by eapply (Hl1 0%nat).
 Qed.
 
+Lemma list_reln_take {A} R (l : list A) n :
+  list_reln l R →
+  list_reln (take n l) R.
+Proof.
+  intros H.
+  rewrite -(take_drop n l) in H.
+  apply list_reln_app in H.
+  naive_solver.
+Qed.
+
+Lemma list_reln_drop {A} R (l : list A) n :
+  list_reln l R →
+  list_reln (drop n l) R.
+Proof.
+  intros H.
+  rewrite -(take_drop n l) in H.
+  apply list_reln_app in H.
+  naive_solver.
+Qed.
+
+Lemma list_reln_prefix {A} R (l0 : list A) l1 :
+  list_reln l0 R →
+  l1 `prefix_of` l0 →
+  list_reln l1 R.
+Proof.
+  intros H [? ->].
+  apply list_reln_app in H.
+  naive_solver.
+Qed.
+
 (* TODO: not sure if right form. *)
 Lemma bind_is_Some {A B} (f : A → option B) (mx : option A) :
   is_Some (mx ≫= f) ↔ is_Some mx ∧ (∀ x, mx = Some x → is_Some (f x)).
