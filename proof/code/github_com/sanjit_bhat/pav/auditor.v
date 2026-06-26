@@ -638,6 +638,12 @@ Definition CallGetⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
     do:  ("r" <-[go.PointerType GetReply] "$r0");;;
     do:  "$r1";;;
     do:  ("errb" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "errb"
+    then
+      let: "$r0" := ktcore.BlameAdtrFull in
+      do:  ("err" <-[ktcore.Blame] "$r0");;;
+      return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")
+    else do:  #());;;
     let: "$r0" := (![go.uint64] (StructFieldRef GetReply "StartEp"%go (![go.PointerType GetReply] "r"))) in
     do:  ("startEp" <-[go.uint64] "$r0");;;
     let: "$r0" := (![go.PointerType SignedLink] (StructFieldRef GetReply "StartLink"%go (![go.PointerType GetReply] "r"))) in
@@ -646,12 +652,6 @@ Definition CallGetⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
     do:  ("currLink" <-[go.PointerType SignedLink] "$r0");;;
     let: "$r0" := (![go.PointerType SignedVrf] (StructFieldRef GetReply "Vrf"%go (![go.PointerType GetReply] "r"))) in
     do:  ("vrf" <-[go.PointerType SignedVrf] "$r0");;;
-    (if: ![go.bool] "errb"
-    then
-      let: "$r0" := ktcore.BlameAdtrFull in
-      do:  ("err" <-[ktcore.Blame] "$r0");;;
-      return: (![go.uint64] "startEp", ![go.PointerType SignedLink] "startLink", ![go.PointerType SignedLink] "currLink", ![go.PointerType SignedVrf] "vrf", ![ktcore.Blame] "err")
-    else do:  #());;;
     (if: ![go.bool] (StructFieldRef GetReply "Err"%go (![go.PointerType GetReply] "r"))
     then
       let: "$r0" := ktcore.BlameUnknown in

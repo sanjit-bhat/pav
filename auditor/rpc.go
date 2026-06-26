@@ -34,14 +34,14 @@ func CallGet(c *advrpc.Client, epoch uint64) (startEp uint64, startLink, currLin
 		return
 	}
 	r, _, errb := GetReplyDecode(*rb)
-	startEp = r.StartEp
-	startLink = r.StartLink
-	currLink = r.CurrLink
-	vrf = r.Vrf
 	if errb {
 		err = ktcore.BlameAdtrFull
 		return
 	}
+	startEp = r.StartEp
+	startLink = r.StartLink
+	currLink = r.CurrLink
+	vrf = r.Vrf
 	if r.Err {
 		// [Get] legitimately returns errs.
 		err = ktcore.BlameUnknown

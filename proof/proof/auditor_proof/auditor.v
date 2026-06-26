@@ -6,14 +6,14 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
   advrpc cryptoffi hashchain ktcore merkle server.
 
 From New.proof.github_com.sanjit_bhat.pav.auditor_proof Require Import
-  base rpc serde.
+  base rpc_serv serde.
 
 (* TODO: bad New.proof.sync exports.
 https://github.com/mit-pdos/perennial/issues/470 *)
 From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 Module auditor.
-Import base.auditor rpc.auditor serde.auditor.
+Import base.auditor rpc_serv.auditor serde.auditor.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -70,6 +70,46 @@ Proof.
   iIntros "[H0 H1]".
   iCombine "H0 H1" gives %->.
   by iCombine "H0 H1" as "H".
+Qed.
+
+Lemma op_read γ :
+  is_inv γ -∗
+  □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
+    (own γ σ ={∅,⊤}=∗ True)).
+Proof.
+  simpl. iIntros "#Hinv".
+  rewrite /is_inv.
+  iModIntro. iInv "Hinv" as ">@" "Hclose".
+  iApply fupd_mask_intro.
+  { set_solver. }
+  iIntros "Hmask".
+  iFrame.
+  iIntros "Hown".
+  iMod "Hmask" as "_".
+  iMod ("Hclose" with "[-]") as "_".
+  - iFrame.
+  - by iFrame "#".
+Qed.
+
+Lemma op_update γ :
+  is_inv γ -∗
+  □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
+    (∀ new_digs,
+    let σ' := set state.digs (.++ new_digs) σ in
+    own γ σ' ={∅,⊤}=∗ True)).
+Proof.
+  iIntros "#Hinv".
+  iModIntro.
+  rewrite /is_inv.
+  iInv "Hinv" as ">@" "Hclose".
+  iApply fupd_mask_intro.
+  { set_solver. }
+  iIntros "Hmask".
+  iFrame.
+  iIntros "* Hown".
+  iMod "Hmask" as "_".
+  iMod ("Hclose" with "[-]"); [|done].
+  iFrame.
 Qed.
 
 End proof.
@@ -461,6 +501,7 @@ Lemma wp_Auditor_Get a γ epoch Q :
         "#Hown_startLink" ∷ SignedLink.own ptr_startLink startLink (□) ∗
         "#Hown_currLink" ∷ SignedLink.own ptr_currLink currLink (□) ∗
         "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
+
         "#Hwish_startLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) startEp startLink ∗
         "#Hwish_currLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) epoch currLink ∗
         "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗

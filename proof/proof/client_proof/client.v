@@ -7,10 +7,10 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
   advrpc auditor cryptoffi hashchain ktcore merkle server.
 
 From New.proof.github_com.sanjit_bhat.pav.client_proof Require Import
-  base rpc.
+  base rpc_serv.
 
 Module client.
-Import rpc.client rpc.server.
+Import rpc_serv.client rpc_serv.server.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -1196,17 +1196,17 @@ Proof.
   - word.
 Qed.
 
-Lemma wp_Client_Audit γ ptr_c σ adtr_good sl_adtrPk adtrPk :
+Lemma wp_Client_Audit γ ptr_c σ adtr_good (adtrAddr : w64) sl_adtrPk adtrPk :
   {{{
     is_pkg_init client ∗
-    "Hclient" ∷ Client.own γ ptr_c σ
+    "Hclient" ∷ Client.own γ ptr_c σ ∗
     "#Hsl_adtrPk" ∷ sl_adtrPk ↦*□ adtrPk ∗
     "%Heq_adtrPk" ∷ ⌜match auditor.Trust.get_full adtr_good with None => True | Some adtrγ =>
-      adtrPk = adtrγ.(auditor.cfg.sig_pk) end⌝
+      adtrPk = adtrγ.(auditor.cfg.adtr_sig_pk) end⌝
   }}}
   ptr_c @! (go.PointerType client.Client) @! "Audit" #adtrAddr #sl_adtrPk
   {{{
-    (startEp ep : w64) err ptr_evid,
+    (startEp ep : w64) err (ptr_evid : loc),
     RET (#startEp, #ep, #(ktcore.blame_to_u64 err), #ptr_evid);
     "Hclient" ∷ Client.own γ ptr_c σ ∗
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
@@ -1216,9 +1216,9 @@ Lemma wp_Client_Audit γ ptr_c σ adtr_good sl_adtrPk adtrPk :
         ktcore.BlameAdtrSig:=option_bool $ auditor.Trust.get_sigpred adtr_good;
         ktcore.BlameAdtrFull:=option_bool $ auditor.Trust.get_full adtr_good
       ]})⌝ ∗
-    "#Hevid" ∷ match ptr_evid with null => True | _ =>
+    "#Hevid" ∷ (if decide (ptr_evid = null) then True else
       ∃ evid,
-      "#Hown_evid" ∷ ktcore.Evid.own ptr_evid evid (□) end ∗
+      "#Hown_evid" ∷ ktcore.Evid.own ptr_evid evid (□)) ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       "%Heq_startEp" ∷ ⌜match auditor.Trust.get_sigpred adtr_good with None => True | Some adtrγ =>
         uint.nat startEp = (adtrγ.(ktcore.Agree.digs_start) +

@@ -1,140 +1,39 @@
-From New.generatedproof.github_com.sanjit_bhat.pav Require Import auditor server.
+From New.generatedproof.github_com.sanjit_bhat.pav Require Import auditor.
 From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 From New.proof.github_com.sanjit_bhat.pav Require Import
-  advrpc cryptoffi hashchain ktcore merkle.
+  advrpc cryptoffi hashchain ktcore merkle server.
 
 From New.proof.github_com.sanjit_bhat.pav.auditor_proof Require Import
-  serde.
-From New.proof.github_com.sanjit_bhat.pav.server_proof Require Import
-  serde server rpc.
+  auditor rpc_serv serde.
 
 Module auditor.
-Import serde.server server.server rpc.server serde.auditor.
+Import auditor.auditor rpc_serv.auditor serde.auditor.
 
-Module state.
-Record t :=
-  mk {
-    digs: list $ list w8;
-  }.
-End state.
+Module Trust.
+Inductive t :=
+  | No
+  | SigPred (γ : ktcore.Agree.t)
+  | Full (γ : cfg.t).
 
-(* cfg is the static state we know about this party, if good. *)
-Module cfg.
-Record t :=
-  mk {
-    (* duplicate [serv_sig_pk] across [serv_good] bc we need to know
-    it unconditionally. *)
-    serv_sig_pk: list w8;
-    adtr_sig_pk: list w8;
-    agreeγ: ktcore.Agree.t;
-    serv_good: server.Trust.t;
-  }.
-End cfg.
+Definition get_sigpred t :=
+  match t with
+  | SigPred γ => Some γ
+  | Full γ => Some γ.(cfg.agreeγ)
+  | _ => None
+  end.
 
-Section proof.
-Context `{!heapGS Σ}.
-Context {sem : go.Semantics}.
-Collection W := sem.
-#[local] Set Default Proof Using "W".
+Definition get_full t := match t with Full γ => Some γ | _ => None end.
 
-Definition wish_SignedLink servPk adtrPk ep link : iProp Σ :=
-  "#Hwish_adtr_sig" ∷ ktcore.wish_LinkSig adtrPk ep
-    link.(SignedLink.Link) link.(SignedLink.AdtrSig) ∗
-  "#Hwish_serv_sig" ∷ ktcore.wish_LinkSig servPk ep
-    link.(SignedLink.Link) link.(SignedLink.ServSig).
-
-Definition wish_SignedVrf servPk adtrPk vrf : iProp Σ :=
-  "#Hwish_adtr_sig" ∷ ktcore.wish_VrfSig adtrPk
-    vrf.(SignedVrf.VrfPk) vrf.(SignedVrf.AdtrSig) ∗
-  "#Hwish_serv_sig" ∷ ktcore.wish_VrfSig servPk
-    vrf.(SignedVrf.VrfPk) vrf.(SignedVrf.ServSig).
-
-End proof.
-
-Module history.
-Section proof.
-Context `{!heapGS Σ}.
-Context {sem : go.Semantics}.
-Collection W := sem.
-#[local] Set Default Proof Using "W".
-
-Definition own_ep ptr σ (ep : nat) γ : iProp Σ :=
-  let agreeγ := γ.(cfg.agreeγ) in
-  ∃ sig_link,
-  "#Hown_epoch" ∷ SignedLink.own ptr sig_link (□) ∗
-  "#His_epoch" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk)
-    (W64 ep) sig_link ∗
-  (* could derive this from LinkSig, but it's easier to state explicitly. *)
-  "%His_link" ∷ ⌜hashchain.valid (take (S ep - agreeγ.(ktcore.Agree.digs_start)) σ.(state.digs))
-    agreeγ.(ktcore.Agree.cut) sig_link.(SignedLink.Link) (S ep)⌝.
-
-(* TODO: in-mem startEp and sigpred startEp are diff values.
-we should give them diff names. *)
-Definition own ptr γ σ q : iProp Σ :=
-  let agreeγ := γ.(cfg.agreeγ) in
-  ∃ sl_lastDig lastDig start_ep sl_epochs sl0_epochs,
-  let last_ep := agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs) - 1 in
-  "Hstr_history" ∷ ptr ↦{#q} (auditor.history.mk sl_lastDig start_ep sl_epochs) ∗
-  "#Hsl_lastDig" ∷ sl_lastDig ↦*□ lastDig ∗
-  "%Heq_lastDig" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
-  "Hsl_epochs" ∷ sl_epochs ↦*{#q} sl0_epochs ∗
-  "Hcap_epochs" ∷ own_slice_cap loc sl_epochs (DfracOwn q) ∗
-  "#Hepochs" ∷ ([∗ list] idx ↦ ptr ∈ sl0_epochs,
-    own_ep ptr σ (uint.nat start_ep + idx)%nat γ) ∗
-
-  "%Hsome_digs" ∷ ⌜length σ.(state.digs) > 0⌝ ∗
-  "%Hsome_epochs" ∷ ⌜length sl0_epochs > 0⌝ ∗
-  "%Hnoof_ep" ∷ ⌜last_ep = uint.Z $ W64 last_ep⌝ ∗
-  "%Heq_audit_start" ∷ ⌜uint.nat start_ep = (agreeγ.(ktcore.Agree.digs_start) + agreeγ.(ktcore.Agree.func_start))%nat⌝ ∗
-  "%Heq_audit_end" ∷ ⌜(uint.nat start_ep + length sl0_epochs =
-    agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs))%nat⌝.
-
-Definition align_serv σ γ servγ : iProp Σ :=
-  let agreeγ := γ.(cfg.agreeγ) in
-  let servAgreeγ := servγ.(server.cfg.agreeγ) in
-  ∃ digs,
-  "#His_digs" ∷ mono_list_lb_own servAgreeγ.(ktcore.Agree.digs) digs ∗
-  "%Heq_digs" ∷ ⌜σ.(state.digs) = digs⌝ ∗
-  "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
-  "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝.
-
-#[global] Instance own_aux_combine_sep_as ptr γ σ0 σ1 q0 q1 :
-  CombineSepAs (own ptr γ σ0 q0) (own ptr γ σ1 q1) (own ptr γ σ0 (q0 + q1)) | 60.
+Lemma full_to_sigpred t γ :
+  get_full t = Some γ →
+  get_sigpred t = Some γ.(cfg.agreeγ).
 Proof.
-  rewrite /CombineSepAs.
-  iIntros "[H0 H1]".
-  iNamedSuffix "H0" "0".
-  iNamedSuffix "H1" "1".
-  iCombine "Hstr_history0 Hstr_history1" as "?" gives %?.
-  simplify_eq/=.
-  iCombine "Hsl_epochs0 Hsl_epochs1" as "?" gives %?.
-  iCombine "Hcap_epochs0 Hcap_epochs1" as "?".
-  iCombine "Hsl_lastDig0 Hsl_lastDig1" gives %?.
-  simplify_eq/=.
-  (* TODO: DfracOwn q0 ⋅ DfracOwn q1. not getting combined properly. *)
-  iFrame "∗#%".
+  rewrite /get_full /get_sigpred. intros.
+  case_match; try done.
+  naive_solver.
 Qed.
-
-#[global] Instance own_frac ptr γ σ :
-  fractional.Fractional (λ q, own ptr γ σ q).
-Proof.
-  intros ??. iSplit.
-  - iIntros "@".
-    iDestruct "Hstr_history" as "[? ?]".
-    iDestruct "Hsl_epochs" as "[? ?]".
-    iDestruct "Hcap_epochs" as "[? ?]".
-    iFrame "∗#%".
-  - iIntros "[H0 H1]".
-    by iCombine "H0 H1" as "H".
-Qed.
-
-#[global] Instance own_as_frac ptr γ σ q :
-  fractional.AsFractional (own ptr γ σ q) (λ q, own ptr γ σ q) q.
-Proof. auto. Qed.
-
-End proof.
-End history.
+End Trust.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -142,81 +41,108 @@ Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition wish_getNextLink γ σ proof (ep : w64) dig link : iProp Σ :=
-  let agreeγ := γ.(cfg.agreeγ) in
-  ∃ prevDig,
-  "%Heq_ep" ∷ ⌜uint.Z ep = (agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs))%Z⌝ ∗
-  "%Heq_prevDig" ∷ ⌜last σ.(state.digs) = Some prevDig⌝ ∗
-  "#His_upd" ∷ ktcore.wish_ListUpdate prevDig
-    proof.(ktcore.AuditProof.Updates) dig ∗
-  "%His_link" ∷ ⌜hashchain.valid (σ.(state.digs) ++ [dig]) agreeγ.(ktcore.Agree.cut)
-    link (S $ uint.nat ep)⌝ ∗
-  "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.serv_sig_pk) ep link
-    proof.(ktcore.AuditProof.LinkSig).
+Definition is_rpc_cli (c : loc) (good : Trust.t) : iProp Σ :=
+  match Trust.get_full good with None => True | Some γ => is_inv γ end.
 
-Lemma wish_getNextLink_det γ σ proof ep0 dig0 link0 ep1 dig1 link1 :
-  wish_getNextLink γ σ proof ep0 dig0 link0 -∗
-  wish_getNextLink γ σ proof ep1 dig1 link1 -∗
-  ⌜ep0 = ep1 ∧ dig0 = dig1 ∧ link0 = link1⌝.
-Proof.
-  iNamedSuffix 1 "0".
-  iNamedSuffix 1 "1".
-  simplify_eq/=.
-  iDestruct (ktcore.wish_ListUpdate_det with "His_upd0 His_upd1") as %->.
-  destruct His_link0 as [His_link0 _].
-  destruct His_link1 as [His_link1 _].
-  rewrite -His_link1 in His_link0.
-  opose proof (hashchain.det _ _ _ _ His_link0) as ->.
-  iPureIntro. repeat split. word.
-Qed.
+#[global] Instance is_rpc_cli_pers c good : Persistent (is_rpc_cli c good).
+Proof. apply _. Qed.
 
-Lemma wp_CallAudit c good (prevEpoch : w64) :
+Lemma wp_Dial (good : Trust.t) (addr : w64) :
+  {{{ is_pkg_init advrpc }}}
+  @! advrpc.Dial #addr
   {{{
-    is_pkg_init server ∗
-    "#His_serv" ∷ is_rpc_cli c good ∗
-    "#His_args" ∷ match Trust.get_full good with None => True | Some γ =>
-      let servAgreeγ := γ.(server.cfg.agreeγ) in
-      ∃ entry : list w8,
-      "#Hidx_ep" ∷ mono_list_idx_own servAgreeγ.(ktcore.Agree.digs) (uint.nat prevEpoch) entry end
+    ptr_cli, RET #ptr_cli;
+    "#His_cli" ∷ is_rpc_cli ptr_cli good
+  }}}.
+Proof. Admitted.
+
+Lemma wp_Get_cli_call (Q : cfg.t → state.t → iProp Σ)
+    c good sl_arg d0 arg ptr_reply (x : slice.t) :
+  {{{
+    is_pkg_init auditor ∗
+    "#His_cli" ∷ is_rpc_cli c good ∗
+    "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
+    "Hptr_reply" ∷ ptr_reply ↦ x ∗
+    "#Hfupd" ∷ match Trust.get_full good with None => True | Some γ =>
+      □ (|={⊤,∅}=> ∃ σ, own γ σ ∗
+        (own γ σ ={∅,⊤}=∗ Q γ σ)) end
   }}}
-  @! server.CallAudit #c #prevEpoch
+  c @! (go.PointerType advrpc.Client) @! "Call" auditor.GetRpc #sl_arg #ptr_reply
   {{{
-    sl_proofs err, RET (#sl_proofs, #(ktcore.blame_to_u64 err));
-    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ Trust.get_full good]}⌝ ∗
-    "#Herr" ∷ (if decide (err ≠ ∅) then True else
-      ∃ proofs,
-      "#Hsl_proofs" ∷ ktcore.AuditProofSlice1D.own sl_proofs proofs (□) ∗
+    sl_reply err0, RET #err0;
+    "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
+    "Hptr_reply" ∷ ptr_reply ↦ sl_reply ∗
+
+    "Herr_net" ∷ match err0 with true => True | false =>
+    ∃ replyB,
+    "Hsl_reply" ∷ sl_reply ↦* replyB ∗
+
+    "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
+    let agreeγ := γ.(cfg.agreeγ) in
+    ∃ startEp startLink currLink vrf err1,
+    "%His_reply" ∷ ⌜GetReply.wish replyB
+      (GetReply.mk' startEp startLink currLink vrf err1) []⌝ ∗
+
+    (("%Herr_adtr_dec" ∷ ⌜err1 = true⌝ ∗
+      "Hgenie" ∷ ¬ ⌜∃ obj tail, GetArg.wish arg obj tail⌝) ∨
+
+    ∃ epoch tail σ,
+    "%Hdec" ∷ ⌜GetArg.wish arg (GetArg.mk' epoch) tail⌝ ∗
+    "HQ" ∷ Q γ σ ∗
+
+    "#Herr_adtr_args" ∷
+      match err1 with
+      | true =>
+        ⌜uint.Z epoch < agreeγ.(ktcore.Agree.digs_start) + agreeγ.(ktcore.Agree.func_start) ∨
+        uint.Z epoch >= agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs)⌝
+      | false =>
+        "#Hwish_startLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) startEp startLink ∗
+        "#Hwish_currLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) epoch currLink ∗
+        "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗
+        "%Heq_vrf" ∷ ⌜vrf.(SignedVrf.VrfPk) = agreeγ.(ktcore.Agree.vrf_pk)⌝ ∗
+        "%Heq_startEp" ∷ ⌜uint.nat startEp = (agreeγ.(ktcore.Agree.digs_start) + agreeγ.(ktcore.Agree.func_start))%nat⌝
+      end) end end
+  }}}.
+Proof. Admitted.
+
+Lemma wp_CallGet c good (epoch : w64) :
+  {{{
+    is_pkg_init auditor ∗
+    "#His_cli" ∷ is_rpc_cli c good
+  }}}
+  @! auditor.CallGet #c #epoch
+  {{{
+    (startEp : w64) ptr_startLink ptr_currLink ptr_vrf err,
+    RET (#startEp, #ptr_startLink, #ptr_currLink, #ptr_vrf, #(ktcore.blame_to_u64 err));
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameAdtrFull:=option_bool $ Trust.get_full good]}⌝ ∗
+    "Herr" ∷ (if decide (err ≠ ∅) then True else
+      ∃ startLink currLink vrf,
+      "#Hown_startLink" ∷ SignedLink.own ptr_startLink startLink (□) ∗
+      "#Hown_currLink" ∷ SignedLink.own ptr_currLink currLink (□) ∗
+      "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
 
       "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
-        (* writing determ trans per epoch makes postcond easier to use
-        than one trans across all epochs. epochs are indep. *)
-        ([∗ list] idx ↦ proof ∈ proofs,
-          □ ∀ agreeγ adtrσ,
-          history.align_serv adtrσ agreeγ γ -∗
-          ⌜length adtrσ.(state.digs) - 1 = (uint.Z prevEpoch + idx)%Z⌝ -∗
-          ⌜agreeγ.(cfg.serv_sig_pk) = γ.(cfg.sig_pk)⌝ -∗
-
-          ∃ ep dig link,
-          let adtrσ' := set state.digs (.++ [dig]) adtrσ in
-          "#Hwish_getNextLink" ∷ wish_getNextLink agreeγ adtrσ
-            proof ep dig link ∗
-          "#Halign_next" ∷ history.align_serv adtrσ' agreeγ γ) end)
+        let agreeγ := γ.(cfg.agreeγ) in
+        "#Hwish_startLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) startEp startLink ∗
+        "#Hwish_currLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) epoch currLink ∗
+        "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗
+        "%Heq_vrf" ∷ ⌜vrf.(SignedVrf.VrfPk) = agreeγ.(ktcore.Agree.vrf_pk)⌝ ∗
+        "%Heq_startEp" ∷ ⌜uint.nat startEp = (agreeγ.(ktcore.Agree.digs_start) + agreeγ.(ktcore.Agree.func_start))%nat⌝ end)
   }}}.
 Proof.
   wp_start as "@". wp_auto.
   wp_apply wp_alloc as "* Ha".
-  wp_apply (AuditArg.wp_enc (AuditArg.mk' _) with "[$Ha]") as "* (Hsl_b&_&_&%Hwish)".
+  wp_apply (GetArg.wp_enc (GetArg.mk' _) with "[$Ha]") as "* (Hsl_b&_&_&%Hwish)".
   { iDestruct own_slice_nil as "$".
     iDestruct own_slice_cap_nil as "$". }
   simpl in *.
   wp_apply wp_alloc as "* Hreply".
-  wp_apply (wp_Audit_cli_call (Q_read_idx (uint.nat prevEpoch))
+  wp_apply (wp_Get_cli_call (λ _ _, True%I)
     with "[$Hsl_b $Hreply]") as "* @".
   { iFrame "#".
-    rewrite /server.is_rpc_cli.
-    case_match; try done.
-    iNamed "His_args".
-    by iApply op_read_idx. }
+    rewrite /is_rpc_cli.
+    case_match; [|done].
+    by iApply op_read. }
   wp_if_destruct.
   { rewrite ktcore.rw_BlameUnknown.
     iApply "HΦ".
@@ -224,9 +150,9 @@ Proof.
     iPureIntro. apply ktcore.blame_unknown. }
   iNamed "Herr_net".
   iPersist "Hsl_reply".
-  wp_apply (AuditReply.wp_dec with "[$Hsl_reply]") as "* Hgenie".
+  wp_apply (GetReply.wp_dec with "[$Hsl_reply]") as "* Hgenie".
   wp_if_destruct.
-  { rewrite ktcore.rw_BlameServFull.
+  { rewrite ktcore.rw_BlameAdtrFull.
     iApply "HΦ".
     iSplit; [|by case_decide].
     iApply ktcore.blame_one.
@@ -239,72 +165,25 @@ Proof.
   destruct obj. iNamed "Hreply".
   wp_auto. simpl.
   wp_if_destruct.
-  { rewrite ktcore.rw_BlameServFull.
+  { rewrite ktcore.rw_BlameUnknown.
     iApply "HΦ".
-    iSplit; try done.
-    iApply ktcore.blame_one.
-    iIntros (?).
-    case_match; try done.
-    iNamed "Hgood".
-    opose proof (AuditReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
-    simplify_eq/=.
-    iDestruct "Hgood" as "[@|@]".
-    - iApply "Hgenie". naive_solver.
-    - opose proof (AuditArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
-      simplify_eq/=.
-      iDestruct "HQ" as "[#Hnew_digs %]".
-      iDestruct "Herr" as %?.
-      lia. }
+    iSplit; [|by case_decide].
+    iPureIntro. apply ktcore.blame_unknown. }
 
   rewrite /ktcore.BlameNone ktcore.rw_BlameNone.
   iApply "HΦ".
-  iSplit.
-  { iPureIntro. apply ktcore.blame_none. }
+  iSplitR. { iPureIntro. apply ktcore.blame_none. }
   case_decide; try done.
   iFrame "#".
   case_match; try done.
   iNamed "Hgood".
-  opose proof (AuditReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+  opose proof (GetReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
   simplify_eq/=.
   iDestruct "Hgood" as "[@|@]"; try done.
-  opose proof (AuditArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
+  opose proof (GetArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
   simplify_eq/=.
-  iDestruct "HQ" as "[#Hnew_digs %]".
-  iNamed "Herr".
-
-  iClear "His_args".
-  iApply big_sepL_intro.
-  iModIntro. iIntros (?? Hlook_proofs) "!> * @ % %Heq_sig_pk".
-  rewrite /wish_getNextLink /history.align_serv.
-  destruct adtrσ, σ. simplify_eq/=.
-  iDestruct (big_sepL_lookup with "His_upds") as "{His_upds} @"; [done|].
-  iDestruct (big_sepL_lookup with "His_sigs") as "{His_sigs} @"; [done|].
-  apply lookup_lt_Some in Hlook_proofs.
-  iDestruct (mono_list_lb_valid with "Hnew_digs His_digs") as %[[? Hpref]|[new_digs ?]].
-  { apply (f_equal length) in Hpref.
-    autorewrite with len in *. word. }
-  simplify_eq/=.
-  autorewrite with len in *.
-  iDestruct (mono_list_lb_own_le (digs ++ [dig1]) with "Hnew_digs")
-    as "{Hnew_digs His_digs} Hlb".
-  { apply prefix_snoc.
-    { by apply prefix_app_r. }
-    rewrite -Hlook1. f_equal. word. }
-
-  rewrite Heq_sig_pk.
-  iFrame "#".
-  repeat iSplit; try done; try iPureIntro.
-  - word.
-  - rewrite lookup_app_l in Hlook0; [|word].
-    replace (_ + _)%nat with (pred $ length digs) in Hlook0 by word.
-    rewrite -last_lookup in Hlook0.
-    rewrite Hlook0.
-    naive_solver.
-  - exact_eq His_link; [|done|word].
-    erewrite take_S_r.
-    2: { by erewrite <-Hlook1. }
-    rewrite take_app_length'; [done|].
-    len.
+  iNamed "Herr_adtr_args".
+  by iFrame "#%".
 Qed.
 
 End proof.

@@ -347,6 +347,7 @@ Qed.
 End proof.
 End client.
 
+(* TODO: maybe this should be under client namespace. *)
 Module server.
 Import serde.server server.server client.
 
