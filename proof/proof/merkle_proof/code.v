@@ -16,7 +16,11 @@ Import base.merkle serde.merkle theory.merkle.
 Section defs.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
-Collection W := sem.
+(* [package_sem] is needed because [Proof.wish_det] (used in
+[wish_proofToTree_det]) is generalized over [merkle.Assumptions], even though
+it does not depend on it semantically. *)
+Context {package_sem : merkle.Assumptions}.
+Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Fixpoint own_tree ptr t d : iProp Σ :=
@@ -204,6 +208,7 @@ Proof.
   destruct oleaf0 as [[]|]; try done.
   iNamedSuffix "Holeaf1" "1".
   by simplify_eq/=.
+  Unshelve. all: assumption.
 Qed.
 
 (* invariants on proofToTree tree that allow subsequent puts.
