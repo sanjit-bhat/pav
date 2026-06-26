@@ -46,8 +46,9 @@ Proof.
   wp_auto.
   wp_apply cryptoffi.wp_NewHasher as "* @".
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_b]") as "@".
-  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr]") as "* @".
-  { iApply own_slice_nil. }
+  iDestruct (own_slice_nil (V:=w8) (DfracOwn 1)) as "Hnil".
+  iDestruct (own_slice_cap_nil (V:=w8)) as "Hnil_cap".
+  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr $Hnil $Hnil_cap]") as "* @".
   iApply "HΦ".
   list_simplifier.
   iFrame "∗%".

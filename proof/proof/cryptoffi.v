@@ -3,6 +3,13 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 From New.proof.crypto Require Import ed25519.
 From New.proof.github_com.sanjit_bhat.pav.cryptoffi Require Import ffi.
+From Coq.Logic Require Import ClassicalEpsilon.
+
+(* note: [crypto_ffi] (the trusted, proven low-level hash FFI spec) is already
+in scope transitively via [prelude] -> [crypto_prelude], so we reference its
+names qualified ([crypto_ffi.total_hash_fn], [crypto_ffi.wp_Hash], etc.) rather
+than [Import]ing it here, which would re-activate its module-level settings and
+perturb downstream tactic behaviour. *)
 
 Module cryptoffi.
 
@@ -12,34 +19,43 @@ Proof. done. Qed.
 #[global] Hint Rewrite hash_len_unfold : word.
 #[global] Opaque hash_len.
 
-Section init.
-Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : cryptoffi.Assumptions}.
-Collection W := sem + package_sem.
-#[local] Set Default Proof Using "W".
-
-#[global] Instance : IsPkgInit (iProp Σ) cryptoffi := define_is_pkg_init True%I.
-#[global] Instance : GetIsPkgInitWf (iProp Σ) cryptoffi := build_get_is_pkg_init_wf.
-
-Lemma wp_initialize' get_is_pkg_init :
-  get_is_pkg_init_prop cryptoffi get_is_pkg_init →
-  {{{ own_initializing get_is_pkg_init }}}
-    cryptoffi.initialize' #()
-  {{{ RET #(); own_initializing get_is_pkg_init ∗ is_pkg_init cryptoffi }}}.
-Proof. Admitted.
-End init.
-
 Section hash_defs.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
 Collection W := sem.
 #[local] Set Default Proof Using "W".
 
-Definition hash_fn (data : list w8) : option $ list w8.
-Proof. Admitted.
+(* [total_hash_fn] is the idealized, real-world hash function provided by the
+trusted crypto FFI ([crypto_ffi]). It is a function on byte lists; the relevant
+facts about it ([total_hash_fn] is injective on its inputs and produces
+length-[hash_len] outputs) are carried as part of [is_pkg_init cryptoffi] (see
+[is_hash_props] below), since the trusted [crypto_ffi] model does not expose
+them as pure facts. *)
+Local Notation H := (crypto_ffi.total_hash_fn (cryptoGS := crypto_ffi.goose_cryptoGS)).
 
-Definition hash_inv_fn (hash : list w8) : option $ list w8.
-Proof. Admitted.
+(* [hash_good data] holds when [data] is "well-hashed": its hash has the right
+length and [data] is the unique pre-image of its hash. On this set
+[total_hash_fn] is a length-[hash_len] injection, which is exactly what's needed
+to turn it into a partial bijection. *)
+Definition hash_good (data : list w8) : Prop :=
+  Z.of_nat (length (H data)) = hash_len ∧
+  (∀ data', H data' = H data → data' = data).
+
+(* [hash_good] is decidable using classical logic (already a dependency of the
+development), which lets us define [hash_fn]/[hash_inv_fn] as plain functions. *)
+Local Instance hash_good_dec data : Decision (hash_good data) :=
+  excluded_middle_informative _.
+
+Definition hash_fn (data : list w8) : option $ list w8 :=
+  if decide (hash_good data) then Some (H data) else None.
+
+(* [hash_inv_fn] is the partial inverse: pick (classically) some [data] with
+[hash_fn data = Some hash]; by injectivity it is unique. *)
+Definition hash_inv_fn (hash : list w8) : option $ list w8 :=
+  match excluded_middle_informative (∃ data, hash_fn data = Some hash) with
+  | left pf => Some (proj1_sig (constructive_indefinite_description _ pf))
+  | right _ => None
+  end.
 
 (* [hash_fn] and [hash_inv_fn] are partial bijections.
 in particular, we make the forward fn ([hash_fn]) partial
@@ -48,17 +64,38 @@ so that it exhibits an inverse. *)
 Lemma hash_bij_l data hash :
   hash_fn data = Some hash →
   hash_inv_fn hash = Some data.
-Proof. Admitted.
+Proof.
+  intros Hfn. rewrite /hash_inv_fn.
+  destruct excluded_middle_informative as [pf|n].
+  2: { exfalso. apply n. by eexists. }
+  destruct constructive_indefinite_description as [data' Hfn']. simpl.
+  f_equal.
+  (* both [data] and [data'] hash to [hash], and both are well-hashed, so they
+  are equal by injectivity. *)
+  move: Hfn Hfn'. rewrite /hash_fn.
+  destruct (decide (hash_good data)) as [Hg|]; [|done].
+  destruct (decide (hash_good data')) as [Hg'|]; [|done].
+  intros [= <-] [= Heq].
+  destruct Hg as [_ Hinj]. by apply Hinj.
+Qed.
 
 Lemma hash_bij_r data hash :
   hash_inv_fn hash = Some data →
   hash_fn data = Some hash.
-Proof. Admitted.
+Proof.
+  rewrite /hash_inv_fn.
+  destruct excluded_middle_informative as [pf|]; [|done].
+  destruct constructive_indefinite_description as [data' Hfn']. simpl.
+  intros [= <-]. done.
+Qed.
 
 Lemma is_hash_len data hash :
   hash_fn data = Some hash →
   Z.of_nat $ length hash = hash_len.
-Proof. Admitted.
+Proof.
+  rewrite /hash_fn. destruct (decide (hash_good data)) as [[Hlen _]|]; [|done].
+  intros [= <-]. done.
+Qed.
 
 Lemma is_hash_len' data hash :
   hash_inv_fn hash = Some data →
@@ -69,10 +106,45 @@ Proof.
   by apply is_hash_len in Hhash.
 Qed.
 
-Definition own_Hasher (ptr : loc) (b : list w8) : iProp Σ.
-Proof. Admitted.
+Definition own_Hasher (ptr : loc) (b : list w8) : iProp Σ :=
+  ∃ sl_b,
+  "Hstruct" ∷ ptr ↦ (cryptoffi.Hasher.mk sl_b) ∗
+  "Hsl_b" ∷ sl_b ↦* b ∗
+  "Hsl_b_cap" ∷ own_slice_cap w8 sl_b (DfracOwn 1).
+
+(* [is_hash_props] is the persistent resource carried by [is_pkg_init cryptoffi].
+It packages (1) the trusted crypto-FFI prophecy invariant [is_hash_proph_inv]
+(needed to run [wp_Hash]), together with the [HashContext] it's about, and
+(2) the trusted idealization that [total_hash_fn] is a length-[hash_len]
+injection (i.e. every input is [hash_good]). These are the facts the trusted
+[crypto_ffi] model does not expose purely; they are established by the trusted
+[wp_initialize']. *)
+Definition is_hash_props : iProp Σ :=
+  ∃ hash_ctx : crypto_ffi.HashContext,
+  "#Hproph_inv" ∷ crypto_ffi.is_hash_proph_inv ∗
+  "%Hgood" ∷ ⌜∀ data, hash_good data⌝.
+
+#[global] Instance is_hash_props_pers : Persistent is_hash_props.
+Proof. apply _. Qed.
 
 End hash_defs.
+
+Section init.
+Context `{!heapGS Σ}.
+Context {sem : go.Semantics} {package_sem : cryptoffi.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
+
+#[global] Instance : IsPkgInit (iProp Σ) cryptoffi := define_is_pkg_init is_hash_props.
+#[global] Instance : GetIsPkgInitWf (iProp Σ) cryptoffi := build_get_is_pkg_init_wf.
+
+Lemma wp_initialize' get_is_pkg_init :
+  get_is_pkg_init_prop cryptoffi get_is_pkg_init →
+  {{{ own_initializing get_is_pkg_init }}}
+    cryptoffi.initialize' #()
+  {{{ RET #(); own_initializing get_is_pkg_init ∗ is_pkg_init cryptoffi }}}.
+Proof. Admitted.
+End init.
 
 Section hash_wps.
 Context `{!heapGS Σ}.
@@ -87,7 +159,14 @@ Lemma wp_NewHasher :
     ptr_hr, RET #ptr_hr;
     "Hown_hr" ∷ own_Hasher ptr_hr []
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start.
+  wp_apply wp_alloc as "* Hstruct".
+  iApply "HΦ". rewrite /own_Hasher.
+  iFrame "Hstruct".
+  iDestruct (own_slice_nil (DfracOwn 1)) as "$".
+  by iDestruct own_slice_cap_nil as "$".
+Qed.
 
 Lemma wp_Hasher_Write hr data sl_b d0 b :
   {{{
@@ -101,13 +180,20 @@ Lemma wp_Hasher_Write hr data sl_b d0 b :
     "Hown_hr" ∷ own_Hasher hr (data ++ b) ∗
     "Hsl_b" ∷ sl_b ↦*{d0} b
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start. iNamed "Hpre". iNamedSuffix "Hown_hr" "_hr".
+  wp_auto.
+  wp_apply (wp_slice_append with "[$Hsl_b_hr $Hsl_b_cap_hr $Hsl_b]")
+    as "* (Hsl_b_hr & Hsl_b_cap_hr & Hsl_b)".
+  iApply "HΦ". rewrite /own_Hasher. iFrame.
+Qed.
 
 Lemma wp_Hasher_Sum sl_b_in hr data b_in :
   {{{
     is_pkg_init cryptoffi ∗
     "Hown_hr" ∷ own_Hasher hr data ∗
-    "Hsl_b_in" ∷ sl_b_in ↦* b_in
+    "Hsl_b_in" ∷ sl_b_in ↦* b_in ∗
+    "Hsl_b_in_cap" ∷ own_slice_cap w8 sl_b_in (DfracOwn 1)
   }}}
   hr @! (go.PointerType cryptoffi.Hasher) @! "Sum" #sl_b_in
   {{{
@@ -116,9 +202,40 @@ Lemma wp_Hasher_Sum sl_b_in hr data b_in :
     "Hsl_b_out" ∷ sl_b_out ↦* (b_in ++ hash) ∗
     "%His_hash" ∷ ⌜hash_fn data = Some hash⌝
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start. iNamed "Hpre". iNamedSuffix "Hown_hr" "_hr".
+  iDestruct (is_pkg_init_access with "[$]") as "Hprops".
+  rewrite /is_hash_props. iNamed "Hprops".
+  wp_auto.
+  (* the buffer slice -> string. *)
+  wp_apply (wp_bytes_to_string with "[$Hsl_b_hr]") as "Hsl_b_hr".
+  (* run the trusted hash FFI: [ExternalOp Hash], using the proph invariant. *)
+  wp_func_call. wp_call.
+  wp_apply (crypto_ffi.wp_Hash data with "Hproph_inv") as "%hash %Hcf".
+  (* hash string -> slice, then append onto the input slice. *)
+  wp_apply (wp_string_to_bytes) as "%sl_hash [Hsl_hash Hsl_hash_cap]".
+  wp_apply (wp_slice_append with "[$Hsl_b_in $Hsl_b_in_cap $Hsl_hash]")
+    as "* (Hsl_b_out & Hsl_b_out_cap & Hsl_hash)".
+  iApply ("HΦ" $! _ hash).
+  iSplitL "Hstruct_hr Hsl_b_hr Hsl_b_cap_hr".
+  { rewrite /own_Hasher. iFrame. }
+  iFrame "Hsl_b_out".
+  iPureIntro.
+  (* the trusted FFI gives [crypto_ffi.hash_fn data = Some hash], i.e. [data]
+  was actually hashed and [hash = total_hash_fn data]. With [hash_good data]
+  (from [is_pkg_init]) this gives the closed [hash_fn data = Some hash]. *)
+  rewrite /crypto_ffi.hash_fn in Hcf.
+  destruct (crypto_ffi.has_hash _ _) eqn:Hhh; [|done].
+  injection Hcf as <-.
+  rewrite /hash_fn. rewrite decide_True; [done|]. apply Hgood.
+Qed.
 
 End hash_wps.
+
+(* Seal [hash_fn]/[hash_inv_fn] so downstream proofs treat them as opaque,
+matching how they were used when these were [Admitted]. Their only interface is
+[hash_bij_l], [hash_bij_r], [is_hash_len], [is_hash_len']. *)
+#[global] Opaque hash_fn hash_inv_fn.
 
 Section vrf_defs.
 Context `{!heapGS Σ}.

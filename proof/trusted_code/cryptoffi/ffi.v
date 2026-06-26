@@ -7,8 +7,11 @@ Existing Instances crypto_op crypto_model.
 Section crypto.
   Context {go_gctx : GoGlobalContext}.
 
-  (** Type: func(uint64) Listener *)
+  (** Type: func(string) string.
+  [ExternalOp Hash] already performs the prophecy-resolve internally (see
+  [is_crypto_ffi_step] in [crypto_ffi/impl.v]), so no extra [Resolve] wrapper is
+  needed here; the proph id is the internal [crypto_hash_proph_id]. *)
   Definition TrustedHashⁱᵐᵖˡ : val :=
-    λ: "data", "". (* Resolve (ExternalOp Hash "data") xO. *)
+    λ: "data", ExternalOp Hash "data".
 
 End crypto.

@@ -346,8 +346,9 @@ Proof.
   { iFrame "#". }
   iNamedSuffix "H" "1".
   rewrite -wp_fupd.
-  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr1]") as "* @".
-  { iDestruct own_slice_nil as "$". }
+  iDestruct (own_slice_nil (V:=w8) (DfracOwn 1)) as "Hnil".
+  iDestruct (own_slice_cap_nil (V:=w8)) as "Hnil_cap".
+  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr1 $Hnil $Hnil_cap]") as "* @".
   iPersist "Hsl_b_out".
   iModIntro.
   simpl.

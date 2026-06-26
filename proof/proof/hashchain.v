@@ -323,8 +323,9 @@ Proof.
   iNamedSuffix 1 "0". wp_auto.
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr0 $Hsl_nextVal]").
   iNamedSuffix 1 "1". wp_auto.
-  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr1]").
-  { iApply own_slice_nil. }
+  iDestruct (own_slice_nil (V:=w8) (DfracOwn 1)) as "Hnil".
+  iDestruct (own_slice_cap_nil (V:=w8)) as "Hnil_cap".
+  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr1 $Hnil $Hnil_cap]").
   iIntros "*". iNamed 1.
   wp_auto.
   iApply "HΦ".

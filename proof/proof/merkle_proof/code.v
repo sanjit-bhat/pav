@@ -334,8 +334,9 @@ Proof.
   iClear "Hsl_b".
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_val]") as "@".
   iClear "Hsl_b".
-  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr]") as "* @".
-  { iDestruct own_slice_nil as "$". }
+  iDestruct (own_slice_nil (V:=w8) (DfracOwn 1)) as "Hnil".
+  iDestruct (own_slice_cap_nil (V:=w8)) as "Hnil_cap".
+  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr $Hnil $Hnil_cap]") as "* @".
 
   list_simplifier.
   iDestruct (own_slice_len with "Hsl_label") as %[-> ?].
@@ -368,8 +369,9 @@ Proof.
   iClear "Hsl_b".
   wp_apply (cryptoffi.wp_Hasher_Write with "[$Hown_hr $Hsl_child1]") as "@".
   iClear "Hsl_b".
-  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr]") as "* @".
-  { iDestruct own_slice_nil as "$". }
+  iDestruct (own_slice_nil (V:=w8) (DfracOwn 1)) as "Hnil".
+  iDestruct (own_slice_cap_nil (V:=w8)) as "Hnil_cap".
+  wp_apply (cryptoffi.wp_Hasher_Sum with "[$Hown_hr $Hnil $Hnil_cap]") as "* @".
   list_simplifier.
   iApply "HΦ". iFrame "∗#%".
 Qed.
