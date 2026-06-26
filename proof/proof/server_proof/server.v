@@ -814,6 +814,28 @@ Qed.
 
 (** update-side helper funcs. *)
 
+(** Trusted runtime-timer boundary.
+
+  [time.NewTimer] is an untranslated Go runtime primitive: in
+  [New/code/time.v] it is only a name with no [ⁱᵐᵖˡ] body, and
+  [New/proof/time.v] gives it no spec. We axiomatize a spec for it here,
+  in the project (NOT in [_opam]), as a trusted assumption -- exactly
+  analogous to the existing [wp_Now]/[wp_Until]/[wp_Time__Add] axioms in
+  the framework [time.v], and modelled on the proven [wp_After].
+
+  [NewTimer(d)] allocates a [*time.Timer] whose [C] field is a
+  receive-channel "bag" of [time.Time] values that may fire. We capture
+  exactly what [getWork] needs: a (read-only) pointer to the Timer struct,
+  plus an [is_chan_bag] over its [C] channel with the trivial predicate
+  (the time value carries no information here). *)
+Axiom wp_NewTimer : ∀ (d : time.Duration.t),
+  {{{ True }}}
+    @! time.NewTimer #d
+  {{{ (tmr : loc) (tv : time.Timer.t) γch, RET #tmr;
+    "#Htmr" ∷ tmr ↦□ tv ∗
+    "#Hchan" ∷ bag.is_chan_bag γch tv.(time.Timer.C') (λ (_ : time.Time.t), True)%I
+  }}}.
+
 Lemma wp_Server_getWork s γ obj :
   {{{
     is_pkg_init server ∗
@@ -827,9 +849,67 @@ Lemma wp_Server_getWork s γ obj :
 Proof.
   wp_start as "@".
   iDestruct (is_pkg_init_access with "[$]") as "@".
-  iNamed "Hown_serv_ro". wp_auto.
-  (* TODO: translate/prove [Timer] and [NewTimer], assuming [newTimer]. *)
-Admitted.
+  iNamed "Hown_serv_ro".
+  (* The [select] inside the loop receives from a channel bag, and
+  [bag_recv_au] consumes two later credits per receive. The loop body itself
+  has too few pure reduction steps to mint two credits each iteration, so we
+  instead carry a pair of later credits in the loop invariant: they are minted
+  from the abundant pure steps available before the loop and, on each [workQ]
+  receive, replenished from the pure steps of the append before looping again.
+  The timer branch only consumes them (it returns). *)
+  wp_auto_lc 2.
+  iAssert (£ 1 ∗ £ 1)%I with "[$]" as "Hlc".
+  wp_apply (wp_NewTimer with "[$]") as "* @".
+  (* loop invariant: [work_ptr] holds a mutable accumulated slice of work
+  pointers, each element satisfying [work.own]. We keep mutable ownership +
+  capacity so the [append] inside the loop typechecks; we persist the slice
+  into [work.own_sl] only when we return (the timer branch). *)
+  iAssert (∃ (sl_work : slice.t) (sl0_work : list loc) (work : list work.t'),
+    "work" ∷ work_ptr ↦ sl_work ∗
+    "Hlc" ∷ (£ 1 ∗ £ 1) ∗
+    "Hsl_work" ∷ sl_work ↦* sl0_work ∗
+    "Hcap_work" ∷ own_slice_cap loc sl_work (DfracOwn 1) ∗
+    "#Hown0_work" ∷ ([∗ list] ptr;wobj ∈ sl0_work;work,
+      work.own γ obj.(Server.secs) ptr wobj))%I
+    with "[work Hlc]" as "IH".
+  { iExists slice.nil, [], []. iFrame "work Hlc".
+    iDestruct (own_slice_nil (V:=loc)) as "$".
+    iDestruct (own_slice_cap_nil (V:=loc)) as "$".
+    by iApply big_sepL2_nil. }
+  wp_for "IH".
+  wp_apply chan.wp_select_blocking.
+  rewrite big_andL_cons. iSplit.
+  { (* timer fired: persist the slice and return the accumulated work. *)
+    iExists time.Time.t, _, _. repeat iExists _.
+    iSplitR; first done.
+    iDestruct (bag.is_bag_is_chan with "Hchan") as "$".
+    iApply (bag.bag_recv_au with "[$Hlc]").
+    { iFrame "#". }
+    iNext. iIntros (t) "_".
+    iPersist "Hsl_work".
+    wp_auto.
+    wp_for_post.
+    iApply "HΦ".
+    iExists sl0_work. iFrame "#". }
+  rewrite big_andL_cons. iSplit; [|by rewrite big_andL_nil].
+  { (* received work from workQ: append and continue. *)
+    iExists (loc : Type), _, _. repeat iExists _.
+    iSplitR; first done.
+    iDestruct (bag.is_bag_is_chan with "His_workQ") as "$".
+    iApply (bag.bag_recv_au with "[$Hlc]").
+    { iFrame "#". }
+    iNext. iIntros (w) "Hw". simpl subst.
+    iDestruct "Hw" as "(%wobj & #Hown_w)".
+    (* replenish the two later credits for the next iteration. *)
+    wp_auto_lc 2.
+    iAssert (£ 1 ∗ £ 1)%I with "[$]" as "Hlc".
+    wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Ht _]". wp_auto.
+    wp_apply (wp_slice_append with "[$Hsl_work $Hcap_work $Ht]")
+      as "%sl_new (Hsl_new & Hcap_new & _)".
+    iDestruct (big_sepL2_snoc with "[$Hown0_work $Hown_w]") as "#Hown0_new".
+    wp_for_post.
+    iFrame "∗ #". }
+Qed.
 
 Lemma wp_Server_doWork s γ obj sl_work work :
   {{{
