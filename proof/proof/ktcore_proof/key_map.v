@@ -149,21 +149,102 @@ Definition map_val_fn kt_pk rand map_val :=
 Definition map_val_inv_fn map_val :=
   rem0 ← cryptoffi.hash_inv_fn map_val;
   guard (length rem0 ≥ 8);;
+  guard (0 ≤ sint.Z (le_to_u64 (take 8 rem0)));;
   let pk_len := sint.nat (le_to_u64 (take 8 rem0)) in
   let rem1 := drop 8 rem0 in
   guard (length rem1 ≥ pk_len);;
   let pk := take pk_len rem1 in
   let rem2 := drop pk_len rem1 in
+  guard (length rem2 ≥ 8);;
+  guard (0 ≤ sint.Z (le_to_u64 (take 8 rem2)));;
   let rand_len := sint.nat (le_to_u64 (take 8 rem2)) in
   let rem3 := drop 8 rem2 in
-  guard (length rem3 ≥ rand_len);;
+  guard (length rem3 = rand_len);;
   let rand := take rand_len rem3 in
   Some (pk, rand).
 
 Lemma map_val_iff {kt_pk rand map_val} :
   map_val_fn kt_pk rand map_val ↔
   map_val_inv_fn map_val = Some (kt_pk, rand).
-Proof. Admitted.
+Proof.
+  rewrite /map_val_fn /map_val_inv_fn /CommitOpen.pure_enc /CommitOpen.valid
+    /safemarshal.Slice1D.pure_enc /safemarshal.Slice1D.valid
+    /safemarshal.w64.pure_enc /=.
+  pose proof (u64_le_length (W64 (length kt_pk))) as Hlen_pk.
+  pose proof (u64_le_length (W64 (length rand))) as Hlen_rand.
+  split.
+  - intros [Hhash%cryptoffi.hash_bij_l [HvVal HvRand]].
+    rewrite Hhash /=.
+    rewrite -!app_assoc.
+    (* take 8 of the encoding gives back the pk-length prefix *)
+    rewrite (take_app_length' _ _ 8); [|len..].
+    rewrite !u64_le_to_word.
+    replace (sint.nat (W64 (length kt_pk))) with (length kt_pk) by word.
+    rewrite (drop_app_length' _ _ 8); [|len..].
+    rewrite (take_app_length' kt_pk); [|done..].
+    rewrite (drop_app_length' kt_pk); [|done..].
+    rewrite (take_app_length' _ _ 8); [|len..].
+    rewrite !u64_le_to_word.
+    replace (sint.nat (W64 (length rand))) with (length rand) by word.
+    rewrite (drop_app_length' _ _ 8); [|len..].
+    rewrite take_ge; [|done..].
+    (* now discharge the guards *)
+    rewrite option_guard_True; [|len].
+    rewrite option_guard_True; [|word].
+    rewrite option_guard_True; [|len].
+    rewrite option_guard_True; [|len].
+    rewrite option_guard_True; [|word].
+    rewrite option_guard_True; [|done].
+    done.
+  - intros Hinv.
+    destruct (cryptoffi.hash_inv_fn map_val) as [rem0|] eqn:Hinvfn; [|done].
+    simpl in Hinv.
+    repeat case_guard; try done.
+    simplify_eq/=.
+    (* abbreviations *)
+    set (pk_len := sint.nat (le_to_u64 (take 8 rem0))) in *.
+    set (rem1 := drop 8 rem0) in *.
+    set (rem2 := drop pk_len rem1) in *.
+    set (rand_len := sint.nat (le_to_u64 (take 8 rem2))) in *.
+    set (rem3 := drop 8 rem2) in *.
+    (* hypotheses available (folded):
+       Hg0 : length rem0 ≥ 8
+       Hg1 : length rem1 ≥ pk_len
+       Hg2 : length rem2 ≥ 8
+       Hp0 : 0 ≤ sint.Z (le_to_u64 (take 8 rem0))
+       Hp2 : 0 ≤ sint.Z (le_to_u64 (take 8 rem2))
+       Hr3 : length rem3 = rand_len *)
+    assert (length rem3 = rand_len) as Hr3 by assumption.
+    assert (length rem1 ≥ pk_len) as Hg1 by assumption.
+    assert (length rem0 ≥ 8) as Hg0 by assumption.
+    assert (length rem2 ≥ 8) as Hg2 by assumption.
+    assert (length (take pk_len rem1) = pk_len) as Hlpk
+      by (rewrite length_take_le; [done|lia]).
+    assert (length (take rand_len rem3) = rand_len) as Hlrand
+      by (rewrite length_take_le; [done|lia]).
+    split_and!.
+    + (* reconstruct rem0 and apply hash_bij_r *)
+      rewrite -!app_assoc.
+      suffices Henc :
+        u64_le (W64 (length (take pk_len rem1))) ++ take pk_len rem1 ++
+        u64_le (W64 (length (take rand_len rem3))) ++ take rand_len rem3 = rem0.
+      { rewrite Henc. by apply cryptoffi.hash_bij_r. }
+      rewrite Hlpk Hlrand.
+      (* rebuild the two length prefixes *)
+      replace (W64 pk_len) with (le_to_u64 (take 8 rem0)) by (subst pk_len; word).
+      rewrite le_to_u64_le; [|rewrite length_take; lia].
+      replace (W64 rand_len) with (le_to_u64 (take 8 rem2)) by (subst rand_len; word).
+      rewrite le_to_u64_le; [|rewrite length_take; lia].
+      (* peel rand: take rand_len rem3 = rem3 *)
+      rewrite (take_ge rem3 rand_len); [|lia].
+      (* unfold the let-bound remainders to drop-expressions, then collapse *)
+      try subst rem3. try subst rem2. try subst rem1.
+      by rewrite !take_drop.
+    + (* validity of Val *)
+      rewrite Hlpk. subst pk_len. word.
+    + (* validity of Rand *)
+      rewrite Hlrand. subst rand_len. word.
+Qed.
 
 Lemma map_val_det {kt_pk rand map_val0 map_val1} :
   map_val_fn kt_pk rand map_val0 →
