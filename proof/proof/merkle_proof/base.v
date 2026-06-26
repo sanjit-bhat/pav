@@ -2,6 +2,7 @@ From New.generatedproof.github_com.sanjit_bhat.pav Require Import merkle.
 From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 From New.proof Require Import bytes.
+From New.proof.encoding Require Import binary.
 From New.proof.github_com.goose_lang Require Import primitive std.
 From New.proof.github_com.sanjit_bhat.pav Require Import cryptoffi cryptoutil safemarshal.
 From New.proof.github_com.tchajed Require Import marshal.
@@ -46,7 +47,31 @@ Lemma wp_initialize' get_is_pkg_init :
   {{{ own_initializing get_is_pkg_init }}}
     merkle.initialize' #()
   {{{ RET #(); own_initializing get_is_pkg_init ∗ is_pkg_init merkle }}}.
-Proof. Admitted.
+Proof.
+  intros Hinit. wp_start as "Hown".
+  wp_apply (wp_package_init with "[$Hown] HΦ").
+  { destruct Hinit as (-> & ?); done. }
+  iIntros "Hown". wp_auto.
+  wp_apply wp_GlobalAlloc as "Hglobal".
+  wp_apply (safemarshal.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
+  wp_apply (marshal.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
+  wp_apply (cryptoutil.wp_initialize' with "[$Hown]") as "(Hown & #Hcu)"; first naive_solver.
+  wp_apply (cryptoffi.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
+  wp_apply (std.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
+  wp_apply (binary.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
+  wp_apply (bytes.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
+  wp_func_call. wp_call.
+  wp_apply wp_slice_literal. iSplitR; first done. iIntros "* [Hsl_b _]". wp_auto.
+  wp_apply (cryptoutil.wp_Hash with "[$Hsl_b]").
+  iIntros "* @".
+  iPersist "Hsl_hash".
+  repeat wp_pure.
+  wp_store.
+  iPersist "Hglobal".
+  wp_auto.
+  iFrame. iEval (rewrite is_pkg_init_unfold /=). iFrame "#".
+  iFrame "%".
+Qed.
 
 End proof.
 End merkle.
