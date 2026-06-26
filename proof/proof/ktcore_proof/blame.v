@@ -15,11 +15,22 @@ Inductive BlameTys :=
   | BlameClients
   | BlameUnknown.
 
-Axiom BlameTys_EqDecision : EqDecision BlameTys.
-Global Existing Instance BlameTys_EqDecision.
+Global Instance BlameTys_EqDecision : EqDecision BlameTys.
+Proof. solve_decision. Defined.
 
-Axiom BlameTys_Countable : Countable BlameTys.
-Global Existing Instance BlameTys_Countable.
+Global Instance BlameTys_Countable : Countable BlameTys.
+Proof.
+  apply (inj_countable'
+    (λ b, match b with
+          | BlameServSig => 0 | BlameServFull => 1 | BlameAdtrSig => 2
+          | BlameAdtrFull => 3 | BlameClients => 4 | BlameUnknown => 5
+          end%nat)
+    (λ n, match n with
+          | 0 => BlameServSig | 1 => BlameServFull | 2 => BlameAdtrSig
+          | 3 => BlameAdtrFull | 4 => BlameClients | _ => BlameUnknown
+          end%nat)).
+  by intros [].
+Defined.
 
 Definition Blame := gset BlameTys.
 
@@ -186,9 +197,8 @@ Proof.
   all: try (intros x; solve_proper).
   all: try (intros ??????; apply word_or_comm_acc).
   all: try set_solver.
-  rewrite !set_fold_singleton.
-  apply (inj uint.Z). rewrite !word.unsigned_or_nowrap.
-  vm_compute. reflexivity.
+  all: rewrite ?set_fold_singleton.
+  all: apply (inj uint.Z); rewrite ?word.unsigned_or_nowrap; vm_compute; reflexivity.
 Qed.
 
 Lemma blame_none interp : BlameSpec ∅ interp.
