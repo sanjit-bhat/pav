@@ -672,15 +672,148 @@ Lemma wp_dec sl_b d b :
       ⌜wish b obj tail⌝
     end
   }}}.
-(* BLOCKED: GetReply's last field [Err : bool] is decoded via [safemarshal.ReadBool]
-   (= marshal.ReadBool), whose spec returns [bool_decide (uint.Z bit ≠ 0)] for ANY
-   first byte [bit]. The success case must produce [wish b obj tail], i.e.
-   [b = ... ++ bool.pure_enc obj.(Err) ++ tail] with [bool.pure_enc Err = [if Err then W8 1 else W8 0]].
-   But a non-canonical byte (e.g. 2) decodes to Err=true while pure_enc true = [1], so the
-   round-trip wish is FALSE — the wish-based spec is unprovable, exactly like the (now respec'd)
-   standalone [safemarshal.bool.wp_dec]. Needs a respec (state the actual decoder guarantee,
-   like bool.wp_dec) rather than [wish]. wp_enc / wish_det are fine and proven. *)
-Proof. Admitted.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  destruct b as [|b0 brest].
+  - (* empty input *)
+    wp_apply (safemarshal.w64.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1". destruct err1.
+    + wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iExFalso. iPureIntro.
+      rewrite /pure_enc /safemarshal.w64.pure_enc in Henc.
+      apply (f_equal length) in Henc. rewrite !length_app u64_le_length /= in Henc. lia.
+    + iDestruct "Hpost1" as (rem1) "[Hb1 %Hw64a]".
+      rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc in Hw64a.
+      iExFalso. iPureIntro. apply (f_equal length) in Hw64a.
+      rewrite /= length_app u64_le_length in Hw64a. lia.
+  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
+    wp_apply (safemarshal.w64.wp_dec with "[$Hsl_b]").
+    iIntros (a1 b1 err1) "Hpost1". destruct err1.
+    + (* StartEp read failed *)
+      wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+      destruct Hwish as [Henc _]. iApply "Hpost1".
+      iExists obj.(StartEp), _. iPureIntro.
+      rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc.
+      rewrite /pure_enc /safemarshal.w64.pure_enc in Henc.
+      rewrite -?app_assoc in Henc. rewrite -?app_assoc. exact Henc.
+    + iDestruct "Hpost1" as (rem1) "[Hb1 %Hw64a]".
+      wp_auto.
+      wp_apply (SignedLink.wp_dec with "[$Hb1]").
+      iIntros (a2 b2 err2) "Hpost2". destruct err2.
+      * (* StartLink read failed *)
+        wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+        destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+        destruct Hvalid as [HvSL [HvCL HvVrf]]. iApply "Hpost2".
+        assert (safemarshal.w64.wish (b0 :: brest) obj.(StartEp)
+                  (SignedLink.pure_enc obj.(StartLink) ++ SignedLink.pure_enc obj.(CurrLink)
+                   ++ SignedVrf.pure_enc obj.(Vrf) ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hw0.
+        { rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc.
+          rewrite /pure_enc /safemarshal.w64.pure_enc in Henc.
+          rewrite -?app_assoc in Henc. rewrite -?app_assoc. exact Henc. }
+        destruct (safemarshal.w64.wish_det _ _ _ _ Hw64a Hw0) as [_ Hrem1].
+        iExists obj.(StartLink),
+          (SignedLink.pure_enc obj.(CurrLink) ++ SignedVrf.pure_enc obj.(Vrf)
+           ++ safemarshal.bool.pure_enc obj.(Err) ++ tail).
+        iPureIntro. rewrite /SignedLink.wish. split; [|exact HvSL].
+        rewrite Hrem1 -?app_assoc //.
+      * iDestruct "Hpost2" as (slo0 rem2) "(Ha2 & Hb2 & %Hsl2)".
+        wp_auto.
+        wp_apply (SignedLink.wp_dec with "[$Hb2]").
+        iIntros (a3 b3 err3) "Hpost3". destruct err3.
+        -- (* CurrLink read failed *)
+           wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+           destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+           destruct Hvalid as [HvSL [HvCL HvVrf]]. iApply "Hpost3".
+           assert (safemarshal.w64.wish (b0 :: brest) obj.(StartEp)
+                     (SignedLink.pure_enc obj.(StartLink) ++ SignedLink.pure_enc obj.(CurrLink)
+                      ++ SignedVrf.pure_enc obj.(Vrf) ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hw0.
+           { rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc.
+             rewrite /pure_enc /safemarshal.w64.pure_enc in Henc.
+             rewrite -?app_assoc in Henc. rewrite -?app_assoc. exact Henc. }
+           destruct (safemarshal.w64.wish_det _ _ _ _ Hw64a Hw0) as [_ Hrem1].
+           assert (SignedLink.wish rem1 obj.(StartLink)
+                     (SignedLink.pure_enc obj.(CurrLink) ++ SignedVrf.pure_enc obj.(Vrf)
+                      ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hs0.
+           { rewrite /SignedLink.wish. split; [|exact HvSL]. rewrite Hrem1 -?app_assoc //. }
+           destruct (SignedLink.wish_det _ _ _ _ Hsl2 Hs0) as [_ Hrem2].
+           iExists obj.(CurrLink),
+             (SignedVrf.pure_enc obj.(Vrf) ++ safemarshal.bool.pure_enc obj.(Err) ++ tail).
+           iPureIntro. rewrite /SignedLink.wish. split; [|exact HvCL].
+           rewrite Hrem2 -?app_assoc //.
+        -- iDestruct "Hpost3" as (slo1 rem3) "(Ha3 & Hb3 & %Hsl3)".
+           wp_auto.
+           wp_apply (SignedVrf.wp_dec with "[$Hb3]").
+           iIntros (a4 b4 err4) "Hpost4". destruct err4.
+           ++ (* Vrf read failed *)
+              wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+              destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+              destruct Hvalid as [HvSL [HvCL HvVrf]]. iApply "Hpost4".
+              assert (safemarshal.w64.wish (b0 :: brest) obj.(StartEp)
+                        (SignedLink.pure_enc obj.(StartLink) ++ SignedLink.pure_enc obj.(CurrLink)
+                         ++ SignedVrf.pure_enc obj.(Vrf) ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hw0.
+              { rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc.
+                rewrite /pure_enc /safemarshal.w64.pure_enc in Henc.
+                rewrite -?app_assoc in Henc. rewrite -?app_assoc. exact Henc. }
+              destruct (safemarshal.w64.wish_det _ _ _ _ Hw64a Hw0) as [_ Hrem1].
+              assert (SignedLink.wish rem1 obj.(StartLink)
+                        (SignedLink.pure_enc obj.(CurrLink) ++ SignedVrf.pure_enc obj.(Vrf)
+                         ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hs0.
+              { rewrite /SignedLink.wish. split; [|exact HvSL]. rewrite Hrem1 -?app_assoc //. }
+              destruct (SignedLink.wish_det _ _ _ _ Hsl2 Hs0) as [_ Hrem2].
+              assert (SignedLink.wish rem2 obj.(CurrLink)
+                        (SignedVrf.pure_enc obj.(Vrf) ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hs1.
+              { rewrite /SignedLink.wish. split; [|exact HvCL]. rewrite Hrem2 -?app_assoc //. }
+              destruct (SignedLink.wish_det _ _ _ _ Hsl3 Hs1) as [_ Hrem3].
+              iExists obj.(Vrf), (safemarshal.bool.pure_enc obj.(Err) ++ tail).
+              iPureIntro. rewrite /SignedVrf.wish. split; [|exact HvVrf].
+              rewrite Hrem3 -?app_assoc //.
+           ++ iDestruct "Hpost4" as (svo rem4) "(Ha4 & Hb4 & %Hsl4)".
+              wp_auto.
+              wp_apply (safemarshal.bool.wp_dec with "[$Hb4]").
+              iIntros (a5 b5 err5) "Hpost5". destruct err5.
+              ** (* Err read failed *)
+                 wp_auto. iApply "HΦ". iIntros "Hex". iDestruct "Hex" as (obj tail) "%Hwish".
+                 destruct Hwish as [Henc Hvalid]. rewrite /valid in Hvalid.
+                 destruct Hvalid as [HvSL [HvCL HvVrf]]. iApply "Hpost5".
+                 assert (safemarshal.w64.wish (b0 :: brest) obj.(StartEp)
+                           (SignedLink.pure_enc obj.(StartLink) ++ SignedLink.pure_enc obj.(CurrLink)
+                            ++ SignedVrf.pure_enc obj.(Vrf) ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hw0.
+                 { rewrite /safemarshal.w64.wish /safemarshal.w64.pure_enc.
+                   rewrite /pure_enc /safemarshal.w64.pure_enc in Henc.
+                   rewrite -?app_assoc in Henc. rewrite -?app_assoc. exact Henc. }
+                 destruct (safemarshal.w64.wish_det _ _ _ _ Hw64a Hw0) as [_ Hrem1].
+                 assert (SignedLink.wish rem1 obj.(StartLink)
+                           (SignedLink.pure_enc obj.(CurrLink) ++ SignedVrf.pure_enc obj.(Vrf)
+                            ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hs0.
+                 { rewrite /SignedLink.wish. split; [|exact HvSL]. rewrite Hrem1 -?app_assoc //. }
+                 destruct (SignedLink.wish_det _ _ _ _ Hsl2 Hs0) as [_ Hrem2].
+                 assert (SignedLink.wish rem2 obj.(CurrLink)
+                           (SignedVrf.pure_enc obj.(Vrf) ++ safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hs1.
+                 { rewrite /SignedLink.wish. split; [|exact HvCL]. rewrite Hrem2 -?app_assoc //. }
+                 destruct (SignedLink.wish_det _ _ _ _ Hsl3 Hs1) as [_ Hrem3].
+                 assert (SignedVrf.wish rem3 obj.(Vrf)
+                           (safemarshal.bool.pure_enc obj.(Err) ++ tail)) as Hvf0.
+                 { rewrite /SignedVrf.wish. split; [|exact HvVrf]. rewrite Hrem3 -?app_assoc //. }
+                 destruct (SignedVrf.wish_det _ _ _ _ Hsl4 Hvf0) as [_ Hrem4].
+                 iExists obj.(Err), tail.
+                 iPureIntro. rewrite /safemarshal.bool.wish. rewrite Hrem4 -?app_assoc //.
+              ** (* success *)
+                 iDestruct "Hpost5" as (rem5) "(Hb5 & %Hb5w)".
+                 destruct Hsl2 as [Hsl2eq HvSL0]. destruct Hsl3 as [Hsl3eq HvCL0].
+                 destruct Hsl4 as [Hsl4eq HvVrf0].
+                 rewrite /safemarshal.w64.wish in Hw64a.
+                 rewrite /safemarshal.bool.wish in Hb5w.
+                 wp_auto.
+                 wp_alloc l as "Hptr".
+                 iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
+                 wp_auto.
+                 iApply "HΦ". iExists (GetReply.mk' a1 slo0 slo1 svo a5), rem5.
+                 iFrame "Hb5". iSplitL "Hptr Ha2 Ha3 Ha4".
+                 { iExists a2, a3, a4. iFrame "Hptr Ha2 Ha3 Ha4". }
+                 iPureIntro. rewrite /wish /pure_enc /valid. split.
+                 --- rewrite Hw64a Hsl2eq Hsl3eq Hsl4eq Hb5w -?app_assoc //.
+                 --- split; [exact HvSL0|split; [exact HvCL0|exact HvVrf0]].
+Qed.
 
 End proof.
 End GetReply.
