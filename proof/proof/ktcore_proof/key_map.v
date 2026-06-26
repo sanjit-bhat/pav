@@ -236,6 +236,15 @@ Lemma pks_in_hidden_from_0 {vrf_pk hidden uid pks} :
   pks_in_hidden vrf_pk hidden uid pks.
 Proof. naive_solver. Qed.
 
+Lemma pks_in_hidden_from_singleton {vrf_pk hidden uid from pk} :
+  pks_in_hidden_from vrf_pk hidden uid from [pk] →
+  in_hidden vrf_pk hidden uid from (Some pk).
+Proof.
+  rewrite /pks_in_hidden_from. intros H.
+  ospecialize (H 0%nat _ _); [done|].
+  by ereplace (from + 0)%nat with from in H by lia.
+Qed.
+
 (** out->in reasoning for [plain_inv_fn]. *)
 
 Local Lemma dec_map_labels_out_lookup {vrf_pk m_prev m_next dec val} :

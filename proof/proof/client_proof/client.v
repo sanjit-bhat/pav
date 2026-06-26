@@ -319,6 +319,8 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
         (merkle.inv_fn last_dig) uid (uint.nat prevVerLen) pks⌝ ∗
       "%HnonMemb" ∷ ⌜ktcore.in_hidden agreeγ.(ktcore.Agree.vrf_pk)
         (merkle.inv_fn last_dig) uid (uint.nat prevVerLen + length pks) None⌝ ∗
+      "%Hnoof_vers" ∷ ⌜let num_vers := (uint.nat prevVerLen + length pks)%nat in
+        num_vers = uint.nat (W64 num_vers)⌝ ∗
 
       "#Hperm_pks" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
         if decide (length pks = 0%nat) then True else
@@ -327,7 +329,7 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
           "#Hidx_pks" ∷ ([∗ list] off ↦ pk ∈ pks,
             ∃ i,
             let ver := (uint.nat prevVerLen + off)%nat in
-            mono_list_idx_own uidγ i (ver, pk)) end)
+            "#Hidx_pk" ∷ mono_list_idx_own uidγ i (ver, pk)) end)
   }}}.
 Proof.
   simpl. wp_start as "@". wp_auto.
@@ -501,6 +503,7 @@ Proof.
   iFrame "#%".
   iSplitR. { by iNamed "His_next". }
   iSplitR. { iPureIntro. exact_eq Hnone_hidden0. len. }
+  iSplitR; [len|].
   rewrite /server.is_rpc_cli.
   destruct (server.Trust.get_full _) eqn:Ht; try done.
   erewrite server.Trust.full_to_sigpred; [|done].
@@ -697,7 +700,7 @@ Proof.
     case_decide; [word|].
     iNamed "Hperm_pks".
     list_elem pks 0%nat as pk.
-    iDestruct (big_sepL_lookup with "Hidx_pks") as (?) "#Hidx_pk"; [done|].
+    iDestruct (big_sepL_lookup with "Hidx_pks") as "@"; [done|].
     simplify_eq/=.
     by iDestruct (mono_list_auth_idx_lookup with "Hown_uid Hidx_pk") as %?. }
   iClear "Hperm_pks".
@@ -966,7 +969,7 @@ Lemma wp_checkPend ptr_pend pend_pk obj sl_pks sl0_pks pks :
     "Herr" ∷
       match err with
       | true =>
-        "%Hconflict" ∷ ⌜(1 < length pks)%nat ∨ ∃ pk, pks = [pk] ∧ pend_pk ≠ Some pk⌝
+        "%Herr" ∷ ⌜(1 < length pks)%nat ∨ ∃ pk, pks = [pk] ∧ pend_pk ≠ Some pk⌝
       | false =>
         match isChanged with
         | false => "%Heq_pks" ∷ ⌜pks = []⌝
@@ -994,9 +997,10 @@ Proof.
   2: {
     iApply "HΦ". iFrame "∗#%".
     iPureIntro. naive_solver. }
-  list_elem sl0_pks 0%nat as sl_pk.
-  assert ([pk] !! 0%nat = Some pk) by done.
-  iDestruct (big_sepL2_lookup with "Hsl0_pks") as "@"; [done..|].
+  assert (∃ x, sl0_pks = [x]) as (sl_pk&->).
+  { destruct sl0_pks; simpl in *; [word|].
+    destruct sl0_pks; simpl in *; [naive_solver|word]. }
+  simpl. iNamed "Hsl0_pks". iClear "Hsl0_pks".
   case_decide as Ht; [|word]. clear Ht.
   wp_apply (wp_load_slice_index with "[$Hsl_pks]") as "_"; [word|done|].
   wp_apply bytes.wp_Equal as "_".
@@ -1053,6 +1057,7 @@ Proof.
   iNamed "Hclient". iNamed "Hown_nextVer". wp_auto.
   rewrite /own. iNamed "Hown_gs".
   iNamed "His_nextVer".
+  rename digs0 into keys_digs.
   iDestruct (mono_list_auth_lb_valid with "Hown_digs Hlb_ver_digs") as %[_ Hpref].
   wp_apply (wp_Client_getHistory with "[$Hstr_client]") as "* @".
   { iFrame "#".
@@ -1061,9 +1066,9 @@ Proof.
     clear Ht.
     iNamed "Halign_lastEp". iNamed "Halign_serv_sigpred". iNamed "Halign_serv_full".
     rewrite Heq_serv_func_start drop_0 in Hmono_plain.
-    eapply ktcore.staged_next_ver in Hstaged as (last_dig&Hlast_dig&Hnum_vers).
-    2: {
-      rewrite Heq_vrf_pk.
+    apply ktcore.staged_extract in Hstaged as (last_dig&_&Hlast_dig&_&_&Ht).
+    opose proof (Ht _) as Hnum_vers.
+    { rewrite Heq_vrf_pk.
       unfold ktcore.mono_plain in *.
       rewrite !fmap_drop.
       apply list_reln_drop.
@@ -1086,7 +1091,110 @@ Proof.
   case_decide as Ht; try done. clear Ht.
   iNamed "Herr".
   iNamed "Hown_nextEp". wp_auto.
-Admitted.
+  rewrite Heq_ver in Hmembs HnonMemb |-*.
+  wp_apply (wp_checkPend with "[$Hstr_ver]") as "* @".
+  { iFrame "#%". }
+  iClear "HpendPk".
+  wp_if_destruct; iNamed "Herr".
+  { rewrite ktcore.rw_BlameServClients.
+    iApply "HΦ".
+    iSplit.
+    2: {
+      destruct (decide (_ ≠ ∅)); [|set_solver].
+      iFrame "∗ Hown_serv Hown_lastEp #%". }
+    iApply ktcore.blame_two.
+    iSplit; [done|].
+    iIntros ([? Hclis_good]).
+    destruct (server.Trust.get_full _); try done.
+    iNamed "Halign_nextVer".
+    simplify_eq/=. rewrite Hclis_good.
+    iNamed "HgoodCli".
+    destruct Herr as [?|(pk&->&?)].
+    - destruct (decide (_ = 0%nat)) as [Ht|Ht]; [word|]. clear Ht.
+      iNamed "Hperm_pks".
+      simplify_eq/=.
+      list_elem pks 1%nat as pk.
+      iDestruct (big_sepL_lookup with "Hidx_pks") as "@"; [done|].
+      iDestruct (mono_list_auth_idx_lookup with "Hputs Hidx_pk") as %Hlook.
+      apply list_elem_of_lookup_2 in Hlook.
+      eapply Hbound in Hlook. word.
+    - simpl in *.
+      iNamed "Hperm_pks". iDestruct "Hidx_pks" as "[H _]". iNamed "H".
+      simplify_eq/=.
+      iDestruct (mono_list_auth_idx_lookup with "Hputs Hidx_pk") as %Hlook.
+      apply list_elem_of_lookup_2 in Hlook.
+      ereplace (?[x] + 0)%nat with ?x in Hlook by lia.
+      by eapply Heq_pend in Hlook. }
+  iClear "Hperm_pks".
+
+  iMod (mono_list_auth_own_update_app new_digs with "Hown_digs") as "[Hown_digs #Hlb_digs]".
+  wp_if_destruct; iNamed "Herr"; simplify_eq/=.
+  2: {
+    iApply "HΦ".
+    iSplitR. { iPureIntro. apply ktcore.blame_none. }
+    case_decide as Ht; try done. clear Ht.
+    pose proof Hstaged as Ht.
+    apply ktcore.staged_extract in Ht as (last_dig'&old_key&Hlast_dig'&Hold_key&?&_).
+    destruct Hpref as [rem_digs ->].
+    list_simplifier.
+    ereplace (?[x] + 0)%nat with ?x in HnonMemb by lia.
+    eapply (ktcore.staged_grow_last _ _ (rem_digs ++ new_digs) last_dig) in Hstaged;
+      cycle 1; [|done..|].
+    { rewrite -Hlast_dig !(assoc _) !last_app.
+      repeat case_match; try done.
+      rewrite Hlast_dig'.
+      by apply last_drop_Some'' in Hlast_dig'. }
+    iFrame "∗ Hown_serv #%". simpl.
+    iNamed "His_nextEp".
+    opose proof (last_length_Some _ _).
+    { eexists. exact Hlast_dig'. }
+    autorewrite with len in *.
+    rewrite drop_app_le; [|word].
+    iFrame "%".
+    word. }
+
+  iNamed "Hown_nextVer". rewrite Heq_pend. iNamed "HpendPk". wp_auto.
+  iApply "HΦ".
+  iSplitR. { iPureIntro. apply ktcore.blame_none. }
+  case_decide as Ht; try done. clear Ht.
+  pose proof Hstaged as Ht.
+  apply ktcore.staged_extract in Ht as (last_dig'&old_key&Hlast_dig'&Hold_key&?&_).
+  destruct Hpref as [rem_digs ->].
+  list_simplifier.
+  ereplace (?[x] + 1)%nat with (S ?x) in HnonMemb by lia.
+  eapply ktcore.pks_in_hidden_from_singleton in Hmembs.
+  eapply (ktcore.staged_grow_new _ _ (rem_digs ++ new_digs) last_dig)
+    in Hstaged as (num_old&num_new&?&Hstaged);
+    cycle 1; [|done..|].
+  { rewrite -Hlast_dig !(assoc _) !last_app.
+    repeat case_match; try done.
+    rewrite Hlast_dig'.
+    by apply last_drop_Some'' in Hlast_dig'. }
+  iFrame "∗ Hown_serv #%". simpl in *.
+  iNamed "His_nextEp".
+  opose proof (last_length_Some _ _).
+  { eexists. exact Hlast_dig'. }
+  autorewrite with len in *.
+  rewrite drop_app_le; [|word].
+  set (ver.mk' (S nextVer.(ver.ver))) as nextVer'.
+  replace (S _) with (nextVer'.(ver.ver)) in Hstaged; [|done].
+  iFrame "%".
+  iExists (length rem_digs + length new_digs)%nat.
+  repeat iSplit; try done.
+  - word.
+  - word.
+  - simpl. word.
+  - destruct (server.Trust.get_full _); try done.
+    iNamed "Halign_nextVer".
+    iFrame "%".
+    destruct (γ.(cfg.clis_good)); try done.
+    iNamed "HgoodCli".
+    iFrame. simpl.
+    iPureIntro. split.
+    + intros. etrans. { by eapply Hbound. } lia.
+    + intros * Helem. eapply Hbound in Helem. lia.
+  - word.
+Qed.
 
 End proof.
 End client.

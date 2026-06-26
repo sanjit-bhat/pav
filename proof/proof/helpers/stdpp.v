@@ -210,6 +210,11 @@ Proof.
   len. rewrite drop_app_length'; [done|lia].
 Qed.
 
+Lemma last_drop_Some'' {A} (l : list A) x n :
+  last (drop n l) = Some x →
+  last l = Some x.
+Proof. intros H. rewrite -(take_drop n l) last_app H //. Qed.
+
 Lemma lookup_drop_Some {A} n (l : list A) i x :
   l !! i = Some x →
   n ≤ i →
