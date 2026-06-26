@@ -43,24 +43,29 @@ Definition ReadBoolⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
     let: "rem" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "data" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "b" := (GoAlloc (go.SliceType go.byte) "b") in
-    let: "$r0" := (![go.SliceType go.byte] "b") in
-    do:  ("rem" <-[go.SliceType go.byte] "$r0");;;
-    (if: Convert go.untyped_bool go.bool ((let: "$a0" := (![go.SliceType go.byte] "rem") in
-    (FuncResolve go.len [go.SliceType go.byte] #()) "$a0") <⟨go.int⟩ #(W64 1))
+    let: "x" := (GoAlloc go.byte (GoZeroVal go.byte #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b") in
+    (FuncResolve ReadByte [] #()) "$a0") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    do:  ("x" <-[go.byte] "$r0");;;
+    do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err"
+    then return: (![go.bool] "data", ![go.SliceType go.byte] "rem", ![go.bool] "err")
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] "x") >⟨go.byte⟩ #(W8 1))
     then
       let: "$r0" := #true in
       do:  ("err" <-[go.bool] "$r0");;;
       return: (![go.bool] "data", ![go.SliceType go.byte] "rem", ![go.bool] "err")
     else do:  #());;;
-    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
-    (FuncResolve marshal.ReadBool [] #()) "$a0") in
-    let: "$r0" := "$ret0" in
-    let: "$r1" := "$ret1" in
+    let: "$r0" := ((![go.byte] "x") =⟨go.byte⟩ #(W8 1)) in
     do:  ("data" <-[go.bool] "$r0");;;
-    do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
     return: (![go.bool] "data", ![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:19:6 *)
+(* go: safemarshal.go:22:6 *)
 Definition ReadConstBoolⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "cst",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -89,7 +94,7 @@ Definition ReadConstBoolⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     else do:  #());;;
     return: (![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:32:6 *)
+(* go: safemarshal.go:35:6 *)
 Definition ReadIntⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -113,7 +118,7 @@ Definition ReadIntⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
     do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
     return: (![go.uint64] "data", ![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:42:6 *)
+(* go: safemarshal.go:45:6 *)
 Definition ReadConstIntⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "cst",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -142,7 +147,7 @@ Definition ReadConstIntⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     else do:  #());;;
     return: (![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:55:6 *)
+(* go: safemarshal.go:58:6 *)
 Definition ReadByteⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -170,7 +175,7 @@ Definition ReadByteⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
     do:  ("data" <-[go.byte] "$r0");;;
     return: (![go.byte] "data", ![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:66:6 *)
+(* go: safemarshal.go:69:6 *)
 Definition ReadConstByteⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "cst",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -199,7 +204,7 @@ Definition ReadConstByteⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     else do:  #());;;
     return: (![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:79:6 *)
+(* go: safemarshal.go:82:6 *)
 Definition WriteByteⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "data",
     exception_do (let: "data" := (GoAlloc go.byte "data") in
@@ -209,7 +214,7 @@ Definition WriteByteⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
      CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$v0")])) in
      (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1")).
 
-(* go: safemarshal.go:83:6 *)
+(* go: safemarshal.go:86:6 *)
 Definition ReadBytesⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "length",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -235,7 +240,7 @@ Definition ReadBytesⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
     do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
     return: (![go.SliceType go.byte] "data", ![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:93:6 *)
+(* go: safemarshal.go:96:6 *)
 Definition ReadSlice1Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -261,7 +266,7 @@ Definition ReadSlice1Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     (FuncResolve ReadBytes [] #()) "$a0" "$a1")) in
     return: ("$ret0", "$ret1", "$ret2")).
 
-(* go: safemarshal.go:102:6 *)
+(* go: safemarshal.go:105:6 *)
 Definition WriteSlice1Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "data",
     exception_do (let: "data" := (GoAlloc (go.SliceType go.byte) "data") in
@@ -275,7 +280,7 @@ Definition WriteSlice1Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
      let: "$a1" := (![go.SliceType go.byte] "data") in
      (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1")).
 
-(* go: safemarshal.go:107:6 *)
+(* go: safemarshal.go:110:6 *)
 Definition ReadSlice2Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -319,7 +324,7 @@ Definition ReadSlice2Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
       do:  ("data" <-[go.SliceType (go.SliceType go.byte)] "$r0")));;;
     return: (![go.SliceType (go.SliceType go.byte)] "data", ![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:124:6 *)
+(* go: safemarshal.go:127:6 *)
 Definition WriteSlice2Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "data",
     exception_do (let: "data" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "data") in
@@ -340,7 +345,7 @@ Definition WriteSlice2Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
       do:  ("b" <-[go.SliceType go.byte] "$r0")));;;
     return: (![go.SliceType go.byte] "b")).
 
-(* go: safemarshal.go:132:6 *)
+(* go: safemarshal.go:135:6 *)
 Definition ReadSlice3Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -384,7 +389,7 @@ Definition ReadSlice3Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
       do:  ("data" <-[go.SliceType (go.SliceType (go.SliceType go.byte))] "$r0")));;;
     return: (![go.SliceType (go.SliceType (go.SliceType go.byte))] "data", ![go.SliceType go.byte] "rem", ![go.bool] "err")).
 
-(* go: safemarshal.go:149:6 *)
+(* go: safemarshal.go:152:6 *)
 Definition WriteSlice3Dⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "data",
     exception_do (let: "data" := (GoAlloc (go.SliceType (go.SliceType (go.SliceType go.byte))) "data") in

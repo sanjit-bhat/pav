@@ -7,12 +7,15 @@ import (
 // TODO: pre-size byte slices for encoding functions.
 
 func ReadBool(b []byte) (data bool, rem []byte, err bool) {
-	rem = b
-	if len(rem) < 1 {
+	x, rem, err := ReadByte(b)
+	if err {
+		return
+	}
+	if x > 1 {
 		err = true
 		return
 	}
-	data, rem = marshal.ReadBool(rem)
+	data = x == 1
 	return
 }
 

@@ -32,89 +32,6 @@ Qed.
 
 End proof.
 
-Module bool.
-
-Definition pure_enc (obj : bool) :=
-  [if obj then W8 1 else W8 0].
-
-Definition wish b obj tail :=
-  b = pure_enc obj ++ tail.
-
-Lemma wish_det tail0 tail1 obj0 obj1 {b} :
-  wish b obj0 tail0 →
-  wish b obj1 tail1 →
-  obj0 = obj1 ∧ tail0 = tail1.
-Proof.
-  rewrite /wish /pure_enc. intros -> Heq.
-  destruct obj0, obj1; simplify_eq/=; try done; word.
-Qed.
-
-Section proof.
-Context `{hG: heapGS Σ, !ffi_semantics _ _}.
-Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
-Collection W := sem + package_sem.
-#[local] Set Default Proof Using "W".
-
-Lemma wp_enc obj sl_b b :
-  {{{
-    is_pkg_init marshal ∗
-    "Hsl_b" ∷ sl_b ↦* b ∗
-    "Hcap_b" ∷ own_slice_cap w8 sl_b 1
-  }}}
-  @! marshal.WriteBool #sl_b #obj
-  {{{
-    sl_b', RET #sl_b';
-    let b' := b ++ pure_enc obj in
-    sl_b' ↦* b' ∗
-    own_slice_cap w8 sl_b' 1
-  }}}.
-Proof.
-  iIntros (Φ) "(Hinit & Hsl_b & Hcap_b) HΦ".
-  wp_apply (marshal.wp_WriteBool with "[$Hinit $Hsl_b $Hcap_b]").
-  iIntros (sl_b') "[Hsl' Hcap']".
-  iApply "HΦ". rewrite /pure_enc. iFrame.
-Qed.
-
-(* RESPEC (2026-06-23): the original statement was over [safemarshal.ReadByte]
-   (which returns a w8), so its [obj : bool] could never match the returned byte
-   — unprovable as written. It now reads [safemarshal.ReadBool]. Note the decoder
-   maps any non-zero byte to [true] (marshal.ReadBool = [bool_decide (bit ≠ 0)]),
-   so the round-trip [wish b obj tail] (= [b = pure_enc obj ++ tail]) is FALSE for
-   non-canonical bytes (e.g. byte 2 decodes to true but pure_enc true = [1]); the
-   success case therefore states exactly what the decoder guarantees. *)
-Lemma wp_dec sl_b d b :
-  {{{
-    is_pkg_init safemarshal ∗
-    "Hsl_b" ∷ sl_b ↦*{d} b
-  }}}
-  @! safemarshal.ReadBool #sl_b
-  {{{
-    obj sl_tail err, RET (#obj, #sl_tail, #err);
-    match err with
-    | true => ¬ ∃ obj' tail', ⌜wish b obj' tail'⌝
-    | false =>
-      ∃ first tail,
-      sl_tail ↦*{d} tail ∗
-      ⌜b = first :: tail ∧ obj = bool_decide (uint.Z first ≠ 0)⌝
-    end
-  }}}.
-Proof.
-  wp_start as "Hsl_b". wp_auto.
-  iDestruct (own_slice_len with "Hsl_b") as %[Hlen ?].
-  wp_if_destruct.
-  - iApply "HΦ". iPureIntro.
-    intros (obj' & tail' & Heq). rewrite /wish /pure_enc in Heq.
-    apply (f_equal length) in Heq. rewrite length_app /= in Heq. word.
-  - destruct b as [|bit btail].
-    { simpl in Hlen. word. }
-    wp_apply (marshal.wp_ReadBool with "[$Hsl_b]").
-    iIntros (obj0 s') "[%Hobj Hs']". wp_auto.
-    iApply "HΦ". iExists bit, btail. iFrame "Hs'". iPureIntro. split; [done|exact Hobj].
-Qed.
-
-End proof.
-End bool.
-
 Module w8.
 
 Definition pure_enc (obj : w8) :=
@@ -204,6 +121,91 @@ Qed.
 
 End proof.
 End w8.
+
+Module bool.
+
+Definition pure_enc (obj : bool) :=
+  [if obj then W8 1 else W8 0].
+
+Definition wish b obj tail :=
+  b = pure_enc obj ++ tail.
+
+Lemma wish_det tail0 tail1 obj0 obj1 {b} :
+  wish b obj0 tail0 →
+  wish b obj1 tail1 →
+  obj0 = obj1 ∧ tail0 = tail1.
+Proof.
+  rewrite /wish /pure_enc. intros -> Heq.
+  destruct obj0, obj1; simplify_eq/=; try done; word.
+Qed.
+
+Section proof.
+Context `{hG: heapGS Σ, !ffi_semantics _ _}.
+Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
+
+Lemma wp_enc obj sl_b b :
+  {{{
+    is_pkg_init marshal ∗
+    "Hsl_b" ∷ sl_b ↦* b ∗
+    "Hcap_b" ∷ own_slice_cap w8 sl_b 1
+  }}}
+  @! marshal.WriteBool #sl_b #obj
+  {{{
+    sl_b', RET #sl_b';
+    let b' := b ++ pure_enc obj in
+    sl_b' ↦* b' ∗
+    own_slice_cap w8 sl_b' 1
+  }}}.
+Proof.
+  iIntros (Φ) "(Hinit & Hsl_b & Hcap_b) HΦ".
+  wp_apply (marshal.wp_WriteBool with "[$Hinit $Hsl_b $Hcap_b]").
+  iIntros (sl_b') "[Hsl' Hcap']".
+  iApply "HΦ". rewrite /pure_enc. iFrame.
+Qed.
+
+Lemma wp_dec sl_b d b :
+  {{{
+    is_pkg_init safemarshal ∗
+    "Hsl_b" ∷ sl_b ↦*{d} b
+  }}}
+  @! safemarshal.ReadBool #sl_b
+  {{{
+    obj sl_tail err, RET (#obj, #sl_tail, #err);
+    match err with
+    | true => ¬ ∃ obj' tail', ⌜wish b obj' tail'⌝
+    | false =>
+      ∃ tail,
+      sl_tail ↦*{d} tail ∗
+      ⌜wish b obj tail⌝
+    end
+  }}}.
+Proof.
+  wp_start as "Hsl_b". wp_auto.
+  wp_apply (w8.wp_dec with "[$Hsl_b]").
+  iIntros (x b1 err1) "Hpost". destruct err1.
+  - wp_auto. iDestruct "Hpost" as %Hpost.
+    iApply "HΦ". iPureIntro. intros (obj' & tail' & Hwish).
+    apply Hpost. exists (if obj' then W8 1 else W8 0), tail'.
+    rewrite /wish /pure_enc in Hwish. rewrite /w8.wish /w8.pure_enc. exact Hwish.
+  - iDestruct "Hpost" as (tail) "(Hb1 & %Hw8)".
+    wp_auto.
+    wp_if_destruct.
+    + rewrite /w8.wish /w8.pure_enc in Hw8.
+      iApply "HΦ". iPureIntro. intros (obj' & tail' & Hwish).
+      rewrite /wish /pure_enc Hw8 in Hwish.
+      destruct obj'; simplify_eq/=; word.
+    + rewrite /w8.wish /w8.pure_enc in Hw8.
+      iApply "HΦ". iExists tail. iFrame "Hb1". iPureIntro.
+      rewrite /wish /pure_enc Hw8.
+      case_bool_decide as Hx.
+      * subst x. done.
+      * assert (x = W8 0) as -> by word. done.
+Qed.
+
+End proof.
+End bool.
 
 Module w64.
 
