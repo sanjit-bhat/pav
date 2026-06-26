@@ -455,6 +455,21 @@ Proof.
   word.
 Qed.
 
+(* A non-empty byte slice owns at least one element heap-pointsto, from which
+   the dfrac's validity follows. (Empty slices own nothing, so this fails for
+   them — the root of the zero-sized-alloc issue.) *)
+Lemma own_slice_dfrac_valid (s : slice.t) (vs : list w8) dq :
+  0 < length vs →
+  s ↦*{dq} vs -∗ ⌜✓ dq⌝.
+Proof.
+  iIntros (Hlen) "Hsl".
+  destruct vs as [|v vs']; [simpl in Hlen; lia|].
+  iDestruct (own_slice_elem_acc 0 with "Hsl") as "[Helem _]"; [done|done|].
+  iEval (rewrite typed_pointsto_unseal_eq) in "Helem".
+  iDestruct "Helem" as "[Hdef _]".
+  iApply (heap_pointsto_valid with "Hdef").
+Qed.
+
 Lemma wp_Verify sl_prevLink d0 prevLink sl_proof d1 proof old_vs cut fuel :
   {{{
     is_pkg_init hashchain ∗
@@ -552,13 +567,12 @@ Proof.
   iDestruct (own_slice_slice (W64 32) (W64 32) with "Hsl_proof")
     as "(Hsl_newVal&_&Hsl_proof)"; [word|].
   wp_apply (wp_GetNextLink with "[$Hsl_newLink $Hsl_newVal]") as "* @"; [done|].
+  iAssert (⌜✓ d0⌝)%I as %Hvalid_d0.
+  { iDestruct (own_slice_dfrac_valid with "Hsl_prevLink") as %?; [|done].
+    destruct His_chain as [_ Hlen_link].
+    rewrite cryptoffi.hash_len_unfold in Hlen_link. word. }
   iMod (own_slice_update_to_dfrac d0 with "Hsl_nextLink") as "Hsl_nextLink".
-  { (* TODO: need to extract [✓ d0] from Hsl_prevLink.
-    one easy fix: prove validity OR empty list.
-    this seems like a "hack" that works for the goose v4 slice model.
-    but at its core, we're dealing with a zero-sized alloc problem,
-    and make({}struct, 10) is still zero-sized. *)
-    admit. }
+  { done. }
   iModIntro.
   wp_for_post.
   iFrame "newLink ∗".
@@ -584,7 +598,7 @@ Proof.
   - len.
   - rewrite last_snoc /=. f_equal; word.
   (* TODO: [word] in goose v4 seems to take much longer than in goose v3. *)
-Admitted.
+Qed.
 
 Lemma wp_HashChain_Prove c vs d (prevLen : w64) :
   {{{
