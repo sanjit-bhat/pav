@@ -23,7 +23,53 @@ Global Existing Instance BlameTys_Countable.
 
 Definition Blame := gset BlameTys.
 
-Definition blame_to_u64 (err : Blame) : w64. Admitted.
+Definition party_bit (p : BlameTys) : w64 :=
+  match p with
+  | BlameServSig => W64 1
+  | BlameServFull => W64 2
+  | BlameAdtrSig => W64 4
+  | BlameAdtrFull => W64 8
+  | BlameClients => W64 16
+  | BlameUnknown => W64 32
+  end.
+
+Definition blame_to_u64 (err : Blame) : w64 :=
+  set_fold (λ p acc, word.or (party_bit p) acc) (W64 0) err.
+
+(* the fold function commutes in its accumulator, which is needed for the
+[set_fold] union/disj-union lemmas. *)
+Lemma word_or_comm_acc (a1 a2 b : w64) :
+  word.or a1 (word.or a2 b) = word.or a2 (word.or a1 b).
+Proof.
+  apply (inj uint.Z).
+  rewrite !word.unsigned_or_nowrap.
+  rewrite !Z.lor_assoc.
+  by rewrite (Z.lor_comm (uint.Z a1) (uint.Z a2)).
+Qed.
+
+Lemma blame_fold_comm (x1 x2 : BlameTys) (b : w64) :
+  word.or (party_bit x1) (word.or (party_bit x2) b) =
+  word.or (party_bit x2) (word.or (party_bit x1) b).
+Proof. apply word_or_comm_acc. Qed.
+
+(* OR-ing two words is zero iff both are zero. *)
+Lemma word_or_eq_zero (a b : w64) :
+  word.or a b = W64 0 ↔ a = W64 0 ∧ b = W64 0.
+Proof.
+  split.
+  2: { intros [-> ->]. apply (inj uint.Z). by rewrite word.unsigned_or_nowrap. }
+  intros Hor.
+  pose proof (word.unsigned_range a) as [??].
+  pose proof (word.unsigned_range b) as [??].
+  assert (uint.Z (word.or a b) = uint.Z (W64 0)) as Hu by by rewrite Hor.
+  rewrite word.unsigned_or_nowrap in Hu.
+  change (uint.Z (W64 0)) with 0 in Hu.
+  apply Z.lor_eq_0_iff in Hu as [Ha Hb].
+  split; apply (inj uint.Z); [rewrite Ha | rewrite Hb]; done.
+Qed.
+
+Lemma party_bit_ne_zero (p : BlameTys) : party_bit p ≠ W64 0.
+Proof. destruct p; done. Qed.
 
 (* [BlameSpec] formalizes the notion of blaming a set of parties who
 are responsible for a bad thing happening.
@@ -74,41 +120,76 @@ Collection W := sem + package_sem.
 
 Lemma rw_Blame0 err :
   blame_to_u64 err = W64 0 ↔ err = ∅.
-Proof. Admitted.
+Proof.
+  rewrite /blame_to_u64.
+  split.
+  - (* fold = 0 → err = ∅. by contradiction: a non-empty set has a party
+    whose bit is nonzero, and OR-ing only sets bits. *)
+    intros Hfold.
+    apply (set_fold_ind_L
+             (λ (acc : w64) (s : Blame),
+                acc = W64 0 → s = ∅)
+             (λ p acc, word.or (party_bit p) acc) (W64 0)); [done| |done].
+    intros p s acc Hp IH Hor.
+    apply word_or_eq_zero in Hor as [Hbit _].
+    by destruct (party_bit_ne_zero p).
+  - intros ->. apply set_fold_empty.
+Qed.
 
 Lemma rw_BlameNone :
   # (W64 0) = # (blame_to_u64 ∅).
-Proof. Admitted.
+Proof. rewrite /blame_to_u64 set_fold_empty. done. Qed.
 
 (* TODO: would be nice to re-use Blame defs from code file.
 rewriting on code.BlameServFull (#(W64 1)) doesn't work on #(W64 1) goal. *)
+(* [blame_to_u64] on a singleton reduces to that party's bit. *)
+Lemma blame_to_u64_singleton p :
+  blame_to_u64 {[ p ]} = party_bit p.
+Proof.
+  rewrite /blame_to_u64 set_fold_singleton.
+  apply (inj uint.Z). rewrite word.unsigned_or_nowrap.
+  destruct p; vm_compute; reflexivity.
+Qed.
+
 Lemma rw_BlameServSig :
   # (W64 1) = # (blame_to_u64 {[ BlameServSig ]}).
-Proof. Admitted.
+Proof. by rewrite blame_to_u64_singleton. Qed.
 
 Lemma rw_BlameServFull :
   # (W64 2) = # (blame_to_u64 {[ BlameServFull ]}).
-Proof. Admitted.
+Proof. by rewrite blame_to_u64_singleton. Qed.
 
 Lemma rw_BlameAdtrSig :
   # (W64 4) = # (blame_to_u64 {[ BlameAdtrSig ]}).
-Proof. Admitted.
+Proof. by rewrite blame_to_u64_singleton. Qed.
 
 Lemma rw_BlameAdtrFull :
   # (W64 8) = # (blame_to_u64 {[ BlameAdtrFull ]}).
-Proof. Admitted.
+Proof. by rewrite blame_to_u64_singleton. Qed.
 
 Lemma rw_BlameClients :
   # (W64 16) = # (blame_to_u64 {[ BlameClients ]}).
-Proof. Admitted.
+Proof. by rewrite blame_to_u64_singleton. Qed.
 
 Lemma rw_BlameUnknown :
   # (W64 32) = # (blame_to_u64 {[ BlameUnknown ]}).
-Proof. Admitted.
+Proof. by rewrite blame_to_u64_singleton. Qed.
 
 Lemma rw_BlameServClients :
   # (W64 18) = # (blame_to_u64 {[ BlameServFull; BlameClients ]}).
-Proof. Admitted.
+Proof.
+  enough (blame_to_u64 {[BlameServFull; BlameClients]} = W64 18) as -> by done.
+  rewrite /blame_to_u64.
+  rewrite (set_fold_disj_union_strong (=@{w64})
+             (λ p acc, word.or (party_bit p) acc) (W64 0)
+             {[BlameServFull]} {[BlameClients]}).
+  all: try (intros x; solve_proper).
+  all: try (intros ??????; apply word_or_comm_acc).
+  all: try set_solver.
+  rewrite !set_fold_singleton.
+  apply (inj uint.Z). rewrite !word.unsigned_or_nowrap.
+  vm_compute. reflexivity.
+Qed.
 
 Lemma blame_none interp : BlameSpec ∅ interp.
 Proof. rewrite /BlameSpec. naive_solver. Qed.
