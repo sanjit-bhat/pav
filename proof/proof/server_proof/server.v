@@ -34,6 +34,20 @@ Proof.
 Qed.
 End list.
 
+Section map.
+Context {PROP : bi} `{!BiAffine PROP} `{Countable K} {A B : Type}.
+
+Lemma fractional_big_sepM2 (m1 : gmap K A) (m2 : gmap K B)
+    (Φ : K → A → B → Qp → PROP) :
+  (∀ k x y, fractional.Fractional (λ q, Φ k x y q)) →
+  fractional.Fractional (λ q, [∗ map] k ↦ x;y ∈ m1;m2, Φ k x y q)%I.
+Proof.
+  intros HΦ q1 q2. rewrite -big_sepM2_sep.
+  apply big_sepM2_proper => ?????. apply HΦ.
+Qed.
+
+End map.
+
 Lemma list_reln_singleton {A} (a : A) R : list_reln [a] R.
 Proof. by intros ?**. Qed.
 
@@ -398,11 +412,69 @@ Definition own γ ptr obj : iProp Σ :=
 End proof.
 End secrets.
 
+Section ownmap.
+Context `{!heapGS Σ}.
+Context {sem : go.Semantics}.
+Context {K V : Type}.
+Context `[!ZeroVal K] `[!EqDecision K] `[!Countable K] `[!ZeroVal V]
+  `[IntoValInj0 : !go.IntoValInj K] `[IntoValInjV : !go.IntoValInj V].
+
+#[global] Instance own_map_dfrac mptr (m : gmap K V) :
+  DFractional (λ dq, own_map mptr dq m).
+Proof.
+  rewrite own_map_unseal /own_map_def. split.
+  - intros dp dq. iSplit.
+    + iIntros "(%mv & %mp & Hp & %His & %Hag & %Hdom & %Hdef)".
+      iDestruct "Hp" as "[Hp0 Hp1]".
+      iSplitL "Hp0"; iFrame "%∗".
+    + iIntros "[(%mv0 & %mp0 & Hp0 & %His0 & %Hag0 & %Hdom0 & %Hdef0)
+        (%mv1 & %mp1 & Hp1 & %His1 & %Hag1 & %Hdom1 & %Hdef1)]".
+      iCombine "Hp0 Hp1" gives %[_ ->].
+      iCombine "Hp0 Hp1" as "Hp".
+      iFrame "%∗".
+  - apply _.
+  - iIntros (dq) "(%mv & %mp & Hp & %His & %Hag & %Hdom & %Hdef)".
+    iPersist "Hp". iModIntro. iFrame "%#".
+Qed.
+
+#[global] Instance own_map_as_dfrac mptr (m : gmap K V) dq :
+  AsDFractional (own_map mptr dq m) (λ dq, own_map mptr dq m) dq.
+Proof. split; [done|apply _]. Qed.
+
+#[global] Instance own_map_combine_sep_gives mptr (m0 m1 : gmap K V) dq0 dq1 :
+  CombineSepGives (own_map mptr dq0 m0) (own_map mptr dq1 m1) (⌜m0 = m1⌝).
+Proof using IntoValInjV heapGS0 Σ.
+  rewrite /CombineSepGives own_map_unseal /own_map_def.
+  iIntros "[(%mv0 & %mp0 & Hp0 & %His0 & %Hag0 & %Hdom0 & %Hdef0)
+    (%mv1 & %mp1 & Hp1 & %His1 & %Hag1 & %Hdom1 & %Hdef1)]".
+  iCombine "Hp0 Hp1" gives %[_ ->].
+  iModIntro. iPureIntro.
+  apply map_eq => k.
+  opose proof (go.map_lookup_pure #k _ _ His0) as Hl0.
+  opose proof (go.map_lookup_pure #k _ _ His1) as Hl1.
+  specialize (Hag0 k). specialize (Hag1 k).
+  assert (mp0 #k = mp1 #k) as Heq by congruence.
+  rewrite Hag0 Hag1 in Heq.
+  destruct (m0 !! k) as [v0|], (m1 !! k) as [v1|]; simplify_eq/=; done.
+Qed.
+
+#[global] Instance own_map_combine_sep_as mptr (m0 m1 : gmap K V) dq0 dq1 :
+  CombineSepAs (own_map mptr dq0 m0) (own_map mptr dq1 m1)
+    (own_map mptr (dq0 ⋅ dq1) m0) | 60.
+Proof using IntoValInjV heapGS0 Σ.
+  rewrite /CombineSepAs.
+  iIntros "[H0 H1]".
+  iCombine "H0 H1" gives %->.
+  iCombine "H0 H1" as "$".
+Qed.
+
+End ownmap.
+
 Module keyStore.
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics}.
-Collection W := sem.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_plain ptr0_plain (plain : ktcore.plain_ty) q : iProp Σ :=
@@ -431,14 +503,64 @@ Definition own γ ptr secs dig q : iProp Σ :=
   "%Hbij_maps" ∷ ⌜ktcore.is_plain (vrf_pkγ γ) plain hidden⌝ ∗
   "%His_commit" ∷ ⌜is_commit secs.(secrets.commit) hidden⌝.
 
+#[global] Instance own_plain_frac ptr0_plain plain :
+  fractional.Fractional (λ q, own_plain ptr0_plain plain q).
+Proof.
+  rewrite /own_plain.
+  apply fractional_big_sepM2 => uid sl_pks pks q1 q2. iSplit.
+  - iIntros "(%sl0_pks & Hsl & Hcap & #Hsl0)".
+    iEval (rewrite -(dfrac_op_own q2 q1)) in "Hcap".
+    iDestruct "Hsl" as "[Hsl0' Hsl1']".
+    iDestruct "Hcap" as "[Hcap0 Hcap1]".
+    iSplitL "Hsl0' Hcap0"; iFrame "∗#".
+  - iIntros "[(%sl0_pks0 & Hsl0 & Hcap0 & #Hsl0a)
+      (%sl0_pks1 & Hsl1 & Hcap1 & #Hsl0b)]".
+    iCombine "Hsl0 Hsl1" gives %->.
+    iCombine "Hsl0 Hsl1" as "Hsl".
+    iCombine "Hcap0 Hcap1" as "Hcap".
+    rewrite -!dfrac_op_own.
+    iFrame "∗#".
+Qed.
+
+#[global] Instance own_plain_as_frac ptr0_plain plain q :
+  fractional.AsFractional (own_plain ptr0_plain plain q)
+    (λ q, own_plain ptr0_plain plain q) q.
+Proof. split; [done|apply _]. Qed.
+
+#[global] Instance own_frac γ ptr secs dig :
+  fractional.Fractional (λ q, own γ ptr secs dig q).
+Proof.
+  rewrite /own. intros q1 q2. iSplit.
+  - iIntros "@".
+    iEval (rewrite -(dfrac_op_own q2 q1)) in "Hown_hidden".
+    iEval (rewrite -(dfrac_op_own q2 q1)) in "Hptr_plain".
+    iDestruct "Hown_hidden" as "[Hh0 Hh1]".
+    iDestruct "Hptr_plain" as "[Hp0 Hp1]".
+    iDestruct "Hown_plain" as "[Hpl0 Hpl1]".
+    iSplitL "Hh0 Hp0 Hpl0"; iFrame "∗#%".
+  - iIntros "[H0 H1]".
+    iNamedSuffix "H0" "0". iNamedSuffix "H1" "1".
+    iCombine "Hstr_keyStore0 Hstr_keyStore1" gives %[= <- <-].
+    iCombine "Hown_hidden0 Hown_hidden1" as "Hown_hidden".
+    iCombine "Hptr_plain0 Hptr_plain1" gives %<-.
+    iCombine "Hptr_plain0 Hptr_plain1" as "Hptr_plain".
+    iCombine "Hown_plain0 Hown_plain1" as "Hown_plain".
+    rewrite -!dfrac_op_own.
+    iFrame "∗#%".
+Qed.
+
+#[global] Instance own_as_frac γ ptr secs dig q :
+  fractional.AsFractional (own γ ptr secs dig q) (λ q, own γ ptr secs dig q) q.
+Proof. split; [done|apply _]. Qed.
+
 End proof.
 End keyStore.
 
 Module history.
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics}.
-Collection W := sem.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition is_audits γ digs audits : iProp Σ :=
@@ -468,6 +590,39 @@ Definition own γ ptr digs q : iProp Σ :=
 
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
   "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (vrf_pkγ γ) vrfSig.
+
+#[global] Instance hashchain_own_as_dfrac ptr vs d :
+  AsDFractional (hashchain.own ptr vs d) (λ d, hashchain.own ptr vs d) d.
+Proof. split; [done|apply _]. Qed.
+
+#[global] Instance own_frac γ ptr digs :
+  fractional.Fractional (λ q, own γ ptr digs q).
+Proof.
+  rewrite /own. intros q1 q2. iSplit.
+  - iIntros "@".
+    iEval (rewrite -(dfrac_op_own q2 q1)) in "Hstr_history".
+    iEval (rewrite -(dfrac_op_own q2 q1)) in "Hown_chain".
+    iEval (rewrite -(dfrac_op_own q2 q1)) in "Hcap_audits".
+    iDestruct "Hstr_history" as "[Hs0 Hs1]".
+    iDestruct "Hown_chain" as "[Hc0 Hc1]".
+    iDestruct "Hsl_audits" as "[Ha0 Ha1]".
+    iDestruct "Hcap_audits" as "[Hcap0 Hcap1]".
+    iSplitL "Hs0 Hc0 Ha0 Hcap0"; iFrame "∗#%".
+  - iIntros "[H0 H1]".
+    iNamedSuffix "H0" "0". iNamedSuffix "H1" "1".
+    iCombine "Hstr_history0 Hstr_history1" gives %[= <- <- <-].
+    iCombine "Hstr_history0 Hstr_history1" as "Hstr_history".
+    iCombine "Hown_chain0 Hown_chain1" as "Hown_chain".
+    iCombine "Hsl_audits0 Hsl_audits1" gives %->.
+    iCombine "Hsl_audits0 Hsl_audits1" as "Hsl_audits".
+    iCombine "Hcap_audits0 Hcap_audits1" as "Hcap_audits".
+    rewrite -!dfrac_op_own.
+    iFrame "∗#%".
+Qed.
+
+#[global] Instance own_as_frac γ ptr digs q :
+  fractional.AsFractional (own γ ptr digs q) (λ q, own γ ptr digs q) q.
+Proof. split; [done|apply _]. Qed.
 
 Lemma is_audits_grow new_dig upd_proof sig link γ digs last_dig audits :
   let ep := length digs in
@@ -561,8 +716,8 @@ Record t' :=
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics}.
-Collection W := sem.
+Context {sem : go.Semantics} {package_sem : server.Assumptions}.
+Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_ro γ ptr obj : iProp Σ :=
@@ -589,7 +744,60 @@ Definition own γ ptr σ obj q : iProp Σ :=
   "%Heq_digs_info" ∷ ⌜γ.(cfg.sigγ).(sigpred.cfg.info) =
     sigpred.digs_info.mk 0 None 0⌝.
 
+#[global] Instance own_frac γ ptr σ obj :
+  fractional.Fractional (λ q, own γ ptr σ obj q).
+Proof.
+  rewrite /own. intros q1 q2. iSplit.
+  - iIntros "@".
+    iDestruct "Hown_keys" as "[Hk0 Hk1]".
+    iDestruct "Hown_hist" as "[Hh0 Hh1]".
+    iEval (rewrite Qp.div_add_distr) in "Hown_gs".
+    iDestruct (fractional.fractional_split _ (own_aux γ σ) (q1/2) (q2/2)
+      with "Hown_gs") as "[Hg0 Hg1]".
+    iSplitL "Hk0 Hh0 Hg0"; iFrame "∗#%".
+  - iIntros "[H0 H1]".
+    iDestruct "H0" as "(%ptr_keys0 & %ptr_hist0 & %last_dig0 & H0)".
+    iNamedSuffix "H0" "0".
+    iDestruct "H1" as "(%ptr_keys1 & %ptr_hist1 & %last_dig1 & H1)".
+    iNamedSuffix "H1" "1".
+    iCombine "Hfld_keys0 Hfld_keys1" gives %[= <-].
+    iCombine "Hfld_hist0 Hfld_hist1" gives %[= <-].
+    assert (last_dig0 = last_dig1) as <- by naive_solver.
+    iCombine "Hown_keys0 Hown_keys1" as "Hown_keys".
+    iCombine "Hown_hist0 Hown_hist1" as "Hown_hist".
+    iCombine "Hown_gs0 Hown_gs1" as "Hown_gs".
+    rewrite Qp.div_add_distr.
+    iFrame "∗#%".
+Qed.
+
+#[global] Instance own_as_frac γ ptr σ obj q :
+  fractional.AsFractional (own γ ptr σ obj q) (λ q, own γ ptr σ obj q) q.
+Proof. split; [done|apply _]. Qed.
+
+#[global] Instance own_combine_sep_gives γ ptr σ0 σ1 obj0 obj1 q0 q1 :
+  CombineSepGives (own γ ptr σ0 obj0 q0) (own γ ptr σ1 obj1 q1) (⌜σ0 = σ1⌝).
+Proof.
+  rewrite /CombineSepGives /own.
+  iIntros "[H0 H1]".
+  iNamedSuffix "H0" "0". iNamedSuffix "H1" "1".
+  iCombine "Hown_gs0 Hown_gs1" gives %->.
+  by iModIntro.
+Qed.
+
 Definition own_aux γ ptr obj q : iProp Σ := ∃ σ, own γ ptr σ obj q.
+
+#[global] Instance own_aux_frac γ ptr obj :
+  fractional.Fractional (λ q, own_aux γ ptr obj q).
+Proof.
+  rewrite /own_aux. intros q1 q2. iSplit.
+  - iIntros "(%σ & H)".
+    iDestruct "H" as "[H0 H1]".
+    iSplitL "H0"; iExists σ; iFrame.
+  - iIntros "[(%σ0 & H0) (%σ1 & H1)]".
+    iCombine "H0 H1" gives %->.
+    iCombine "H0 H1" as "H".
+    iExists σ1. iFrame.
+Qed.
 
 Definition lock_perm γ ptr obj : iProp Σ :=
   ∃ ptr_mu,
@@ -1568,7 +1776,6 @@ Proof.
   iAssert (is_inv γ)%I with "Ht" as "{Ht} #His_inv".
   iMod (init_RWMutex (Server.own_aux γ ptr_serv obj)
     with "[-HΦ Hptr_mu] Hptr_mu") as "Hlock_perms".
-  { admit. } (* TODO: Fractional *)
   { iExists σ. simplify_eq/=.
     iFrame "∗#". simpl.
     rewrite Hinv_merkle ktcore.plain_inv_empty.
@@ -1589,7 +1796,7 @@ Proof.
   wp_apply (wp_fork with "[Hlock_perm]").
   { by wp_apply (wp_Server_worker with "[$]"). }
   wp_end. simplify_eq/=. iFrame "∗#".
-Admitted.
+Qed.
 
 End proof.
 End server.
