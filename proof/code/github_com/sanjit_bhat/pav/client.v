@@ -251,6 +251,12 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
       do:  ("err" <-[ktcore.Blame] "$r0");;;
       return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
     else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.uint64] "startEp") >⟨go.uint64⟩ (![go.uint64] (StructFieldRef epoch "epoch"%go (![go.PointerType epoch] (StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c"))))))
+    then
+      let: "$r0" := ktcore.BlameAdtrFull in
+      do:  ("err" <-[ktcore.Blame] "$r0");;;
+      return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")
+    else do:  #());;;
     let: "vrfPkB" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "$r0" := (let: "$a0" := (![go.PointerType cryptoffi.VrfPublicKey] (StructFieldRef serv "vrfPk"%go (![go.PointerType serv] (StructFieldRef Client "serv"%go (![go.PointerType Client] "c"))))) in
     (FuncResolve cryptoffi.VrfPublicKeyEncode [] #()) "$a0") in
@@ -290,7 +296,7 @@ Definition Client__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  ("ep" <-[go.uint64] "$r0");;;
     return: (![go.uint64] "startEp", ![go.uint64] "ep", ![ktcore.Blame] "err", ![go.PointerType ktcore.Evid] "evid")).
 
-(* go: client.go:144:6 *)
+(* go: client.go:149:6 *)
 Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "uid" "servAddr" "servPk",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -401,7 +407,7 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     do:  ((StructFieldRef Client "lastEp"%go (![go.PointerType Client] "c")) <-[go.PointerType epoch] "$r0");;;
     return: (![go.PointerType Client] "c", ![go.uint64] "ep", ![ktcore.Blame] "err")).
 
-(* go: client.go:180:18 *)
+(* go: client.go:185:18 *)
 Definition Client__getHistoryⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "c" "uid" "prevVerLen",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -498,7 +504,7 @@ Definition Client__getHistoryⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalC
       do:  ("pks" <-[go.SliceType (go.SliceType go.byte)] "$r0")));;;
     return: (![go.PointerType epoch] "nextEp", ![go.SliceType (go.SliceType go.byte)] "pks", ![ktcore.Blame] "err")).
 
-(* go: client.go:210:6 *)
+(* go: client.go:215:6 *)
 Definition getNextEpⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "prev" "sigPk" "chainProof" "sig",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -558,7 +564,7 @@ Definition getNextEpⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
     do:  ("next" <-[go.PointerType epoch] "$r0");;;
     return: (![go.PointerType epoch] "next", ![go.bool] "err")).
 
-(* go: client.go:231:6 *)
+(* go: client.go:236:6 *)
 Definition checkMembsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "vrfPk" "uid" "prefixLen" "dig" "hist",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -585,7 +591,7 @@ Definition checkMembsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
       else do:  #()))));;;
     return: (![go.bool] "err")).
 
-(* go: client.go:240:6 *)
+(* go: client.go:245:6 *)
 Definition checkMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "vrfPk" "uid" "ver" "dig" "memb",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -634,7 +640,7 @@ Definition checkMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
     else do:  #());;;
     return: (![go.bool] "err")).
 
-(* go: client.go:257:6 *)
+(* go: client.go:262:6 *)
 Definition checkNonMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "vrfPk" "uid" "ver" "dig" "nonMemb",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -677,7 +683,7 @@ Definition checkNonMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     else do:  #());;;
     return: (![go.bool] "err")).
 
-(* go: client.go:273:6 *)
+(* go: client.go:278:6 *)
 Definition checkAuditLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "adtrPk" "ep" "link",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -701,7 +707,7 @@ Definition checkAuditLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     else do:  #());;;
     return: (![go.bool] "err")).
 
-(* go: client.go:283:6 *)
+(* go: client.go:288:6 *)
 Definition checkAuditVrfⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "adtrPk" "vrf",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in

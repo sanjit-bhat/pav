@@ -128,6 +128,18 @@ Proof.
   split; [set_solver|by simplify_map_eq/=].
 Qed.
 
+(* TODO: delete [blame_one]. do the same for [blame_two]. *)
+Lemma blame_one' party good interp :
+  interp !! party = Some good →
+  (¬ ⌜good = true⌝ : iProp Σ) -∗
+  ⌜BlameSpec {[ party ]} interp⌝.
+Proof.
+  iPureIntro. intros ?. right. right.
+  destruct good; try done.
+  exists party.
+  split; [set_solver|by simplify_map_eq/=].
+Qed.
+
 Lemma blame_two party0 party1 good0 good1 interp :
   (⌜party0 ≠ party1⌝ : iProp Σ) ∗
   ¬ ⌜(good0 = true ∧ good1 = true)⌝ -∗

@@ -1201,8 +1201,12 @@ Lemma wp_Client_Audit γ ptr_c σ adtr_good (adtrAddr : w64) sl_adtrPk adtrPk :
     is_pkg_init client ∗
     "Hclient" ∷ Client.own γ ptr_c σ ∗
     "#Hsl_adtrPk" ∷ sl_adtrPk ↦*□ adtrPk ∗
+    "#His_adtrPk" ∷ match auditor.Trust.get_sigpred adtr_good with None => True | Some adtrγ =>
+      cryptoffi.is_sig_pk adtrPk (sigpred.P adtrγ) end ∗
     "%Heq_adtrPk" ∷ ⌜match auditor.Trust.get_full adtr_good with None => True | Some adtrγ =>
-      adtrPk = adtrγ.(auditor.cfg.adtr_sig_pk) end⌝
+      adtrPk = adtrγ.(auditor.cfg.adtr_sig_pk) end⌝ ∗
+    "%Heq_serv_pk" ∷ ⌜match auditor.Trust.get_full adtr_good with None => True | Some adtrγ =>
+      γ.(cfg.sig_pk) = adtrγ.(auditor.cfg.serv_sig_pk) end⌝
   }}}
   ptr_c @! (go.PointerType client.Client) @! "Audit" #adtrAddr #sl_adtrPk
   {{{
@@ -1218,16 +1222,189 @@ Lemma wp_Client_Audit γ ptr_c σ adtr_good (adtrAddr : w64) sl_adtrPk adtrPk :
       ]})⌝ ∗
     "#Hevid" ∷ (if decide (ptr_evid = null) then True else
       ∃ evid,
-      "#Hown_evid" ∷ ktcore.Evid.own ptr_evid evid (□)) ∗
+      "#Hown_evid" ∷ ktcore.Evid.own ptr_evid evid (□) ∗
+      "#His_evid" ∷ ktcore.wish_Evid evid γ.(cfg.sig_pk)) ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
+      "%Hlt_startEp" ∷ ⌜uint.nat startEp ≤ uint.nat ep⌝ ∗
       "%Heq_startEp" ∷ ⌜match auditor.Trust.get_sigpred adtr_good with None => True | Some adtrγ =>
-        uint.nat startEp = (adtrγ.(ktcore.Agree.digs_start) +
+        uint.nat startEp ≥ (adtrγ.(ktcore.Agree.digs_start) +
           adtrγ.(ktcore.Agree.func_start))%nat end⌝ ∗
       "%Heq_ep" ∷ ⌜uint.nat ep = σ.(state.epoch)⌝ ∗
       "#His_audit" ∷ match auditor.Trust.get_sigpred adtr_good with None => True | Some adtrγ =>
         ktcore.is_audit γ.(cfg.agreeγ) adtrγ (uint.nat ep) end)
   }}}.
-Proof. Admitted.
+Proof.
+  wp_start as "@". wp_auto.
+  wp_apply (auditor.wp_Dial adtr_good) as "* @".
+  iNamed "Hclient". iNamed "Hown_lastEp". wp_auto.
+  wp_apply auditor.wp_CallGet as "* @".
+  { iFrame "#". }
+  case_bool_decide as Heq_err; wp_auto;
+    rewrite ktcore.rw_Blame0 in Heq_err; subst.
+  2: {
+    iApply "HΦ".
+    iSplitL. { iFrame "∗#%". }
+    iSplitL; [|by repeat case_decide].
+    iPureIntro.
+    eapply ktcore.blame_add_interp; [done|].
+    apply map_singleton_subseteq_l.
+    by simpl_map. }
+  case_decide as Ht; try done. clear Ht.
+  iNamed "Herr".
+
+  iNamed "Hown_serv". wp_auto.
+  wp_apply wp_checkAuditLink as "* @".
+  { iFrame "#". }
+  wp_if_destruct.
+  { rewrite ktcore.rw_BlameAdtrFull.
+    iApply "HΦ".
+    iSplitR "Hgood Hgenie". { iFrame "∗#%". }
+    iSplitL; [|by repeat case_decide].
+    iApply ktcore.blame_one'; [by simpl_map|].
+    iIntros (?).
+    destruct (auditor.Trust.get_full _); try done.
+    iNamed "Hgood".
+    iApply "Hgenie".
+    rewrite Heq_adtrPk Heq_serv_pk.
+    iFrame "#". }
+  iNamedSuffix "Hgenie" "_start".
+  wp_apply wp_checkAuditLink as "* @".
+  { iFrame "#". }
+  wp_if_destruct.
+  { rewrite ktcore.rw_BlameAdtrFull.
+    iApply "HΦ".
+    iSplitR "Hgood Hgenie". { iFrame "∗#%". }
+    iSplitL; [|by repeat case_decide].
+    iApply ktcore.blame_one'; [by simpl_map|].
+    iIntros (?).
+    destruct (auditor.Trust.get_full _); try done.
+    iNamed "Hgood".
+    iApply "Hgenie".
+    rewrite Heq_adtrPk Heq_serv_pk.
+    iFrame "#". }
+  iNamedSuffix "Hgenie" "_curr".
+  wp_apply wp_checkAuditVrf as "* @".
+  { iFrame "#". }
+  wp_if_destruct.
+  { rewrite ktcore.rw_BlameAdtrFull.
+    iApply "HΦ".
+    iSplitR "Hgood Hgenie". { iFrame "∗#%". }
+    iSplitL; [|by repeat case_decide].
+    iApply ktcore.blame_one'; [by simpl_map|].
+    iIntros (?).
+    destruct (auditor.Trust.get_full _); try done.
+    iNamed "Hgood".
+    iApply "Hgenie".
+    rewrite Heq_adtrPk Heq_serv_pk.
+    iFrame "#". }
+  iNamed "Hgenie".
+  wp_if_destruct.
+  { rewrite ktcore.rw_BlameAdtrFull.
+    iApply "HΦ".
+    iSplitR "Hgood". { iFrame "∗#%". }
+    iSplitL; [|by repeat case_decide].
+    iApply ktcore.blame_one'; [by simpl_map|].
+    iIntros (?).
+    destruct (auditor.Trust.get_full _) eqn:Ht; try done.
+    erewrite auditor.Trust.full_to_sigpred; [|done].
+    clear Ht.
+    iNamed "Hwish_SignedLink_curr".
+    iDestruct (ktcore.get_link_sigpred with "His_adtrPk Hwish_adtr_sig") as "@".
+    iNamed "Hgood".
+    word. }
+  iClear "Hgood".
+
+  wp_apply cryptoffi.wp_VrfPublicKeyEncode as "* @".
+  { iFrame "#". }
+  iPersist "Hsl_enc".
+  iNamedSuffix "Hown_vrf" "_vrf". wp_auto.
+  wp_apply bytes.wp_Equal as "_".
+  { iFrame "#". }
+  case_bool_decide as Heq_adtr_vrf_pk; wp_auto.
+  2: {
+    eset (ktcore.Evid.mk'
+      (Some (ktcore.EvidVrf.mk'
+        γ.(cfg.agreeγ).(ktcore.Agree.vrf_pk) _
+        vrf.(auditor.SignedVrf.VrfPk) _))
+      None) as evid.
+    iAssert (ktcore.wish_Evid evid γ.(cfg.sig_pk))%I as "#His_evid".
+    { rewrite /ktcore.wish_Evid /=.
+      iNamed "Hwish_SignedVrf".
+      by iFrame "#". }
+    wp_apply wp_alloc as "%ptr_evid_vrf Hptr_evid_vrf".
+    rewrite -wp_fupd.
+    wp_apply wp_alloc as "%ptr_evid Hptr_evid".
+    iPersist "Hptr_evid_vrf Hptr_evid".
+    iModIntro.
+    rewrite ktcore.rw_BlameServSig.
+    iApply "HΦ".
+    iSplitL. { iFrame "∗ Hstr_serv #%". }
+    iSplitL. 2: { case_decide; try done. by iFrame "His_evid #". }
+    iApply ktcore.blame_one'; [by simpl_map|].
+    iIntros (?).
+    destruct (server.Trust.get_sigpred _); try done.
+    iNamed "Halign_serv_sigpred".
+    by iApply ktcore.wish_Evid_sigpred. }
+
+  iNamedSuffix "Hown_currLink" "_link". wp_auto.
+  wp_apply bytes.wp_Equal as "_".
+  { iFrame "#". }
+  case_bool_decide as Heq_adtr_link; wp_auto.
+  2: {
+    eset (ktcore.Evid.mk'
+      None
+      (Some (ktcore.EvidLink.mk' _
+        lastEp.(epoch.link) _
+        currLink.(auditor.SignedLink.Link) _))
+      ) as evid.
+    iAssert (ktcore.wish_Evid evid γ.(cfg.sig_pk))%I as "#His_evid".
+    { rewrite /ktcore.wish_Evid /=.
+      iNamed "His_lastEp".
+      iNamed "Hwish_SignedLink_curr".
+      by iFrame "#". }
+    wp_apply wp_alloc as "%ptr_evid_link Hptr_evid_link".
+    rewrite -wp_fupd.
+    wp_apply wp_alloc as "%ptr_evid Hptr_evid".
+    iPersist "Hptr_evid_link Hptr_evid".
+    iModIntro.
+    rewrite ktcore.rw_BlameServSig.
+    iApply "HΦ".
+    iSplitL. { iFrame "∗ Hstr_serv #%". }
+    iSplitL. 2: { case_decide; try done. by iFrame "His_evid #". }
+    iApply ktcore.blame_one'; [by simpl_map|].
+    iIntros (?).
+    destruct (server.Trust.get_sigpred _); try done.
+    iNamed "Halign_serv_sigpred".
+    by iApply ktcore.wish_Evid_sigpred. }
+
+  iApply "HΦ".
+  rewrite /own. iNamed "Hown_gs".
+  iDestruct (mono_list_lb_own_get with "Hown_digs") as "#Hcli_digs".
+  iSplitL. { iFrame "∗ Hstr_serv His_nextVer #%". }
+  iSplitL. { iPureIntro. apply ktcore.blame_none. }
+  iSplitL. { by case_decide. }
+  case_decide as Ht; try done. clear Ht.
+  repeat iSplitL.
+  - word.
+  - destruct (auditor.Trust.get_sigpred _); try done.
+    iNamed "Hwish_SignedLink_start".
+    iDestruct (ktcore.get_link_sigpred with "His_adtrPk Hwish_adtr_sig") as "@".
+    word.
+  - iNamed "His_lastEp". word.
+  - destruct (auditor.Trust.get_sigpred _); try done.
+    iFrame "#".
+    iNamedSuffix "Hwish_SignedVrf" "_vrf".
+    iDestruct (ktcore.get_vrf_sigpred with "His_adtrPk Hwish_adtr_sig_vrf") as "H".
+    rewrite /vrfP. iNamed "H".
+    iNamedSuffix "Hwish_SignedLink_curr" "_link".
+    iDestruct (ktcore.get_link_sigpred with "His_adtrPk Hwish_adtr_sig_link") as "@".
+    iNamed "His_lastEp".
+    rewrite -Heq_adtr_link in Hinv.
+    replace (_ + _)%nat with (S (uint.nat lastEp.(epoch.epoch))) in His_chain by word.
+    opose proof (hashchain.inj His_chain Hinv) as [<- _].
+    iFrame "#%".
+    iPureIntro. split; [congruence|word].
+Qed.
 
 End proof.
 End client.

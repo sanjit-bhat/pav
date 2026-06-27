@@ -111,7 +111,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_Link sl_ServSig sl_AdtrSig,
-  "Hstruct" ∷ ptr ↦{d} (auditor.SignedLink.mk sl_Link sl_ServSig sl_AdtrSig) ∗
+  "Hstr_SignedLink" ∷ ptr ↦{d} (auditor.SignedLink.mk sl_Link sl_ServSig sl_AdtrSig) ∗
 
   "Hsl_Link" ∷ sl_Link ↦*{d} obj.(Link) ∗
   "Hsl_ServSig" ∷ sl_ServSig ↦*{d} obj.(ServSig) ∗
@@ -193,7 +193,7 @@ Collection W := sem + package_sem.
 
 Definition own ptr obj d : iProp Σ :=
   ∃ sl_VrfPk sl_ServSig sl_AdtrSig,
-  "Hstruct" ∷ ptr ↦{d} (auditor.SignedVrf.mk sl_VrfPk sl_ServSig sl_AdtrSig) ∗
+  "Hstr_SignedVrf" ∷ ptr ↦{d} (auditor.SignedVrf.mk sl_VrfPk sl_ServSig sl_AdtrSig) ∗
 
   "Hsl_VrfPk" ∷ sl_VrfPk ↦*{d} obj.(VrfPk) ∗
   "Hsl_ServSig" ∷ sl_ServSig ↦*{d} obj.(ServSig) ∗

@@ -109,6 +109,7 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp,
 	if err != ktcore.BlameNone {
 		return
 	}
+
 	// check adtr sig for consistency under untrusted server and trusted auditor.
 	// check serv sig to catch serv misbehavior.
 	if checkAuditLink(c.serv.sigPk, adtrPk, startEp, startLink) {
@@ -120,6 +121,10 @@ func (c *Client) Audit(adtrAddr uint64, adtrPk cryptoffi.SigPublicKey) (startEp,
 		return
 	}
 	if checkAuditVrf(c.serv.sigPk, adtrPk, vrf) {
+		err = ktcore.BlameAdtrFull
+		return
+	}
+	if startEp > c.lastEp.epoch {
 		err = ktcore.BlameAdtrFull
 		return
 	}
