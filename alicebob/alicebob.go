@@ -2,10 +2,10 @@ package alicebob
 
 import (
 	"bytes"
-	"sync"
 	"time"
 
 	"github.com/goose-lang/primitive"
+	"github.com/goose-lang/std"
 	"github.com/sanjit-bhat/pav/auditor"
 	"github.com/sanjit-bhat/pav/client"
 	"github.com/sanjit-bhat/pav/cryptoffi"
@@ -22,152 +22,127 @@ func init() {
 	server.EpochTime = time.Millisecond
 }
 
-func testAliceBob(servAddr uint64, adtrAddr uint64) (err ktcore.Blame, evid *ktcore.Evid) {
-	// setup server and auditor.
-	serv, servSigPk := server.New()
-	servRpc := server.NewRpcServer(serv)
-	servRpc.Serve(servAddr)
+func testAliceBob(servAddr uint64, servGood bool, adtrAddrs []uint64) (err ktcore.Blame, evid *ktcore.Evid) {
+	serv, servPk := server.New()
+	server.NewRpcServer(serv).Serve(servAddr)
 	time.Sleep(time.Millisecond)
 
-	// TODO: example stitching multiple auditors together.
-	// TODO: example with just good server and no auditors.
-	adtr, adtrPk, err := auditor.New(servAddr, servSigPk)
+	// epoch 0.
+	alice, ep, err := client.New(aliceUid, servAddr, servPk)
 	if err != ktcore.BlameNone {
 		return
 	}
-	adtrRpc := auditor.NewRpcAuditor(adtr)
-	adtrRpc.Serve(adtrAddr)
-	time.Sleep(time.Millisecond)
-
-	// setup alice and bob.
-	alice, aliceStartEp, err := client.New(aliceUid, servAddr, servSigPk)
+	primitive.Assume(ep == 0)
+	bob, ep, err := client.New(bobUid, servAddr, servPk)
 	if err != ktcore.BlameNone {
 		return
 	}
-	primitive.Assume(aliceStartEp == 0)
-	bob, _, err := client.New(bobUid, servAddr, servSigPk)
+	primitive.Assume(ep == 0)
+	ep, bobHasPk0, _, err := bob.Get(aliceUid)
 	if err != ktcore.BlameNone {
 		return
 	}
+	primitive.Assume(ep == 0)
 
-	// run alice and bob.
-	var aliceHist []*optPk
-	var aliceErr ktcore.Blame
-	var bobEp uint64
-	var bobAlicePk *optPk
-	var bobErr ktcore.Blame
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	wg.Add(1)
-	go func() {
-		r0, r1 := runAlice(alice)
-		aliceHist = r0
-		aliceErr = r1
-		wg.Done()
-	}()
-	go func() {
-		r0, r1, r2 := runBob(bob)
-		bobEp = r0
-		bobAlicePk = r1
-		bobErr = r2
-		wg.Done()
-	}()
-	wg.Wait()
-
-	if aliceErr != ktcore.BlameNone {
-		err = aliceErr
-		return
-	}
-	if bobErr != ktcore.BlameNone {
-		err = bobErr
-		return
-	}
-
-	// sync auditor and do second audit.
-	// in real world, sync will happen periodically.
-	if err = adtr.Update(); err != ktcore.BlameNone {
-		return
-	}
-	adtrStartEp0, _, err, evid := alice.Audit(adtrAddr, adtrPk)
-	if err != ktcore.BlameNone {
-		return
-	}
-	primitive.Assume(adtrStartEp0 == 0)
-	adtrStartEp1, _, err, evid := bob.Audit(adtrAddr, adtrPk)
-	if err != ktcore.BlameNone {
-		return
-	}
-	primitive.Assume(adtrStartEp1 == 0)
-
-	// Assume alice monitored bob's Get epoch.
-	primitive.Assume(bobEp < uint64(len(aliceHist)))
-	alicePk := aliceHist[bobEp]
-	// "KT consistency". in this test case, it means bob got the right key.
-	if !equal(alicePk, bobAlicePk) {
-		// at min, this property relies on auditor maintaining its sigpred.
-		// or with no auditor, server maintaining its sigpred.
-		err = ktcore.BlameAdtrSig
-		return
-	}
-	return
-}
-
-type optPk struct {
-	opt bool
-	pk  []byte
-}
-
-func equal(o0, o1 *optPk) bool {
-	if o0.opt != o1.opt {
-		return false
-	}
-	if !o0.opt {
-		return true
-	}
-	return bytes.Equal(o0.pk, o1.pk)
-}
-
-// runAlice does a bunch of puts.
-func runAlice(cli *client.Client) (hist []*optPk, err ktcore.Blame) {
-	// in this simple example, alice is the only putter.
-	// she can assume that epochs update iff her Put executes,
-	// which leads to a simple history structure.
-	// from Client.New, know epoch 0.
-	hist = append(hist, &optPk{})
-	for i := 0; i < 20; i++ {
-		time.Sleep(5 * time.Millisecond)
-		pk := cryptoffi.RandBytes(32)
-		// no pending puts at this pt. we waited until prior put was inserted.
-		cli.Put(pk)
-
-		if err = loopChanged(cli, uint64(len(hist))); err != ktcore.BlameNone {
-			return
-		}
-		hist = append(hist, &optPk{opt: true, pk: pk})
-	}
-	return
-}
-
-func loopChanged(cli *client.Client, ep uint64) (err ktcore.Blame) {
-	for {
-		var ep0 uint64
-		var isChanged bool
-		ep0, isChanged, err = cli.SelfMon()
+	var adtr0, adtr1 *auditor.Auditor
+	var adtr0Pk, adtr1Pk []byte
+	if !servGood {
+		adtr0, adtr0Pk, err = auditor.New(servAddr, servPk)
 		if err != ktcore.BlameNone {
 			return
 		}
-		if isChanged {
-			primitive.Assume(ep0 == ep)
-			break
+		adtr1, adtr1Pk, err = auditor.New(servAddr, servPk)
+		if err != ktcore.BlameNone {
+			return
 		}
+		auditor.NewRpcAuditor(adtr0).Serve(adtrAddrs[0])
+		auditor.NewRpcAuditor(adtr1).Serve(adtrAddrs[1])
+		time.Sleep(time.Millisecond)
 	}
-	return
-}
 
-// runBob does a get at some time in the middle of alice's puts.
-func runBob(cli *client.Client) (ep uint64, ent *optPk, err ktcore.Blame) {
-	time.Sleep(120 * time.Millisecond)
-	ep, isReg, pk, err := cli.Get(aliceUid)
-	ent = &optPk{opt: isReg, pk: pk}
+	// epoch 1.
+	alicePk1 := cryptoffi.RandBytes(32)
+	alice.Put(alicePk1)
+	time.Sleep(2 * server.EpochTime)
+	ep, isChanged, err := alice.SelfMon()
+	if err != ktcore.BlameNone {
+		return
+	}
+	primitive.Assume(ep == 1)
+	primitive.Assume(isChanged)
+	ep, bobHasPk1, bobPk1, err := bob.Get(aliceUid)
+	if err != ktcore.BlameNone {
+		return
+	}
+	primitive.Assume(ep == 1)
+
+	if !servGood {
+		adtr0.Update()
+		adtr1.Update()
+		var startEp uint64
+		startEp, ep, err, evid = alice.Audit(adtrAddrs[0], adtr0Pk)
+		if err != ktcore.BlameNone {
+			return
+		}
+		primitive.Assume(startEp == 0)
+		primitive.Assume(ep == 1)
+		startEp, ep, err, evid = bob.Audit(adtrAddrs[1], adtr1Pk)
+		if err != ktcore.BlameNone {
+			return
+		}
+		primitive.Assume(startEp == 0)
+		primitive.Assume(ep == 1)
+	}
+
+	var adtr2 *auditor.Auditor
+	var adtr2Pk []byte
+	if !servGood {
+		adtr2, adtr2Pk, err = auditor.New(servAddr, servPk)
+		if err != ktcore.BlameNone {
+			return
+		}
+		auditor.NewRpcAuditor(adtr2).Serve(adtrAddrs[2])
+		time.Sleep(time.Millisecond)
+	}
+
+	// epoch 2.
+	alicePk2 := cryptoffi.RandBytes(32)
+	alice.Put(alicePk2)
+	time.Sleep(2 * server.EpochTime)
+	ep, isChanged, err = alice.SelfMon()
+	if err != ktcore.BlameNone {
+		return
+	}
+	primitive.Assume(ep == 2)
+	primitive.Assume(isChanged)
+	ep, bobHasPk2, bobPk2, err := bob.Get(aliceUid)
+	if err != ktcore.BlameNone {
+		return
+	}
+	primitive.Assume(ep == 2)
+
+	if !servGood {
+		adtr2.Update()
+		var startEp uint64
+		startEp, ep, err, evid = alice.Audit(adtrAddrs[2], adtr2Pk)
+		if err != ktcore.BlameNone {
+			return
+		}
+		primitive.Assume(startEp == 1)
+		primitive.Assume(ep == 2)
+		startEp, ep, err, evid = bob.Audit(adtrAddrs[2], adtr2Pk)
+		if err != ktcore.BlameNone {
+			return
+		}
+		primitive.Assume(startEp == 1)
+		primitive.Assume(ep == 2)
+	}
+
+	// "KT consistency".
+	std.Assert(!bobHasPk0)
+	std.Assert(bobHasPk1)
+	std.Assert(bytes.Equal(bobPk1, alicePk1))
+	std.Assert(bobHasPk2)
+	std.Assert(bytes.Equal(bobPk2, alicePk2))
 	return
 }
