@@ -2,12 +2,12 @@
 Require Export New.proof.crypto_prelude.
 Require Export New.generatedproof.bytes.
 Require Export New.generatedproof.github_com.goose_lang.primitive.
+Require Export New.generatedproof.github_com.goose_lang.std.
 Require Export New.generatedproof.github_com.sanjit_bhat.pav.auditor.
 Require Export New.generatedproof.github_com.sanjit_bhat.pav.client.
 Require Export New.generatedproof.github_com.sanjit_bhat.pav.cryptoffi.
 Require Export New.generatedproof.github_com.sanjit_bhat.pav.ktcore.
 Require Export New.generatedproof.github_com.sanjit_bhat.pav.server.
-Require Export New.generatedproof.sync.
 Require Export New.generatedproof.time.
 Require Export New.golang.theory.
 Require Export New.code.github_com.sanjit_bhat.pav.alicebob.
@@ -15,59 +15,4 @@ Require Export New.code.github_com.sanjit_bhat.pav.alicebob.
 Set Default Proof Using "Type".
 
 Module alicebob.
-Module optPk.
-Section def.
-
-Context `{!heapGS Σ}.
-Context {sem : go.Semantics}.
-Context {package_sem' : alicebob.Assumptions}.
-
-Local Set Default Proof Using "All".
-
-#[global]Program Instance optPk_typed_pointsto  :
-  TypedPointsto (Σ:=Σ) (alicebob.optPk.t) :=
-  {|
-    typed_pointsto_def l v dq :=
-      (
-      "opt" ∷ l.[(alicebob.optPk.t), "opt"] ↦{dq} v.(alicebob.optPk.opt') ∗
-      "pk" ∷ l.[(alicebob.optPk.t), "pk"] ↦{dq} v.(alicebob.optPk.pk') ∗
-      "_" ∷ True
-      )%I
-  |}.
-Final Obligation. solve_typed_pointsto_agree. Qed.
-
-#[global] Instance optPk_into_val_typed
-   :
-  IntoValTypedUnderlying (alicebob.optPk.t) (alicebob.optPkⁱᵐᵖˡ).
-Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance optPk_access_load_opt l (v : (alicebob.optPk.t)) dq :
-  AccessStrict
-    (l.[(alicebob.optPk.t), "opt"] ↦{dq} (v.(alicebob.optPk.opt')))
-    (l.[(alicebob.optPk.t), "opt"] ↦{dq} (v.(alicebob.optPk.opt')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance optPk_access_store_opt l (v : (alicebob.optPk.t)) opt' :
-  AccessStrict
-    (l.[(alicebob.optPk.t), "opt"] ↦ (v.(alicebob.optPk.opt')))
-    (l.[(alicebob.optPk.t), "opt"] ↦ opt')
-    (l ↦ v) (l ↦ (v <|(alicebob.optPk.opt') := opt'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance optPk_access_load_pk l (v : (alicebob.optPk.t)) dq :
-  AccessStrict
-    (l.[(alicebob.optPk.t), "pk"] ↦{dq} (v.(alicebob.optPk.pk')))
-    (l.[(alicebob.optPk.t), "pk"] ↦{dq} (v.(alicebob.optPk.pk')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance optPk_access_store_pk l (v : (alicebob.optPk.t)) pk' :
-  AccessStrict
-    (l.[(alicebob.optPk.t), "pk"] ↦ (v.(alicebob.optPk.pk')))
-    (l.[(alicebob.optPk.t), "pk"] ↦ pk')
-    (l ↦ v) (l ↦ (v <|(alicebob.optPk.pk') := pk'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-End def.
-End optPk.
-
 End alicebob.

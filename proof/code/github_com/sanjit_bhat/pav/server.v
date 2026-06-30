@@ -78,8 +78,6 @@ Definition HistoryRpc {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(
 
 Definition AuditRpc {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 3).
 
-Definition EpochTime {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/server.EpochTime"%go.
-
 Definition NewRpcServer {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/server.NewRpcServer"%go.
 
 Definition CallStart {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/server.CallStart"%go.
@@ -1013,7 +1011,7 @@ Definition AuditReplyDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
 (* Start bootstraps a party with knowledge of the last hash
    in the hashchain and vrf.
 
-   go: server.go:56:18 *)
+   go: server.go:52:18 *)
 Definition Server__Startⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     with_defer: (let: "vrf" := (GoAlloc (go.PointerType StartVrf) (GoZeroVal (go.PointerType StartVrf) #())) in
@@ -1057,7 +1055,7 @@ Definition Server__Startⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
 
 (* Put queues pk (at the specified version) for insertion.
 
-   go: server.go:69:18 *)
+   go: server.go:65:18 *)
 Definition Server__Putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "ver" "pk",
     exception_do (let: "s" := (GoAlloc (go.PointerType Server) "s") in
@@ -1093,7 +1091,7 @@ Definition Server__Putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
 (* History gives key history for uid, excluding first prevVerLen versions.
    the caller already saw prevEpoch.
 
-   go: server.go:78:18 *)
+   go: server.go:74:18 *)
 Definition Server__Historyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "prevEpoch" "prevVerLen",
     with_defer: (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1150,7 +1148,7 @@ Definition Server__Historyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
 
 (* Audit errors if args out of bounds.
 
-   go: server.go:100:18 *)
+   go: server.go:96:18 *)
 Definition Server__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "prevEpoch",
     with_defer: (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1181,7 +1179,7 @@ Definition Server__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  ("proof" <-[go.SliceType (go.PointerType ktcore.AuditProof)] "$r0");;;
     return: (![go.SliceType (go.PointerType ktcore.AuditProof)] "proof", ![go.bool] "err")).
 
-(* go: server.go:123:18 *)
+(* go: server.go:119:18 *)
 Definition Server__workerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     exception_do (let: "s" := (GoAlloc (go.PointerType Server) "s") in
@@ -1197,10 +1195,14 @@ Definition Server__workerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
       (MethodResolve (go.PointerType Server) "doWork"%go (![go.PointerType Server] "s")) "$a0"));;;
     return: #()).
 
-(* go: server.go:136:6 *)
+(* New starts a [Server] with epochTime, the time between epochs.
+   AKD uses an epochTime of ~1 second.
+
+   go: server.go:134:6 *)
 Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: <>,
-    exception_do (let: "mu" := (GoAlloc (go.PointerType sync.RWMutex) (GoZeroVal (go.PointerType sync.RWMutex) #())) in
+  λ: "epochTime",
+    exception_do (let: "epochTime" := (GoAlloc time.Duration "epochTime") in
+    let: "mu" := (GoAlloc (go.PointerType sync.RWMutex) (GoZeroVal (go.PointerType sync.RWMutex) #())) in
     let: "$r0" := (GoAlloc sync.RWMutex (GoZeroVal sync.RWMutex #())) in
     do:  ("mu" <-[go.PointerType sync.RWMutex] "$r0");;;
     let: "vrfSk" := (GoAlloc (go.PointerType cryptoffi.VrfPrivateKey) (GoZeroVal (go.PointerType cryptoffi.VrfPrivateKey) #())) in
@@ -1251,12 +1253,13 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     let: "$r0" := ((FuncResolve go.make1 [go.ChannelType go.sendrecv (go.PointerType work)] #()) #()) in
     do:  ("wq" <-[go.ChannelType go.sendrecv (go.PointerType work)] "$r0");;;
     let: "s" := (GoAlloc (go.PointerType Server) (GoZeroVal (go.PointerType Server) #())) in
-    let: "$r0" := (GoAlloc Server (let: "$v0" := (![go.PointerType sync.RWMutex] "mu") in
-    let: "$v1" := (![go.PointerType secrets] "secs") in
-    let: "$v2" := (![go.PointerType keyStore] "keys") in
-    let: "$v3" := (![go.PointerType history] "hist") in
-    let: "$v4" := (![go.ChannelType go.sendrecv (go.PointerType work)] "wq") in
-    CompositeLiteral Server (LiteralValue [KeyedElement (Some (KeyField "mu"%go)) (ElementExpression (go.PointerType sync.RWMutex) "$v0"); KeyedElement (Some (KeyField "secs"%go)) (ElementExpression (go.PointerType secrets) "$v1"); KeyedElement (Some (KeyField "keys"%go)) (ElementExpression (go.PointerType keyStore) "$v2"); KeyedElement (Some (KeyField "hist"%go)) (ElementExpression (go.PointerType history) "$v3"); KeyedElement (Some (KeyField "workQ"%go)) (ElementExpression (go.ChannelType go.sendrecv (go.PointerType work)) "$v4")]))) in
+    let: "$r0" := (GoAlloc Server (let: "$v0" := (![go.PointerType secrets] "secs") in
+    let: "$v1" := (![go.ChannelType go.sendrecv (go.PointerType work)] "wq") in
+    let: "$v2" := (![time.Duration] "epochTime") in
+    let: "$v3" := (![go.PointerType sync.RWMutex] "mu") in
+    let: "$v4" := (![go.PointerType keyStore] "keys") in
+    let: "$v5" := (![go.PointerType history] "hist") in
+    CompositeLiteral Server (LiteralValue [KeyedElement (Some (KeyField "secs"%go)) (ElementExpression (go.PointerType secrets) "$v0"); KeyedElement (Some (KeyField "workQ"%go)) (ElementExpression (go.ChannelType go.sendrecv (go.PointerType work)) "$v1"); KeyedElement (Some (KeyField "epochTime"%go)) (ElementExpression time.Duration "$v2"); KeyedElement (Some (KeyField "mu"%go)) (ElementExpression (go.PointerType sync.RWMutex) "$v3"); KeyedElement (Some (KeyField "keys"%go)) (ElementExpression (go.PointerType keyStore) "$v4"); KeyedElement (Some (KeyField "hist"%go)) (ElementExpression (go.PointerType history) "$v5")]))) in
     do:  ("s" <-[go.PointerType Server] "$r0");;;
     let: "dig" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "$r0" := ((MethodResolve (go.PointerType merkle.Map) "Hash"%go (![go.PointerType merkle.Map] (StructFieldRef keyStore "hidden"%go (![go.PointerType keyStore] "keys")))) #()) in
@@ -1281,13 +1284,13 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     do:  (Fork ("$go" #()));;;
     return: (![go.PointerType Server] "s", ![cryptoffi.SigPublicKey] "sigPk")).
 
-(* go: server.go:162:18 *)
+(* go: server.go:160:18 *)
 Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     exception_do (let: "work" := (GoAlloc (go.SliceType (go.PointerType work)) (GoZeroVal (go.SliceType (go.PointerType work)) #())) in
     let: "s" := (GoAlloc (go.PointerType Server) "s") in
     let: "timer" := (GoAlloc (go.PointerType time.Timer) (GoZeroVal (go.PointerType time.Timer) #())) in
-    let: "$r0" := (let: "$a0" := (![time.Duration] (GlobalVarAddr EpochTime #())) in
+    let: "$r0" := (let: "$a0" := (![time.Duration] (StructFieldRef Server "epochTime"%go (![go.PointerType Server] "s"))) in
     (FuncResolve time.NewTimer [] #()) "$a0") in
     do:  ("timer" <-[go.PointerType time.Timer] "$r0");;;
     (for: (λ: <>, #true); (λ: <>, #()) := λ: <>,
@@ -1306,7 +1309,7 @@ Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
         do:  ("work" <-[go.SliceType (go.PointerType work)] "$r0")
         ))]))).
 
-(* go: server.go:176:18 *)
+(* go: server.go:174:18 *)
 Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "work",
     with_defer: (let: "s" := (GoAlloc (go.PointerType Server) "s") in
@@ -1383,7 +1386,7 @@ Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
 
 (* getHist returns a history of membership proofs for all post-prefix versions.
 
-   go: server.go:202:18 *)
+   go: server.go:200:18 *)
 Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "prefixLen",
     exception_do (let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) (GoZeroVal (go.SliceType (go.PointerType ktcore.Memb)) #())) in
@@ -1450,7 +1453,7 @@ Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
 
 (* getBound returns a non-membership proof for the boundary version.
 
-   go: server.go:219:18 *)
+   go: server.go:217:18 *)
 Definition Server__getBoundⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "numVers",
     exception_do (let: "bound" := (GoAlloc (go.PointerType ktcore.NonMemb) (GoZeroVal (go.PointerType ktcore.NonMemb) #())) in
@@ -1493,8 +1496,7 @@ Definition Server__getBoundⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
 Definition initialize' {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: <>,
     package.init pkg_id.server (λ: <>,
-      exception_do (do:  (go.GlobalAlloc EpochTime time.Duration #());;;
-      do:  (merkle.initialize' #());;;
+      exception_do (do:  (merkle.initialize' #());;;
       do:  (hashchain.initialize' #());;;
       do:  (cryptoffi.initialize' #());;;
       do:  (std.initialize' #());;;
@@ -1503,9 +1505,7 @@ Definition initialize' {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
       do:  (marshal.initialize' #());;;
       do:  (safemarshal.initialize' #());;;
       do:  (ktcore.initialize' #());;;
-      do:  (advrpc.initialize' #());;;
-      let: "$r0" := time.Second in
-      do:  ((GlobalVarAddr EpochTime #()) <-[time.Duration] "$r0"))
+      do:  (advrpc.initialize' #()))
       ).
 
 Module StartChain.
@@ -1819,12 +1819,13 @@ Record t :=
 mk {
   secs' : loc;
   workQ' : chan.t;
+  epochTime' : time.Duration.t;
   mu' : loc;
   keys' : loc;
   hist' : loc;
 }.
 
-#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _) (zero_val _) (zero_val _)|}.
+#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _) (zero_val _) (zero_val _) (zero_val _)|}.
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
@@ -1833,6 +1834,7 @@ End Server.
 Definition Server'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
   (go.FieldDecl "secs"%go (go.PointerType secrets));
   (go.FieldDecl "workQ"%go (go.ChannelType go.sendrecv (go.PointerType work)));
+  (go.FieldDecl "epochTime"%go time.Duration);
   (go.FieldDecl "mu"%go (go.PointerType sync.RWMutex));
   (go.FieldDecl "keys"%go (go.PointerType keyStore));
   (go.FieldDecl "hist"%go (go.PointerType history))
@@ -1851,6 +1853,8 @@ Class Server_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContex
   #[global] Server_set_secs (x : Server.t) y :: ⟦StructFieldSet (Serverⁱᵐᵖˡ) "secs", (#x, #y)⟧ ⤳[under] #(x <|Server.secs' := y|>);
   #[global] Server_get_workQ (x : Server.t) :: ⟦StructFieldGet (Serverⁱᵐᵖˡ) "workQ", #x⟧ ⤳[under] #x.(Server.workQ');
   #[global] Server_set_workQ (x : Server.t) y :: ⟦StructFieldSet (Serverⁱᵐᵖˡ) "workQ", (#x, #y)⟧ ⤳[under] #(x <|Server.workQ' := y|>);
+  #[global] Server_get_epochTime (x : Server.t) :: ⟦StructFieldGet (Serverⁱᵐᵖˡ) "epochTime", #x⟧ ⤳[under] #x.(Server.epochTime');
+  #[global] Server_set_epochTime (x : Server.t) y :: ⟦StructFieldSet (Serverⁱᵐᵖˡ) "epochTime", (#x, #y)⟧ ⤳[under] #(x <|Server.epochTime' := y|>);
   #[global] Server_get_mu (x : Server.t) :: ⟦StructFieldGet (Serverⁱᵐᵖˡ) "mu", #x⟧ ⤳[under] #x.(Server.mu');
   #[global] Server_set_mu (x : Server.t) y :: ⟦StructFieldSet (Serverⁱᵐᵖˡ) "mu", (#x, #y)⟧ ⤳[under] #(x <|Server.mu' := y|>);
   #[global] Server_get_keys (x : Server.t) :: ⟦StructFieldGet (Serverⁱᵐᵖˡ) "keys", #x⟧ ⤳[under] #x.(Server.keys');
