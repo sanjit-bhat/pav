@@ -160,7 +160,7 @@ func New(epochTime time.Duration) (*Server, cryptoffi.SigPublicKey) {
 func (s *Server) getWork() (work []*work) {
 	timer := time.NewTimer(s.epochTime)
 	// don't care about upper-bounding batch size.
-	// so aggregate as much work as we can within [EpochTime].
+	// so aggregate as much work as we can within epochTime.
 	for {
 		select {
 		case <-timer.C:

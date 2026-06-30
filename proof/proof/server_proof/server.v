@@ -558,9 +558,10 @@ Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_ro γ ptr obj : iProp Σ :=
-  ∃ ptr_secs ptr_workQ workQγ,
+  ∃ ptr_secs ptr_workQ workQγ (epochTime : w64),
   "#Hfld_secs" ∷ ptr.[server.Server.t, "secs"] ↦□ ptr_secs ∗
   "#Hfld_workQ" ∷ ptr.[server.Server.t, "workQ"] ↦□ ptr_workQ ∗
+  "#Hfld_epochTime" ∷ ptr.[server.Server.t, "epochTime"] ↦□ epochTime ∗
 
   "#Hown_secs" ∷ secrets.own γ ptr_secs obj.(secs) ∗
   "#His_workQ" ∷ bag.is_chan_bag workQγ ptr_workQ (work.own_aux γ obj.(secs)).
@@ -810,7 +811,6 @@ Lemma wp_Server_getWork s γ obj :
   }}}.
 Proof.
   wp_start as "@".
-  iDestruct (is_pkg_init_access with "[$]") as "@".
   iNamed "Hown_serv_ro". wp_auto.
   (* TODO: translate/prove [Timer] and [NewTimer], assuming [newTimer]. *)
 Admitted.
@@ -1403,12 +1403,13 @@ Proof.
   - done.
 Qed.
 
-Lemma wp_New (uidγ : gmap w64 gname) :
+Lemma wp_New (epochTime : w64) (uidγ : gmap w64 gname) :
   {{{ is_pkg_init server }}}
-  @! server.New #()
+  @! server.New #epochTime
   {{{
     γ obj ptr_server sl_sigPk, RET (#ptr_server, #sl_sigPk);
     "#His_inv" ∷ is_inv γ ∗
+    "%Heq_uidγ" ∷ ⌜γ.(cfg.uidγ) = uidγ⌝ ∗
     "Hlocks" ∷ ([∗] replicate (pred $ Z.to_nat rwmutex.actualMaxReaders)
       (Server.lock_perm γ ptr_server obj)) ∗
     "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.sig_pk) ∗
@@ -1470,7 +1471,7 @@ Proof.
   iMod (start_bag (work.own_aux γ obj.(Server.secs)) with "His_chan Hown_chan")
     as "#His_chan_bag"; [done|].
   iStructNamed "Hptr_serv". simpl in *.
-  iPersist "secs workQ mu keys hist".
+  iPersist "secs workQ epochTime mu keys hist".
   iPersist "s sigPk Hsl_sigPk Hptr_secs Hptr_keys Hptr_audit Hsl_commit_sec".
   iMod (inv_alloc nroot _ (∃ σ, inv_aux γ σ) with "[Hgs_digs' Hgs_pend']") as "Ht".
   { iExists σ. simplify_eq/=.
