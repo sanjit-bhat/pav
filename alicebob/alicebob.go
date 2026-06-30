@@ -16,14 +16,11 @@ import (
 const (
 	aliceUid uint64 = iota
 	bobUid
+	epochTime = time.Millisecond
 )
 
-func init() {
-	server.EpochTime = time.Millisecond
-}
-
 func testAliceBob(servAddr uint64, servGood bool, adtrAddrs []uint64) {
-	serv, servPk := server.New()
+	serv, servPk := server.New(epochTime)
 	server.NewRpcServer(serv).Serve(servAddr)
 	time.Sleep(time.Millisecond)
 
@@ -53,7 +50,7 @@ func testAliceBob(servAddr uint64, servGood bool, adtrAddrs []uint64) {
 	// epoch 1.
 	alicePk1 := cryptoffi.RandBytes(32)
 	alice.Put(alicePk1)
-	time.Sleep(2 * server.EpochTime)
+	time.Sleep(2 * epochTime)
 	ep, isChanged, err := alice.SelfMon()
 	primitive.Assume(err == ktcore.BlameNone)
 	primitive.Assume(ep == 1)
@@ -88,7 +85,7 @@ func testAliceBob(servAddr uint64, servGood bool, adtrAddrs []uint64) {
 	// epoch 2.
 	alicePk2 := cryptoffi.RandBytes(32)
 	alice.Put(alicePk2)
-	time.Sleep(2 * server.EpochTime)
+	time.Sleep(2 * epochTime)
 	ep, isChanged, err = alice.SelfMon()
 	primitive.Assume(err == ktcore.BlameNone)
 	primitive.Assume(ep == 2)

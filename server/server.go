@@ -11,16 +11,12 @@ import (
 	"github.com/sanjit-bhat/pav/merkle"
 )
 
-// performance params.
-var (
-	// EpochTime roughly matches AKD.
-	EpochTime = time.Second
-)
-
 type Server struct {
 	secs *secrets
 	// workQ for batching puts into one epoch update.
-	workQ chan *work
+	workQ     chan *work
+	// epochTime (tunable) is the time between epoch updates.
+	epochTime time.Duration
 
 	mu   *sync.RWMutex
 	keys *keyStore
@@ -133,7 +129,9 @@ func (s *Server) worker() {
 	}
 }
 
-func New() (*Server, cryptoffi.SigPublicKey) {
+// New starts a [Server] with epochTime, the time between epochs.
+// AKD uses an epochTime of ~1 second.
+func New(epochTime time.Duration) (*Server, cryptoffi.SigPublicKey) {
 	mu := new(sync.RWMutex)
 	vrfSk := cryptoffi.VrfGenerateKey()
 	sigPk, sigSk := cryptoffi.SigGenerateKey()
@@ -146,7 +144,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 	chain := hashchain.New()
 	hist := &history{chain: chain, vrfPkSig: vrfSig}
 	wq := make(chan *work)
-	s := &Server{mu: mu, secs: secs, keys: keys, hist: hist, workQ: wq}
+	s := &Server{secs: secs, workQ: wq, epochTime: epochTime, mu: mu, keys: keys, hist: hist}
 
 	// commit empty map as epoch 0 to always have some epoch
 	// against which we can respond to requests.
@@ -160,7 +158,7 @@ func New() (*Server, cryptoffi.SigPublicKey) {
 }
 
 func (s *Server) getWork() (work []*work) {
-	timer := time.NewTimer(EpochTime)
+	timer := time.NewTimer(s.epochTime)
 	// don't care about upper-bounding batch size.
 	// so aggregate as much work as we can within [EpochTime].
 	for {
