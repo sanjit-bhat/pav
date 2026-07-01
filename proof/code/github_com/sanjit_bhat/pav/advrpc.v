@@ -114,14 +114,16 @@ Definition Server__Serveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  (Fork ("$go" #()));;;
     return: #()).
 
-(* go: advrpc.go:63:6 *)
+(* TODO: support optional maxConcReq limit to prevent rwmutex overload.
+
+   go: advrpc.go:64:6 *)
 Definition NewServerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "handlers",
     exception_do (let: "handlers" := (GoAlloc (go.MapType go.uint64 (go.FunctionType (go.Signature [go.SliceType go.byte; go.PointerType (go.SliceType go.byte)] false []))) "handlers") in
     return: (GoAlloc Server (let: "$v0" := (![go.MapType go.uint64 (go.FunctionType (go.Signature [go.SliceType go.byte; go.PointerType (go.SliceType go.byte)] false []))] "handlers") in
      CompositeLiteral Server (LiteralValue [KeyedElement (Some (KeyField "handlers"%go)) (ElementExpression (go.MapType go.uint64 (go.FunctionType (go.Signature [go.SliceType go.byte; go.PointerType (go.SliceType go.byte)] false []))) "$v0")])))).
 
-(* go: advrpc.go:74:6 *)
+(* go: advrpc.go:75:6 *)
 Definition Dialⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "addr",
     exception_do (let: "addr" := (GoAlloc go.uint64 "addr") in
@@ -134,7 +136,7 @@ Definition Dialⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val 
 
 (* Call does an rpc.
 
-   go: advrpc.go:80:18 *)
+   go: advrpc.go:81:18 *)
 Definition Client__Callⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "c" "rpcId" "args" "reply",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in

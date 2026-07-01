@@ -9,7 +9,7 @@ const (
 	GetRpc uint64 = iota
 )
 
-func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
+func NewRpcServer(adtr *Auditor) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
 	h[GetRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err := GetArgDecode(arg)

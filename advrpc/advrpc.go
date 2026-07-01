@@ -60,6 +60,7 @@ func (s *Server) Serve(addr uint64) {
 	}()
 }
 
+// TODO: support optional maxConcReq limit to prevent rwmutex overload.
 func NewServer(handlers map[uint64]func([]byte, *[]byte)) *Server {
 	return &Server{handlers: handlers}
 }

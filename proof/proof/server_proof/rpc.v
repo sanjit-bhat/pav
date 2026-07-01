@@ -2,7 +2,7 @@ From New.generatedproof.github_com.sanjit_bhat.pav Require Import server.
 From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 From New.proof.github_com.sanjit_bhat.pav Require Import
-  cryptoffi hashchain ktcore merkle.
+  advrpc cryptoffi hashchain ktcore merkle.
 
 From New.proof.github_com.sanjit_bhat.pav.server_proof Require Import
   serde server.
@@ -51,6 +51,19 @@ Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : server.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
+
+Lemma wp_NewRpcServer γ s obj :
+  {{{
+    is_pkg_init server ∗
+    "Hlocks" ∷ ([∗] replicate (pred $ Z.to_nat rwmutex.actualMaxReaders)
+      (Server.lock_perm γ s obj))
+  }}}
+  @! server.NewRpcServer #s
+  {{{
+    ptr_serv_rpc, RET #ptr_serv_rpc;
+    "#His_serv_rpc" ∷ advrpc.is_Server ptr_serv_rpc
+  }}}.
+Proof. Admitted.
 
 (* TODO: make [is_rpc_cli] generic. currently, specialized to server. *)
 Definition is_rpc_cli (c : loc) (good : Trust.t) : iProp Σ :=

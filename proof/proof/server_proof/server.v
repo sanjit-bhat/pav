@@ -1403,13 +1403,13 @@ Proof.
   - done.
 Qed.
 
-Lemma wp_New (epochTime : w64) (uidγ : gmap w64 gname) :
+Lemma wp_New (uidγs : gmap w64 gname) (epochTime : w64) :
   {{{ is_pkg_init server }}}
   @! server.New #epochTime
   {{{
     γ obj ptr_server sl_sigPk, RET (#ptr_server, #sl_sigPk);
     "#His_inv" ∷ is_inv γ ∗
-    "%Heq_uidγ" ∷ ⌜γ.(cfg.uidγs) = uidγ⌝ ∗
+    "%Heq_uidγs" ∷ ⌜γ.(cfg.uidγs) = uidγs⌝ ∗
     "Hlocks" ∷ ([∗] replicate (pred $ Z.to_nat rwmutex.actualMaxReaders)
       (Server.lock_perm γ ptr_server obj)) ∗
     "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.sig_pk) ∗
@@ -1466,7 +1466,7 @@ Proof.
 
   iMod (dghost_var_alloc (∅ : ktcore.plain_ty)) as (pendγ) "[Hgs_pend Hgs_pend']".
   eremember (Server.mk' (secrets.mk' commit_sec)) as obj.
-  eremember (cfg.mk sigPk pendγ uidγ agreeγ) as γ.
+  eremember (cfg.mk sigPk pendγ uidγs agreeγ) as γ.
   eremember (state.mk ∅ [hash]) as σ.
   iMod (start_bag (work.own_aux γ obj.(Server.secs)) with "His_chan Hown_chan")
     as "#His_chan_bag"; [done|].

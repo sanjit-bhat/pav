@@ -41,6 +41,19 @@ Context {sem : go.Semantics} {package_sem : auditor.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
+Lemma wp_NewRpcServer a γ :
+  {{{
+    is_pkg_init auditor ∗
+    "Hlocks" ∷ ([∗] replicate (Z.to_nat rwmutex.actualMaxReaders)
+      (Auditor.lock_perm a γ))
+  }}}
+  @! auditor.NewRpcServer #a
+  {{{
+    ptr_adtr_rpc, RET #ptr_adtr_rpc;
+    "#His_adtr_rpc" ∷ advrpc.is_Server ptr_adtr_rpc
+  }}}.
+Proof. Admitted.
+
 Definition is_rpc_cli (c : loc) (good : Trust.t) : iProp Σ :=
   match Trust.get_full good with None => True | Some γ => is_inv γ end.
 

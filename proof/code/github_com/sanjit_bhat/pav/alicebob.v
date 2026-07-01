@@ -121,10 +121,10 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
       (FuncResolve primitive.Assume [] #()) "$a0");;;
       do:  (let: "$a0" := (![go.uint64] (IndexRef (go.SliceType go.uint64) (![go.SliceType go.uint64] "adtrAddrs", #(W64 0)))) in
       (MethodResolve (go.PointerType advrpc.Server) "Serve"%go (let: "$a0" := (![go.PointerType auditor.Auditor] "adtr0") in
-      (FuncResolve auditor.NewRpcAuditor [] #()) "$a0")) "$a0");;;
+      (FuncResolve auditor.NewRpcServer [] #()) "$a0")) "$a0");;;
       do:  (let: "$a0" := (![go.uint64] (IndexRef (go.SliceType go.uint64) (![go.SliceType go.uint64] "adtrAddrs", #(W64 1)))) in
       (MethodResolve (go.PointerType advrpc.Server) "Serve"%go (let: "$a0" := (![go.PointerType auditor.Auditor] "adtr1") in
-      (FuncResolve auditor.NewRpcAuditor [] #()) "$a0")) "$a0");;;
+      (FuncResolve auditor.NewRpcServer [] #()) "$a0")) "$a0");;;
       do:  (let: "$a0" := time.Millisecond in
       (FuncResolve time.Sleep [] #()) "$a0")
     else do:  #());;;
@@ -223,7 +223,7 @@ Definition testAliceBobⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
       (FuncResolve primitive.Assume [] #()) "$a0");;;
       do:  (let: "$a0" := (![go.uint64] (IndexRef (go.SliceType go.uint64) (![go.SliceType go.uint64] "adtrAddrs", #(W64 2)))) in
       (MethodResolve (go.PointerType advrpc.Server) "Serve"%go (let: "$a0" := (![go.PointerType auditor.Auditor] "adtr2") in
-      (FuncResolve auditor.NewRpcAuditor [] #()) "$a0")) "$a0");;;
+      (FuncResolve auditor.NewRpcServer [] #()) "$a0")) "$a0");;;
       do:  (let: "$a0" := time.Millisecond in
       (FuncResolve time.Sleep [] #()) "$a0")
     else do:  #());;;

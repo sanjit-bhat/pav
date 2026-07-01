@@ -42,8 +42,8 @@ func testAliceBob(servAddr uint64, servGood bool, adtrAddrs []uint64) {
 		primitive.Assume(err == ktcore.BlameNone)
 		adtr1, adtr1Pk, err = auditor.New(servAddr, servPk)
 		primitive.Assume(err == ktcore.BlameNone)
-		auditor.NewRpcAuditor(adtr0).Serve(adtrAddrs[0])
-		auditor.NewRpcAuditor(adtr1).Serve(adtrAddrs[1])
+		auditor.NewRpcServer(adtr0).Serve(adtrAddrs[0])
+		auditor.NewRpcServer(adtr1).Serve(adtrAddrs[1])
 		time.Sleep(time.Millisecond)
 	}
 
@@ -78,7 +78,7 @@ func testAliceBob(servAddr uint64, servGood bool, adtrAddrs []uint64) {
 	if !servGood {
 		adtr2, adtr2Pk, err = auditor.New(servAddr, servPk)
 		primitive.Assume(err == ktcore.BlameNone)
-		auditor.NewRpcAuditor(adtr2).Serve(adtrAddrs[2])
+		auditor.NewRpcServer(adtr2).Serve(adtrAddrs[2])
 		time.Sleep(time.Millisecond)
 	}
 

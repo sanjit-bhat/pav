@@ -283,7 +283,7 @@ Definition NewRpcServerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     return: (let: "$a0" := (![go.MapType go.uint64 (go.FunctionType (go.Signature [go.SliceType go.byte; go.PointerType (go.SliceType go.byte)] false []))] "h") in
      (FuncResolve advrpc.NewServer [] #()) "$a0")).
 
-(* go: rpc.go:56:6 *)
+(* go: rpc.go:55:6 *)
 Definition CallStartⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "c",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -324,7 +324,9 @@ Definition CallStartⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
     do:  ("vrf" <-[go.PointerType StartVrf] "$r0");;;
     return: (![go.PointerType StartChain] "chain", ![go.PointerType StartVrf] "vrf", ![ktcore.Blame] "err")).
 
-(* go: rpc.go:72:6 *)
+(* TODO: return Blame for serde errors.
+
+   go: rpc.go:72:6 *)
 Definition CallPutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "c" "uid" "pk" "ver",
     exception_do (let: "ver" := (GoAlloc go.uint64 "ver") in
@@ -351,7 +353,7 @@ Definition CallPutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
     (MethodResolve (go.PointerType advrpc.Client) "Call"%go (![go.PointerType advrpc.Client] "c")) "$a0" "$a1" "$a2");;;
     return: #()).
 
-(* go: rpc.go:80:6 *)
+(* go: rpc.go:79:6 *)
 Definition CallHistoryⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "c" "uid" "prevEpoch" "prevVerLen",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in
@@ -410,7 +412,7 @@ Definition CallHistoryⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     else do:  #());;;
     return: (![go.SliceType go.byte] (StructFieldRef HistoryReply "ChainProof"%go (![go.PointerType HistoryReply] "r")), ![go.SliceType go.byte] (StructFieldRef HistoryReply "LinkSig"%go (![go.PointerType HistoryReply] "r")), ![go.SliceType (go.PointerType ktcore.Memb)] (StructFieldRef HistoryReply "Hist"%go (![go.PointerType HistoryReply] "r")), ![go.PointerType ktcore.NonMemb] (StructFieldRef HistoryReply "Bound"%go (![go.PointerType HistoryReply] "r")), ktcore.BlameNone)).
 
-(* go: rpc.go:100:6 *)
+(* go: rpc.go:99:6 *)
 Definition CallAuditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "c" "prevEpoch",
     exception_do (let: "err" := (GoAlloc ktcore.Blame (GoZeroVal ktcore.Blame #())) in

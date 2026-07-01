@@ -59,7 +59,7 @@ Definition CheckStartChain {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_s
 
 Definition CheckStartVrf {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/auditor.CheckStartVrf"%go.
 
-Definition NewRpcAuditor {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/auditor.NewRpcAuditor"%go.
+Definition NewRpcServer {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/auditor.NewRpcServer"%go.
 
 Definition CallGet {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/auditor.CallGet"%go.
 
@@ -531,7 +531,7 @@ Definition CheckStartVrfⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     return: (![go.PointerType cryptoffi.VrfPublicKey] "vrfPk", ![go.bool] "err")).
 
 (* go: rpc.go:12:6 *)
-Definition NewRpcAuditorⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+Definition NewRpcServerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "adtr",
     exception_do (let: "adtr" := (GoAlloc (go.PointerType Auditor) "adtr") in
     let: "h" := (GoAlloc (go.MapType go.uint64 (go.FunctionType (go.Signature [go.SliceType go.byte; go.PointerType (go.SliceType go.byte)] false []))) (GoZeroVal (go.MapType go.uint64 (go.FunctionType (go.Signature [go.SliceType go.byte; go.PointerType (go.SliceType go.byte)] false []))) #())) in
@@ -1267,7 +1267,7 @@ Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions
   #[global] getNextDig_unfold :: FuncUnfold getNextDig [] (getNextDigⁱᵐᵖˡ);
   #[global] CheckStartChain_unfold :: FuncUnfold CheckStartChain [] (CheckStartChainⁱᵐᵖˡ);
   #[global] CheckStartVrf_unfold :: FuncUnfold CheckStartVrf [] (CheckStartVrfⁱᵐᵖˡ);
-  #[global] NewRpcAuditor_unfold :: FuncUnfold NewRpcAuditor [] (NewRpcAuditorⁱᵐᵖˡ);
+  #[global] NewRpcServer_unfold :: FuncUnfold NewRpcServer [] (NewRpcServerⁱᵐᵖˡ);
   #[global] CallGet_unfold :: FuncUnfold CallGet [] (CallGetⁱᵐᵖˡ);
   #[global] GetArgEncode_unfold :: FuncUnfold GetArgEncode [] (GetArgEncodeⁱᵐᵖˡ);
   #[global] GetArgDecode_unfold :: FuncUnfold GetArgDecode [] (GetArgDecodeⁱᵐᵖˡ);

@@ -532,7 +532,7 @@ Qed.
 
 (* TODO: rename clis_good. mis-leading. we are a good client.
 this referring to smth else. whether our uid compromised. *)
-Lemma wp_New serv_good clis_good uidγs uid uidγ (servAddr : w64) sl_servPk servPk :
+Lemma wp_New uidγs serv_good clis_good uid uidγ (servAddr : w64) sl_servPk servPk :
   {{{
     is_pkg_init client ∗
     "%Hlook_uidγ" ∷ ⌜uidγs !! uid = Some uidγ⌝ ∗
