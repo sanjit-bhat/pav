@@ -66,6 +66,32 @@ Proof.
   wp_apply (server.wp_New uidγs) as "* @".
   wp_apply (server.wp_NewRpcServer with "[$Hlocks]") as "* @".
   wp_apply advrpc.wp_Server_Serve.
+  { iFrame "#".
+    (* TODO: [solve_pkg_init] should recursively unfold pkg deps.
+    currently, it unfolds just one level. *)
+    iEval (rewrite ?is_pkg_init_unfold; simpl is_pkg_init_deps; unfold named) in "#".
+    repeat
+      lazymatch goal with
+      | |- environments.envs_entails ?env _ =>
+          lazymatch env with
+          | context[environments.Esnoc _ ?i (_ ∗ _)%I] =>
+              iDestruct i as "[? ?]"
+          | context[environments.Esnoc _ ?i (□ _)%I] =>
+              iDestruct i as "#?"
+          end
+      end.
+    iEval (rewrite ?is_pkg_init_unfold; simpl is_pkg_init_deps; unfold named) in "#".
+    repeat
+      lazymatch goal with
+      | |- environments.envs_entails ?env _ =>
+          lazymatch env with
+          | context[environments.Esnoc _ ?i (_ ∗ _)%I] =>
+              iDestruct i as "[? ?]"
+          | context[environments.Esnoc _ ?i (□ _)%I] =>
+              iDestruct i as "#?"
+          end
+      end.
+    done. }
 Admitted.
 
 End proof.
