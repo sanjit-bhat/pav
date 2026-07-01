@@ -18,6 +18,7 @@ Record t :=
     uid : w64;
     sig_pk : list w8;
     agreeγ : ktcore.Agree.t;
+    uidγs : gmap w64 gname;
     serv_good : server.Trust.t;
     clis_good : bool;
   }.
@@ -67,11 +68,11 @@ Definition own ptr (pend_pk : option $ list w8) obj : iProp Σ :=
     end.
 
 Definition valid γ keys obj : iProp Σ :=
-  ∃ digs,
+  ∃ keys_digs,
   let agreeγ := γ.(cfg.agreeγ) in
-  "#Hlb_ver_digs" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) digs ∗
+  "#Hlb_ver_digs" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) keys_digs ∗
   "%Hstaged" ∷ ⌜ktcore.staged_keys agreeγ.(ktcore.Agree.vrf_pk)
-    (drop agreeγ.(ktcore.Agree.func_start) digs)
+    (drop agreeγ.(ktcore.Agree.func_start) keys_digs)
     γ.(cfg.uid) keys obj.(ver)⌝.
 
 Definition uid_inv γ : iProp Σ :=
@@ -81,11 +82,11 @@ Definition uid_inv γ : iProp Σ :=
 TODO: for now, trusted connection to clis_good. *)
 Definition is_uid_inv γ : iProp Σ := inv nroot (uid_inv γ).
 
-Definition align_full γcli γserv (pend_pk : option $ list w8) obj : iProp Σ :=
+Definition own_puts γ (pend_pk : option $ list w8) obj : iProp Σ :=
   ∃ uidγ,
-  "%Hlook_uidγ" ∷ ⌜γserv.(server.cfg.uidγ) !! γcli.(cfg.uid) = Some uidγ⌝ ∗
+  "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγs) !! γ.(cfg.uid) = Some uidγ⌝ ∗
   "HgoodCli" ∷
-    match γcli.(cfg.clis_good) with
+    match γ.(cfg.clis_good) with
     | true =>
       ∃ puts,
       "Hputs" ∷ mono_list_auth_own uidγ 1 puts ∗
@@ -170,8 +171,9 @@ Definition align_full γcli γserv : iProp Σ :=
   "%Heq_sig_pk" ∷ ⌜γcli.(cfg.sig_pk) = γserv.(server.cfg.sig_pk)⌝ ∗
   "%Heq_serv_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
   "%Heq_serv_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
-  (* not required, but makes life easier. *)
-  "%Heq_serv_func_start" ∷ ⌜servAgreeγ.(ktcore.Agree.func_start) = 0%nat⌝.
+  (* [func_start] equality not required, but makes life easier. *)
+  "%Heq_serv_func_start" ∷ ⌜servAgreeγ.(ktcore.Agree.func_start) = 0%nat⌝ ∗
+  "%Heq_uidγs" ∷ ⌜γcli.(cfg.uidγs) = γserv.(server.cfg.uidγs)⌝.
 
 End proof.
 End serv.
@@ -188,8 +190,7 @@ Definition own γ ptr σ : iProp Σ :=
   "Hstr_client" ∷ ptr ↦ (client.Client.mk γ.(cfg.uid) ptr_nextVer ptr_lastEp ptr_serv) ∗
   "Hown_nextVer" ∷ ver.own ptr_nextVer σ.(state.pend_pk) nextVer ∗
   "#His_nextVer" ∷ ver.valid γ σ.(state.keys) nextVer ∗
-  "Halign_nextVer" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
-    ver.align_full γ γserv σ.(state.pend_pk) nextVer end ∗
+  "Hputs_nextVer" ∷ ver.own_puts γ σ.(state.pend_pk) nextVer ∗
   "#Hown_lastEp" ∷ epoch.own ptr_lastEp lastEp ∗
   "#His_lastEp" ∷ epoch.valid γ digs lastEp ∗
   "#Halign_lastEp" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>

@@ -291,12 +291,11 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
     "#Halign_serv_full" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
       serv.align_full γ γserv end ∗
 
-    "#His_ver" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
-      ∃ i dig,
-      let servAgreeγ := servγ.(server.cfg.agreeγ) in
-      "%Hlook_dig" ∷ ⌜digs !! i = Some dig⌝ ∗
+    "#His_ver" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | _ =>
+      ∃ ver_idx ver_dig,
+      "%Hlook_ver_dig" ∷ ⌜digs !! ver_idx = Some ver_dig⌝ ∗
       "%Hlt_ver" ∷ ⌜uint.nat prevVerLen ≤
-        length $ ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid dig⌝ end
+        length $ ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid ver_dig⌝ end
   }}}
   ptr_c @! (go.PointerType client.Client) @! "getHistory" #uid #prevVerLen
   {{{
@@ -322,10 +321,10 @@ Lemma wp_Client_getHistory ptr_c uid (prevVerLen : w64) γ x0 x1 ptr_lastEp last
       "%Hnoof_vers" ∷ ⌜let num_vers := (uint.nat prevVerLen + length pks)%nat in
         num_vers = uint.nat (W64 num_vers)⌝ ∗
 
-      "#Hperm_pks" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
+      "#Hperm_pks" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | _ =>
         if decide (length pks = 0%nat) then True else
           ∃ uidγ,
-          "%Hlook_uidγ" ∷ ⌜servγ.(server.cfg.uidγ) !! uid = Some uidγ⌝ ∗
+          "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγs) !! uid = Some uidγ⌝ ∗
           "#Hidx_pks" ∷ ([∗ list] off ↦ pk ∈ pks,
             ∃ i,
             let ver := (uint.nat prevVerLen + off)%nat in
@@ -344,9 +343,9 @@ Proof.
     rewrite last_lookup in Hlast_dig.
     replace (pred _) with (uint.nat lastEp.(epoch.epoch)) in Hlast_dig; [|word].
     iDestruct (mono_list_idx_own_get with "Hserv_digs") as "$"; [done|].
-    apply lookup_lt_Some in Hlook_dig as ?.
+    apply lookup_lt_Some in Hlook_ver_dig as ?.
     rewrite Heq_serv_func_start drop_0 in Hmono_plain.
-    opose proof (ktcore.mono_plain_lookup uid _ Hlook_dig Hlast_dig _) as Hpref; [done|word|].
+    opose proof (ktcore.mono_plain_lookup uid _ Hlook_ver_dig Hlast_dig _) as Hpref; [done|word|].
     apply prefix_length in Hpref.
     rewrite Heq_vrf_pk in Hlt_ver.
     word. }
@@ -447,10 +446,10 @@ Proof.
       rewrite last_lookup in Hlast_dig.
       autorewrite with len in *.
       replace (pred _) with (uint.nat next.(epoch.epoch)) in Hlast_dig; [|word].
-      apply lookup_lt_Some in Hlook_dig as ?.
-      apply (lookup_app_l_Some _ newDigs) in Hlook_dig.
+      apply lookup_lt_Some in Hlook_ver_dig as ?.
+      apply (lookup_app_l_Some _ newDigs) in Hlook_ver_dig.
       rewrite Heq_serv_func_start drop_0 in Hmono_plain.
-      opose proof (ktcore.mono_plain_lookup uid _ Hlook_dig Hlast_dig _) as Hpref; [done|word|].
+      opose proof (ktcore.mono_plain_lookup uid _ Hlook_ver_dig Hlast_dig _) as Hpref; [done|word|].
       apply prefix_length in Hpref.
       word. }
     iExactEq "Hwish_bound". f_equal. word. }
@@ -522,6 +521,8 @@ Proof.
   iDestruct ("H" $! uid with "[]") as (?) "(%&#Hidx_pks)".
   { apply (f_equal length) in Heq_hist.
     autorewrite with len in *. word. }
+  iNamed "Halign_serv_full".
+  rewrite Heq_uidγs.
   iFrame "%".
   iApply big_sepL_intro.
   iIntros "!> * %Hlook".
@@ -529,17 +530,19 @@ Proof.
   by rewrite -Heq_hist lookup_drop in Hlook.
 Qed.
 
-Lemma wp_New serv_good clis_good uid (servAddr : w64) sl_servPk servPk :
+(* TODO: rename clis_good. mis-leading. we are a good client.
+this referring to smth else. whether our uid compromised. *)
+Lemma wp_New serv_good clis_good uidγs uid uidγ (servAddr : w64) sl_servPk servPk :
   {{{
     is_pkg_init client ∗
-    "Halign_uid" ∷ match server.Trust.get_full serv_good with None => True | Some γserv =>
-      ∃ uidγ,
-      "%Hlook_uidγ" ∷ ⌜γserv.(server.cfg.uidγ) !! uid = Some uidγ⌝ ∗
-      "Hclis_good" ∷
-        match clis_good with
-        | true => "Hown_uid" ∷ mono_list_auth_own uidγ 1 ([] : list (nat * list w8))
-        | false => "#Hinv_uid" ∷ ver.is_uid_inv uidγ
-        end end ∗
+    "%Hlook_uidγ" ∷ ⌜uidγs !! uid = Some uidγ⌝ ∗
+    "Hclis_good" ∷
+      match clis_good with
+      | true => "Hown_uid" ∷ mono_list_auth_own uidγ 1 ([] : list (nat * list w8))
+      | false => "#Hinv_uid" ∷ ver.is_uid_inv uidγ
+      end ∗
+    "%Heq_uidγs" ∷ ⌜match server.Trust.get_full serv_good with None => True | Some γserv =>
+      uidγs = γserv.(server.cfg.uidγs) end⌝ ∗
     "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
     "%Heq_servPk" ∷ ⌜match server.Trust.get_full serv_good with None => True | Some servγ =>
       servPk = servγ.(server.cfg.sig_pk) end⌝ ∗
@@ -557,6 +560,7 @@ Lemma wp_New serv_good clis_good uid (servAddr : w64) sl_servPk servPk :
       let agreeγ := γ.(cfg.agreeγ) in
       "%Heq_uid" ∷ ⌜γ.(cfg.uid) = uid⌝ ∗
       "%Heq_sig_pk" ∷ ⌜γ.(cfg.sig_pk) = servPk⌝ ∗
+      "%Heq_uidγs" ∷ ⌜γ.(cfg.uidγs) = uidγs⌝ ∗
       "%Heq_serv_good" ∷ ⌜γ.(cfg.serv_good) = serv_good⌝ ∗
       "%Heq_clis_good" ∷ ⌜γ.(cfg.clis_good) = clis_good⌝ ∗
       "%Heq_agree_ep" ∷ ⌜(agreeγ.(ktcore.Agree.digs_start) +
@@ -619,7 +623,7 @@ Proof.
   (* fake func_start out until later, so we can call getHistory. *)
   set (ktcore.Agree.mk vrf.(server.StartVrf.VrfPk) digsγ
     (S (uint.nat ep) - length digs) cut (length digs)) as fakeAgreeγ.
-  set (cfg.mk uid servPk fakeAgreeγ serv_good clis_good) as fakeγ.
+  set (cfg.mk uid servPk fakeAgreeγ uidγs serv_good clis_good) as fakeγ.
   iAssert (serv.own fakeγ ptr_serv)%I as "#Hown_serv".
   { iNamed "Hwish_CheckStartVrf". iFrame "#". }
   iAssert (match server.Trust.get_sigpred serv_good with None => True | Some γserv =>
@@ -695,8 +699,8 @@ Proof.
     iApply ktcore.blame_two.
     iSplit; [done|].
     iIntros ([? ->]).
+    iNamed "Hclis_good".
     destruct (server.Trust.get_full _); try done.
-    iNamed "Halign_uid". iNamed "Hclis_good".
     case_decide; [word|].
     iNamed "Hperm_pks".
     list_elem pks 0%nat as pk.
@@ -736,10 +740,7 @@ Proof.
     rewrite Hlast_dig in Hlast_dig0.
     simplify_eq/=.
     by eapply (ktcore.staged_init _ _ _ []).
-  - destruct (server.Trust.get_full _); try done.
-    iNamed "Halign_uid".
-    rewrite /ver.align_full.
-    iFrame "%". simpl.
+  - iFrame "%". simpl.
     destruct clis_good; [|done].
     iFrame.
     iPureIntro. set_solver.
@@ -772,7 +773,6 @@ Lemma wp_Client_Put γ ptr_c σ sl_pk pk :
 Proof.
   wp_start as "@".
   iNamed "Hclient". iNamed "Hown_nextVer". iNamed "Hown_serv".
-  destruct γ, σ. simpl in *.
   wp_auto. simpl.
   iPersist "c pk".
   wp_bind (If _ _ _).
@@ -781,7 +781,7 @@ Proof.
     ∃ sl_pendPk',
     "->" ∷ ⌜v = execute_val⌝ ∗
     "Hstr_client" ∷ ptr_c ↦ {|
-                          client.Client.uid' := uid;
+                          client.Client.uid' := γ.(cfg.uid);
                           client.Client.nextVer' := ptr_nextVer;
                           client.Client.lastEp' := ptr_lastEp;
                           client.Client.serv' := ptr_serv
@@ -796,7 +796,7 @@ Proof.
     with "[Hstr_client Hstr_ver]"
   ) as "* @".
   { wp_if_destruct.
-    - destruct pend_pk; iNamed "HpendPk"; try done.
+    - destruct σ.(state.pend_pk); iNamed "HpendPk"; try done.
       simplify_eq/=.
       wp_apply bytes.wp_Equal as "_".
       { iFrame "#". }
@@ -805,42 +805,39 @@ Proof.
       by iFrame "∗#".
     - by iFrame "∗#". }
 
-  destruct (server.Trust.get_full _) eqn:Heq_good; iNamed "Halign_nextVer".
-  2: {
-    wp_apply server.wp_CallPut.
-    { iFrame "#". rewrite Heq_good //. }
-    iApply "HΦ".
-    rewrite /Client.own Heq_good /=.
-    by iFrame "∗ Hstr_serv #%". }
+  iAssert (
+    |={⊤}=> ∃ uidγ i,
+    "Hputs_nextVer" ∷ ver.own_puts γ (Some pk) nextVer ∗
+    "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγs) !! γ.(cfg.uid) = Some uidγ⌝ ∗
+    "#Hidx_put" ∷ mono_list_idx_own uidγ i (nextVer.(ver.ver), pk))%I
+    with "[Hputs_nextVer]" as "> @".
+  { iNamed "Hputs_nextVer".
+    iFrame "%".
+    destruct γ.(cfg.clis_good); iNamed "HgoodCli".
+    - iMod (mono_list_auth_own_update_app [(nextVer.(ver.ver), pk)]
+        with "Hputs") as "[Hputs #Hlb]".
+      iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "$".
+      { by rewrite lookup_snoc. }
+      iFrame.
+      iPureIntro. split.
+      + intros. decompose_list_elem_of; [naive_solver|].
+        by simplify_eq/=.
+      + intros. decompose_list_elem_of; [|by simplify_eq/=].
+        destruct σ.(state.pend_pk); naive_solver.
+    - iFrame "#".
+      iInv "Huid_inv" as ">@" "Hclose".
+      iMod (mono_list_auth_own_update_app [(nextVer.(ver.ver), pk)]
+        with "Hputs") as "[Hputs #Hlb]".
+      iMod ("Hclose" with "[Hputs]") as "_"; [iFrame|].
+      iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "$"; [|done].
+      { by rewrite lookup_snoc. } }
 
-  simpl in *. destruct clis_good; iNamed "HgoodCli".
-  - iMod (mono_list_auth_own_update_app [(nextVer.(ver.ver), pk)]
-      with "Hputs") as "[Hputs #Hlb]".
-    iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "#Hidx".
-    { by rewrite lookup_snoc. }
-    wp_apply server.wp_CallPut.
-    { iFrame "#". rewrite Heq_good Heq_ver. iFrame "#%". }
-    iApply "HΦ".
-    rewrite /Client.own Heq_good /=.
-    iFrame "∗ Hstr_serv #%". simpl in *.
-    iPureIntro. repeat split; try done.
-    + intros. decompose_list_elem_of; [naive_solver|].
-      by simplify_eq/=.
-    + intros. decompose_list_elem_of; [naive_solver|].
-      by simplify_eq/=.
-  - iApply fupd_wp.
-    iInv "Huid_inv" as ">@" "Hclose".
-    iMod (mono_list_auth_own_update_app [(nextVer.(ver.ver), pk)]
-      with "Hputs") as "[Hputs #Hlb]".
-    iMod ("Hclose" with "[Hputs]") as "_"; [iFrame|].
-    iModIntro.
-    iDestruct (mono_list_idx_own_get (length puts) with "Hlb") as "#Hidx".
-    { by rewrite lookup_snoc. }
-    wp_apply server.wp_CallPut.
-    { iFrame "#". rewrite Heq_good Heq_ver. iFrame "#%". }
-    iApply "HΦ".
-    rewrite /Client.own Heq_good /=.
-    by iFrame "∗ Hstr_serv #%".
+  wp_apply server.wp_CallPut.
+  { rewrite Heq_ver. iFrame "#%".
+    destruct (server.Trust.get_full _); try done.
+    by iNamed "Halign_serv_full". }
+  iApply "HΦ".
+  by iFrame "∗ Hstr_serv #%".
 Qed.
 
 Lemma wp_Client_Get γ ptr_c σ (uid : w64) :
@@ -1057,7 +1054,6 @@ Proof.
   iNamed "Hclient". iNamed "Hown_nextVer". wp_auto.
   rewrite /own. iNamed "Hown_gs".
   iNamed "His_nextVer".
-  rename digs0 into keys_digs.
   iDestruct (mono_list_auth_lb_valid with "Hown_digs Hlb_ver_digs") as %[_ Hpref].
   wp_apply (wp_Client_getHistory with "[$Hstr_client]") as "* @".
   { iFrame "#".
@@ -1065,8 +1061,8 @@ Proof.
     erewrite server.Trust.full_to_sigpred; [|done].
     clear Ht.
     iNamed "Halign_lastEp". iNamed "Halign_serv_sigpred". iNamed "Halign_serv_full".
-    rewrite Heq_serv_func_start drop_0 in Hmono_plain.
     apply ktcore.staged_extract in Hstaged as (last_dig&_&Hlast_dig&_&_&Ht).
+    rewrite Heq_serv_func_start drop_0 in Hmono_plain.
     opose proof (Ht _) as Hnum_vers.
     { rewrite Heq_vrf_pk.
       unfold ktcore.mono_plain in *.
@@ -1104,11 +1100,10 @@ Proof.
       iFrame "∗ Hown_serv Hown_lastEp #%". }
     iApply ktcore.blame_two.
     iSplit; [done|].
-    iIntros ([? Hclis_good]).
-    destruct (server.Trust.get_full _); try done.
-    iNamed "Halign_nextVer".
-    simplify_eq/=. rewrite Hclis_good.
+    iNamed "Hputs_nextVer".
+    iIntros ([? ->]).
     iNamed "HgoodCli".
+    destruct (server.Trust.get_full _); try done.
     destruct Herr as [?|(pk&->&?)].
     - destruct (decide (_ = 0%nat)) as [Ht|Ht]; [word|]. clear Ht.
       iNamed "Hperm_pks".
@@ -1184,8 +1179,7 @@ Proof.
   - word.
   - word.
   - simpl. word.
-  - destruct (server.Trust.get_full _); try done.
-    iNamed "Halign_nextVer".
+  - iNamed "Hputs_nextVer".
     iFrame "%".
     destruct (γ.(cfg.clis_good)); try done.
     iNamed "HgoodCli".
@@ -1216,8 +1210,6 @@ Lemma wp_Client_Audit γ ptr_c σ adtr_good (adtrAddr : w64) sl_adtrPk adtrPk :
     "%Hblame" ∷ ⌜ktcore.BlameSpec err
       ({[
         ktcore.BlameServSig:=option_bool $ server.Trust.get_sigpred γ.(cfg.serv_good);
-        ktcore.BlameServFull:=option_bool $ server.Trust.get_full γ.(cfg.serv_good);
-        ktcore.BlameAdtrSig:=option_bool $ auditor.Trust.get_sigpred adtr_good;
         ktcore.BlameAdtrFull:=option_bool $ auditor.Trust.get_full adtr_good
       ]})⌝ ∗
     "#Hevid" ∷ (if decide (ptr_evid = null) then True else

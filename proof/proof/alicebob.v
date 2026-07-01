@@ -27,9 +27,9 @@ Collection W := sem + package_sem.
 #[global] Instance : IsPkgInit (iProp Σ) alicebob := define_is_pkg_init True%I.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) alicebob := build_get_is_pkg_init_wf.
 
-(* [alice_okay] is whether alice's uid is adversarially controlled. *)
+(* [alice_leak] is whether alice's uid is adversarially controlled. *)
 Lemma wp_testAliceBob (serv_trust adtr_trust : Trust.t)
-    (alice_okay bob_okay : bool)
+    (alice_leak bob_leak : bool)
     (servAddr : w64) (servGood : bool) sl_adtrAddrs (adtrAddrs : list w64) :
   {{{
     is_pkg_init alicebob ∗

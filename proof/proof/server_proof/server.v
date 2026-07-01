@@ -22,7 +22,7 @@ Record t :=
     sig_pk : list w8;
     pendγ : gname;
     (* map from uid to gname. *)
-    uidγ : gmap w64 gname;
+    uidγs : gmap w64 gname;
     agreeγ : ktcore.Agree.t;
   }.
 End cfg.
@@ -105,7 +105,7 @@ Definition valid γ obj : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
   "#Hperm_uids" ∷ ([∗ map] uid ↦ pks ∈ obj.(state.pending),
     ∃ uidγ,
-    "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
+    "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγs) !! uid = Some uidγ⌝ ∗
     "#Hpks" ∷ ([∗ list] ver ↦ pk ∈ pks,
       ∃ i,
       (* client owns mlist_auth for their uid.
@@ -156,7 +156,7 @@ Lemma digs_to_put_perms γ i dig :
     (* if empty pks, might not have uidγ. *)
     ⌜length pks > 0%nat⌝ -∗
     ∃ uidγ,
-      ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
+      ⌜γ.(cfg.uidγs) !! uid = Some uidγ⌝ ∗
       ([∗ list] ver ↦ pk ∈ pks,
         ∃ i,
         mono_list_idx_own uidγ i (ver, pk)).
@@ -278,7 +278,7 @@ Definition perm_put γ uid ver pk : iProp Σ :=
 
 Lemma op_put γ uid uidγ i ver pk :
   is_inv γ -∗
-  ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ -∗
+  ⌜γ.(cfg.uidγs) !! uid = Some uidγ⌝ -∗
   mono_list_idx_own uidγ i (ver, pk) -∗
   perm_put γ uid ver pk.
 Proof.
@@ -1409,7 +1409,7 @@ Lemma wp_New (epochTime : w64) (uidγ : gmap w64 gname) :
   {{{
     γ obj ptr_server sl_sigPk, RET (#ptr_server, #sl_sigPk);
     "#His_inv" ∷ is_inv γ ∗
-    "%Heq_uidγ" ∷ ⌜γ.(cfg.uidγ) = uidγ⌝ ∗
+    "%Heq_uidγ" ∷ ⌜γ.(cfg.uidγs) = uidγ⌝ ∗
     "Hlocks" ∷ ([∗] replicate (pred $ Z.to_nat rwmutex.actualMaxReaders)
       (Server.lock_perm γ ptr_server obj)) ∗
     "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.sig_pk) ∗

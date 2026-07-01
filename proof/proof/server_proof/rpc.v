@@ -87,15 +87,15 @@ Lemma wp_Put_cli_call c good uid pk ver sl_arg d0 arg ptr_reply (x : slice.t) :
   }}}.
 Proof. Admitted.
 
-Lemma wp_CallPut c good uid sl_pk (pk : list w8) (ver : w64) :
+Lemma wp_CallPut c good uid sl_pk (pk : list w8) uidγs uidγ i (ver : w64) :
   {{{
     is_pkg_init server ∗
     "#His_cli" ∷ is_rpc_cli c good ∗
     "#Hsl_pk" ∷ sl_pk ↦*□ pk ∗
-    "#His_put" ∷ match Trust.get_full good with None => True | Some γ =>
-      ∃ i uidγ,
-      "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
-      "#Hidx" ∷ mono_list_idx_own uidγ i (uint.nat ver, pk) end
+    "%Hlook_uidγ" ∷ ⌜uidγs !! uid = Some uidγ⌝ ∗
+    "#His_put" ∷ mono_list_idx_own uidγ i (uint.nat ver, pk) ∗
+    "%Heq_uidγs" ∷ ⌜match Trust.get_full good with None => True | Some γ =>
+      uidγs = γ.(cfg.uidγs) end⌝
   }}}
   @! server.CallPut #c #uid #sl_pk #ver
   {{{ RET #(); True }}}.
@@ -113,7 +113,7 @@ Proof.
   { iFrame "#%".
     rewrite /is_rpc_cli.
     case_match; [|done].
-    iNamed "His_put".
+    subst.
     by iApply op_put. }
   wp_end.
 Qed.

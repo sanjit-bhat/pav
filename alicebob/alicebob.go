@@ -107,7 +107,7 @@ func testAliceBob(servAddr uint64, servGood bool, adtrAddrs []uint64) {
 		primitive.Assume(ep == 2)
 	}
 
-	// "KT consistency".
+	// KT agreement.
 	std.Assert(!bobHasPk0)
 	std.Assert(bobHasPk1)
 	std.Assert(bytes.Equal(bobPk1, alicePk1))
