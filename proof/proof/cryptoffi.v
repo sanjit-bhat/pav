@@ -462,6 +462,7 @@ Lemma wp_RandBytes (n : w64) :
   @! cryptoffi.RandBytes #n
   {{{
     sl_b (b : list w8), RET #sl_b;
+    (* TODO: remove iNames. too low-level. *)
     "Hsl_b" ∷ sl_b ↦* b ∗
     "%Hlen_b" ∷ ⌜length b = uint.nat n⌝
   }}}.
