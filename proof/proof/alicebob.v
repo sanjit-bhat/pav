@@ -1,10 +1,11 @@
 From New.generatedproof.github_com.sanjit_bhat.pav Require Import alicebob.
-From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 From New.proof Require Import bytes time.
 From New.proof.github_com.goose_lang Require Import primitive std.
 From New.proof.github_com.sanjit_bhat.pav Require Import
   advrpc auditor client cryptoffi ktcore server.
+
+From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 
 Module alicebob.
 
@@ -53,34 +54,34 @@ Ltac solve_pkg_init2 :=
       end);
   solve [ iFrame "#" ].
 
-Definition get_servγ t γ :=
+Definition mk_servγ t γ :=
   match t with
   | Trust.No => server.Trust.No
   | Trust.SigPred => server.Trust.SigPred γ.(server.cfg.agreeγ)
   | Trust.Full => server.Trust.Full γ
   end.
 
-Lemma get_servγ_full t γ x :
-  server.Trust.get_full (get_servγ t γ) = Some x → x = γ.
+Lemma mk_servγ_full t γ x :
+  server.Trust.get_full (mk_servγ t γ) = Some x → x = γ.
 Proof. intros. destruct t; try done; by simplify_eq/=. Qed.
 
-Lemma get_servγ_sigpred t γ x :
-  server.Trust.get_sigpred (get_servγ t γ) = Some x → x = γ.(server.cfg.agreeγ).
+Lemma mk_servγ_sigpred t γ x :
+  server.Trust.get_sigpred (mk_servγ t γ) = Some x → x = γ.(server.cfg.agreeγ).
 Proof. intros. destruct t; try done; by simplify_eq/=. Qed.
 
-Definition get_adtrγ t γ :=
+Definition mk_adtrγ t γ :=
   match t with
   | Trust.No => auditor.Trust.No
   | Trust.SigPred => auditor.Trust.SigPred γ.(auditor.cfg.agreeγ)
   | Trust.Full => auditor.Trust.Full γ
   end.
 
-Lemma get_adtrγ_full t γ x :
-  auditor.Trust.get_full (get_adtrγ t γ) = Some x → x = γ.
+Lemma mk_adtrγ_full t γ x :
+  auditor.Trust.get_full (mk_adtrγ t γ) = Some x → x = γ.
 Proof. intros. destruct t; try done; by simplify_eq/=. Qed.
 
-Lemma get_adtrγ_sigpred t γ x :
-  auditor.Trust.get_sigpred (get_adtrγ t γ) = Some x → x = γ.(auditor.cfg.agreeγ).
+Lemma mk_adtrγ_sigpred t γ x :
+  auditor.Trust.get_sigpred (mk_adtrγ t γ) = Some x → x = γ.(auditor.cfg.agreeγ).
 Proof. intros. destruct t; try done; by simplify_eq/=. Qed.
 
 Lemma wp_testAliceBob (serv_trust adtr_trust : Trust.t) (alice_good bob_good : bool)
@@ -132,15 +133,15 @@ Proof.
   wp_apply time.wp_Sleep.
 
   (* epoch 0. *)
-  wp_apply (client.wp_New uidγs (get_servγ serv_trust γ) with "[$Halice_good]") as "* @".
+  wp_apply (client.wp_New uidγs (mk_servγ serv_trust γ) with "[$Halice_good]") as "* @".
   { iFrame "#".
     iSplitR. { iPureIntro. by simplify_map_eq/=. }
     rewrite (assoc _).
     iSplitR.
     - destruct (server.Trust.get_full _) eqn:Ht; try done.
-      apply get_servγ_full in Ht. by subst.
+      apply mk_servγ_full in Ht. by subst.
     - destruct (server.Trust.get_sigpred _) eqn:Ht; try done.
-      apply get_servγ_sigpred in Ht. by subst. }
+      apply mk_servγ_sigpred in Ht. by subst. }
   clear Hblame.
   wp_apply primitive.wp_Assume as "%".
   case_bool_decide as Ht; try done.
@@ -149,15 +150,15 @@ Proof.
   iNamedSuffix "Herr" "_al".
   wp_apply primitive.wp_Assume as "%".
   case_bool_decide as Ht; try done. subst.
-  wp_apply (client.wp_New uidγs (get_servγ serv_trust γ) with "[$Hbob_good]") as "* @".
+  wp_apply (client.wp_New uidγs (mk_servγ serv_trust γ) with "[$Hbob_good]") as "* @".
   { iFrame "#".
     iSplitR. { iPureIntro. by simplify_map_eq/=. }
     rewrite (assoc _).
     iSplitR.
     - destruct (server.Trust.get_full _) eqn:Ht; try done.
-      apply get_servγ_full in Ht. by subst.
+      apply mk_servγ_full in Ht. by subst.
     - destruct (server.Trust.get_sigpred _) eqn:Ht; try done.
-      apply get_servγ_sigpred in Ht. by subst. }
+      apply mk_servγ_sigpred in Ht. by subst. }
   clear Hblame.
   wp_apply primitive.wp_Assume as "%".
   case_bool_decide as Ht; try done.
@@ -196,8 +197,8 @@ Proof.
       "#His_inv_adtr1" ∷ auditor.is_inv adtr1γ ∗
       "Hadtr0" ∷ auditor.Auditor.lock_perm adtr0 adtr0γ ∗
       "Hadtr1" ∷ auditor.Auditor.lock_perm adtr1 adtr1γ ∗
-      "%Heq_servGood0" ∷ ⌜adtr0γ.(auditor.cfg.serv_good) = get_servγ serv_trust γ⌝ ∗
-      "%Heq_servGood1" ∷ ⌜adtr1γ.(auditor.cfg.serv_good) = get_servγ serv_trust γ⌝ ∗
+      "%Heq_servGood0" ∷ ⌜adtr0γ.(auditor.cfg.serv_good) = mk_servγ serv_trust γ⌝ ∗
+      "%Heq_servGood1" ∷ ⌜adtr1γ.(auditor.cfg.serv_good) = mk_servγ serv_trust γ⌝ ∗
       "%Heq_servPk0" ∷ ⌜adtr0γ.(auditor.cfg.serv_sig_pk) = γ.(server.cfg.sig_pk)⌝ ∗
       "%Heq_servPk1" ∷ ⌜adtr1γ.(auditor.cfg.serv_sig_pk) = γ.(server.cfg.sig_pk)⌝ ∗
       "#Hsl_sigPk0" ∷ sl_adtr0Pk ↦*□ adtr0γ.(auditor.cfg.adtr_sig_pk) ∗
@@ -208,10 +209,10 @@ Proof.
         (sigpred.P adtr1γ.(auditor.cfg.agreeγ)))
     )%I with "[err ep adtr0 adtr1 adtr0Pk adtr1Pk]".
   { by iFrame "∗#". }
-  { wp_apply (auditor.wp_New (get_servγ serv_trust γ)) as "* @".
+  { wp_apply (auditor.wp_New (mk_servγ serv_trust γ)) as "* @".
     { iFrame "#".
       destruct (server.Trust.get_full _) eqn:Ht; try done.
-      apply get_servγ_full in Ht. subst.
+      apply mk_servγ_full in Ht. subst.
       by iFrame "#". }
     clear Hblame.
     wp_apply primitive.wp_Assume as "%".
@@ -219,10 +220,10 @@ Proof.
     apply ktcore.rw_Blame0 in Ht. subst.
     destruct (decide (_ ≠ ∅)) as [Ht|Ht]; try done. clear Ht.
     iNamedSuffix "Herr" "_adtr0".
-    wp_apply (auditor.wp_New (get_servγ serv_trust γ)) as "* @".
+    wp_apply (auditor.wp_New (mk_servγ serv_trust γ)) as "* @".
     { iFrame "#".
       destruct (server.Trust.get_full _) eqn:Ht; try done.
-      apply get_servγ_full in Ht. subst.
+      apply mk_servγ_full in Ht. subst.
       by iFrame "#". }
     clear Hblame.
     wp_apply primitive.wp_Assume as "%".
@@ -289,7 +290,7 @@ Proof.
     "->" ∷ ⌜v = execute_val⌝ ∗
     "err" ∷ err_ptr ↦ ktcore.blame_to_u64 ∅ ∗
     "ep" ∷ ep_ptr ↦ x0 ∗
-    "Hclient_al1" ∷ client.Client.own γ0 ptr_c
+    "Hclient_al" ∷ client.Client.own γ0 ptr_c
                   {|
                     client.state.epoch := uint.nat (W64 1);
                     client.state.keys :=
@@ -299,20 +300,20 @@ Proof.
                          :: replicate num_pend_key (Some alicePk1);
                     client.state.pend_pk := None
                   |} ∗
-    "Hclient_bob1" ∷ client.Client.own γ1 ptr_c0
+    "Hclient_bob" ∷ client.Client.own γ1 ptr_c0
                    {|
                      client.state.epoch := uint.nat (W64 1);
                      client.state.keys := [None];
                      client.state.pend_pk := None
                    |} ∗
-    "Hadtrs_ep0" ∷ (if servGood then True else
+    "Hadtrs_ep1_0" ∷ (if servGood then True else
       ∃ adtr0γ adtr1γ,
       "#His_inv_adtr0" ∷ auditor.is_inv adtr0γ ∗
       "#His_inv_adtr1" ∷ auditor.is_inv adtr1γ ∗
       "Hadtr0" ∷ auditor.Auditor.lock_perm adtr0 adtr0γ ∗
       "Hadtr1" ∷ auditor.Auditor.lock_perm adtr1 adtr1γ ∗
-      "%Heq_servGood0" ∷ ⌜adtr0γ.(auditor.cfg.serv_good) = get_servγ serv_trust γ⌝ ∗
-      "%Heq_servGood1" ∷ ⌜adtr1γ.(auditor.cfg.serv_good) = get_servγ serv_trust γ⌝ ∗
+      "%Heq_servGood0" ∷ ⌜adtr0γ.(auditor.cfg.serv_good) = mk_servγ serv_trust γ⌝ ∗
+      "%Heq_servGood1" ∷ ⌜adtr1γ.(auditor.cfg.serv_good) = mk_servγ serv_trust γ⌝ ∗
       "%Heq_servPk0" ∷ ⌜adtr0γ.(auditor.cfg.serv_sig_pk) = γ.(server.cfg.sig_pk)⌝ ∗
       "%Heq_servPk1" ∷ ⌜adtr1γ.(auditor.cfg.serv_sig_pk) = γ.(server.cfg.sig_pk)⌝ ∗
       "#Hsl_sigPk0" ∷ sl_adtr0Pk ↦*□ adtr0γ.(auditor.cfg.adtr_sig_pk) ∗
@@ -322,18 +323,17 @@ Proof.
       "#His_sigPk1" ∷ cryptoffi.is_sig_pk adtr1γ.(auditor.cfg.adtr_sig_pk)
         (sigpred.P adtr1γ.(auditor.cfg.agreeγ)) ∗
 
-      "His_audit_al1" ∷ match auditor.Trust.get_sigpred (get_adtrγ adtr_trust adtr0γ) with None => True | Some adtrγ =>
+      "#His_audit_al1" ∷ match auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr0γ) with None => True | Some adtrγ =>
         ktcore.is_audit γ0.(client.cfg.agreeγ) adtrγ 1%nat end ∗
-      "His_audit_bob1" ∷ match auditor.Trust.get_sigpred (get_adtrγ adtr_trust adtr1γ) with None => True | Some adtrγ =>
+      "#His_audit_bob1" ∷ match auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr1γ) with None => True | Some adtrγ =>
         ktcore.is_audit γ1.(client.cfg.agreeγ) adtrγ 1%nat end ∗
-      "%Heq_startEp0" ∷ ⌜match auditor.Trust.get_sigpred (get_adtrγ adtr_trust adtr0γ) with None => True | Some adtrγ =>
+      "%Heq_startEp0" ∷ ⌜match auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr0γ) with None => True | Some adtrγ =>
         (adtrγ.(ktcore.Agree.digs_start) + adtrγ.(ktcore.Agree.func_start) = 0)%nat end⌝ ∗
-      "%Heq_startEp1" ∷ ⌜match auditor.Trust.get_sigpred (get_adtrγ adtr_trust adtr1γ) with None => True | Some adtrγ =>
+      "%Heq_startEp1" ∷ ⌜match auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr1γ) with None => True | Some adtrγ =>
         (adtrγ.(ktcore.Agree.digs_start) + adtrγ.(ktcore.Agree.func_start) = 0)%nat end⌝)
     )%I with "[err ep Hclient_al1 Hclient_bob1 Hadtrs_ep0]".
   { by iFrame "∗#". }
-  {
-    iNamed "Hadtrs_ep0".
+  { iNamed "Hadtrs_ep0".
     wp_apply (auditor.wp_Auditor_Update (λ _, True%I) with "[$Hadtr0]") as "* H".
     { by iApply auditor.op_update. }
     iNamedSuffix "H" "0".
@@ -345,15 +345,15 @@ Proof.
     case_decide as Ht; [|word]. clear Ht.
     wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
     (* TODO: make adtr_good param come first. *)
-    wp_apply (client.wp_Client_Audit _ _ _ (get_adtrγ adtr_trust adtr0γ)
+    wp_apply (client.wp_Client_Audit _ _ _ (mk_adtrγ adtr_trust adtr0γ)
       with "[$Hclient_al1]") as "* H".
     { iFrame "#".
       iSplitR.
       { destruct (auditor.Trust.get_sigpred _) eqn:Ht; try done.
-        apply get_adtrγ_sigpred in Ht. subst.
+        apply mk_adtrγ_sigpred in Ht. subst.
         by iFrame "#". }
       { destruct (auditor.Trust.get_full _) eqn:Ht; try done.
-        apply get_adtrγ_full in Ht. subst.
+        apply mk_adtrγ_full in Ht. subst.
         iPureIntro. split; [done|congruence]. } }
     iNamedSuffix "H" "_al1".
     clear Hblame_al1.
@@ -368,15 +368,15 @@ Proof.
     case_bool_decide as Ht; try done. subst.
     destruct (decide (0 ≤ _ < _)) as [Ht|Ht]; [|word]. clear Ht.
     wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
-    wp_apply (client.wp_Client_Audit _ _ _ (get_adtrγ adtr_trust adtr1γ)
+    wp_apply (client.wp_Client_Audit _ _ _ (mk_adtrγ adtr_trust adtr1γ)
       with "[$Hclient_bob1]") as "* H".
     { iFrame "#".
       iSplitR.
       { destruct (auditor.Trust.get_sigpred (_ _ adtr1γ)) eqn:Ht; try done.
-        apply get_adtrγ_sigpred in Ht. subst.
+        apply mk_adtrγ_sigpred in Ht. subst.
         by iFrame "#". }
       { destruct (auditor.Trust.get_full (_ _ adtr1γ)) eqn:Ht; try done.
-        apply get_adtrγ_full in Ht. subst.
+        apply mk_adtrγ_full in Ht. subst.
         iPureIntro. split; [done|congruence]. } }
     iNamedSuffix "H" "_bob1".
     clear Hblame_bob1.
@@ -394,12 +394,271 @@ Proof.
     simpl in *.
     iPureIntro. repeat split; try done.
     - destruct (auditor.Trust.get_sigpred (_ _ adtr0γ)) eqn:Ht; try done.
-      apply get_adtrγ_sigpred in Ht. subst.
+      apply mk_adtrγ_sigpred in Ht. subst.
       word.
     - destruct (auditor.Trust.get_sigpred (_ _ adtr1γ)) eqn:Ht; try done.
-      apply get_adtrγ_sigpred in Ht. subst.
+      apply mk_adtrγ_sigpred in Ht. subst.
       word. }
-Admitted.
+  iIntros "* @". wp_auto.
+
+  wp_if_join
+    (λ v,
+    ∃ (x0 : w64) adtr2 sl_adtr2Pk,
+    "->" ∷ ⌜v = execute_val⌝ ∗
+    "err" ∷ err_ptr ↦ ktcore.blame_to_u64 ∅ ∗
+    "ep" ∷ ep_ptr ↦ x0 ∗
+    "adtr2" ∷ adtr2_ptr ↦ adtr2 ∗
+    "adtr2Pk" ∷ adtr2Pk_ptr ↦ sl_adtr2Pk ∗
+    "Hadtrs_ep1_1" ∷ (if servGood then True else
+      ∃ adtr2γ,
+      "#His_inv_adtr2" ∷ auditor.is_inv adtr2γ ∗
+      "Hadtr2" ∷ auditor.Auditor.lock_perm adtr2 adtr2γ ∗
+      "%Heq_servGood2" ∷ ⌜adtr2γ.(auditor.cfg.serv_good) = mk_servγ serv_trust γ⌝ ∗
+      "%Heq_servPk2" ∷ ⌜adtr2γ.(auditor.cfg.serv_sig_pk) = γ.(server.cfg.sig_pk)⌝ ∗
+      "#Hsl_sigPk2" ∷ sl_adtr2Pk ↦*□ adtr2γ.(auditor.cfg.adtr_sig_pk) ∗
+      "#His_sigPk2" ∷ cryptoffi.is_sig_pk adtr2γ.(auditor.cfg.adtr_sig_pk)
+        (sigpred.P adtr2γ.(auditor.cfg.agreeγ)))
+    )%I with "[err ep adtr2 adtr2Pk]".
+  { by iFrame "∗#". }
+  { wp_apply (auditor.wp_New (mk_servγ serv_trust γ)) as "* @".
+    { iFrame "#".
+      destruct (server.Trust.get_full _) eqn:Ht; try done.
+      apply mk_servγ_full in Ht. subst.
+      by iFrame "#". }
+    clear Hblame.
+    wp_apply primitive.wp_Assume as "%".
+    case_bool_decide as Ht; try done.
+    apply ktcore.rw_Blame0 in Ht. subst.
+    destruct (decide (_ ≠ ∅)) as [Ht|Ht]; try done. clear Ht.
+    iNamedSuffix "Herr" "_adtr2".
+    replace (Z.to_nat rwmutex.actualMaxReaders) with
+      (S $ pred $ Z.to_nat rwmutex.actualMaxReaders).
+    2: { rewrite rwmutex.actualMaxReaders_unseal. lia. }
+    simpl.
+    iDestruct "Hlocks_adtr2" as "[Hadtr2 Hlocks_adtr2]".
+    case_decide as Ht; [|word]. clear Ht.
+    wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
+    wp_apply (auditor.wp_NewRpcServer with "[$Hlocks_adtr2]") as "* H".
+    iNamedSuffix "H" "2".
+    wp_apply advrpc.wp_Server_Serve.
+    { iFrame "#". solve_pkg_init2. }
+    wp_apply time.wp_Sleep.
+    iFrame "adtr2 adtr2Pk".
+    by iFrame "∗#". }
+  iIntros "* @". wp_auto.
+  iPersist "adtr2 adtr2Pk".
+
+  (* epoch 2. *)
+  wp_apply cryptoffi.wp_RandBytes as "%sl_alicePk2 %alicePk2 @".
+  clear Hlen_b. iRename "Hsl_b" into "Hsl_alicePk2".
+  iPersist "Hsl_alicePk2".
+  wp_apply (client.wp_Client_Put with "[$Hclient_al]") as "@".
+  { iFrame "#". }
+  wp_apply time.wp_Sleep.
+  wp_apply (client.wp_Client_SelfMon with "[$Hclient]") as "* @".
+  clear Hblame.
+  simpl.
+  wp_apply primitive.wp_Assume as "%".
+  case_bool_decide as Ht; try done.
+  apply ktcore.rw_Blame0 in Ht. subst.
+  destruct (decide (_ ≠ ∅)) as [Ht|Ht]; try done. clear Ht.
+  iNamedSuffix "Herr" "2".
+  wp_apply primitive.wp_Assume as "%".
+  case_bool_decide as Ht; try done. subst.
+  wp_apply primitive.wp_Assume as "%". subst.
+  iNamedSuffix "Hchanged2" "_al2".
+  wp_apply (client.wp_Client_Get with "[$Hclient_bob]") as "* @".
+  clear Hblame.
+  wp_apply primitive.wp_Assume as "%".
+  case_bool_decide as Ht; try done.
+  apply ktcore.rw_Blame0 in Ht. subst.
+  destruct (decide (_ ≠ ∅)) as [Ht|Ht]; try done. clear Ht.
+  iNamedSuffix "Herr" "_bob2". simpl in *.
+  wp_apply primitive.wp_Assume as "%".
+  case_bool_decide as Ht; try done. subst.
+
+  wp_if_join
+    (λ v,
+    ∃ (x0 : w64),
+    "->" ∷ ⌜v = execute_val⌝ ∗
+    "err" ∷ err_ptr ↦ ktcore.blame_to_u64 ∅ ∗
+    "ep" ∷ ep_ptr ↦ x0 ∗
+    "Hclient_al" ∷ client.Client.own γ0 ptr_c
+                  {|
+                    client.state.epoch := uint.nat (W64 2);
+                    client.state.keys :=
+                      None
+                      :: (replicate num_last_key last_key ++
+                          Some alicePk1
+                          :: replicate num_pend_key (Some alicePk1)) ++
+                         replicate num_last_key0 last_key0 ++
+                         Some alicePk2
+                         :: replicate num_pend_key0 (Some alicePk2);
+                    client.state.pend_pk := None
+                  |} ∗
+    "Hclient_bob" ∷ client.Client.own γ1 ptr_c0
+                   {|
+                     client.state.epoch := uint.nat (W64 2);
+                     client.state.keys := [None];
+                     client.state.pend_pk := None
+                   |} ∗
+    "Hadtrs_ep2" ∷ (if servGood then True else
+      ∃ adtr2γ,
+      "#His_inv_adtr2" ∷ auditor.is_inv adtr2γ ∗
+      "Hadtr2" ∷ auditor.Auditor.lock_perm adtr2 adtr2γ ∗
+      "%Heq_servGood2" ∷ ⌜adtr2γ.(auditor.cfg.serv_good) = mk_servγ serv_trust γ⌝ ∗
+      "%Heq_servPk2" ∷ ⌜adtr2γ.(auditor.cfg.serv_sig_pk) = γ.(server.cfg.sig_pk)⌝ ∗
+      "#Hsl_sigPk2" ∷ sl_adtr2Pk ↦*□ adtr2γ.(auditor.cfg.adtr_sig_pk) ∗
+      "#His_sigPk2" ∷ cryptoffi.is_sig_pk adtr2γ.(auditor.cfg.adtr_sig_pk)
+        (sigpred.P adtr2γ.(auditor.cfg.agreeγ)) ∗
+
+      "#His_audit_al2" ∷ match auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr2γ) with None => True | Some adtrγ =>
+        ktcore.is_audit γ0.(client.cfg.agreeγ) adtrγ 2%nat end ∗
+      "#His_audit_bob2" ∷ match auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr2γ) with None => True | Some adtrγ =>
+        ktcore.is_audit γ1.(client.cfg.agreeγ) adtrγ 2%nat end ∗
+      "%Heq_startEp" ∷ ⌜match auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr2γ) with None => True | Some adtrγ =>
+        (adtrγ.(ktcore.Agree.digs_start) + adtrγ.(ktcore.Agree.func_start) ≤ 1)%nat end⌝)
+    )%I with "[err ep Hclient_al2 Hclient_bob2 Hadtrs_ep1_1]".
+  { by iFrame "∗#". }
+  { iNamed "Hadtrs_ep1_1".
+    wp_apply (auditor.wp_Auditor_Update (λ _, True%I) with "[$Hadtr2]") as "* H".
+    { by iApply auditor.op_update. }
+    iNamedSuffix "H" "2".
+    clear Hblame2.
+    case_decide as Ht; [|word]. clear Ht.
+    wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
+    wp_apply (client.wp_Client_Audit _ _ _ (mk_adtrγ adtr_trust adtr2γ)
+      with "[$Hclient_al2]") as "* H".
+    { iFrame "#".
+      iSplitR.
+      { destruct (auditor.Trust.get_sigpred _) eqn:Ht; try done.
+        apply mk_adtrγ_sigpred in Ht. subst.
+        by iFrame "#". }
+      { destruct (auditor.Trust.get_full _) eqn:Ht; try done.
+        apply mk_adtrγ_full in Ht. subst.
+        iPureIntro. split; [done|congruence]. } }
+    iNamedSuffix "H" "_al2".
+    clear Hblame_al2.
+    wp_apply primitive.wp_Assume as "%".
+    case_bool_decide as Ht; try done.
+    apply ktcore.rw_Blame0 in Ht. subst.
+    destruct (decide (_ ≠ ∅)) as [Ht|Ht]; try done. clear Ht.
+    iNamedSuffix "Herr_al2" "_al2".
+    wp_apply primitive.wp_Assume as "%".
+    case_bool_decide as Ht; try done. subst.
+    wp_apply primitive.wp_Assume as "%".
+    case_bool_decide as Ht; try done. subst.
+    destruct (decide (0 ≤ _ < _)) as [Ht|Ht]; [|word]. clear Ht.
+    wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
+    wp_apply (client.wp_Client_Audit _ _ _ (mk_adtrγ adtr_trust adtr2γ)
+      with "[$Hclient_bob2]") as "* H".
+    { iFrame "#".
+      iSplitR.
+      { destruct (auditor.Trust.get_sigpred _) eqn:Ht; try done.
+        apply mk_adtrγ_sigpred in Ht. subst.
+        by iFrame "#". }
+      { destruct (auditor.Trust.get_full _) eqn:Ht; try done.
+        apply mk_adtrγ_full in Ht. subst.
+        iPureIntro. split; [done|congruence]. } }
+    iNamedSuffix "H" "_bob2".
+    clear Hblame_bob2.
+    wp_apply primitive.wp_Assume as "%".
+    case_bool_decide as Ht; try done.
+    apply ktcore.rw_Blame0 in Ht. subst.
+    destruct (decide (_ ≠ ∅)) as [Ht|Ht]; try done. clear Ht.
+    iNamedSuffix "Herr_bob2" "_bob2".
+    wp_apply primitive.wp_Assume as "%".
+    case_bool_decide as Ht; try done. subst.
+    wp_apply primitive.wp_Assume as "%".
+    case_bool_decide as Ht; try done. subst.
+    replace (uint.nat (W64 2)) with 2%nat by word.
+    by iFrame "∗#". }
+  iIntros "* @". wp_auto.
+
+  (* KT agreement. *)
+  autorewrite with len in *.
+  replace num_last_key with 0%nat by word.
+  replace num_pend_key with 0%nat by word.
+  replace num_last_key0 with 0%nat by word.
+  replace num_pend_key0 with 0%nat by word.
+  replace (uint.nat (W64 0)) with 0%nat by word.
+  replace (uint.nat (W64 1)) with 1%nat by word.
+  replace (uint.nat (W64 2)) with 2%nat by word.
+  iDestruct (client.know_keys with "Hclient_al") as "#Hstaged". simpl.
+
+  iAssert (
+    ∃ adtrγ,
+    "#His_audit_al" ∷ ktcore.is_audit γ0.(client.cfg.agreeγ) adtrγ 2 ∗
+    "#His_audit_bob" ∷ ktcore.is_audit γ1.(client.cfg.agreeγ) adtrγ 2 ∗
+    "%Heq_func_start" ∷ ⌜adtrγ.(ktcore.Agree.func_start) = 0%nat⌝
+  )%I with "[Hclient_al Hclient_bob Hadtrs_ep1_0 Hadtrs_ep2]" as "@".
+  { destruct servGood eqn:Ht; subst servGood;
+      case_bool_decide; try done; clear Ht.
+    - destruct (server.Trust.get_sigpred (mk_servγ serv_trust γ)) eqn:Heq_good.
+      2: { by destruct serv_trust. }
+      pose proof Heq_good as Ht.
+      apply mk_servγ_sigpred in Ht as ->.
+      iDestruct (client.serv_is_adtr with "Hclient_al") as "[$ %]".
+      { by rewrite Heq_serv_good_al. }
+      iDestruct (client.serv_is_adtr with "Hclient_bob") as "[$ %]".
+      { by rewrite Heq_serv_good_bob. }
+      word.
+    - iNamed "Hadtrs_ep1_0". iNamed "Hadtrs_ep2".
+      destruct (auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr0γ)) eqn:Heq_good0.
+      2: { destruct serv_trust, adtr_trust; try done. lia. }
+      pose proof Heq_good0 as Ht.
+      apply mk_adtrγ_sigpred in Ht as ->.
+      destruct (auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr1γ)) eqn:Heq_good1.
+      2: { by destruct adtr_trust. }
+      pose proof Heq_good1 as Ht.
+      apply mk_adtrγ_sigpred in Ht as ->.
+      destruct (auditor.Trust.get_sigpred (mk_adtrγ adtr_trust adtr2γ)) eqn:Heq_good2.
+      2: { by destruct adtr_trust. }
+      pose proof Heq_good2 as Ht.
+      apply mk_adtrγ_sigpred in Ht as ->.
+      iDestruct (ktcore.combine_audits with "His_audit_al1 His_audit_al2") as "#His_audit_al";
+        [word|word|done|].
+      iDestruct (ktcore.combine_audits with "His_audit_bob1 His_audit_bob2") as "#His_audit_bob";
+        [word|word|done|].
+      replace adtr0γ.(auditor.cfg.agreeγ).(ktcore.Agree.func_start) with 0%nat by word.
+      replace adtr1γ.(auditor.cfg.agreeγ).(ktcore.Agree.func_start) with 0%nat by word.
+      iFrame "#".
+      simpl. word. }
+
+  simplify_eq/=.
+  iDestruct (ktcore.commit_staged with "Hstaged His_audit_al") as "H".
+  { word. }
+  { simpl. word. }
+  replace (γ0.(client.cfg.agreeγ).(ktcore.Agree.digs_start) +
+    γ0.(client.cfg.agreeγ).(ktcore.Agree.func_start))%nat with 0%nat by word.
+  simpl.
+  iPoseProof ("H" $! 0%nat with "[]") as "Hal0"; [done|].
+  iPoseProof ("H" $! 1%nat with "[]") as "Hal1"; [done|].
+  iPoseProof ("H" $! 2%nat with "[]") as "{H} Hal2"; [done|].
+  iPoseProof "His_audit_bob" as "@".
+  (* TODO: make word fact be pure premise. *)
+  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob0 His_audit_bob []") as "Hbob0"; [word|].
+  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob1 His_audit_bob []") as "Hbob1"; [word|].
+  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob2 His_audit_bob []") as "Hbob2"; [word|].
+  replace γ0.(client.cfg.uid) with (W64 0) by done.
+  iDestruct (ktcore.kt_ptsto_agree with "Hal0 Hbob0") as %<-; [done..|].
+  iDestruct (ktcore.kt_ptsto_agree with "Hal1 Hbob1") as %<-; [done..|].
+  iDestruct (ktcore.kt_ptsto_agree with "Hal2 Hbob2") as %<-; [done..|].
+  iNamedSuffix "Hopt_pk_bob0" "0".
+  iNamedSuffix "Hopt_pk_bob1" "1".
+  iNamedSuffix "Hopt_pk_bob2" "2".
+  subst.
+  wp_apply std.wp_Assert; [done|].
+  wp_apply std.wp_Assert; [done|].
+  wp_apply bytes.wp_Equal as "_".
+  { iFrame "#". }
+  wp_apply std.wp_Assert; [by case_bool_decide|].
+  wp_apply std.wp_Assert; [done|].
+  wp_apply bytes.wp_Equal as "_".
+  { iFrame "#". }
+  wp_apply std.wp_Assert; [by case_bool_decide|].
+  by iApply "HΦ".
+Qed.
 
 End proof.
 End alicebob.
