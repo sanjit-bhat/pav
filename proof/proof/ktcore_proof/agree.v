@@ -85,12 +85,12 @@ Proof.
 Qed.
 
 Lemma kt_ptsto_txfer γcli γadtr ep uid opt_pk audit_ep :
+  (γadtr.(Agree.digs_start) + γadtr.(Agree.func_start) ≤ ep ≤ audit_ep)%nat →
   γcli ↪KT[ep, uid] opt_pk -∗
   is_audit γcli γadtr audit_ep -∗
-  ⌜γadtr.(Agree.digs_start) + γadtr.(Agree.func_start) ≤ ep ≤ audit_ep⌝ -∗
   γadtr ↪KT[ep, uid] opt_pk.
 Proof.
-  simpl. iIntros "@@%". rewrite /kt_ptsto.
+  simpl. iIntros (?) "@@". rewrite /kt_ptsto.
   eremember (ep - _)%nat as ep_t.
   list_elem digs ep_t as dig'. subst.
   iDestruct (mono_list_idx_own_get with "Hcli_digs") as "Hlook"; [done|].

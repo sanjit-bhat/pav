@@ -344,8 +344,7 @@ Proof.
     clear Hblame1.
     case_decide as Ht; [|word]. clear Ht.
     wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
-    (* TODO: make adtr_good param come first. *)
-    wp_apply (client.wp_Client_Audit _ _ _ (mk_adtrγ adtr_trust adtr0γ)
+    wp_apply (client.wp_Client_Audit (mk_adtrγ adtr_trust adtr0γ)
       with "[$Hclient_al1]") as "* H".
     { iFrame "#".
       iSplitR.
@@ -368,7 +367,7 @@ Proof.
     case_bool_decide as Ht; try done. subst.
     destruct (decide (0 ≤ _ < _)) as [Ht|Ht]; [|word]. clear Ht.
     wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
-    wp_apply (client.wp_Client_Audit _ _ _ (mk_adtrγ adtr_trust adtr1γ)
+    wp_apply (client.wp_Client_Audit (mk_adtrγ adtr_trust adtr1γ)
       with "[$Hclient_bob1]") as "* H".
     { iFrame "#".
       iSplitR.
@@ -527,7 +526,7 @@ Proof.
     clear Hblame2.
     case_decide as Ht; [|word]. clear Ht.
     wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
-    wp_apply (client.wp_Client_Audit _ _ _ (mk_adtrγ adtr_trust adtr2γ)
+    wp_apply (client.wp_Client_Audit (mk_adtrγ adtr_trust adtr2γ)
       with "[$Hclient_al2]") as "* H".
     { iFrame "#".
       iSplitR.
@@ -550,7 +549,7 @@ Proof.
     case_bool_decide as Ht; try done. subst.
     destruct (decide (0 ≤ _ < _)) as [Ht|Ht]; [|word]. clear Ht.
     wp_apply (wp_load_slice_index with "[$Hsl_adtrAddrs]") as "_"; [word|done|].
-    wp_apply (client.wp_Client_Audit _ _ _ (mk_adtrγ adtr_trust adtr2γ)
+    wp_apply (client.wp_Client_Audit (mk_adtrγ adtr_trust adtr2γ)
       with "[$Hclient_bob2]") as "* H".
     { iFrame "#".
       iSplitR.
@@ -636,10 +635,9 @@ Proof.
   iPoseProof ("H" $! 1%nat with "[]") as "Hal1"; [done|].
   iPoseProof ("H" $! 2%nat with "[]") as "{H} Hal2"; [done|].
   iPoseProof "His_audit_bob" as "@".
-  (* TODO: make word fact be pure premise. *)
-  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob0 His_audit_bob []") as "Hbob0"; [word|].
-  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob1 His_audit_bob []") as "Hbob1"; [word|].
-  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob2 His_audit_bob []") as "Hbob2"; [word|].
+  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob0 His_audit_bob") as "Hbob0"; [word|].
+  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob1 His_audit_bob") as "Hbob1"; [word|].
+  iDestruct (ktcore.kt_ptsto_txfer with "Hptr_kt_bob2 His_audit_bob") as "Hbob2"; [word|].
   replace γ0.(client.cfg.uid) with (W64 0) by done.
   iDestruct (ktcore.kt_ptsto_agree with "Hal0 Hbob0") as %<-; [done..|].
   iDestruct (ktcore.kt_ptsto_agree with "Hal1 Hbob1") as %<-; [done..|].

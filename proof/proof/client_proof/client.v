@@ -1190,7 +1190,7 @@ Proof.
   - word.
 Qed.
 
-Lemma wp_Client_Audit γ ptr_c σ adtr_good (adtrAddr : w64) sl_adtrPk adtrPk :
+Lemma wp_Client_Audit adtr_good γ ptr_c σ (adtrAddr : w64) sl_adtrPk adtrPk :
   {{{
     is_pkg_init client ∗
     "Hclient" ∷ Client.own γ ptr_c σ ∗
