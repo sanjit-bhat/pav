@@ -703,7 +703,7 @@ Proof.
     iFrame "#".
 Qed.
 
-Lemma wp_Auditor_Update ptr_a γ Q :
+Lemma wp_Auditor_Update Q ptr_a γ :
   {{{
     is_pkg_init auditor ∗
     "Hlock" ∷ Auditor.lock_perm ptr_a γ ∗
@@ -847,6 +847,7 @@ Lemma wp_New servGood (servAddr : w64) sl_servPk servPk :
       "Hlocks" ∷ ([∗] replicate (Z.to_nat rwmutex.actualMaxReaders)
         (Auditor.lock_perm ptr_a γ)) ∗
       "%Heq_servGood" ∷ ⌜γ.(cfg.serv_good) = servGood⌝ ∗
+      "%Heq_servPk" ∷ ⌜γ.(cfg.serv_sig_pk) = servPk⌝ ∗
 
       "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.adtr_sig_pk) ∗
       "#His_sigPk" ∷ cryptoffi.is_sig_pk γ.(cfg.adtr_sig_pk)
