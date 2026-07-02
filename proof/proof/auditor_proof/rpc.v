@@ -44,7 +44,7 @@ Collection W := sem + package_sem.
 Lemma wp_NewRpcServer a γ :
   {{{
     is_pkg_init auditor ∗
-    "Hlocks" ∷ ([∗] replicate (Z.to_nat rwmutex.actualMaxReaders)
+    "Hlocks" ∷ ([∗] replicate (pred $ Z.to_nat rwmutex.actualMaxReaders)
       (Auditor.lock_perm a γ))
   }}}
   @! auditor.NewRpcServer #a
