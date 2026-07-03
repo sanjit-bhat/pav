@@ -315,8 +315,8 @@ Qed.
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own ptr obj d : iProp Σ :=
@@ -328,6 +328,7 @@ Definition own ptr obj d : iProp Σ :=
   "Hsl_LeafLabel" ∷ sl_LeafLabel ↦*{d} obj.(LeafLabel) ∗
   "Hsl_LeafVal" ∷ sl_LeafVal ↦*{d} obj.(LeafVal).
 
+(* TODO: other serde files have pure wishes. *)
 Definition wish b obj tail : iProp Σ :=
   ∃ enc,
   "%Henc_obj" ∷ ⌜encodes obj enc⌝ ∗
@@ -344,6 +345,14 @@ Proof.
   { by subst. }
   naive_solver.
 Qed.
+
+End proof.
+
+Section proof.
+Context `{!heapGS Σ}.
+Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
+Collection W := sem + package_sem.
+#[local] Set Default Proof Using "W".
 
 Lemma wp_dec sl_b d b :
   {{{

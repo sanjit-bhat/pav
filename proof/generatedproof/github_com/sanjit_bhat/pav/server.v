@@ -556,6 +556,7 @@ Local Set Default Proof Using "All".
       (
       "secs" ∷ l.[(server.Server.t), "secs"] ↦{dq} v.(server.Server.secs') ∗
       "workQ" ∷ l.[(server.Server.t), "workQ"] ↦{dq} v.(server.Server.workQ') ∗
+      "epochTime" ∷ l.[(server.Server.t), "epochTime"] ↦{dq} v.(server.Server.epochTime') ∗
       "mu" ∷ l.[(server.Server.t), "mu"] ↦{dq} v.(server.Server.mu') ∗
       "keys" ∷ l.[(server.Server.t), "keys"] ↦{dq} v.(server.Server.keys') ∗
       "hist" ∷ l.[(server.Server.t), "hist"] ↦{dq} v.(server.Server.hist') ∗
@@ -593,6 +594,19 @@ Proof. solve_pointsto_access_struct. Qed.
     (l.[(server.Server.t), "workQ"] ↦ (v.(server.Server.workQ')))
     (l.[(server.Server.t), "workQ"] ↦ workQ')
     (l ↦ v) (l ↦ (v <|(server.Server.workQ') := workQ'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance Server_access_load_epochTime l (v : (server.Server.t)) dq :
+  AccessStrict
+    (l.[(server.Server.t), "epochTime"] ↦{dq} (v.(server.Server.epochTime')))
+    (l.[(server.Server.t), "epochTime"] ↦{dq} (v.(server.Server.epochTime')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance Server_access_store_epochTime l (v : (server.Server.t)) epochTime' :
+  AccessStrict
+    (l.[(server.Server.t), "epochTime"] ↦ (v.(server.Server.epochTime')))
+    (l.[(server.Server.t), "epochTime"] ↦ epochTime')
+    (l ↦ v) (l ↦ (v <|(server.Server.epochTime') := epochTime'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance Server_access_load_mu l (v : (server.Server.t)) dq :
   AccessStrict

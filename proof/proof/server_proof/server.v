@@ -14,43 +14,6 @@ From New.proof.github_com.sanjit_bhat.pav Require Import prelude.
 Module server.
 Import serde.server.
 
-Section list.
-Context {PROP : bi}.
-
-(* TODO: upstream. *)
-Lemma big_sepL2_drop {A B} `{!BiAffine PROP} (n : nat)
-    (Φ : nat → A → B → PROP) (l1 : list A) (l2 : list B) :
-  ([∗ list] k ↦ y1;y2 ∈ l1;l2, Φ k y1 y2) ⊢
-  ([∗ list] k ↦ y1;y2 ∈ drop n l1;drop n l2, Φ (n + k)%nat y1 y2).
-Proof.
-  iIntros "H".
-  rewrite -{1}(take_drop n l1) -{1}(take_drop n l2).
-  iDestruct (big_sepL2_length with "H") as %?.
-  autorewrite with len in *.
-  iDestruct (big_sepL2_app_same_length with "H") as "[_ H]"; [len|].
-  destruct (decide (n ≥ length l1)).
-  - by rewrite !drop_ge; [|lia..].
-  - by replace (length (take n l1)) with n; [|len].
-Qed.
-End list.
-
-Section map.
-Context {PROP : bi} `{!BiAffine PROP} `{Countable K} {A B : Type}.
-
-Lemma fractional_big_sepM2 (m1 : gmap K A) (m2 : gmap K B)
-    (Φ : K → A → B → Qp → PROP) :
-  (∀ k x y, fractional.Fractional (λ q, Φ k x y q)) →
-  fractional.Fractional (λ q, [∗ map] k ↦ x;y ∈ m1;m2, Φ k x y q)%I.
-Proof.
-  intros HΦ q1 q2. rewrite -big_sepM2_sep.
-  apply big_sepM2_proper => ?????. apply HΦ.
-Qed.
-
-End map.
-
-Lemma list_reln_singleton {A} (a : A) R : list_reln [a] R.
-Proof. by intros ?**. Qed.
-
 (** top-level server state and inv. *)
 
 Module cfg.
@@ -59,8 +22,8 @@ Record t :=
     sig_pk : list w8;
     pendγ : gname;
     (* map from uid to gname. *)
-    uidγ : gmap w64 gname;
-    sigγ : sigpred.cfg.t;
+    uidγs : gmap w64 gname;
+    agreeγ : ktcore.Agree.t;
   }.
 End cfg.
 
@@ -71,18 +34,12 @@ Record t :=
     client gives server permission to add to this.
     all writable post-conds only reference pending. *)
     pending : ktcore.plain_ty;
-    (* hist of digs.
+    (* digs of digs.
     server can update this by adding dig that corresponds to curr pending.
-    all read-only post-conds only reference hist. *)
-    hist : list (list w8);
+    all read-only post-conds only reference digs. *)
+    digs : list (list w8);
   }.
 End state.
-
-Notation vrf_pkγ γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
-Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
-Notation start_epγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.start_ep)).
-Notation cutγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.cut)).
-Notation audit_offsetγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.audit_offset)).
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -94,9 +51,10 @@ Collection W := sem.
 instead of [into_sep_fractional_half] (priority 100).
 not sure if this is a bug in instance priority. *)
 Definition own_aux γ obj q : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   "Hown_pend" ∷ dghost_var γ.(cfg.pendγ) (DfracOwn q) obj.(state.pending) ∗
   (* client remembers lb's of this. *)
-  "Hown_hist" ∷ mono_list_auth_own (digsγ γ) q obj.(state.hist).
+  "Hown_digs" ∷ mono_list_auth_own agreeγ.(ktcore.Agree.digs) q obj.(state.digs).
 
 (* other 1/2 in server lock inv. *)
 Definition own γ obj : iProp Σ := own_aux γ obj (1/2).
@@ -107,13 +65,13 @@ Proof.
   intros ??. iSplit.
   - iIntros "@".
     iDestruct "Hown_pend" as "[? ?]".
-    iDestruct "Hown_hist" as "[? ?]".
+    iDestruct "Hown_digs" as "[? ?]".
     iFrame.
   - iIntros "[H0 H1]".
     iNamedSuffix "H0" "0".
     iNamedSuffix "H1" "1".
     iCombine "Hown_pend0 Hown_pend1" as "?".
-    iCombine "Hown_hist0 Hown_hist1" as "?".
+    iCombine "Hown_digs0 Hown_digs1" as "?".
     iFrame.
 Qed.
 
@@ -129,7 +87,7 @@ Proof.
   iNamedSuffix "H0" "0".
   iNamedSuffix "H1" "1".
   iCombine "Hown_pend0 Hown_pend1" gives %[? ?].
-  iDestruct (mono_list_auth_own_agree with "Hown_hist0 Hown_hist1") as %[? ?].
+  iDestruct (mono_list_auth_own_agree with "Hown_digs0 Hown_digs1") as %[? ?].
   iModIntro.
   destruct obj0, obj1. by simplify_eq/=.
 Qed.
@@ -144,18 +102,19 @@ Proof.
 Qed.
 
 Definition valid γ obj : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   "#Hperm_uids" ∷ ([∗ map] uid ↦ pks ∈ obj.(state.pending),
     ∃ uidγ,
-    "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
+    "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγs) !! uid = Some uidγ⌝ ∗
     "#Hpks" ∷ ([∗ list] ver ↦ pk ∈ pks,
       ∃ i,
       (* client owns mlist_auth for their uid.
       for adversarial uid, auth in inv. *)
       mono_list_idx_own uidγ i (ver, pk))) ∗
   "%Hsub_pend" ∷ ⌜∀ last_dig,
-    last obj.(state.hist) = Some last_dig →
-    ktcore.plain_sub (ktcore.to_plain (vrf_pkγ γ) last_dig) obj.(state.pending)⌝ ∗
-  "%Hsub_hist" ∷ ⌜ktcore.mono_plain (vrf_pkγ γ) obj.(state.hist)⌝.
+    last obj.(state.digs) = Some last_dig →
+    ktcore.plain_sub (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) last_dig) obj.(state.pending)⌝ ∗
+  "%Hsub_digs" ∷ ⌜ktcore.mono_plain agreeγ.(ktcore.Agree.vrf_pk) obj.(state.digs)⌝.
 
 Definition inv_aux γ obj : iProp Σ :=
   "Hown_serv" ∷ own γ obj ∗
@@ -168,61 +127,71 @@ Definition is_inv γ := inv nroot (∃ obj, inv_aux γ obj).
 
 (** helpers for inv. *)
 
-Lemma hist_pks_prefix uid γ (i j : nat) (x y : list w8) :
+Lemma digs_pks_prefix uid γ (i j : nat) (x y : list w8) :
+  let agreeγ := γ.(cfg.agreeγ) in
   (i ≤ j)%nat →
   is_inv γ -∗
-  mono_list_idx_own (digsγ γ) i x -∗
-  mono_list_idx_own (digsγ γ) j y ={⊤}=∗
-  ⌜ktcore.to_pks (vrf_pkγ γ) uid x `prefix_of` ktcore.to_pks (vrf_pkγ γ) uid y⌝.
+  mono_list_idx_own agreeγ.(ktcore.Agree.digs) i x -∗
+  mono_list_idx_own agreeγ.(ktcore.Agree.digs) j y ={⊤}=∗
+  ⌜ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid x `prefix_of` ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid y⌝.
 Proof.
-  iIntros (?) "#Hinv #Hidx0 #Hidx1".
+  simpl. iIntros (?) "#Hinv #Hidx0 #Hidx1".
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
   iNamed "Hown_serv".
-  iDestruct (mono_list_auth_idx_lookup with "Hown_hist Hidx0") as %Hlook0.
-  iDestruct (mono_list_auth_idx_lookup with "Hown_hist Hidx1") as %Hlook1.
+  iDestruct (mono_list_auth_idx_lookup with "Hown_digs Hidx0") as %Hlook0.
+  iDestruct (mono_list_auth_idx_lookup with "Hown_digs Hidx1") as %Hlook1.
   iMod ("Hclose" with "[-]") as "_"; [iFrame "∗#"|].
   iNamed "His_serv".
   iIntros "!> !%".
   by eapply ktcore.mono_plain_lookup.
 Qed.
 
-Lemma hist_to_put_perms γ i x :
+Lemma digs_to_put_perms γ i dig :
+  let agreeγ := γ.(cfg.agreeγ) in
   is_inv γ -∗
-  mono_list_idx_own (digsγ γ) i x ={⊤}=∗
-  ∀ uid pks,
-    ⌜ktcore.to_plain (vrf_pkγ γ) x !! uid = Some pks⌝ -∗
+  mono_list_idx_own agreeγ.(ktcore.Agree.digs) i dig ={⊤}=∗
+  ∀ uid,
+    let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid dig in
     (* if empty pks, might not have uidγ. *)
     ⌜length pks > 0%nat⌝ -∗
     ∃ uidγ,
-      ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ ∗
+      ⌜γ.(cfg.uidγs) !! uid = Some uidγ⌝ ∗
       ([∗ list] ver ↦ pk ∈ pks,
         ∃ i,
         mono_list_idx_own uidγ i (ver, pk)).
 Proof.
-  iIntros "#Hinv #Hidx".
+  simpl. iIntros "#Hinv #Hidx".
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
   iNamed "Hown_serv".
-  iDestruct (mono_list_auth_idx_lookup with "Hown_hist Hidx") as %Hlook_hist.
+  iDestruct (mono_list_auth_idx_lookup with "Hown_digs Hidx") as %Hlook_digs.
   iMod ("Hclose" with "[-]") as "_"; [by iFrame "∗#"|].
   iNamed "His_serv".
   iModIntro.
 
-  iIntros "* %Hlook_uid %Hlen_pks".
-  apply lookup_lt_Some in Hlook_hist as ?.
-  list_elem (obj.(state.hist)) (pred (length obj.(state.hist))) as last_dig.
+  iIntros "* %Hlen_pks".
+  apply lookup_lt_Some in Hlook_digs as ?.
+  list_elem (obj.(state.digs)) (pred (length obj.(state.digs))) as last_dig.
   opose proof (ktcore.mono_plain_lookup uid _
-    Hlook_hist Hlast_dig_lookup _) as Hsub0; [done|lia|].
+    Hlook_digs Hlast_dig_lookup _) as Hsub0; [done|lia|].
   rewrite -last_lookup in Hlast_dig_lookup.
   apply Hsub_pend in Hlast_dig_lookup as Hsub1.
   specialize (Hsub1 uid).
-  rewrite !lookup_total_alt in Hsub0.
-  rewrite Hlook_uid /= in Hsub0.
-  destruct (ktcore.to_plain _ last_dig !! uid) eqn:?.
-  2: { apply prefix_length in Hsub0. simpl in *. lia. }
-  simpl in *.
-  case_match; try done.
+
+  eassert (_ `prefix_of` obj.(state.pending) !!! uid) as Hsub2.
+  { etrans; [exact Hsub0|].
+    rewrite /option_relation in Hsub1.
+    rewrite !lookup_total_alt.
+    repeat case_match; try done.
+    apply prefix_nil. }
+  rewrite (lookup_total_alt obj.(state.pending)) in Hsub2.
+  destruct (obj.(state.pending) !! uid) as [pks|] eqn:Hlook_obj.
+  2: {
+    rewrite Hlook_obj in Hsub2.
+    apply prefix_length in Hsub2.
+    simpl in *. lia. }
+  rewrite Hlook_obj /= in Hsub2.
 
   iDestruct (big_sepM_lookup with "Hperm_uids") as "@"; [done|].
   iFrame "%".
@@ -242,15 +211,17 @@ Definition perm_read γ Q : iProp Σ :=
         ={∅,⊤}=∗ Q obj)).
 
 Definition Q_read_lb prev_lb γ obj : iProp Σ :=
-  mono_list_lb_own (digsγ γ) obj.(state.hist) ∗
-  ⌜prev_lb `prefix_of` obj.(state.hist)⌝.
+  let agreeγ := γ.(cfg.agreeγ) in
+  mono_list_lb_own agreeγ.(ktcore.Agree.digs) obj.(state.digs) ∗
+  ⌜prev_lb `prefix_of` obj.(state.digs)⌝.
 
 Lemma op_read_lb γ prev_lb :
+  let agreeγ := γ.(cfg.agreeγ) in
   is_inv γ -∗
-  mono_list_lb_own (digsγ γ) prev_lb -∗
+  mono_list_lb_own agreeγ.(ktcore.Agree.digs) prev_lb -∗
   perm_read γ (Q_read_lb prev_lb γ).
 Proof.
-  iIntros "#Hinv #Hlb".
+  simpl. iIntros "#Hinv #Hlb".
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
   iApply fupd_mask_intro.
@@ -259,16 +230,17 @@ Proof.
   iFrame.
   iIntros "@".
   iMod "Hmask" as "_".
-  iDestruct (mono_list_lb_own_get with "Hown_hist") as "#Hlb'".
-  iDestruct (mono_list_auth_lb_valid with "Hown_hist Hlb") as %[_ ?].
+  iDestruct (mono_list_lb_own_get with "Hown_digs") as "#Hlb'".
+  iDestruct (mono_list_auth_lb_valid with "Hown_digs Hlb") as %[_ ?].
   iMod ("Hclose" with "[-]") as "_".
   - iFrame "∗#".
   - by iFrame "#%".
 Qed.
 
 Definition Q_read_idx prev_idx γ obj : iProp Σ :=
-  mono_list_lb_own (digsγ γ) obj.(state.hist) ∗
-  ⌜prev_idx < length obj.(state.hist)⌝.
+  let agreeγ := γ.(cfg.agreeγ) in
+  mono_list_lb_own agreeγ.(ktcore.Agree.digs) obj.(state.digs) ∗
+  ⌜prev_idx < length obj.(state.digs)⌝.
 
 (* op_read_idx necessary, even tho weaker than op_read_lb.
 cli_call takes in curried Q_read, since it's used in both pre and post.
@@ -276,11 +248,12 @@ at currying time, not under good flag, so client doesn't have prev_lb.
 but it does have have prev_idx!
 that's an arg to, e.g., CallHistory, independent of good-ness. *)
 Lemma op_read_idx γ prev_idx (a : list w8) :
+  let agreeγ := γ.(cfg.agreeγ) in
   is_inv γ -∗
-  mono_list_idx_own (digsγ γ) prev_idx a -∗
+  mono_list_idx_own agreeγ.(ktcore.Agree.digs) prev_idx a -∗
   perm_read γ (Q_read_idx prev_idx γ).
 Proof.
-  iIntros "#Hinv #Hidx".
+  simpl. iIntros "#Hinv #Hidx".
   iDestruct "Hidx" as "(%&%Hlook&Hlb)".
   iMod (op_read_lb with "Hinv Hlb") as "{Hlb} (%&Hown&Hfupd)".
   iModIntro.
@@ -305,7 +278,7 @@ Definition perm_put γ uid ver pk : iProp Σ :=
 
 Lemma op_put γ uid uidγ i ver pk :
   is_inv γ -∗
-  ⌜γ.(cfg.uidγ) !! uid = Some uidγ⌝ -∗
+  ⌜γ.(cfg.uidγs) !! uid = Some uidγ⌝ -∗
   mono_list_idx_own uidγ i (ver, pk) -∗
   perm_put γ uid ver pk.
 Proof.
@@ -343,16 +316,17 @@ Proof.
     by apply prefix_app_r.
 Qed.
 
-Definition perm_add_hist γ : iProp Σ :=
+Definition perm_add_digs γ : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   □ (|={⊤,∅}=> ∃ obj, own γ obj ∗
     ∀ dig,
-    ⌜ktcore.to_plain (vrf_pkγ γ) dig = obj.(state.pending)⌝ -∗
-    let obj' := set (state.hist) (.++ [dig]) obj in
+    ⌜ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) dig = obj.(state.pending)⌝ -∗
+    let obj' := set (state.digs) (.++ [dig]) obj in
     (own γ obj' ={∅,⊤}=∗ True)).
 
-Lemma op_add_hist γ : is_inv γ -∗ perm_add_hist γ.
+Lemma op_add_digs γ : is_inv γ -∗ perm_add_digs γ.
 Proof.
-  rewrite /perm_add_hist. iIntros "#Hinv".
+  rewrite /perm_add_digs. iIntros "#Hinv".
   iModIntro.
   rewrite /is_inv.
   iInv "Hinv" as ">@" "Hclose".
@@ -401,11 +375,12 @@ Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own γ ptr obj : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   ∃ ptr_sig ptr_vrf sl_commit,
   "#Hstr_secrets" ∷ ptr ↦□ (server.secrets.mk ptr_sig ptr_vrf sl_commit) ∗
   "#Hown_sig" ∷ cryptoffi.own_sig_sk ptr_sig γ.(cfg.sig_pk)
-    (sigpred.P γ.(cfg.sigγ)) ∗
-  "#Hown_vrf" ∷ cryptoffi.own_vrf_sk ptr_vrf (vrf_pkγ γ) ∗
+    (sigpred.P agreeγ) ∗
+  "#Hown_vrf" ∷ cryptoffi.own_vrf_sk ptr_vrf agreeγ.(ktcore.Agree.vrf_pk) ∗
   "#Hsl_commit" ∷ sl_commit ↦*□ obj.(commit) ∗
   "%Hlen_commit" ∷ ⌜Z.of_nat (length obj.(commit)) = cryptoffi.hash_len⌝.
 
@@ -494,13 +469,14 @@ Definition is_commit commit_sec (hidden : gmap (list w8) (list w8)) :=
     hidden.
 
 Definition own γ ptr secs dig q : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   ∃ ptr_hidden hidden ptr_plain ptr0_plain,
-  let plain := ktcore.to_plain (vrf_pkγ γ) dig in
+  let plain := ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) dig in
   "#Hstr_keyStore" ∷ ptr ↦□ (server.keyStore.mk ptr_hidden ptr_plain) ∗
   "Hown_hidden" ∷ merkle.own_Map ptr_hidden hidden dig (DfracOwn q) ∗
   "Hptr_plain" ∷ ptr_plain ↦${#q} ptr0_plain ∗
   "Hown_plain" ∷ own_plain ptr0_plain plain q ∗
-  "%Hbij_maps" ∷ ⌜ktcore.is_plain (vrf_pkγ γ) plain hidden⌝ ∗
+  "%Hbij_maps" ∷ ⌜ktcore.is_plain agreeγ.(ktcore.Agree.vrf_pk) plain hidden⌝ ∗
   "%His_commit" ∷ ⌜is_commit secs.(secrets.commit) hidden⌝.
 
 #[global] Instance own_plain_frac ptr0_plain plain :
@@ -577,6 +553,7 @@ Definition is_audits γ digs audits : iProp Σ :=
     "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig)).
 
 Definition own γ ptr digs q : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   ∃ ptr_chain sl_audits sl0_audits audits sl_vrfSig vrfSig,
   "Hstr_history" ∷ ptr ↦{#q} (server.history.mk ptr_chain sl_audits sl_vrfSig) ∗
   "Hown_chain" ∷ hashchain.own ptr_chain digs (DfracOwn q) ∗
@@ -586,10 +563,10 @@ Definition own γ ptr digs q : iProp Σ :=
   "#Hown_audits" ∷ ([∗ list] idx ↦ p; aud ∈ sl0_audits; audits,
     ktcore.AuditProof.own p aud (□)) ∗
   "#His_audits" ∷ is_audits γ digs audits ∗
-  "%Hmono_plain" ∷ ⌜ktcore.mono_plain (vrf_pkγ γ) digs⌝ ∗
+  "%Hmono_plain" ∷ ⌜ktcore.mono_plain agreeγ.(ktcore.Agree.vrf_pk) digs⌝ ∗
 
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
-  "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (vrf_pkγ γ) vrfSig.
+  "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) agreeγ.(ktcore.Agree.vrf_pk) vrfSig.
 
 #[global] Instance hashchain_own_as_dfrac ptr vs d :
   AsDFractional (hashchain.own ptr vs d) (λ d, hashchain.own ptr vs d) d.
@@ -678,18 +655,19 @@ Record t' := mk' {
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : server.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own γ secs ptr obj : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   ∃ sl_pk sl_mapLabel mapLabel sl_mapVal mapVal rand,
   "#Hstr_work" ∷ ptr ↦□ (server.work.mk obj.(uid) obj.(ver) sl_pk sl_mapLabel sl_mapVal) ∗
   "#Hsl_pk" ∷ sl_pk ↦*□ obj.(pk) ∗
   "#Hsl_mapLabel" ∷ sl_mapLabel ↦*□ mapLabel ∗
   "#Hsl_mapVal" ∷ sl_mapVal ↦*□ mapVal ∗
 
-  "%His_mapLabel" ∷ ⌜ktcore.map_label_fn (vrf_pkγ γ) obj.(uid)
+  "%His_mapLabel" ∷ ⌜ktcore.map_label_fn agreeγ.(ktcore.Agree.vrf_pk) obj.(uid)
     (uint.nat obj.(ver)) mapLabel⌝ ∗
   "%His_rand" ∷ ⌜ktcore.is_CommitRand secs.(secrets.commit) mapLabel rand⌝ ∗
   "%His_mapVal" ∷ ⌜ktcore.map_val_fn obj.(pk) rand mapVal⌝ ∗
@@ -721,28 +699,31 @@ Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
 Definition own_ro γ ptr obj : iProp Σ :=
-  ∃ ptr_secs ptr_workQ workQγ,
+  ∃ ptr_secs ptr_workQ workQγ (epochTime : w64),
   "#Hfld_secs" ∷ ptr.[server.Server.t, "secs"] ↦□ ptr_secs ∗
   "#Hfld_workQ" ∷ ptr.[server.Server.t, "workQ"] ↦□ ptr_workQ ∗
+  "#Hfld_epochTime" ∷ ptr.[server.Server.t, "epochTime"] ↦□ epochTime ∗
 
   "#Hown_secs" ∷ secrets.own γ ptr_secs obj.(secs) ∗
   "#His_workQ" ∷ bag.is_chan_bag workQγ ptr_workQ (work.own_aux γ obj.(secs)).
 
 Definition own γ ptr σ obj q : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   ∃ ptr_keys ptr_hist last_dig,
   "#Hfld_keys" ∷ ptr.[server.Server.t, "keys"] ↦□ ptr_keys ∗
   "#Hfld_hist" ∷ ptr.[server.Server.t, "hist"] ↦□ ptr_hist ∗
 
   "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(secs) last_dig q ∗
-  "Hown_hist" ∷ history.own γ ptr_hist σ.(state.hist) q ∗
+  "Hown_hist" ∷ history.own γ ptr_hist σ.(state.digs) q ∗
 
   (* other 1/2 in server inv. *)
   "Hown_gs" ∷ own_aux γ σ (q/2) ∗
-  "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
-  "%Heq_hist_pend" ∷ ⌜ktcore.to_plain (vrf_pkγ γ) last_dig = σ.(state.pending)⌝ ∗
-  "#Hperm_add_hist" ∷ perm_add_hist γ ∗
-  "%Heq_digs_info" ∷ ⌜γ.(cfg.sigγ).(sigpred.cfg.info) =
-    sigpred.digs_info.mk 0 None 0⌝.
+  "%Hlast_dig" ∷ ⌜last σ.(state.digs) = Some last_dig⌝ ∗
+  "%Heq_hist_pend" ∷ ⌜ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) last_dig = σ.(state.pending)⌝ ∗
+  "#Hperm_add_digs" ∷ perm_add_digs γ ∗
+  "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
+  "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+  "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝.
 
 #[global] Instance own_frac γ ptr σ obj :
   fractional.Fractional (λ q, own γ ptr σ obj q).
@@ -817,25 +798,14 @@ Collection W := sem + package_sem.
 
 (** fetch-side helper funcs. *)
 
-(* TODO: upstream. *)
-Lemma subslice_snoc {A} n m (l : list A) x :
-  l !! m = Some x →
-  (n ≤ m)%nat →
-  subslice n (S m) l = subslice n m l ++ [x].
-Proof.
-  (* TODO: rm [subslice_split_r], worse version of [subslice_app_contig]. *)
-  intros **.
-  rewrite -(subslice_app_contig _ m); [|lia].
-  by erewrite subslice_singleton; [|done].
-Qed.
-
 Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
-  let pks := ktcore.to_pks (vrf_pkγ γ) uid last_dig in
+  let agreeγ := γ.(cfg.agreeγ) in
+  let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid last_dig in
   {{{
     is_pkg_init server ∗
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
-    "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+    "%Hlast_dig" ∷ ⌜last σ.(state.digs) = Some last_dig⌝ ∗
     "%Heq_prefixLen" ∷ ⌜uint.nat prefixLen ≤ length pks⌝
   }}}
   s @! (go.PointerType server.Server) @! "getHist" #uid #prefixLen
@@ -843,7 +813,7 @@ Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
     sl_hist hist, RET #sl_hist;
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
-    "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γ) uid
+    "#Hwish_hist" ∷ ktcore.wish_ListMemb agreeγ.(ktcore.Agree.vrf_pk) uid
       (uint.nat prefixLen) last_dig hist ∗
     "%Heq_hist" ∷ ⌜drop (uint.nat prefixLen) pks =
       ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
@@ -856,7 +826,7 @@ Proof.
   simplify_eq/=. wp_auto.
   wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
   (* destruct "uid existence" early to reduce complexity. *)
-  destruct (ktcore.to_plain (vrf_pkγ γ) last_dig !! uid) as [pks|] eqn:Hlook_uid.
+  destruct (ktcore.to_plain (γ.(cfg.agreeγ).(ktcore.Agree.vrf_pk)) last_dig !! uid) as [pks|] eqn:Hlook_uid.
   2: {
     rewrite lookup_total_alt Hlook_uid /= in Heq_prefixLen |-*.
     iDestruct (big_sepM2_lookup_r_none with "Hptr0_plain") as %->; [done|].
@@ -892,7 +862,7 @@ Proof.
     "Hcap_hist" ∷ own_slice_cap loc sl_hist 1 ∗
     "#Hsl0_hist" ∷ ([∗ list] ptr;obj ∈ sl0_hist;hist, ktcore.Memb.own ptr obj (□)) ∗
 
-    "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γ) uid
+    "#Hwish_hist" ∷ ktcore.wish_ListMemb (γ.(cfg.agreeγ).(ktcore.Agree.vrf_pk)) uid
       (uint.nat prefixLen) last_dig hist ∗
     "%Heq_hist" ∷ ⌜subslice (uint.nat prefixLen) (uint.nat ver) pks =
       ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝
@@ -972,12 +942,13 @@ Proof.
 Qed.
 
 Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
-  let pks := ktcore.to_pks (vrf_pkγ γ) uid last_dig in
+  let agreeγ := γ.(cfg.agreeγ) in
+  let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid last_dig in
   {{{
     is_pkg_init server ∗
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hown_serv_ro" ∷ Server.own_ro γ s obj ∗
-    "%Hlast_dig" ∷ ⌜last σ.(state.hist) = Some last_dig⌝ ∗
+    "%Hlast_dig" ∷ ⌜last σ.(state.digs) = Some last_dig⌝ ∗
     "%Heq_numVers" ∷ ⌜uint.nat numVers = length pks⌝
   }}}
   s @! (go.PointerType server.Server) @! "getBound" #uid #numVers
@@ -985,7 +956,7 @@ Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
     ptr_bound bound, RET #ptr_bound;
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
     "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
-    "#Hwish_bound" ∷ ktcore.wish_NonMemb (vrf_pkγ γ) uid
+    "#Hwish_bound" ∷ ktcore.wish_NonMemb agreeγ.(ktcore.Agree.vrf_pk) uid
       (uint.nat numVers) last_dig bound
   }}}.
 Proof.
@@ -1147,7 +1118,8 @@ Proof.
 
   iAssert (
     ∃ (i : w64) (t0 : loc) sl_upd sl0_upd upd new_dig,
-    let new_pend := ktcore.to_plain (vrf_pkγ γ) new_dig in
+    let agreeγ := γ.(cfg.agreeγ) in
+    let new_pend := ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) new_dig in
     "i" ∷ i_ptr ↦ i ∗
     "%Hlt_i" ∷ ⌜0 ≤ sint.Z i ≤ length work⌝ ∗
     "w" ∷ w_ptr ↦ t0 ∗
@@ -1156,10 +1128,10 @@ Proof.
     "Hcap_upd" ∷ own_slice_cap loc sl_upd 1 ∗
     "#Hsl0_upd" ∷ ([∗ list] ptr;obj ∈ sl0_upd;upd, ktcore.UpdateProof.own ptr obj (□)) ∗
     "#His_upd" ∷ ktcore.wish_ListUpdate last_dig upd new_dig ∗
-    "%Hmono" ∷ ⌜ktcore.plain_sub (ktcore.to_plain (vrf_pkγ γ) last_dig)
-      (ktcore.to_plain (vrf_pkγ γ) new_dig)⌝ ∗
+    "%Hmono" ∷ ⌜ktcore.plain_sub (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) last_dig)
+      (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) new_dig)⌝ ∗
     "Hown_keys" ∷ keyStore.own γ ptr_keys obj.(Server.secs) new_dig 1 ∗
-    "Hown_gs" ∷ own_aux γ {| state.pending := new_pend; state.hist := hist |} (1/2)
+    "Hown_gs" ∷ own_aux γ {| state.pending := new_pend; state.digs := digs |} (1/2)
   )%I with "[Hown_keys Hown_gs upd Hsl_upd Hcap_upd w i]" as "IH".
   { iFrame "∗". iExists []. simpl.
     iSplit; [word|].
@@ -1188,14 +1160,15 @@ Proof.
     (* unify cases of uid in or not in golang map. *)
     iAssert (
       ∃ sl0_pks,
+      let agreeγ := γ.(cfg.agreeγ) in
       let sl_pks := default slice.nil (ptr0_plain !! w.(work.uid)) in
       "Hsl_pks" ∷ sl_pks ↦* sl0_pks ∗
       "Hcap_pks" ∷ own_slice_cap slice.t sl_pks 1 ∗
       "#Hsl0_pks" ∷ ([∗ list] sl_pk;pk ∈
-        sl0_pks;ktcore.to_pks (vrf_pkγ γ) w.(work.uid) old_dig,
+        sl0_pks;ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) w.(work.uid) old_dig,
         "Hsl_pk" ∷ sl_pk ↦*□ pk) ∗
       "Hown_plain" ∷ keyStore.own_plain (delete w.(work.uid) ptr0_plain)
-        (delete w.(work.uid) (ktcore.to_plain (vrf_pkγ γ) old_dig)) 1
+        (delete w.(work.uid) (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) old_dig)) 1
     )%I with "[Hown_plain]" as "@".
     { destruct (ptr0_plain !! _) eqn:?; simpl in *.
       - iDestruct (big_sepM2_delete_l with "Hown_plain") as "(%&%&@&Hown_plain)"; [done|].
@@ -1211,8 +1184,9 @@ Proof.
     iDestruct (own_slice_len with "Hsl_pks") as %?.
     iDestruct (big_sepL2_length with "Hsl0_pks") as %?.
 
-    iAssert (⌜uint.nat w.(work.ver) =
-      length $ ktcore.to_pks (vrf_pkγ γ) w.(work.uid) old_dig⌝)%I
+    iAssert (let agreeγ := γ.(cfg.agreeγ) in
+      ⌜uint.nat w.(work.ver) =
+      length $ ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) w.(work.uid) old_dig⌝)%I
       as %Heq_ver; [word|].
     clear Ht.
     destruct (hidden !! mapLabel) eqn:Hlook_hid.
@@ -1237,9 +1211,9 @@ Proof.
     iNamedSuffix "Hown_gs" "_gs".
     simpl.
     iMod (dghost_var_update with "Hown_pend_gs") as "[Hpend Hpend']".
-    iDestruct "Hown_hist_gs" as "[Hhist Hhist']".
-    iMod ("Hperm" with "[$Hpend' $Hhist']") as "_".
-    iAssert (own_aux _ _ (1/2))%I with "[$Hpend $Hhist]" as "Hown_gs".
+    iDestruct "Hown_digs_gs" as "[Hdigs Hdigs']".
+    iMod ("Hperm" with "[$Hpend' $Hdigs']") as "_".
+    iAssert (own_aux _ _ (1/2))%I with "[$Hpend $Hdigs]" as "Hown_gs".
     iModIntro.
 
     wp_apply (merkle.wp_Map_Put with "[$Hown_hidden]") as "%%%new_dig @".
@@ -1278,7 +1252,7 @@ Proof.
     - instantiate (1:=ktcore.UpdateProof.mk' _ _ _). iFrame "#".
     - done.
     - by iApply ktcore.wish_ListUpdate_grow.
-    - trans (ktcore.to_plain (vrf_pkγ γ) old_dig); [done|].
+    - trans (ktcore.to_plain (γ.(cfg.agreeγ).(ktcore.Agree.vrf_pk)) old_dig); [done|].
       apply insert_included; [apply _|].
       intros.
       setoid_rewrite lookup_total_correct; [|done].
@@ -1297,7 +1271,7 @@ Proof.
 
   iApply ncfupd_wp.
   rewrite /own.
-  iPoseProof "Hperm_add_hist" as "Hperm".
+  iPoseProof "Hperm_add_digs" as "Hperm".
   iMod "Hperm" as "(%obj'&Hown_gs'&Hperm)".
   destruct obj'.
   iCombine "Hown_gs Hown_gs'" as "Hown_gs" gives %?.
@@ -1307,25 +1281,25 @@ Proof.
   iSpecialize ("Hperm" with "[]"); [done|].
   iNamedSuffix "Hown_gs" "_gs".
   simpl.
-  iMod (mono_list_auth_own_update_app [new_dig] with "Hown_hist_gs") as "[[Hhist Hhist'] #Hlb_hist]".
+  iMod (mono_list_auth_own_update_app [new_dig] with "Hown_digs_gs") as "[[Hdigs Hdigs'] #Hlb_digs]".
   iDestruct "Hown_pend_gs" as "[Hpend Hpend']".
-  iMod ("Hperm" with "[$Hpend' $Hhist']") as "_".
-  iAssert (own_aux _ (state.mk _ _) (1/2))%I with "[$Hpend $Hhist]" as "Hown_gs".
+  iMod ("Hperm" with "[$Hpend' $Hdigs']") as "_".
+  iAssert (own_aux _ (state.mk _ _) (1/2))%I with "[$Hpend $Hdigs]" as "Hown_gs".
   iModIntro.
 
   iDestruct (own_slice_len with "Hsl_audits") as %?.
   iDestruct (big_sepL2_length with "Hown_audits") as %?.
-  eassert (ktcore.mono_plain (vrf_pkγ γ) (_ ++ [_])) as Hmono_plain'.
+  eassert (ktcore.mono_plain (γ.(cfg.agreeγ).(ktcore.Agree.vrf_pk)) (_ ++ [_])) as Hmono_plain'.
   { rewrite /ktcore.mono_plain in Hmono_plain |-*.
     rewrite !fmap_app.
     eapply list_reln_snoc; [done|].
-    intros * Hlast_hist.
-    rewrite !fmap_last Hlast_dig /= in Hlast_hist.
+    intros * Hlast_digs.
+    rewrite !fmap_last Hlast_dig /= in Hlast_digs.
     by simplify_eq/=. }
   clear Hmono_plain.
   wp_apply ktcore.wp_SignLink as "* @".
   { iFrame "#". iPureIntro.
-    destruct γ.(cfg.sigγ).(cfg.info). simplify_eq/=.
+    rewrite Heq_cut Heq_digs_start Heq_func_start.
     split; [|repeat split].
     - exact_eq His_chain. word.
     - len.
@@ -1408,11 +1382,12 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
   {{{
     sl_chainProof sl_linkSig sl_hist ptr_bound err σ lastDig,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #err);
-    let numEps := length σ.(state.hist) in
-    let pks := ktcore.to_pks (vrf_pkγ γ) uid lastDig in
+    let agreeγ := γ.(cfg.agreeγ) in
+    let numEps := length σ.(state.digs) in
+    let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid lastDig in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
-    "%Hlast_hist" ∷ ⌜last σ.(state.hist) = Some lastDig⌝ ∗
+    "%Hlast_digs" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
     "#Herr" ∷
       match err with
       | true => ⌜uint.nat prevEpoch ≥ numEps ∨
@@ -1421,7 +1396,7 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
         ∃ lastLink chainProof linkSig hist bound,
         "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 $ length pks)⌝ ∗
-        "%His_lastLink" ∷ ⌜hashchain.valid (σ.(state.hist)) None lastLink numEps⌝ ∗
+        "%His_lastLink" ∷ ⌜hashchain.valid (σ.(state.digs)) None lastLink numEps⌝ ∗
 
         "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
         "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
@@ -1429,14 +1404,14 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
         "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
-          (drop (S (uint.nat prevEpoch)) σ.(state.hist))⌝ ∗
+          (drop (S (uint.nat prevEpoch)) σ.(state.digs))⌝ ∗
         "#Hwish_linkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
           (W64 $ (Z.of_nat numEps - 1)) lastLink linkSig ∗
-        "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γ) uid
+        "#Hwish_hist" ∷ ktcore.wish_ListMemb agreeγ.(ktcore.Agree.vrf_pk) uid
           (uint.nat prevVerLen) lastDig hist ∗
         "%Heq_hist" ∷ ⌜drop (uint.nat prevVerLen) pks =
           ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝ ∗
-        "#Hwish_bound" ∷ ktcore.wish_NonMemb (vrf_pkγ γ) uid
+        "#Hwish_bound" ∷ ktcore.wish_NonMemb agreeγ.(ktcore.Agree.vrf_pk) uid
           (length pks) lastDig bound
       end
   }}}.
@@ -1469,8 +1444,9 @@ Proof.
     wp_end. iFrame "∗#%". word. }
   simpl.
   wp_apply (wp_map_lookup1 with "[$Hptr_plain]") as "Hptr_plain".
-  iAssert (⌜sint.Z (default slice.nil (ptr0_plain !! uid)).(slice.len) =
-    length $ ktcore.to_pks (vrf_pkγ γ) uid last_dig⌝)%I as %?.
+  iAssert (let agreeγ := γ.(cfg.agreeγ) in
+    ⌜sint.Z (default slice.nil (ptr0_plain !! uid)).(slice.len) =
+    length $ ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid last_dig⌝)%I as %?.
   { rewrite /keyStore.own_plain.
     iNamed "Hown_plain".
     rewrite lookup_total_alt.
@@ -1488,7 +1464,7 @@ Proof.
   wp_apply (hashchain.wp_HashChain_Prove with "[$Hown_chain]") as "* @"; [word|].
   iPersist "Hsl_proof".
   case_decide as Ht; [|word]. clear Ht.
-  list_elem audits (pred $ length σ.(state.hist)) as last_audit.
+  list_elem audits (pred $ length σ.(state.digs)) as last_audit.
   iDestruct (big_sepL2_lookup_r with "Hown_audits")
     as "(%ptr_audit&%Hlook_sl0_audits&@)"; [done|].
   iDestruct (big_sepL_lookup with "His_sigs") as "@"; [done|].
@@ -1506,7 +1482,7 @@ Proof.
   { iFrame "∗∗#%". }
   wp_end.
   iFrame (Hlast_dig) "∗ Hown_ro". iFrame "#%".
-  replace (length _ - 1) with (Z.of_nat $ pred $ length σ.(state.hist)) by lia.
+  replace (length _ - 1) with (Z.of_nat $ pred $ length σ.(state.digs)) by lia.
   iFrame "#".
   repeat iSplit; try iPureIntro.
   - word.
@@ -1525,7 +1501,7 @@ Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
   s @! (go.PointerType server.Server) @! "Audit" #prevEpoch
   {{{
     sl_proofs err σ, RET (#sl_proofs, #err);
-    let numEps := length σ.(state.hist) in
+    let numEps := length σ.(state.digs) in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
     "Herr" ∷
@@ -1545,13 +1521,13 @@ Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
         "#His_upds" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ dig0 dig1,
           let predEp := (uint.nat prevEpoch + i)%nat in
-          "%Hlook0" ∷ ⌜σ.(state.hist) !! predEp = Some dig0⌝ ∗
-          "%Hlook1" ∷ ⌜σ.(state.hist) !! (S predEp) = Some dig1⌝ ∗
+          "%Hlook0" ∷ ⌜σ.(state.digs) !! predEp = Some dig0⌝ ∗
+          "%Hlook1" ∷ ⌜σ.(state.digs) !! (S predEp) = Some dig1⌝ ∗
           "#His_upd" ∷ ktcore.wish_ListUpdate dig0 aud.(ktcore.AuditProof.Updates) dig1) ∗
         "#His_sigs" ∷ ([∗ list] i ↦ aud ∈ proofs,
           ∃ link,
           let ep := (S $ uint.nat prevEpoch + i)%nat in
-          "%His_link" ∷ ⌜hashchain.valid (take (S ep) σ.(state.hist)) None link (S ep)⌝ ∗
+          "%His_link" ∷ ⌜hashchain.valid (take (S ep) σ.(state.digs)) None link (S ep)⌝ ∗
           "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) (W64 ep) link aud.(ktcore.AuditProof.LinkSig))
       end
   }}}.
@@ -1617,30 +1593,35 @@ Lemma wp_Server_Start s γ obj Q :
   s @! (go.PointerType server.Server) @! "Start" #()
   {{{
     chain vrf ptr_chain ptr_vrf σ last_link, RET (#ptr_chain, #ptr_vrf);
-    let numEps := length σ.(state.hist) in
+    let agreeγ := γ.(cfg.agreeγ) in
+    let numEps := length σ.(state.digs) in
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
-    "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 
     "#Hptr_chain" ∷ StartChain.own ptr_chain chain (□) ∗
     "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
 
+    "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
-    (* PrevLink is the only "assumed" link. need to guarantee its length. *)
     "%His_PrevLink" ∷ ⌜hashchain.valid
-      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))
+      (take (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.digs))
       None chain.(StartChain.PrevLink)
       (uint.nat chain.(StartChain.PrevEpochLen))⌝ ∗
     "%His_ChainProof" ∷ ⌜hashchain.wish_Proof chain.(StartChain.ChainProof)
-      (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.hist))⌝ ∗
-    "%His_last_link" ∷ ⌜hashchain.valid (σ.(state.hist)) None last_link numEps⌝ ∗
+      (drop (uint.nat chain.(StartChain.PrevEpochLen)) σ.(state.digs))⌝ ∗
+    "%His_last_link" ∷ ⌜hashchain.valid σ.(state.digs) None last_link numEps⌝ ∗
     "#His_LinkSig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk)
       (W64 $ numEps - 1) last_link chain.(StartChain.LinkSig) ∗
 
-    "%Heq_VrfPk" ∷ ⌜vrf_pkγ γ = vrf.(StartVrf.VrfPk)⌝ ∗
+    "%Heq_VrfPk" ∷ ⌜agreeγ.(ktcore.Agree.vrf_pk) = vrf.(StartVrf.VrfPk)⌝ ∗
     "#His_VrfPk" ∷ cryptoffi.is_vrf_pk vrf.(StartVrf.VrfPk) ∗
-    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (vrf_pkγ γ)
-      vrf.(StartVrf.VrfSig)
+    "#His_VrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk)
+      agreeγ.(ktcore.Agree.vrf_pk) vrf.(StartVrf.VrfSig) ∗
+
+    (* bootstrap caller's facts about our Agree state. *)
+    "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
+    "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+    "%Heq_func_start" ∷ ⌜agreeγ.(ktcore.Agree.func_start) = 0%nat⌝
   }}}.
 Proof.
   wp_start as "@".
@@ -1666,7 +1647,7 @@ Proof.
   wp_apply (hashchain.wp_HashChain_Bootstrap with "[$Hown_chain]") as "* @"; [word|].
   case_decide as Ht; [|word]. clear Ht.
   wp_bind.
-  list_elem audits (pred $ length σ.(state.hist)) as last_audit.
+  list_elem audits (pred $ length σ.(state.digs)) as last_audit.
   iDestruct (big_sepL2_lookup_r with "Hown_audits")
     as "(%ptr_audit&%Hlook_sl0_audits&@)"; [done|].
   iDestruct (big_sepL_lookup with "His_sigs") as "@"; [done|].
@@ -1685,9 +1666,9 @@ Proof.
 
   iApply ("HΦ" $! (StartChain.mk' _ _ _ _) (StartVrf.mk' _ _)). simpl.
   simpl. iFrame "∗#".
-  replace (uint.nat (word.sub _ _)) with (pred $ length σ.(state.hist)); [|word].
+  replace (uint.nat (word.sub _ _)) with (pred $ length σ.(state.digs)); [|word].
   iFrame "%".
-  replace (_ - _) with (Z.of_nat $ pred $ length σ.(state.hist)); [|lia].
+  replace (_ - _) with (Z.of_nat $ pred $ length σ.(state.digs)); [|lia].
   iDestruct (cryptoffi.own_vrf_sk_to_pk with "[]") as "His_vrf_pk"; [done|].
   iFrame "#".
   repeat iSplit; try iPureIntro.
@@ -1697,24 +1678,25 @@ Proof.
   - done.
 Qed.
 
-Lemma wp_New (uidγ : gmap w64 gname) :
+Lemma wp_New (uidγs : gmap w64 gname) (epochTime : w64) :
   {{{ is_pkg_init server }}}
-  @! server.New #()
+  @! server.New #epochTime
   {{{
     γ obj ptr_server sl_sigPk, RET (#ptr_server, #sl_sigPk);
     "#His_inv" ∷ is_inv γ ∗
+    "%Heq_uidγs" ∷ ⌜γ.(cfg.uidγs) = uidγs⌝ ∗
     "Hlocks" ∷ ([∗] replicate (pred $ Z.to_nat rwmutex.actualMaxReaders)
       (Server.lock_perm γ ptr_server obj)) ∗
     "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.sig_pk) ∗
-    "#His_sigPk" ∷ cryptoffi.is_sig_pk γ.(cfg.sig_pk) (sigpred.P γ.(cfg.sigγ))
+    "#His_sigPk" ∷ cryptoffi.is_sig_pk γ.(cfg.sig_pk) (sigpred.P γ.(cfg.agreeγ))
   }}}.
 Proof.
   wp_start as "@". wp_auto.
   wp_apply wp_alloc as "* Hptr_mu".
   wp_apply cryptoffi.wp_VrfGenerateKey as "* @".
   iMod (mono_list_own_alloc []) as (digsγ) "[Hauth_digs _]".
-  remember (sigpred.cfg.mk vrfPk digsγ (sigpred.digs_info.mk 0%nat None 0%nat)) as sigγ.
-  wp_apply (cryptoffi.wp_SigGenerateKey (sigpred.P sigγ)) as "* @".
+  remember (ktcore.Agree.mk vrfPk digsγ 0%nat None 0%nat) as agreeγ.
+  wp_apply (cryptoffi.wp_SigGenerateKey (sigpred.P agreeγ)) as "* @".
   wp_apply cryptoffi.wp_VrfPrivateKey_PublicKey as "* @".
   { iFrame "#". }
   iRename "Hsl_enc" into "Hsl_vrfPk". iPersist "Hsl_vrfPk".
@@ -1759,12 +1741,12 @@ Proof.
 
   iMod (dghost_var_alloc (∅ : ktcore.plain_ty)) as (pendγ) "[Hgs_pend Hgs_pend']".
   eremember (Server.mk' (secrets.mk' commit_sec)) as obj.
-  eremember (cfg.mk sigPk pendγ uidγ sigγ) as γ.
+  eremember (cfg.mk sigPk pendγ uidγs agreeγ) as γ.
   eremember (state.mk ∅ [hash]) as σ.
   iMod (start_bag (work.own_aux γ obj.(Server.secs)) with "His_chan Hown_chan")
     as "#His_chan_bag"; [done|].
   iStructNamed "Hptr_serv". simpl in *.
-  iPersist "secs workQ mu keys hist".
+  iPersist "secs workQ epochTime mu keys hist".
   iPersist "s sigPk Hsl_sigPk Hptr_secs Hptr_keys Hptr_audit Hsl_commit_sec".
   iMod (inv_alloc nroot _ (∃ σ, inv_aux γ σ) with "[Hgs_digs' Hgs_pend']") as "Ht".
   { iExists σ. simplify_eq/=.
@@ -1781,7 +1763,7 @@ Proof.
     rewrite Hinv_merkle ktcore.plain_inv_empty.
     iModIntro. repeat iSplit; try iPureIntro; try done.
     { rewrite /keyStore.own_plain. naive_solver. }
-    2: { by iApply op_add_hist. }
+    2: { by iApply op_add_digs. }
     iExists [ktcore.AuditProof.mk' [] _].
     iFrame "Hptr_audit #". simpl. repeat iSplit; try done.
     by iDestruct own_slice_nil as "$". }

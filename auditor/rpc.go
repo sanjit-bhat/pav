@@ -9,7 +9,7 @@ const (
 	GetRpc uint64 = iota
 )
 
-func NewRpcAuditor(adtr *Auditor) *advrpc.Server {
+func NewRpcServer(adtr *Auditor) *advrpc.Server {
 	h := make(map[uint64]func([]byte, *[]byte))
 	h[GetRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err := GetArgDecode(arg)
@@ -34,14 +34,14 @@ func CallGet(c *advrpc.Client, epoch uint64) (startEp uint64, startLink, currLin
 		return
 	}
 	r, _, errb := GetReplyDecode(*rb)
-	startEp = r.StartEp
-	startLink = r.StartLink
-	currLink = r.CurrLink
-	vrf = r.Vrf
 	if errb {
 		err = ktcore.BlameAdtrFull
 		return
 	}
+	startEp = r.StartEp
+	startLink = r.StartLink
+	currLink = r.CurrLink
+	vrf = r.Vrf
 	if r.Err {
 		// [Get] legitimately returns errs.
 		err = ktcore.BlameUnknown

@@ -9,34 +9,6 @@ From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
 Module ktcore.
 Import key_map.ktcore.
 
-(* TODO: upstream. *)
-Lemma list_reln_app {A} R (l0 l1 : list A) :
-  list_reln (l0 ++ l1) R →
-  list_reln l0 R ∧ list_reln l1 R.
-Proof.
-  rewrite /list_reln. intros Happ. split.
-  - intros i x y Hx Hy.
-    eapply Happ.
-    + rewrite lookup_app_l; [done|eapply lookup_lt_Some; done].
-    + rewrite lookup_app_l; [done|eapply lookup_lt_Some; done].
-  - intros i x y Hx Hy.
-    apply (Happ (i + length l0)%nat).
-    + rewrite lookup_app_r; last lia.
-      replace (i + length l0 - length l0)%nat with i by lia. done.
-    + rewrite lookup_app_r; last lia.
-      replace (S (i + length l0) - length l0)%nat with (S i) by lia. done.
-Qed.
-
-Lemma lookup_app_r' {A} (l1 l2 : list A) i :
-  l2 !! i = (l1 ++ l2) !! (i + length l1)%nat.
-Proof. rewrite lookup_app_r; [|lia]. f_equal. lia. Qed.
-
-Lemma prefix_eq {A} (l1 l2 : list A) :
-  l1 `prefix_of` l2 →
-  l2 `prefix_of` l1 →
-  l1 = l2.
-Proof. intros ? ?%prefix_length. by apply prefix_length_eq. Qed.
-
 Section proof.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
@@ -56,16 +28,33 @@ Definition staged_keys vrf_pk digs uid keys next_ver :=
     length $ to_pks vrf_pk uid last_dig = next_ver ∧
     keys = (λ x, last $ to_pks vrf_pk uid x) <$> digs ).
 
-Lemma is_staged_init vrf_pk dig uid :
-  in_hidden vrf_pk (merkle.inv_fn dig) uid 0 None →
-  staged_keys vrf_pk [dig] uid [None] 0.
+Lemma staged_extract vrf_pk digs uid keys next_ver :
+  staged_keys vrf_pk digs uid keys next_ver →
+  ∃ last_dig last_key,
+  last digs = Some last_dig ∧
+  last keys = Some last_key ∧
+  length digs = length keys ∧
+  (mono_plain vrf_pk digs →
+    length $ to_pks vrf_pk uid last_dig = next_ver).
 Proof.
-  rewrite /staged_keys /=. intros Hnone.
+  intros (?&Hlast_digs&?). destruct_and!.
+  destruct (last keys) eqn:Hlast_keys.
+  2: {
+    apply last_None in Hlast_keys as ->. simpl in *.
+    opose proof (last_length_Some _ _); [done|].
+    lia. }
+  naive_solver.
+Qed.
+
+Lemma staged_init vrf_pk dig uid pks :
+  pks_in_hidden vrf_pk (merkle.inv_fn dig) uid pks →
+  in_hidden vrf_pk (merkle.inv_fn dig) uid (length pks) None →
+  staged_keys vrf_pk [dig] uid [last pks] (length pks).
+Proof.
+  rewrite /staged_keys /=. intros Hpks Hnone.
   eexists. repeat (split; [done|]).
   intros Hmono.
-  assert (to_pks vrf_pk uid dig = []) as ->; [|done].
-  eapply inv_fn_None_bound in Hnone as ?.
-  by destruct (plain_inv_fn _ _ !!! _).
+  by erewrite inv_fn_inp_pks_exact.
 Qed.
 
 (* grow staged keys by replicating the last existing key. *)

@@ -17,28 +17,32 @@ Record t :=
   mk {
     uid : w64;
     sig_pk : list w8;
-    sigγ : sigpred.cfg.t;
-    serv_good : option $ server.cfg.t;
+    agreeγ : ktcore.Agree.t;
+    uidγs : gmap w64 gname;
+    serv_good : server.Trust.t;
     clis_good : bool;
   }.
 End cfg.
 
-Notation vrf_pkγ γ := (γ.(cfg.sigγ).(sigpred.cfg.vrf_pk)).
-Notation digsγ γ := (γ.(cfg.sigγ).(sigpred.cfg.digs)).
-Notation start_epγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.start_ep)).
-Notation cutγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.cut)).
-Notation audit_offsetγ γ := (γ.(cfg.sigγ).(sigpred.cfg.info).(sigpred.digs_info.audit_offset)).
-
 Module state.
 Record t :=
   mk {
-    digs : list $ list w8;
+    epoch : nat;
     keys : list $ option $ list w8;
-    pending_pk : option $ list w8;
+    pend_pk : option $ list w8;
   }.
 End state.
 
-Module nextVer.
+Section proof.
+Context `{!heapGS Σ}.
+
+Definition own γ (digs : list $ list w8) : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
+  "Hown_digs" ∷ mono_list_auth_own agreeγ.(ktcore.Agree.digs) 1 digs.
+
+End proof.
+
+Module ver.
 Record t :=
   mk' {
     ver : nat;
@@ -46,50 +50,54 @@ Record t :=
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : client.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
+
+Definition own ptr (pend_pk : option $ list w8) obj : iProp Σ :=
+  ∃ w_ver hasPendPk sl_pendPk,
+  "Hstr_ver" ∷ ptr ↦ (client.ver.mk w_ver hasPendPk sl_pendPk) ∗
+  "%Heq_ver" ∷ ⌜uint.nat w_ver = obj.(ver)⌝ ∗
+  "#HpendPk" ∷
+    match pend_pk with
+    | None =>
+      "%Heq_hasPendPk" ∷ ⌜hasPendPk = false⌝
+    | Some pk =>
+      "%Heq_hasPendPk" ∷ ⌜hasPendPk = true⌝ ∗
+      "#Heq_pendPk" ∷ sl_pendPk ↦*□ pk
+    end.
+
+Definition valid γ keys obj : iProp Σ :=
+  ∃ keys_digs,
+  let agreeγ := γ.(cfg.agreeγ) in
+  "#Hlb_ver_digs" ∷ mono_list_lb_own agreeγ.(ktcore.Agree.digs) keys_digs ∗
+  "%Hstaged" ∷ ⌜ktcore.staged_keys agreeγ.(ktcore.Agree.vrf_pk)
+    (drop agreeγ.(ktcore.Agree.func_start) keys_digs)
+    γ.(cfg.uid) keys obj.(ver)⌝.
 
 Definition uid_inv γ : iProp Σ :=
   ∃ (puts : list (nat * list w8)),
   "Hputs" ∷ mono_list_auth_own γ 1 puts.
+(* is_uid_inv allows anyone, even malicious Client, to run Server Put.
+TODO: for now, trusted connection to clis_good. *)
 Definition is_uid_inv γ : iProp Σ := inv nroot (uid_inv γ).
 
-Definition own ptr (pending_pk : option $ list w8) obj : iProp Σ :=
-  ∃ w_ver isPending sl_pendingPk,
-  "Hstr_nextVer" ∷ ptr ↦ (client.nextVer.mk w_ver isPending sl_pendingPk) ∗
-  "%Heq_ver" ∷ ⌜uint.nat w_ver = obj.(ver)⌝ ∗
-  "#HpendingPk" ∷
-    match pending_pk with
-    | None =>
-      "%HisPending" ∷ ⌜isPending = false⌝
-    | Some pk =>
-      "%HisPending" ∷ ⌜isPending = true⌝ ∗
-      "#Hsl_pendingPk" ∷ sl_pendingPk ↦*□ pk
-    end.
-
-Definition align_serv_pend γcli γserv (pending_pk : option $ list w8) obj : iProp Σ :=
+Definition own_puts γ (pend_pk : option $ list w8) obj : iProp Σ :=
   ∃ uidγ,
-  "%Hlook_uidγ" ∷ ⌜γserv.(server.cfg.uidγ) !! γcli.(cfg.uid) = Some uidγ⌝ ∗
+  "%Hlook_uidγ" ∷ ⌜γ.(cfg.uidγs) !! γ.(cfg.uid) = Some uidγ⌝ ∗
   "HgoodCli" ∷
-    match γcli.(cfg.clis_good) with
+    match γ.(cfg.clis_good) with
     | true =>
       ∃ puts,
       "Hputs" ∷ mono_list_auth_own uidγ 1 puts ∗
       "%Hbound" ∷ ⌜∀ (ver' : nat) pk, (ver', pk) ∈ puts → ver' ≤ obj.(ver)⌝ ∗
-      "%Heq_pend" ∷ ⌜∀ pk, (obj.(ver), pk) ∈ puts → pending_pk = Some pk⌝
+      "%Heq_pend" ∷ ⌜∀ pk, (obj.(ver), pk) ∈ puts → pend_pk = Some pk⌝
     | false =>
       "#Huid_inv" ∷ is_uid_inv uidγ
     end.
 
-Definition align_serv_hist γ (digs : list $ list w8) obj : iProp Σ :=
-  ∃ i dig,
-  let pks := ktcore.to_pks (vrf_pkγ γ) γ.(cfg.uid) dig in
-  "%Hlook_dig" ∷ ⌜digs !! i = Some dig⌝ ∗
-  "%Hver_hist" ∷ ⌜obj.(ver) ≤ length pks⌝.
-
 End proof.
-End nextVer.
+End ver.
 
 Module epoch.
 Record t :=
@@ -102,16 +110,9 @@ Record t :=
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : client.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
-
-Definition valid γ digs obj : iProp Σ :=
-  let num_eps := (start_epγ γ + length digs)%nat in
-  "%Heq_ep" ∷ ⌜S $ uint.nat obj.(epoch) = num_eps⌝ ∗
-  "%Hlast_dig" ∷ ⌜last digs = Some obj.(dig)⌝ ∗
-  "%His_chain" ∷ ⌜hashchain.valid digs (cutγ γ) obj.(link) num_eps⌝ ∗
-  "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) obj.(epoch) obj.(link) obj.(sig).
 
 Definition own ptr obj : iProp Σ :=
   ∃ sl_dig sl_link sl_sig,
@@ -120,12 +121,18 @@ Definition own ptr obj : iProp Σ :=
   "#Hsl_link" ∷ sl_link ↦*□ obj.(link) ∗
   "#Hsl_sig" ∷ sl_sig ↦*□ obj.(sig).
 
-Definition align_serv γcli γserv (digs : list $ list w8) : iProp Σ :=
-  "#His_hist" ∷ mono_list_lb_own (server.digsγ γserv) digs ∗
-  "%Heq_serv_start" ∷ ⌜start_epγ γcli = server.start_epγ γserv⌝ ∗
-  "%Heq_start" ∷ ⌜start_epγ γcli = 0%nat⌝ ∗
-  "%Heq_serv_cut" ∷ ⌜cutγ γcli = server.cutγ γserv⌝ ∗
-  "%Heq_cut" ∷ ⌜cutγ γcli = None⌝.
+Definition valid γ digs obj : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
+  let num_eps := (agreeγ.(ktcore.Agree.digs_start) + length digs)%nat in
+  "%Heq_ep" ∷ ⌜S $ uint.nat obj.(epoch) = num_eps⌝ ∗
+  "%Hlast_dig" ∷ ⌜last digs = Some obj.(dig)⌝ ∗
+  "%His_chain" ∷ ⌜hashchain.valid digs agreeγ.(ktcore.Agree.cut) obj.(link) num_eps⌝ ∗
+  "#His_sig" ∷ ktcore.wish_LinkSig γ.(cfg.sig_pk) obj.(epoch) obj.(link) obj.(sig).
+
+Definition align_sigpred servAgreeγ digs : iProp Σ :=
+  "#Hserv_digs" ∷ mono_list_lb_own servAgreeγ.(ktcore.Agree.digs) digs ∗
+  "%Hmono_plain" ∷ ⌜ktcore.mono_plain servAgreeγ.(ktcore.Agree.vrf_pk)
+    (drop servAgreeγ.(ktcore.Agree.func_start) digs)⌝.
 
 End proof.
 End epoch.
@@ -133,25 +140,40 @@ End epoch.
 Module serv.
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : client.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own γ ptr : iProp Σ :=
+  let agreeγ := γ.(cfg.agreeγ) in
   ∃ ptr_cli sl_sigPk ptr_vrfPk sl_vrfSig vrfSig,
   "#Hstr_serv" ∷ ptr ↦□ (client.serv.mk ptr_cli sl_sigPk ptr_vrfPk sl_vrfSig) ∗
   "#His_rpc" ∷ server.is_rpc_cli ptr_cli γ.(cfg.serv_good) ∗
   "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.sig_pk) ∗
-  "#Hown_vrfPk" ∷ cryptoffi.own_vrf_pk ptr_vrfPk (vrf_pkγ γ) ∗
+  "#Hown_vrfPk" ∷ cryptoffi.own_vrf_pk ptr_vrfPk agreeγ.(ktcore.Agree.vrf_pk) ∗
   "#Hsl_vrfSig" ∷ sl_vrfSig ↦*□ vrfSig ∗
-  "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) (vrf_pkγ γ) vrfSig.
+  "#His_vrfSig" ∷ ktcore.wish_VrfSig γ.(cfg.sig_pk) agreeγ.(ktcore.Agree.vrf_pk) vrfSig.
 
-Definition align_serv γcli γserv : iProp Σ :=
-  "#His_sigPk" ∷ cryptoffi.is_sig_pk γcli.(cfg.sig_pk) (sigpred.P γcli.(cfg.sigγ)) ∗
-  (* trusted. *)
+Definition align_sigpred γcli servAgreeγ : iProp Σ :=
+  let agreeγ := γcli.(cfg.agreeγ) in
+  "#His_sigPk" ∷ cryptoffi.is_sig_pk γcli.(cfg.sig_pk) (sigpred.P servAgreeγ) ∗
+  "%Heq_vrf_pk" ∷ ⌜agreeγ.(ktcore.Agree.vrf_pk) =
+    servAgreeγ.(ktcore.Agree.vrf_pk)⌝ ∗
+  "%Heq_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) =
+    servAgreeγ.(ktcore.Agree.digs_start)⌝ ∗
+  "%Heq_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = servAgreeγ.(ktcore.Agree.cut)⌝ ∗
+  "%Heq_func_start" ∷ ⌜servAgreeγ.(ktcore.Agree.func_start) ≤
+    agreeγ.(ktcore.Agree.func_start)⌝.
+
+Definition align_full γcli γserv : iProp Σ :=
+  let agreeγ := γcli.(cfg.agreeγ) in
+  let servAgreeγ := γserv.(server.cfg.agreeγ) in
   "%Heq_sig_pk" ∷ ⌜γcli.(cfg.sig_pk) = γserv.(server.cfg.sig_pk)⌝ ∗
-  (* from signed vrf_pk. *)
-  "%Heq_vrf_pk" ∷ ⌜vrf_pkγ γcli = server.vrf_pkγ γserv⌝.
+  "%Heq_serv_digs_start" ∷ ⌜agreeγ.(ktcore.Agree.digs_start) = 0%nat⌝ ∗
+  "%Heq_serv_cut" ∷ ⌜agreeγ.(ktcore.Agree.cut) = None⌝ ∗
+  (* [func_start] equality not required, but makes life easier. *)
+  "%Heq_serv_func_start" ∷ ⌜servAgreeγ.(ktcore.Agree.func_start) = 0%nat⌝ ∗
+  "%Heq_uidγs" ∷ ⌜γcli.(cfg.uidγs) = γserv.(server.cfg.uidγs)⌝.
 
 End proof.
 End serv.
@@ -159,26 +181,28 @@ End serv.
 Module Client.
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : client.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Definition own γ ptr σ : iProp Σ :=
-  ∃ ptr_pend pend ptr_last last ptr_serv,
-  "Hstr_client" ∷ ptr ↦ (client.Client.mk γ.(cfg.uid) ptr_pend ptr_last ptr_serv) ∗
-  "Hown_pend" ∷ nextVer.own ptr_pend σ.(state.pending_pk) pend ∗
-  "Halign_pend_pend" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    nextVer.align_serv_pend γ γserv σ.(state.pending_pk) pend end ∗
-  "#Halign_pend_hist" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    nextVer.align_serv_hist γ σ.(state.digs) pend end ∗
-  "#Hown_last" ∷ epoch.own ptr_last last ∗
-  "#His_last" ∷ epoch.valid γ σ.(state.digs) last ∗
-  "#Halign_last" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    epoch.align_serv γ γserv σ.(state.digs) end ∗
+  ∃ digs ptr_nextVer nextVer ptr_lastEp lastEp ptr_serv,
+  "Hstr_client" ∷ ptr ↦ (client.Client.mk γ.(cfg.uid) ptr_nextVer ptr_lastEp ptr_serv) ∗
+  "Hown_nextVer" ∷ ver.own ptr_nextVer σ.(state.pend_pk) nextVer ∗
+  "#His_nextVer" ∷ ver.valid γ σ.(state.keys) nextVer ∗
+  "Hputs_nextVer" ∷ ver.own_puts γ σ.(state.pend_pk) nextVer ∗
+  "#Hown_lastEp" ∷ epoch.own ptr_lastEp lastEp ∗
+  "#His_lastEp" ∷ epoch.valid γ digs lastEp ∗
+  "#Halign_lastEp" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
+    epoch.align_sigpred γserv digs end ∗
   "#Hown_serv" ∷ serv.own γ ptr_serv ∗
-  "#Halign_serv" ∷ match γ.(cfg.serv_good) with None => True | Some γserv =>
-    serv.align_serv γ γserv end ∗
-  "Hown_digs" ∷ mono_list_auth_own (digsγ γ) 1 σ.(state.digs).
+  "#Halign_serv_sigpred" ∷ match server.Trust.get_sigpred γ.(cfg.serv_good) with None => True | Some γserv =>
+    serv.align_sigpred γ γserv end ∗
+  "#Halign_serv_full" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some γserv =>
+    serv.align_full γ γserv end ∗
+
+  "Hown_gs" ∷ own γ digs ∗
+  "%Heq_ep" ∷ ⌜S σ.(state.epoch) = (γ.(cfg.agreeγ).(ktcore.Agree.digs_start) + length digs)%nat⌝.
 
 End proof.
 End Client.
@@ -188,6 +212,35 @@ Context `{!heapGS Σ}.
 Context {sem : go.Semantics} {package_sem : client.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
+
+Lemma know_keys γ ptr σ :
+  let agreeγ := γ.(cfg.agreeγ) in
+  Client.own γ ptr σ -∗
+  ktcore.is_staged_keys agreeγ γ.(cfg.uid) σ.(state.keys).
+Proof.
+  rewrite /ktcore.is_staged_keys.
+  iIntros "@".
+  iNamed "His_nextVer".
+  iFrame "#%".
+Qed.
+
+Lemma serv_is_adtr γ servAgreeγ ptr σ :
+  let agreeγ := γ.(cfg.agreeγ) in
+  server.Trust.get_sigpred γ.(cfg.serv_good) = Some servAgreeγ →
+  Client.own γ ptr σ -∗
+  ktcore.is_audit agreeγ servAgreeγ σ.(state.epoch) ∗
+    ⌜servAgreeγ.(ktcore.Agree.func_start) ≤ agreeγ.(ktcore.Agree.func_start)⌝.
+Proof.
+  simpl. iIntros (Hgood) "@".
+  rewrite Hgood /ktcore.is_audit.
+  rewrite /own. iNamed "Hown_gs".
+  iDestruct (mono_list_lb_own_get with "Hown_digs") as "$".
+  iNamed "Halign_serv_sigpred".
+  iFrame "%".
+  iNamed "His_lastEp".
+  iNamed "Halign_lastEp".
+  iFrame "#%".
+Qed.
 
 (* arg order: Client state + getNextEp args + new Client state.
 TODO: describe more once we finish proving related stuff.
@@ -295,6 +348,7 @@ Qed.
 End proof.
 End client.
 
+(* TODO: maybe this should be under client namespace. *)
 Module server.
 Import serde.server server.server client.
 
@@ -308,17 +362,18 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
   {{{
     is_pkg_init server ∗
     "#His_cli" ∷ is_rpc_cli c good ∗
-    "#His_args" ∷ match good with None => True | Some γ =>
+    "#His_args" ∷ match server.Trust.get_full good with None => True | Some γ =>
+      let agreeγ := γ.(server.cfg.agreeγ) in
       ∃ (dig : list w8),
-      "#Hidx_ep" ∷ mono_list_idx_own (server.digsγ γ) (uint.nat prevEpoch) dig ∗
+      "#Hidx_ep" ∷ mono_list_idx_own agreeγ.(ktcore.Agree.digs) (uint.nat prevEpoch) dig ∗
       "%Hlt_ver" ∷ ⌜uint.nat prevVerLen ≤
-        length $ ktcore.to_pks (server.vrf_pkγ γ) uid dig⌝ end
+        length $ ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid dig⌝ end
   }}}
   @! server.CallHistory #c #uid #prevEpoch #prevVerLen
   {{{
     sl_chainProof sl_linkSig sl_hist ptr_bound err,
     RET (#sl_chainProof, #sl_linkSig, #sl_hist, #ptr_bound, #(ktcore.blame_to_u64 err));
-    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool good]}⌝ ∗
+    "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ server.Trust.get_full good]}⌝ ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ chainProof linkSig hist bound,
       "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
@@ -326,24 +381,25 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
       "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
       "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
 
-      "Hgood" ∷ match good with None => True | Some γ =>
+      "Hgood" ∷ match server.Trust.get_full good with None => True | Some γ =>
         ∀ γcli digs,
-        epoch.align_serv γcli γ digs -∗
-        serv.align_serv γcli γ -∗
+        let agreeγ := γ.(server.cfg.agreeγ) in
+        epoch.align_sigpred agreeγ digs -∗
+        serv.align_sigpred γcli agreeγ -∗
+        serv.align_full γcli γ -∗
         ⌜length digs = S $ uint.nat prevEpoch⌝ -∗
 
         ∃ newDigs next,
-        let pks := ktcore.to_pks (vrf_pkγ γcli) uid next.(epoch.dig) in
+        let pks := ktcore.to_pks agreeγ.(ktcore.Agree.vrf_pk) uid next.(epoch.dig) in
         "#Hwish_getNextEp" ∷ wish_getNextEp γcli digs chainProof linkSig
           newDigs next ∗
-        "#Halign_next" ∷ epoch.align_serv γcli γ (digs ++ newDigs) ∗
         "%Hnoof_vers" ∷ ⌜length pks = sint.nat (W64 (length pks))⌝ ∗
 
-        "#Hwish_hist" ∷ ktcore.wish_ListMemb (vrf_pkγ γcli) uid
+        "#Hwish_hist" ∷ ktcore.wish_ListMemb agreeγ.(ktcore.Agree.vrf_pk) uid
           (uint.nat prevVerLen) next.(epoch.dig) hist ∗
         "%Heq_hist" ∷ ⌜drop (uint.nat prevVerLen) pks =
           ktcore.CommitOpen.Val <$> (ktcore.Memb.PkOpen <$> hist)⌝ ∗
-        "#Hwish_bound" ∷ ktcore.wish_NonMemb (vrf_pkγ γcli) uid
+        "#Hwish_bound" ∷ ktcore.wish_NonMemb agreeγ.(ktcore.Agree.vrf_pk) uid
           (length pks) next.(epoch.dig) bound end)
   }}}.
 Proof.
@@ -353,22 +409,26 @@ Proof.
   case_decide as Ht; try done. clear Ht. iNamed "Herr".
   iFrame "#".
   case_match eqn:Ht; try done. clear Ht. iNamed "Hgood".
-  iIntros (?) "*@@%".
-  iExists _, (epoch.mk' (W64 $ length servHist - 1) _ _ _). simpl.
-  rewrite /wish_getNextEp /epoch.valid /epoch.align_serv /=.
-  rewrite Heq_sig_pk Heq_vrf_pk Heq_start Heq_cut.
-  rewrite Heq_start in Heq_serv_start.
-  rewrite Heq_cut in Heq_serv_cut.
+  iIntros (?) "*@@@%".
+  iExists _, (epoch.mk' (W64 $ length servDigs - 1) _ _ _). simpl.
+  rewrite /wish_getNextEp /epoch.valid /=.
+  rewrite Heq_sig_pk Heq_serv_digs_start Heq_serv_cut.
   iFrame "#%".
-  iAssert (⌜digs `prefix_of` servHist⌝)%I as %(?&?).
-  { iDestruct (mono_list_lb_valid with "His_hist Hlb_servHist")
+  iAssert (mono_list_lb_own t.(server.cfg.agreeγ).(ktcore.Agree.digs) servDigs)%I as "Hserv_digs'".
+  { iDestruct (ktcore.get_link_sigpred with "His_sigPk Hwish_linkSig") as "@".
+    opose proof (hashchain.inj His_lastLink _) as [-> _].
+    { exact_eq Hinv. word. }
+    done. }
+  iAssert (⌜digs `prefix_of` servDigs⌝)%I as %(?&?).
+  { iDestruct (mono_list_lb_valid with "Hserv_digs Hserv_digs'")
       as %[?|Hpref]; [done|].
     by apply prefix_length_eq in Hpref as ->; [|lia]. }
-  replace (digs ++ _) with servHist.
+  replace (digs ++ _) with servDigs.
   2: { subst. f_equal. by rewrite drop_app_length'. }
-  iFrame "#%".
-  repeat iSplit; try done.
-  repeat iExists _. iSplit; try done. word.
+  iFrame "%".
+  repeat iExists _.
+  iSplit; [done|].
+  word.
 Qed.
 
 End proof.

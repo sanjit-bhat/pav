@@ -22,6 +22,21 @@ Definition wish_VrfSig sig_pk vrf_pk sig : iProp Σ :=
   "#His_sig" ∷ cryptoffi.is_sig sig_pk enc sig ∗
   "%Hvalid" ∷ ⌜VrfSig.valid obj⌝.
 
+Lemma get_vrf_sigpred γ sig_pk vrf_pk sig :
+  cryptoffi.is_sig_pk sig_pk (sigpred.P γ) -∗
+  wish_VrfSig sig_pk vrf_pk sig -∗
+  sigpred.vrfP γ vrf_pk.
+Proof.
+  iIntros "Hsig_pk @".
+  iDestruct (cryptoffi.is_sig_to_pred with "Hsig_pk His_sig") as "[@|@]"; try done.
+  opose proof (VrfSig.wish_det [] []
+    (VrfSig.mk' _ _) (VrfSig.mk' _ _) _ _) as [? _].
+  { split; [|exact Hvalid]. by list_simplifier. }
+  { split; [|exact Hvalid0]. list_simplifier.
+    by f_equal. }
+  by simplify_eq/=.
+Qed.
+
 Lemma wp_SignVrf ptr_sk pk γ sl_vrfPk vrfPk :
   {{{
     is_pkg_init ktcore ∗
@@ -98,6 +113,21 @@ Definition wish_LinkSig sig_pk ep link sig : iProp Σ :=
   let enc := LinkSig.pure_enc obj in
   "#His_sig" ∷ cryptoffi.is_sig sig_pk enc sig ∗
   "%Hvalid" ∷ ⌜LinkSig.valid obj⌝.
+
+Lemma get_link_sigpred γ sig_pk ep link sig :
+  cryptoffi.is_sig_pk sig_pk (sigpred.P γ) -∗
+  wish_LinkSig sig_pk ep link sig -∗
+  sigpred.linkP γ ep link.
+Proof.
+  iIntros "Hsig_pk @".
+  iDestruct (cryptoffi.is_sig_to_pred with "Hsig_pk His_sig") as "[@|@]"; try done.
+  opose proof (LinkSig.wish_det [] []
+    (LinkSig.mk' _ _ _) (LinkSig.mk' _ _ _) _ _) as [? _].
+  { split; [|exact Hvalid]. by list_simplifier. }
+  { split; [|exact Hvalid0]. list_simplifier.
+    by f_equal. }
+  by simplify_eq/=.
+Qed.
 
 Lemma wp_SignLink ptr_sk pk γ epoch sl_link link :
   {{{

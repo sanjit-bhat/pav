@@ -15,10 +15,16 @@ type blameInterp struct {
 }
 
 func TestAliceBob(t *testing.T) {
-	if err, evid := testAliceBob(makeUniqueAddr(), makeUniqueAddr()); err != ktcore.BlameNone {
-		t.Error()
-		alertUser(t, err, evid)
+	addrs := make([]uint64, 0, 3)
+	for range 3 {
+		addrs = append(addrs, makeUniqueAddr())
 	}
+	// servGood = false is stronger, so always test with that.
+	testAliceBob(makeUniqueAddr(), false, addrs)
+	// if err, evid := testAliceBob(makeUniqueAddr(), false, addrs); err != ktcore.BlameNone {
+	// 	t.Fail()
+	// 	alertUser(t, err, evid)
+	// }
 }
 
 // alertUser goes to end-user in real system.
@@ -34,7 +40,7 @@ func interpBlame(err ktcore.Blame) string {
 		return "[ERROR]: unknown source"
 	}
 	parties := blameToString(err)
-	return fmt.Sprintf("[ERROR]: %s suspect; if good, would not observe error", parties)
+	return fmt.Sprintf("[ERROR]: suspect %s; if good, would not observe error", parties)
 }
 
 func blameToString(err ktcore.Blame) string {

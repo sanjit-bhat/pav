@@ -125,8 +125,8 @@ End blame.
 
 Section proof.
 Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : ktcore.Assumptions}.
-Collection W := sem + package_sem.
+Context {sem : go.Semantics}.
+Collection W := sem.
 #[local] Set Default Proof Using "W".
 
 Lemma rw_Blame0 err :
@@ -212,6 +212,18 @@ Lemma blame_one party good interp :
   (* written as "not good" bc goodness is how to learn contra. *)
   (¬ ⌜good = true⌝ : iProp Σ) -∗
   ⌜BlameSpec {[ party ]} (<[party:=good]>interp)⌝.
+Proof.
+  iPureIntro. intros ?. right. right.
+  destruct good; try done.
+  exists party.
+  split; [set_solver|by simplify_map_eq/=].
+Qed.
+
+(* TODO: delete [blame_one]. do the same for [blame_two]. *)
+Lemma blame_one' party good interp :
+  interp !! party = Some good →
+  (¬ ⌜good = true⌝ : iProp Σ) -∗
+  ⌜BlameSpec {[ party ]} interp⌝.
 Proof.
   iPureIntro. intros ?. right. right.
   destruct good; try done.

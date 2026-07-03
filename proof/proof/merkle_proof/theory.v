@@ -960,11 +960,6 @@ Proof.
       naive_solver.
 Qed.
 
-(* TODO: upstream smth like this. *)
-Lemma bind_is_Some {A B} (f : A → option B) (mx : option A) :
-  is_Some (mx ≫= f) ↔ is_Some mx ∧ (∀ x, mx = Some x → is_Some (f x)).
-Proof. destruct mx; naive_solver. Qed.
-
 Lemma put_Some t label val :
   (* for max depth. *)
   is_fuel t →

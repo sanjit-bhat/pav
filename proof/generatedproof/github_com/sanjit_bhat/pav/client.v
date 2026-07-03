@@ -30,8 +30,8 @@ Local Set Default Proof Using "All".
     typed_pointsto_def l v dq :=
       (
       "uid" ∷ l.[(client.Client.t), "uid"] ↦{dq} v.(client.Client.uid') ∗
-      "pend" ∷ l.[(client.Client.t), "pend"] ↦{dq} v.(client.Client.pend') ∗
-      "last" ∷ l.[(client.Client.t), "last"] ↦{dq} v.(client.Client.last') ∗
+      "nextVer" ∷ l.[(client.Client.t), "nextVer"] ↦{dq} v.(client.Client.nextVer') ∗
+      "lastEp" ∷ l.[(client.Client.t), "lastEp"] ↦{dq} v.(client.Client.lastEp') ∗
       "serv" ∷ l.[(client.Client.t), "serv"] ↦{dq} v.(client.Client.serv') ∗
       "_" ∷ True
       )%I
@@ -55,31 +55,31 @@ Proof. solve_pointsto_access_struct. Qed.
     (l.[(client.Client.t), "uid"] ↦ uid')
     (l ↦ v) (l ↦ (v <|(client.Client.uid') := uid'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance Client_access_load_pend l (v : (client.Client.t)) dq :
+#[global] Instance Client_access_load_nextVer l (v : (client.Client.t)) dq :
   AccessStrict
-    (l.[(client.Client.t), "pend"] ↦{dq} (v.(client.Client.pend')))
-    (l.[(client.Client.t), "pend"] ↦{dq} (v.(client.Client.pend')))
+    (l.[(client.Client.t), "nextVer"] ↦{dq} (v.(client.Client.nextVer')))
+    (l.[(client.Client.t), "nextVer"] ↦{dq} (v.(client.Client.nextVer')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance Client_access_store_pend l (v : (client.Client.t)) pend' :
+#[global] Instance Client_access_store_nextVer l (v : (client.Client.t)) nextVer' :
   AccessStrict
-    (l.[(client.Client.t), "pend"] ↦ (v.(client.Client.pend')))
-    (l.[(client.Client.t), "pend"] ↦ pend')
-    (l ↦ v) (l ↦ (v <|(client.Client.pend') := pend'|>))%I.
+    (l.[(client.Client.t), "nextVer"] ↦ (v.(client.Client.nextVer')))
+    (l.[(client.Client.t), "nextVer"] ↦ nextVer')
+    (l ↦ v) (l ↦ (v <|(client.Client.nextVer') := nextVer'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance Client_access_load_last l (v : (client.Client.t)) dq :
+#[global] Instance Client_access_load_lastEp l (v : (client.Client.t)) dq :
   AccessStrict
-    (l.[(client.Client.t), "last"] ↦{dq} (v.(client.Client.last')))
-    (l.[(client.Client.t), "last"] ↦{dq} (v.(client.Client.last')))
+    (l.[(client.Client.t), "lastEp"] ↦{dq} (v.(client.Client.lastEp')))
+    (l.[(client.Client.t), "lastEp"] ↦{dq} (v.(client.Client.lastEp')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance Client_access_store_last l (v : (client.Client.t)) last' :
+#[global] Instance Client_access_store_lastEp l (v : (client.Client.t)) lastEp' :
   AccessStrict
-    (l.[(client.Client.t), "last"] ↦ (v.(client.Client.last')))
-    (l.[(client.Client.t), "last"] ↦ last')
-    (l ↦ v) (l ↦ (v <|(client.Client.last') := last'|>))%I.
+    (l.[(client.Client.t), "lastEp"] ↦ (v.(client.Client.lastEp')))
+    (l.[(client.Client.t), "lastEp"] ↦ lastEp')
+    (l ↦ v) (l ↦ (v <|(client.Client.lastEp') := lastEp'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance Client_access_load_serv l (v : (client.Client.t)) dq :
   AccessStrict
@@ -98,7 +98,7 @@ Proof. solve_pointsto_access_struct. Qed.
 End def.
 End Client.
 
-Module nextVer.
+Module ver.
 Section def.
 
 Context `{!heapGS Σ}.
@@ -107,65 +107,65 @@ Context {package_sem' : client.Assumptions}.
 
 Local Set Default Proof Using "All".
 
-#[global]Program Instance nextVer_typed_pointsto  :
-  TypedPointsto (Σ:=Σ) (client.nextVer.t) :=
+#[global]Program Instance ver_typed_pointsto  :
+  TypedPointsto (Σ:=Σ) (client.ver.t) :=
   {|
     typed_pointsto_def l v dq :=
       (
-      "ver" ∷ l.[(client.nextVer.t), "ver"] ↦{dq} v.(client.nextVer.ver') ∗
-      "isPending" ∷ l.[(client.nextVer.t), "isPending"] ↦{dq} v.(client.nextVer.isPending') ∗
-      "pendingPk" ∷ l.[(client.nextVer.t), "pendingPk"] ↦{dq} v.(client.nextVer.pendingPk') ∗
+      "ver" ∷ l.[(client.ver.t), "ver"] ↦{dq} v.(client.ver.ver') ∗
+      "hasPendPk" ∷ l.[(client.ver.t), "hasPendPk"] ↦{dq} v.(client.ver.hasPendPk') ∗
+      "pendPk" ∷ l.[(client.ver.t), "pendPk"] ↦{dq} v.(client.ver.pendPk') ∗
       "_" ∷ True
       )%I
   |}.
 Final Obligation. solve_typed_pointsto_agree. Qed.
 
-#[global] Instance nextVer_into_val_typed
+#[global] Instance ver_into_val_typed
    :
-  IntoValTypedUnderlying (client.nextVer.t) (client.nextVerⁱᵐᵖˡ).
+  IntoValTypedUnderlying (client.ver.t) (client.verⁱᵐᵖˡ).
 Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance nextVer_access_load_ver l (v : (client.nextVer.t)) dq :
+#[global] Instance ver_access_load_ver l (v : (client.ver.t)) dq :
   AccessStrict
-    (l.[(client.nextVer.t), "ver"] ↦{dq} (v.(client.nextVer.ver')))
-    (l.[(client.nextVer.t), "ver"] ↦{dq} (v.(client.nextVer.ver')))
+    (l.[(client.ver.t), "ver"] ↦{dq} (v.(client.ver.ver')))
+    (l.[(client.ver.t), "ver"] ↦{dq} (v.(client.ver.ver')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance nextVer_access_store_ver l (v : (client.nextVer.t)) ver' :
+#[global] Instance ver_access_store_ver l (v : (client.ver.t)) ver' :
   AccessStrict
-    (l.[(client.nextVer.t), "ver"] ↦ (v.(client.nextVer.ver')))
-    (l.[(client.nextVer.t), "ver"] ↦ ver')
-    (l ↦ v) (l ↦ (v <|(client.nextVer.ver') := ver'|>))%I.
+    (l.[(client.ver.t), "ver"] ↦ (v.(client.ver.ver')))
+    (l.[(client.ver.t), "ver"] ↦ ver')
+    (l ↦ v) (l ↦ (v <|(client.ver.ver') := ver'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance nextVer_access_load_isPending l (v : (client.nextVer.t)) dq :
+#[global] Instance ver_access_load_hasPendPk l (v : (client.ver.t)) dq :
   AccessStrict
-    (l.[(client.nextVer.t), "isPending"] ↦{dq} (v.(client.nextVer.isPending')))
-    (l.[(client.nextVer.t), "isPending"] ↦{dq} (v.(client.nextVer.isPending')))
+    (l.[(client.ver.t), "hasPendPk"] ↦{dq} (v.(client.ver.hasPendPk')))
+    (l.[(client.ver.t), "hasPendPk"] ↦{dq} (v.(client.ver.hasPendPk')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance nextVer_access_store_isPending l (v : (client.nextVer.t)) isPending' :
+#[global] Instance ver_access_store_hasPendPk l (v : (client.ver.t)) hasPendPk' :
   AccessStrict
-    (l.[(client.nextVer.t), "isPending"] ↦ (v.(client.nextVer.isPending')))
-    (l.[(client.nextVer.t), "isPending"] ↦ isPending')
-    (l ↦ v) (l ↦ (v <|(client.nextVer.isPending') := isPending'|>))%I.
+    (l.[(client.ver.t), "hasPendPk"] ↦ (v.(client.ver.hasPendPk')))
+    (l.[(client.ver.t), "hasPendPk"] ↦ hasPendPk')
+    (l ↦ v) (l ↦ (v <|(client.ver.hasPendPk') := hasPendPk'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance nextVer_access_load_pendingPk l (v : (client.nextVer.t)) dq :
+#[global] Instance ver_access_load_pendPk l (v : (client.ver.t)) dq :
   AccessStrict
-    (l.[(client.nextVer.t), "pendingPk"] ↦{dq} (v.(client.nextVer.pendingPk')))
-    (l.[(client.nextVer.t), "pendingPk"] ↦{dq} (v.(client.nextVer.pendingPk')))
+    (l.[(client.ver.t), "pendPk"] ↦{dq} (v.(client.ver.pendPk')))
+    (l.[(client.ver.t), "pendPk"] ↦{dq} (v.(client.ver.pendPk')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance nextVer_access_store_pendingPk l (v : (client.nextVer.t)) pendingPk' :
+#[global] Instance ver_access_store_pendPk l (v : (client.ver.t)) pendPk' :
   AccessStrict
-    (l.[(client.nextVer.t), "pendingPk"] ↦ (v.(client.nextVer.pendingPk')))
-    (l.[(client.nextVer.t), "pendingPk"] ↦ pendingPk')
-    (l ↦ v) (l ↦ (v <|(client.nextVer.pendingPk') := pendingPk'|>))%I.
+    (l.[(client.ver.t), "pendPk"] ↦ (v.(client.ver.pendPk')))
+    (l.[(client.ver.t), "pendPk"] ↦ pendPk')
+    (l ↦ v) (l ↦ (v <|(client.ver.pendPk') := pendPk'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 
 End def.
-End nextVer.
+End ver.
 
 Module epoch.
 Section def.

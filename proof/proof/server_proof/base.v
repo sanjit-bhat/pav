@@ -14,11 +14,7 @@ Context {sem : go.Semantics} {package_sem : server.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Definition is_initialized : iProp Σ :=
-  ∃ (EpochTime : w64),
-  "#HEpochTime" ∷ global_addr server.EpochTime ↦□ EpochTime.
-
-#[global] Instance : IsPkgInit (iProp Σ) server := define_is_pkg_init is_initialized.
+#[global] Instance : IsPkgInit (iProp Σ) server := define_is_pkg_init True%I.
 #[global] Instance : GetIsPkgInitWf (iProp Σ) server := build_get_is_pkg_init_wf.
 
 End proof.

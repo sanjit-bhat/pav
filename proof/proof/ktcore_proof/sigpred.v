@@ -4,34 +4,10 @@ From New.proof.github_com.sanjit_bhat.pav Require Import
   cryptoffi hashchain merkle safemarshal.
 
 From New.proof.github_com.sanjit_bhat.pav.ktcore_proof Require Import
-  key_map serde.
+  agree key_map serde.
 
 Module sigpred.
-Import key_map.ktcore serde.ktcore.
-
-Module digs_info.
-Record t :=
-  mk {
-    (* epoch of first dig. *)
-    start_ep : nat;
-    (* the hashchain cut. *)
-    cut : option $ list w8;
-    (* the offset in digs from when auditor started monitoring. *)
-    audit_offset : nat;
-  }.
-End digs_info.
-
-Module cfg.
-Record t :=
-  mk {
-    vrf_pk : list w8;
-    digs : gname;
-    info : digs_info.t;
-  }.
-End cfg.
-
-Global Notation start_epγ γ := (γ.(cfg.info).(digs_info.start_ep)).
-Global Notation audit_offsetγ γ := (γ.(cfg.info).(digs_info.audit_offset)).
+Import agree.ktcore key_map.ktcore serde.ktcore.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -42,12 +18,13 @@ Collection W := sem.
 (** VRF sig. *)
 
 Definition vrfP γ (vrfPk : list w8) : iProp Σ :=
-  "%Heq_vrfPk" ∷ ⌜vrfPk = γ.(cfg.vrf_pk)⌝.
+  "%Heq_vrfPk" ∷ ⌜vrfPk = γ.(Agree.vrf_pk)⌝.
 
 Definition vrfP_aux γ enc : iProp Σ :=
   ∃ vrfPk,
-  "%Henc" ∷ ⌜enc = VrfSig.pure_enc (VrfSig.mk' (W8 VrfSigTag) vrfPk)⌝ ∗
-  "%Hvalid" ∷ ⌜safemarshal.Slice1D.valid vrfPk⌝ ∗
+  let obj := VrfSig.mk' (W8 VrfSigTag) vrfPk in
+  "%Henc" ∷ ⌜enc = VrfSig.pure_enc obj⌝ ∗
+  "%Hvalid" ∷ ⌜VrfSig.valid obj⌝ ∗
   "#Hsigpred" ∷ vrfP γ vrfPk.
 
 Lemma vrfP_evid γ vrfPk0 vrfPk1 :
@@ -63,19 +40,19 @@ Qed.
 
 Definition linkP γ (ep : w64) link : iProp Σ :=
   ∃ digs,
-  "%Hinv" ∷ ⌜hashchain.valid digs γ.(cfg.info).(digs_info.cut)
+  "%Hinv" ∷ ⌜hashchain.valid digs γ.(Agree.cut)
     link (S $ uint.nat ep)⌝ ∗
-  "#Hlb_digs" ∷ mono_list_lb_own γ.(cfg.digs) digs ∗
-  "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (γ.(cfg.info).(digs_info.start_ep) + length digs)%nat⌝ ∗
+  "#Hlb_digs" ∷ mono_list_lb_own γ.(Agree.digs) digs ∗
+  "%Hlen_digs" ∷ ⌜S $ uint.nat ep = (γ.(Agree.digs_start) + length digs)%nat⌝ ∗
   (* we started auditing at least by this epoch. *)
-  "%Hlt_audit" ∷ ⌜γ.(cfg.info).(digs_info.start_ep) +
-    γ.(cfg.info).(digs_info.audit_offset) ≤ uint.nat ep⌝ ∗
-  "%Hmono_plain" ∷ ⌜mono_plain γ.(cfg.vrf_pk) (drop γ.(cfg.info).(digs_info.audit_offset) digs)⌝.
+  "%Hlt_audit" ∷ ⌜(γ.(Agree.digs_start) + γ.(Agree.func_start))%nat ≤ uint.nat ep⌝ ∗
+  "%Hmono_plain" ∷ ⌜mono_plain γ.(Agree.vrf_pk) (drop γ.(Agree.func_start) digs)⌝.
 
 Definition linkP_aux γ enc : iProp Σ :=
   ∃ ep link,
-  "%Henc" ∷ ⌜enc = LinkSig.pure_enc (LinkSig.mk' (W8 LinkSigTag) ep link)⌝ ∗
-  "%Hvalid" ∷ ⌜safemarshal.Slice1D.valid link⌝ ∗
+  let obj := LinkSig.mk' (W8 LinkSigTag) ep link in
+  "%Henc" ∷ ⌜enc = LinkSig.pure_enc obj⌝ ∗
+  "%Hvalid" ∷ ⌜LinkSig.valid obj⌝ ∗
   "#Hsigpred" ∷ linkP γ ep link.
 
 Definition P γ enc : iProp Σ :=

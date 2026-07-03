@@ -22,7 +22,6 @@ func NewRpcServer(s *Server) *advrpc.Server {
 	h[PutRpc] = func(arg []byte, reply *[]byte) {
 		a, _, err := PutArgDecode(arg)
 		if err {
-			// would blame client, except that Put client doesn't care.
 			return
 		}
 		s.Put(a.Uid, a.Ver, a.Pk)
@@ -69,11 +68,11 @@ func CallStart(c *advrpc.Client) (chain *StartChain, vrf *StartVrf, err ktcore.B
 	return
 }
 
+// TODO: return Blame for serde errors.
 func CallPut(c *advrpc.Client, uid uint64, pk []byte, ver uint64) {
 	a := &PutArg{Uid: uid, Pk: pk, Ver: ver}
 	ab := PutArgEncode(nil, a)
 	rb := new([]byte)
-	// don't bubble up Put errs bc caller doesn't care to know.
 	c.Call(PutRpc, ab, rb)
 }
 
