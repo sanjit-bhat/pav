@@ -21,7 +21,7 @@ type Client struct {
 }
 
 type ver struct {
-	ver       uint64
+	ver uint64
 	// TODO: rename Client data from pk to key.
 	hasPendPk bool
 	pendPk    []byte

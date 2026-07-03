@@ -14,7 +14,7 @@ import (
 type Server struct {
 	secs *secrets
 	// workQ for batching puts into one epoch update.
-	workQ     chan *work
+	workQ chan *work
 	// epochTime (tunable) is the time between epoch updates.
 	epochTime time.Duration
 
