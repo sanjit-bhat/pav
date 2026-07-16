@@ -532,6 +532,13 @@ Qed.
 
 (* TODO: rename clis_good. mis-leading. we are a good client.
 this referring to smth else. whether our uid compromised. *)
+(* TODO[design]: either we only have uidγ when uid trusted,
+or we always have it (curr).
+- under always: server always requires and gives uid ptsto.
+when untrusted, need uid inv.
+- under sometimes: server conditionally requires and gives uid ptsto.
+don't need uid inv. *)
+(* TODO: clis_good could be subsumed by uidγs. *)
 Lemma wp_New uidγs serv_good clis_good uid uidγ (servAddr : w64) sl_servPk servPk :
   {{{
     is_pkg_init client ∗
