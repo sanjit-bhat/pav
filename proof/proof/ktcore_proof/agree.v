@@ -38,6 +38,7 @@ Collection W := sem.
 Definition kt_ptsto γ ep uid opt_pk : iProp Σ :=
   ∃ dig,
   "#Hidx_dig" ∷ mono_list_idx_own γ.(Agree.digs) (ep - γ.(Agree.digs_start)) dig ∗
+  "%Heq_ep" ∷ ⌜(γ.(Agree.digs_start) ≤ ep)%nat⌝ ∗
   "%Heq_pk" ∷ ⌜last $ ktcore.to_pks γ.(Agree.vrf_pk) uid dig = opt_pk⌝.
 
 Definition is_staged_keys γcli uid keys : iProp Σ :=
@@ -85,26 +86,21 @@ Proof.
 Qed.
 
 Lemma kt_ptsto_txfer γcli γadtr ep uid opt_pk audit_ep :
-  (γadtr.(Agree.digs_start) + γadtr.(Agree.func_start) ≤ ep ≤ audit_ep)%nat →
+  (ep ≤ audit_ep)%nat →
   γcli ↪KT[ep, uid] opt_pk -∗
   is_audit γcli γadtr audit_ep -∗
   γadtr ↪KT[ep, uid] opt_pk.
 Proof.
-  simpl. iIntros (?) "@@". rewrite /kt_ptsto.
-  eremember (ep - _)%nat as ep_t.
-  list_elem digs ep_t as dig'. subst.
-  iDestruct (mono_list_idx_own_get with "Hcli_digs") as "Hlook"; [done|].
-  iDestruct (mono_list_idx_agree with "Hidx_dig Hlook") as %<-.
-  iClear "Hlook".
-  iDestruct (mono_list_idx_own_get with "Hadtr_digs") as "Hlook"; [done|].
-  rewrite Heq_vrf Heq_digs_start.
-  by iFrame "#".
+  iIntros (?) "@@". rewrite /kt_ptsto.
+  iDestruct (mono_list_lb_idx_lookup with "Hcli_digs Hidx_dig") as %?; [word|].
+  rewrite -Heq_vrf -Heq_digs_start.
+  by iDestruct (mono_list_idx_own_get with "Hadtr_digs") as "$".
 Qed.
 
 Lemma commit_staged γcli uid keys γadtr audit_ep :
   let keys_start_ep := (γcli.(Agree.digs_start) + γcli.(Agree.func_start))%nat in
-  γadtr.(Agree.func_start) ≤ γcli.(Agree.func_start) →
-  keys_start_ep + length keys ≤ S audit_ep →
+  (γadtr.(Agree.func_start) ≤ γcli.(Agree.func_start))%nat →
+  (keys_start_ep + length keys ≤ S audit_ep)%nat →
   is_staged_keys γcli uid keys -∗
   is_audit γcli γadtr audit_ep -∗
   (∀ i opt_pk,
@@ -115,7 +111,7 @@ Proof.
   simpl. iIntros "%% @ #Haudit * %Hlook_keys".
   apply lookup_lt_Some in Hlook_keys as ?.
   iPoseProof "Haudit" as "@".
-  iApply kt_ptsto_txfer; [|done|word].
+  iApply kt_ptsto_txfer; [..|done]; [word|].
   iClear "Haudit". rewrite /kt_ptsto.
   destruct Hstaged as (?&Hlast_digs&_&?&Hstaged).
   rewrite last_lookup in Hlast_digs.
@@ -141,7 +137,7 @@ Proof.
   clear Hstaged.
 
   apply list_lookup_fmap_Some in Hlook_keys as (dig&->&Hlook_digs).
-  iExists _. iSplit; [|done].
+  iExists _. repeat iSplit; [|word|done].
   iApply mono_list_idx_own_get; [|done].
   rewrite lookup_drop in Hlook_digs.
   exact_eq Hlook_digs. f_equal. lia.
@@ -155,16 +151,15 @@ therefore, their combine sequences need to end with same auditor.
 NOTE: without hashchain inversion, not sure how to do multi-auditor agreement.
 there's no final Auditor with all the digs. *)
 Lemma combine_audits γcli γadtr0 γadtr1 audit_ep0 audit_ep1 :
-  γadtr0.(Agree.func_start) ≤ γadtr1.(Agree.func_start) →
-  (γadtr1.(Agree.digs_start) + γadtr1.(Agree.func_start) ≤ audit_ep0)%nat →
-  (audit_ep0 ≤ audit_ep1)%nat →
+  (γadtr0.(Agree.func_start) ≤ γadtr1.(Agree.func_start))%nat →
+  (γadtr1.(Agree.digs_start) + γadtr1.(Agree.func_start) ≤ audit_ep0 ≤ audit_ep1)%nat →
   is_audit γcli γadtr0 audit_ep0 -∗
   is_audit γcli γadtr1 audit_ep1 -∗
   let new_γadtr :=
     γadtr1 <| Agree.func_start := γadtr0.(Agree.func_start) |> in
   is_audit γcli new_γadtr audit_ep1.
 Proof.
-  simpl. iIntros "%%%". iNamedSuffix 1 "0". iNamedSuffix 1 "1".
+  intros. iNamedSuffix 1 "0". iNamedSuffix 1 "1".
   rewrite /is_audit /=. iFrame "Hadtr_digs1 #%".
   iAssert (⌜digs `prefix_of` digs0⌝)%I as %(new_digs&->).
   { iDestruct (mono_list_lb_valid with "Hcli_digs0 Hcli_digs1")

@@ -616,9 +616,9 @@ Proof.
       pose proof Heq_good2 as Ht.
       apply mk_adtrγ_sigpred in Ht as ->.
       iDestruct (ktcore.combine_audits with "His_audit_al1 His_audit_al2") as "#His_audit_al";
-        [word|word|done|].
+        [word|done|].
       iDestruct (ktcore.combine_audits with "His_audit_bob1 His_audit_bob2") as "#His_audit_bob";
-        [word|word|done|].
+        [word|done|].
       replace adtr0γ.(auditor.cfg.agreeγ).(ktcore.Agree.func_start) with 0%nat by word.
       replace adtr1γ.(auditor.cfg.agreeγ).(ktcore.Agree.func_start) with 0%nat by word.
       iFrame "#".

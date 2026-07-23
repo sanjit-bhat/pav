@@ -565,6 +565,7 @@ Lemma wp_New uidγs serv_good clis_good uid uidγ (servAddr : w64) sl_servPk ser
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ γ,
       let agreeγ := γ.(cfg.agreeγ) in
+      (* TODO: construct γ from the inputted params. *)
       "%Heq_uid" ∷ ⌜γ.(cfg.uid) = uid⌝ ∗
       "%Heq_sig_pk" ∷ ⌜γ.(cfg.sig_pk) = servPk⌝ ∗
       "%Heq_uidγs" ∷ ⌜γ.(cfg.uidγs) = uidγs⌝ ∗
@@ -953,6 +954,10 @@ Proof.
   replace (_ - _)%nat with (pred $ length (digs ++ new_digs)); [|len].
   rewrite -last_lookup.
   iFrame "%".
+  iSplitR.
+  { iPureIntro.
+    opose proof (last_length_Some _ _) as ?; [done|].
+    autorewrite with len in *. word. }
   apply ktcore.pks_in_hidden_from_0 in Hmembs.
   ereplace (_ + ?[x])%nat with (?x) in HnonMemb by word.
   by erewrite ktcore.inv_fn_inp_pks_exact.
