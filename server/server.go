@@ -71,6 +71,8 @@ func (s *Server) Put(uid uint64, ver uint64, pk []byte) {
 
 // History gives key history for uid, excluding first prevVerLen versions.
 // the caller already saw prevEpoch.
+// TODO: i don't think caller needs to have seen prevEpoch.
+// strengthen API to use prevEpochs, which allows prevEpochs=0.
 func (s *Server) History(uid, prevEpoch, prevVerLen uint64) (chainProof, linkSig []byte, hist []*ktcore.Memb, bound *ktcore.NonMemb, err bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

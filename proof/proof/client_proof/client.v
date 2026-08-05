@@ -1039,10 +1039,13 @@ Lemma wp_Client_SelfMon γ ptr_c σ :
         ∃ last_key num_new_keys,
         let agreeγ := γ.(cfg.agreeγ) in
         let σ0 := set state.epoch (λ _, uint.nat ep) σ in
+        (* TODO: remove redundancies (if any) in this spec,
+        particularly around the epoch bounds. *)
         "%Heq_ep" ∷ ⌜(σ.(state.epoch) ≤ σ0.(state.epoch))%nat⌝ ∗
         "%Hlast_key" ∷ ⌜last σ.(state.keys) = Some last_key⌝ ∗
         "%Heq_keys_len" ∷ ⌜S σ0.(state.epoch) = (agreeγ.(ktcore.Agree.digs_start) +
           agreeγ.(ktcore.Agree.func_start) + length σ.(state.keys) + num_new_keys)%nat⌝ ∗
+        (* TODO: maybe unify Hchanged around ∃ σ1, Client.own. *)
         "Hchanged" ∷
           match isChanged with
           | false =>
