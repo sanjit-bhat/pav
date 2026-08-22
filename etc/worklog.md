@@ -787,3 +787,39 @@ recovery commits a *different* batch.
 So the O(1) atomic step survives as a real property of MVCC, and the honest
 version of §5 is: *the epoch commit needs one atomic step, and how big it has to
 be is a property of the store, not of the tree.*
+
+## 13. Requirement by requirement
+
+`persistent-server-design.md` §1 lists R1–R14. This is where each one actually
+stands, with "met" meaning *demonstrated*, not *designed for*.
+
+| | requirement | status |
+|---|---|---|
+| **R1** | out-of-core tree | **met in the library**, not in `server/` (below). Resident cost is O(batch x depth), not O(N) — §14 |
+| **R2** | crash-atomic epoch publication | **met and crash-tested** on a single-version store (§12). Reasoned, implemented, not crash-tested on Tulip |
+| **R3** | no torn reads against a publish in flight | **met.** MVCC reads pinned to the timestamp HEAD names, or an atomic commit on a store without MVCC. No `previous_node`, no one-epoch reader window |
+| **R4** | read throughput, proof-generation bound | **met on the tree's side**: 1 round trip, ~3 us of tree CPU, 59–72 us per lookup on disk against 143.7 us of VRF. *Not* demonstrated at R4's ~190k lookups/s — there is no multi-core serving harness here |
+| **R5** | cache coherence across epochs | **met.** `ApplyUpdate` + `Evict` warm a replica from the epoch's own audit proof; no blanket flush, no lock over proof generation. Tested end to end over five epochs (`TestReplicaLoop`) |
+| **R6** | writes batched into epochs, one writer | **met** for the batching (`Map.Update`). Fork-freedom rests on the store's atomic step and is not separately tested |
+| **R7** | bulk read APIs | **met**, and it falls out rather than needing a temp-table query: every key is computable, so a batch is one deduped read |
+| **R8** | audit proofs bulk, immutable, out-of-band | **met.** The tape, 178 B/insert at 1M and ~590 at 10^10 *(est.)*, produced inline during the update |
+| **R9** | history proofs bounded independent of version count | **not done.** Marker versions are a client-protocol change (note §7.2) |
+| **R10** | plaintext deletion without touching the tree | **not done.** Tombstones live in the plaintext store, which this work did not touch |
+| **R11** | operational plumbing | **not done**, and not architectural |
+| **R12** | the additions the note would make | partial: bounded explicit RAM **met** (`Evict`); sign-after-durable follows from the commit order but is not wired into `server/`; writer failover, geo reads, tunable staleness, bulk backfill **not done** |
+| **R13** | monotonic reads per client session | **not done.** Client protocol |
+| **R14** | no client-supplied parameter controls server work | **not done.** Pagination is a protocol change (note §7.4) |
+
+So: **every storage-layer requirement is met; four client-protocol ones (R9,
+R10, R13, R14) are untouched.** That split is the design note's own — its §7
+gathers exactly those under "protocol changes worth making", separately from the
+storage layer, because they touch the client and the security proof. This work
+did the storage layer.
+
+The one gap that is *not* explained by that split: **`server/server.go` still
+holds a resident `*merkle.Map`.** The library can live behind a store and
+`etc/bench/ktbench` is a working persistent server against Tulip, but the
+verified server package was left on the in-core path — moving it also means
+persisting the uid rows and the hashchain, which is a proof change rather than a
+merkle one. So R1 is met by the component this work was asked to adapt, and the
+system that ships it is still the small-deployment mode of note §4.3.

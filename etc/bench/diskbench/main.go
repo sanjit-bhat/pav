@@ -14,6 +14,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -205,6 +206,17 @@ var headKey = append(make([]byte, merkle.StoreKeyLen-1), 0xff)
 // peakRSS is the high-water mark of resident memory. it is the number that
 // says whether a tree bigger than RAM is possible: the writer holds the
 // batch's paths, the reader holds one, and neither is O(N).
+// liveHeap is what the process actually needs resident after a GC: the
+// writer's skeleton for one batch, or the reader's one path. peak RSS also
+// includes Pebble's caches and whatever the allocator has not returned, so it
+// answers a different question.
+func liveHeap() string {
+	runtime.GC()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return fmt.Sprintf("%d MB", m.HeapAlloc>>20)
+}
+
 func peakRSS() string {
 	b, err := os.ReadFile("/proc/self/status")
 	if err != nil {
@@ -308,7 +320,7 @@ func main() {
 	if du, err := exec.Command("du", "-sb", *dir).Output(); err == nil {
 		fmt.Printf("        on disk: %s", du)
 	}
-	fmt.Printf("        peak RSS after seeding: %s\n", peakRSS())
+	fmt.Printf("        live heap after seeding: %s, peak RSS %s\n", liveHeap(), peakRSS())
 
 	// measured epochs.
 	base := s.counters
@@ -374,9 +386,9 @@ func main() {
 		float64(tSync.Microseconds())/1e3/float64(*nEpochs),
 		*commitMode)
 
-	fmt.Printf("        peak RSS after epochs: %s\n", peakRSS())
+	fmt.Printf("        live heap after epochs:  %s, peak RSS %s\n", liveHeap(), peakRSS())
 	lookups(s, dig, sample, maxDRead, warm)
-	fmt.Printf("        peak RSS at exit: %s\n", peakRSS())
+	fmt.Printf("        live heap at exit:       %s, peak RSS %s\n", liveHeap(), peakRSS())
 }
 
 // lookups measures one path load plus a proof, from a cold page cache, at each
