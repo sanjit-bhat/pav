@@ -333,3 +333,75 @@ func TestEvictPath(t *testing.T) {
 		}
 	}
 }
+
+// TestReplicaLoop runs the read replica's actual protocol over several epochs:
+// rebuild the map from the epoch's audit proof, check it against the digest,
+// evict to bound it, then serve lookups by loading only the records below the
+// warm top and shedding each path afterwards.
+func TestReplicaLoop(t *testing.T) {
+	const keepD = 10
+	const probeD = 34
+
+	store := newMemStore()
+	writer := &Map{}
+	dig := writer.Hash()
+	var all [][]byte
+
+	var warm *Map
+	for ep := 0; ep < 5; ep++ {
+		labels, vals := mkSeeded(4_000, byte(20+ep))
+		all = append(all, labels...)
+		digOld := dig
+		tape, err := writer.Update(cloneAll(labels), cloneAll(vals))
+		if err {
+			t.Fatal()
+		}
+		store.put(writer.Records())
+		dig = writer.Hash()
+
+		// the replica sees only (labels, vals, tape) and the old digest.
+		m, hOld, err := ApplyUpdate(labels, vals, tape)
+		if err || !bytes.Equal(hOld, digOld) || !bytes.Equal(m.Hash(), dig) {
+			t.Fatalf("epoch %d did not apply", ep)
+		}
+		m.Evict(keepD)
+		if !bytes.Equal(m.Hash(), dig) {
+			t.Fatal("evict changed the digest")
+		}
+		warm = m
+
+		// serve against every label inserted so far, including ones from
+		// epochs this replica has since evicted.
+		for i := 0; i < 300; i++ {
+			l := all[rand.IntN(len(all))]
+			store.loadFrom(t, warm, l, probeD)
+			inMap, val, proof, err := warm.Prove(l)
+			if err || !inMap {
+				t.Fatalf("epoch %d lookup", ep)
+			}
+			h, err := VerifyMemb(l, val, proof)
+			if err || !bytes.Equal(h, dig) {
+				t.Fatalf("epoch %d proof against the wrong digest", ep)
+			}
+			warm.EvictPath(l, keepD)
+			if !bytes.Equal(warm.Hash(), dig) {
+				t.Fatal("serving a lookup changed the digest")
+			}
+		}
+
+		// an absent label must come back absent, against the same digest.
+		absent := make([]byte, cryptoffi.HashLen)
+		copy(absent, all[0])
+		absent[0] ^= 0x55
+		store.loadFrom(t, warm, absent, probeD)
+		inMap, _, proof, err := warm.Prove(absent)
+		if err || inMap {
+			t.Fatal("absent label")
+		}
+		h, err := VerifyNonMemb(absent, proof)
+		if err || !bytes.Equal(h, dig) {
+			t.Fatal()
+		}
+		warm.EvictPath(absent, keepD)
+	}
+}
