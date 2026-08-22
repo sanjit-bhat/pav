@@ -295,3 +295,62 @@ to spend the verification budget on that yet.
 
 Lookups do not parallelize within one lookup in either system, so that column is
 like-for-like: 9.00 us and 1 round trip against 29–36 us and ~21 dependent ones.
+
+## 7. Scaling, and what it says about 10^10
+
+Four tree sizes each, same 46k-insertion epochs, no cache, one thread. Every
+structural cost in both systems is linear in `log2(N)`, so the slopes
+extrapolate.
+
+| N | \vkt memb probes | AKD memb probes | \vkt insert probes | AKD insert probes | \vkt audit B/ins | AKD audit B/ins | \vkt writes/ins | AKD writes/ins |
+|---|---|---|---|---|---|---|---|---|
+| 1M | 25.81 | 42.21 | 7.95 | 13.24 | 178.5 | 255.0 | 7.72 | 7.05 |
+| 2M | 26.79 | 43.89 | 8.94 | 15.97 | 207.3 | 296.6 | 8.67 | 7.97 |
+| 4M | 27.83 | 45.67 | 9.92 | 18.82 | 238.9 | 341.8 | 9.63 | 8.93 |
+| 8M | 28.77 | 47.64 | 10.93 | 21.71 | 271.4 | 387.5 | 10.63 | 9.90 |
+| **slope, per doubling** | **0.99** | **1.81** | **0.99** | **2.85** | **31.0** | **44.2** | **0.97** | **0.95** |
+
+The slopes are the design, stated numerically. \vkt pays one probe per level
+because an inner record carries both child hashes; AKD pays two, and its insert
+path pays closer to three. \vkt's audit proof grows by one 32 B cut hash per
+level plus a fraction of a byte of opcode; AKD's by one 49 B `AzksElement`.
+Write volume is the one place they are the same, and AKD is ~9% ahead.
+
+Extrapolated to `N = 10^10`, the size the depth profile in
+`akd-workload-measurements.md` §5 implies, i.e. 10.3 doublings past 8M *(est.)*:
+
+| | AKD | \vkt |
+|---|---|---|
+| membership, probes | ~66 | **~39** |
+| membership, round trips | ~24, dependent | **1** |
+| insert, probes | ~51 | **~21** |
+| audit proof | **~856 B/insert** | **~590 B/insert** |
+| writes/insert | ~20 | ~21 |
+
+**The audit-proof column is a calibration, not just a projection.** The same
+extrapolation applied to AKD gives ~856 B/insert, against the **906–1006
+B/insert measured directly off the live WhatsApp log** (§3 of the measurements
+note). So the method lands within ~10% of ground truth on the one row where
+ground truth exists, which is the reason to believe the \vkt row.
+
+At 46k insertions per 30 s epoch and `N = 10^10`: ~950k records written per
+epoch, ~66 MB, **~190 GB/day** — against the design note's 392 GB/day estimate
+for one record per node, which assumed 150 B records where these are ~70 B.
+
+## 8. What is not done
+
+- **`server/server.go` still holds a resident `*merkle.Map`.** The library can
+  now live behind a store, and `etc/bench/ktbench` is a working persistent
+  server against Tulip, but the verified server package was left on the in-core
+  path. That is §4.3's small-deployment mode, which the design note keeps
+  deliberately; moving the *verified* server out of core also means persisting
+  the uid rows and the hashchain, which is a protocol-and-proof change rather
+  than a merkle one.
+- **R9 (marker versions) and R14 (pagination)** are untouched. Both are §7
+  protocol changes, on the client and the security proof, not storage.
+- **`Map.Update` is single-threaded.** It parallelizes trivially — partition the
+  batch at the top few levels and the sub-trees are disjoint — and AKD's 8-thread
+  row is the thing to beat if that ever matters. It does not yet: \vkt on one
+  core is already 6x AKD on eight.
+- **`alicebob`'s end-to-end test is timing-flaky**, 9/20 failures on pristine
+  `main` against 6/20 here. Pre-existing, not touched.
