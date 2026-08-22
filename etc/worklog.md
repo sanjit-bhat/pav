@@ -441,6 +441,13 @@ for one record per node, which assumed 150 B records where these are ~70 B.
   than a merkle one.
 - **R9 (marker versions) and R14 (pagination)** are untouched. Both are §7
   protocol changes, on the client and the security proof, not storage.
+- **The writer does not keep its map warm across epochs.** It builds a fresh
+  `NewCut(dig)`, so `Records` is exactly the changed set with no bookkeeping. A
+  warm writer would save the deduped top-of-tree probes — ~28% of its reads at
+  `N = 10^10, B = 46k` *(est.)* — at the cost of a dirty bit on every node,
+  which the invariant would then have to mention. The writer is not the
+  bottleneck (10 s of a 30 s epoch), so this is not the place to spend it.
+
 - **`Map.Update` is single-threaded.** It parallelizes trivially — partition the
   batch at the top few levels and the sub-trees are disjoint — and AKD's 8-thread
   row is the thing to beat if that ever matters. It does not yet: \vkt on one
