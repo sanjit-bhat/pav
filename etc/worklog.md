@@ -627,7 +627,8 @@ cache sizes.
 
 *Corrected by §12: this section measured HEAD's fsync alone, on the assumption
 that the node records did not need to be in it. On a single-version store they
-do, and the durable commit is 118 ms/epoch at 46k insertions rather than 2.3 ms.
+do, and the durable commit is 126-213 ms/epoch at 46k insertions rather than
+2.3 ms.
 What survives is the shape — one fsync, one atomic step — and the batch-size
 sweep below, whose point is the second one.*
 
@@ -660,7 +661,7 @@ knee; the design would rather they were larger.
 |---|---|
 | epoch | **8.8 s** (191 us/insert: 183 load, 5 update+tape, 3 write) |
 | | 10.75 probes, 7.50 hits, 9.96 writes, 242 B tape per insert |
-| epoch durability | **one atomic commit, one fsync** (118 ms at this batch size, §12) |
+| epoch durability | **one atomic commit, one fsync** (126–213 ms depending on tree size, §12) |
 | lookup, page cache warm | p50 **71 us**, p99 133 us |
 | lookup, `MemoryMax=512M` so the 1.9 GB tree cannot be cached | p50 **67 us**, mean 88, p99 346 |
 | | 27.00 probes, 24.0 hits, 1.56 KB read |
@@ -777,8 +778,10 @@ recovery commits a *different* batch.
   atomic step is O(B), which is what the design note's §2.3 said and which this
   log wrongly claimed to have improved on. It costs nothing extra on a local
   engine: one Pebble batch is all-or-nothing and still one fsync. Measured at
-  46k insertions, that commit is **118 ms/epoch**, against 30 s — not the 2.3 ms
-  §11.1 reported for HEAD alone, which was timing the wrong thing.
+  46k insertions, that commit is **126 ms/epoch at 500k leaves, 168 at 2M, 213
+  at 8M** — it grows with the skeleton, i.e. `log2(N/B)`, like everything else
+  here — against a 30 s cadence. Not the 2.3 ms §11.1 reported for HEAD alone,
+  which was timing the wrong thing.
 - **MVCC store** — HEAD-last does work, and the atomic step really is one key,
   **provided HEAD carries the timestamp its node writes had all committed by and
   readers read the nodes at that timestamp.** Reading HEAD and then reading
