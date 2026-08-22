@@ -529,6 +529,15 @@ oversights. Each is against a claim stated in `persistent-server-design.md` or
   2x on lookup and ~2.9x on insert, structurally, because of the record format.
   A tuned AKD closes the round trips and not the probes.
 
+- **"Under value-major ordering all 64 probes land in a narrow range near `L`"**
+  (design §2.1). Only the deep ones do. The key at depth `d` shares `L`'s first
+  `d/8` bytes, so keys below depth `D` fall in a range of relative width
+  `2^-8*(D/8)` — tight from depth 24 on — but depth 0 is all zeros and the
+  shallow keys are scattered across the keyspace. It happens not to matter,
+  because the shallow keys are the top of the tree, which is exactly what a
+  warm map holds and does not probe for. Stated as written, though, the claim
+  is false.
+
 - **§8's first question, "what does a 64-key `batch_get` cost on Tulip? This
   single number decides A vs. B."** Answered — 12–35 us/key in parallel, ~83k
   reads/s aggregate — but it decides something else. B was already ruled out on

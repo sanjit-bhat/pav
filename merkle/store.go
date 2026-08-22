@@ -16,8 +16,14 @@ import (
 // the whole design.
 //
 // every node on label's path is a prefix of label, so all of a path's keys are
-// computable before any I/O. one batch read fetches a whole path, and since
-// the key is value-major, the keys land next to each other.
+// computable before any I/O, and one batch read fetches a whole path.
+//
+// the key is value-major, so the *deep* keys cluster: the key at depth d shares
+// label's first d/8 bytes, so every key below depth D lies in a range of
+// relative width 2^-8*(D/8). the shallow keys do not cluster -- depth 0 is all
+// zeros -- but those are the top of the tree, which a warm map holds anyway
+// (see Evict, ApplyUpdate). so on a sorted engine the probes that actually go
+// to storage come off a handful of blocks.
 //
 // an inner node's record holds its two children's hashes. so the path's
 // records already contain every sibling hash a proof needs, and the record at
