@@ -354,3 +354,38 @@ for one record per node, which assumed 150 B records where these are ~70 B.
   core is already 6x AKD on eight.
 - **`alicebob`'s end-to-end test is timing-flaky**, 9/20 failures on pristine
   `main` against 6/20 here. Pre-existing, not touched.
+
+## 9. Where the storage should live, given the numbers
+
+The goal said to fix on Tulip unless there is a significant performance problem.
+There is one, and it is only on the read path. Splitting it out:
+
+**The write path is fine on Tulip.** A 46k-insertion epoch commits in 9.6–12.8 s
+against the 30 s cadence, on a laptop running all six replicas, paxos, and the
+client in one process. Batched writes are 1.1 us/key. And under MVCC the atomic
+step is one key — HEAD, written last — so nothing about the epoch commit needs a
+transaction over the batch. That is the requirement Tulip actually earns its
+place on (§3.3's "correct operation" theorem).
+
+**The read path is not.** Tulip serves ~83k point reads/s on this box, and a
+lookup wants ~16 probes at `N = 10^10` with a map warmed to depth 20. That is
+~5k lookups/s per deployment, against R4's target of ~190k/s per replica. Three
+orders of magnitude of the gap is the substrate, not the tree: the same lookup
+costs **9.8 us of CPU against an in-process store**, of which the tree's own
+work is a few microseconds — next to `VRF Prove`'s 143.7 us. So served locally,
+the tree is ~7% of a lookup, which is exactly R4's "the tree's job is not to add
+round trips".
+
+So: **Tulip for the durable epoch commit; a local store per read replica.** That
+is §4.7's replicated-log topology, and the two pieces this work adds make it
+cheap rather than a new subsystem:
+
+- the epoch tape is already the log entry, already published for auditors,
+  already ~600 B/insert, and already self-verifying;
+- `ApplyUpdate` turns it into the replica's warm top, and `Evict` bounds what
+  the replica keeps, so a replica is not obliged to hold the full 0.3–7 TB copy
+  §4.7 assumes. It holds the top and reaches for the rest.
+
+The doc's §4.7 table says a private store costs "hours" to spin up a new
+replica. That stands, and it is the real argument against; it is an argument
+about bulk loading, not about the steady state.

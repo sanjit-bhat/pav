@@ -153,6 +153,7 @@ func evict(n0 **node, depth, maxD uint64) {
 // NewCut returns a map that is entirely unloaded, standing for the map with
 // the given hash.
 func NewCut(hash []byte) *Map {
+	std.Assert(uint64(len(hash)) == cryptoffi.HashLen)
 	return &Map{root: mkCut(hash)}
 }
 
@@ -165,6 +166,9 @@ func mkCut(hash []byte) *node {
 	return &node{nodeTy: cutNodeTy, hash: hash}
 }
 
+// LoadPath stores immutable references into recs: a grafted node's label,
+// value, and hashes are sub-slices of the record it came from.
+//
 // LoadPath grafts label's path into the map, where recs[i] is the record
 // stored under PathKeys(label, minD, maxD)[i], or nil if the store has none.
 // complete reports that the path reached a leaf or an empty sub-tree; if it is

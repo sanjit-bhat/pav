@@ -168,7 +168,9 @@ func tapeToTree(tape []byte, depth uint64) (n *node, rem []byte, err bool) {
 		if err {
 			return nil, nil, true
 		}
-		return &node{nodeTy: cutNodeTy, hash: h}, rem, false
+		// a cut standing for the empty sub-tree is the empty sub-tree, so
+		// tapeCut(emptyHash) and tapeEmpty mean the same thing.
+		return mkCut(h), rem, false
 	}
 
 	if op == tapeLeaf {

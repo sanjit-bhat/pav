@@ -121,6 +121,34 @@ func TestBenchMerkSize(t *testing.T) {
 	})
 }
 
+// seedStore seeds a tree of sz leaves entirely out of core, so the seed size
+// is bounded by the store rather than by the resident tree, which costs 730 B
+// a leaf.
+func seedStore(t *testing.T, sz uint64) (store *memStore, dig []byte, labels [][]byte) {
+	store = newMemStore()
+	labels = make([][]byte, 0, sz)
+	dig = (&Map{}).Hash()
+	maxD := probeBound(sz, writeSlack)
+	const chunk = 46_000
+	for done := uint64(0); done < sz; done += chunk {
+		n := min(chunk, sz-done)
+		ls, vs := mkBatch(n)
+		labels = append(labels, ls...)
+		oc := NewCut(dig)
+		for _, l := range ls {
+			store.loadFrom(t, oc, l, maxD)
+		}
+		if _, err := oc.Update(ls, vs); err {
+			t.Fatal("seed")
+		}
+		store.put(oc.Records())
+		dig = oc.Hash()
+	}
+	store.probes = 0
+	store.hits = 0
+	return
+}
+
 func seedMap(sz uint64) (m *Map, labels [][]byte) {
 	m = &Map{}
 	labels = make([][]byte, 0, sz)
@@ -229,18 +257,14 @@ func mkRandVal() []byte {
 // TestBenchMerkStoreGet measures what a lookup costs a KV store: one batch
 // read of computable keys, and how many of them hit.
 func TestBenchMerkStoreGet(t *testing.T) {
-	m, labels := seedMap(defNSeed)
-	dig := m.Hash()
-	store := newMemStore()
-	store.put(m.Records())
-	m = nil
+	store, dig, labels := seedStore(t, defNSeed)
 	runtime.GC()
 
 	nOps := 20_000
 	var bytesRead int
 	var totalGen time.Duration
 	for i := 0; i < nOps; i++ {
-		l := labels[rand.Uint64N(defNSeed)]
+		l := labels[rand.Uint64N(uint64(len(labels)))]
 		t0 := time.Now()
 		oc := NewCut(dig)
 		before := store.hits
@@ -264,11 +288,7 @@ func TestBenchMerkStoreGet(t *testing.T) {
 // TestBenchMerkStoreEpoch measures what one epoch costs a KV store: the
 // deduped prefix probe for the whole batch, then the records it writes back.
 func TestBenchMerkStoreEpoch(t *testing.T) {
-	m, _ := seedMap(defNSeed)
-	dig := m.Hash()
-	store := newMemStore()
-	store.put(m.Records())
-	m = nil
+	store, dig, _ := seedStore(t, defNSeed)
 	runtime.GC()
 
 	const batch = 46_000

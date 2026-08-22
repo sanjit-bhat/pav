@@ -262,3 +262,61 @@ func TestUpdateTamper(t *testing.T) {
 		t.Fatal("repeated entry accepted")
 	}
 }
+
+func TestUpdateEdges(t *testing.T) {
+	// an empty batch against an empty map, and against a one-leaf map.
+	m := &Map{}
+	d0 := m.Hash()
+	p, err := m.Update(nil, nil)
+	if err {
+		t.Fatal()
+	}
+	if o, n, err := VerifyUpdate(nil, nil, p); err || !bytes.Equal(o, d0) || !bytes.Equal(n, d0) {
+		t.Fatal("empty batch on an empty map")
+	}
+
+	l := make([]byte, cryptoffi.HashLen)
+	l[0] = 3
+	p, err = m.Update([][]byte{bytes.Clone(l)}, [][]byte{{1}})
+	if err {
+		t.Fatal()
+	}
+	d1 := m.Hash()
+	if o, n, err := VerifyUpdate([][]byte{l}, [][]byte{{1}}, p); err ||
+		!bytes.Equal(o, d0) || !bytes.Equal(n, d1) {
+		t.Fatal("first leaf")
+	}
+	// the map is now a bare leaf at depth 0, so the tape is one leaf record.
+	p, err = m.Update(nil, nil)
+	if err {
+		t.Fatal()
+	}
+	if o, n, err := VerifyUpdate(nil, nil, p); err || !bytes.Equal(o, d1) || !bytes.Equal(n, d1) {
+		t.Fatal("empty batch on a one-leaf map")
+	}
+
+	// an out-of-core map that is entirely a cut still takes an empty batch,
+	// since nothing reaches the cut.
+	oc := NewCut(d1)
+	p, err = oc.Update(nil, nil)
+	if err {
+		t.Fatal("empty batch on a cut map")
+	}
+	if o, n, err := VerifyUpdate(nil, nil, p); err || !bytes.Equal(o, d1) || !bytes.Equal(n, d1) {
+		t.Fatal()
+	}
+
+	// an empty value is a value.
+	l2 := make([]byte, cryptoffi.HashLen)
+	l2[0] = 200
+	if _, err := m.Update([][]byte{bytes.Clone(l2)}, [][]byte{{}}); err {
+		t.Fatal()
+	}
+	inMap, v, mp, err := m.Prove(l2)
+	if err || !inMap || len(v) != 0 {
+		t.Fatal("empty value")
+	}
+	if h, err := VerifyMemb(l2, v, mp); err || !bytes.Equal(h, m.Hash()) {
+		t.Fatal()
+	}
+}
