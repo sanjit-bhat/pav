@@ -34,6 +34,32 @@ single **tape**: the DFS pre-order (child0 first) serialization of the smallest
 sub-tree covering the batch, with everything off it replaced by an opaque cut.
 Four instructions — `split`, `empty`, `cut(hash)`, `leaf(label, val)`.
 
+### 1.1 Why there is a fourth instruction, and why it carries the value
+
+Split / cut / empty is not enough. When an inserted label lands where the old
+tree already has a *single* leaf, that leaf gets pushed deeper, and **how much
+deeper depends on its own label** — the two diverge at their first differing
+bit. A cut carrying only a hash cannot say where the leaf ends up, so the
+verifier cannot rebuild the new sub-tree. Hence `leaf`. It is not a rare case:
+a path terminates at an empty slot or at a leaf roughly equally often, so
+`leaf` covers about half the insertions.
+
+Carrying the leaf's **value**, not just its hash, is a soundness requirement
+rather than a convenience, and the reason is worth writing down.
+
+A sub-tree holding one leaf hashes to that leaf's hash, at any depth — kt
+compresses single-leaf sub-trees. So if the tape said `leaf(label, hash)`, the
+*old* digest the verifier computes would be that `hash` **whatever label the
+tape claimed**. A malicious server could therefore name the wrong label: the old
+digest still matches the one the auditor already trusts, but the new tree places
+the existing leaf at a position derived from the lie. That silently relocates a
+key the server had already committed to, and the auditor signs it.
+
+Shipping the value closes it: the verifier recomputes `H(leafTag, label, val)`
+and matches it against the old digest, so collision resistance pins both the
+label and the value. The cost is ~65 B on about half the insertions, against
+~600 B/insert of cut hashes — under 5%.
+
 The verifier rebuilds the tape into a tree, hashes it for the old digest, runs
 **the same `put` the server ran**, and hashes again for the new digest. So the
 tape only has to say where the old tree stopped; `put` decides everything else,
