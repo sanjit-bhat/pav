@@ -901,3 +901,115 @@ reason §9 recommends it for the epoch commit and a local store for reads.
 
 **Where "bigger than RAM" actually comes from, then, is Pebble, not Tulip** —
 `etc/bench/diskbench`, §11 and §14.
+
+## 15. How the design was arrived at
+
+Recorded because the order mattered — three of the decisions came from a
+measurement contradicting what I expected, and the reasoning is not recoverable
+from the code.
+
+**1. Measure the substrate first, because §8 said it decided everything.** The
+design note's measurement plan opens with "what does a 64-key `batch_get` cost
+on Tulip? This single number decides A vs. B." So Tulip went first, before any
+merkle work. It returned ~83k point reads/s, 93 us for a single-key read-only
+transaction, and 1.1 us/key for batched writes.
+
+**That inverted the assumption underneath the note's central decision.** Paging
+was ruled out because it trades write volume for read fan-out and the measured
+batch size made the write volume ruinous. But reads cost ~90x writes per key on
+this substrate, so the trade is *favourable* here. Which meant the ruling had to
+be re-derived rather than inherited, and the thing to minimize was **probes per
+operation** — not bytes, not CPU. Every later decision was made against that.
+
+**2. The epoch is already the unit of update, so make it the unit of proof.**
+`Map.Put` generated a ~1.1 KB non-membership proof per insertion, which is two
+thirds of its cost, and the server batches insertions into epochs anyway. One
+descent per epoch that emits one tape removes the per-insert traversal *and* the
+per-insert proof. The tape's shape — split / cut / empty — came from the brief;
+the fourth instruction and the decision to carry the leaf's value rather than
+its hash came from working out what a malicious server could otherwise do
+(§1.1).
+
+**3. The one change to design A came from asking what a proof actually needs.**
+The note keys nodes by trie position so a path's keys are computable. But a
+proof does not need the *nodes* on the path — it needs their **siblings'
+hashes**. Those are exactly what a parent could carry and AKD's `TreeNode` does
+not. Putting both child hashes in the inner record makes the path's records
+already contain the proof, which (a) halves the probes and (b) removes the
+second hop the note budgets for non-membership, because the blocking leaf then
+sits at a prefix of the queried label like everything else.
+
+**4. Measure the parameters rather than picking them.** The probe bound looked
+like a constant to guess; measuring it showed the writer and the reader minimize
+at different values, and that guessing 6 cost the writer 46% (§3.1).
+
+**5. Notice what is already on the wire.** A replica needs the top of the tree
+warm. The epoch's audit proof *is* the top of the tree — §1.5 of the
+measurements note says everything above depth ~17 is rewritten every epoch, and
+the tape covers exactly what changed. So `ApplyUpdate` returns the tree it built
+instead of discarding it, and cache warming costs nothing extra (§3).
+
+**6. Crash safety, reasoned then tested, and the test won.** "Write the records,
+then HEAD" is a clean argument and it is wrong on a single-version store,
+because design A's node keys are mutable. That only surfaced under `kill -9`
+(§12). The lesson is narrower than "test things": the argument was correct *for
+the substrate it was made about* (Tulip, MVCC) and silently carried over to one
+where its premise did not hold.
+
+### 15.1 What was considered and rejected
+
+| | why not |
+|---|---|
+| **Paging / design B** at 128-leaf pages | the note's own ruling: 3.2 TB/day of page rewrites |
+| **Nibble grouping** (b=4, Jellyfish-style): 4x fewer probes | 2x write volume, ~1.7x storage, a page format, and a gluing lemma four levels deep instead of one. The warm top (§3) buys much of the same probe reduction for a `for` loop |
+| **Content-addressed nodes** (note §4.2) | a hash-keyed child cannot be named before its parent is read, which is the whole prefix-probe trick |
+| **`leaf(label, hash)`** in the tape, 32 B cheaper | unsound — lets a server relocate a committed key (§1.1) |
+| **Path-compressing unary chains**: 18% fewer records | `1/ln 2` inner nodes per leaf is real (§7) but 0.44 records/leaf does not pay for a record that stops being a node |
+| **A warm writer with dirty bits**: 28% fewer writer probes | a dirty bit on every node, which the invariant would then have to mention, to speed up something that is not the bottleneck |
+| **Shrinking the append-only proof** | the note said not to bother, on the grounds that AKD's was near-optimal. Batching made it 0.70x AKD's for free, so the note was right about the effort and wrong about the ceiling (§10) |
+
+## 16. Why it is faster than AKD, mechanistically
+
+The headline numbers are not one effect. At 1M leaves, epochs of 46k, insertion
+costs AKD **51.8 us / 23.7 probes** and \vkt **13.0 us / 7.94 probes**. The
+38.8 us decomposes into three separate causes, each measured on its own:
+
+| | us | what it is |
+|---|---|---|
+| **the audit proof is a second traversal** | **13.9** | `get_append_only_proof` walks the tree again and re-reads **10.41 records per insertion**. \vkt emits the tape during the descent it was already making: no second walk, no extra probe. This is also the whole of the 10.4-probe difference in the audit column |
+| **AKD's storage interface** | **12.3** | `main` serializes every key to a heap `Vec<u8>` and SipHashes it per operation. Its `no-key-serialization` branch removes that and drops insert from 37.9 to 25.6. Real work for a persistent store — \vkt's `StoreKey` pays it too — but AKD pays it twice as often, because of the next row |
+| **fewer probes and cheaper tree work** | **12.6** | 13.24 probes against 7.94, plus the tree itself: \vkt's `Update` including the tape is **3.0 us**, and the other 10.0 of its 13.0 is its own store |
+
+For lookups — \vkt 13.2 us / 25.8 probes / **1 round trip**, AKD 29.9 us / 42.2
+probes / **~21 dependent round trips** — there are three causes and they are
+structural, not implementation:
+
+1. **One probe per level, not two.** An AKD `TreeNode` names its children but
+   does not carry their hashes, so building a proof means fetching the node
+   *and* its sibling at every level. Measured directly, same tree, same engine,
+   same key order: **53 probes and 116 us against 27 and 59** (§11.4).
+2. **One round trip, not `depth`.** Every key on a path is a computable prefix
+   of the label, so they all go in one batch read. AKD learns each child's key
+   by reading its parent, so the path is a dependent chain. This costs nothing
+   against a local LSM and is the difference between 1 and ~24 round trips
+   against anything remote — where, at Tulip's measured 93 us per read, it is
+   the entire cost.
+3. **Non-membership needs no second hop.** The blocking leaf sits at a prefix of
+   the queried label, so the same batch that fetched the path already contains
+   it.
+
+And on top of both, **key order**: length-major scatters one path's records
+across the keyspace by depth; value-major clusters the deep ones. Same probe
+count, worth 1.47x when the tree does not fit in cache and 1.03x when it does
+(§11.4) — which is why it is invisible to an in-memory benchmark and
+unavoidable in a deployment.
+
+The audit proof is smaller for a related reason: a cut is 32 B of hash whose
+*position* is implied by the tape's shape, where an `AzksElement` is 49 B
+carrying an explicit `NodeLabel`. AKD re-sends positions its own structure
+already determines. 178 B/insert against 255 at 1M, ~590 against ~856 at 10^10
+*(est.)*.
+
+**The one column AKD wins**, writes per insertion by 9%, has an equally specific
+cause: `put` materializes one inner node per bit along a shared path, giving
+`1/ln 2` inner nodes per leaf where a path-compressed trie has one (§7).
