@@ -33,7 +33,13 @@ tape** and 10.0 us is the harness store's own lookups and copies.
 
 Against a live 3-replica Tulip, at the measured 46k-per-30 s workload: **8.3 s
 per epoch** (7.7–10.5 over five runs), of which the tree is 6 us of 180 us per
-insert.
+insert. **With the tree on a disk** (Pebble, 5M leaves, 1.9 GB): **8.8 s per
+epoch**, one 2.3 ms fsync, and a lookup at p50 67–72 us whether or not the page
+cache can hold the tree (§11).
+
+Isolating the two layout decisions on one tree and one engine (§11.4), a lookup
+costs \vkt **59 us** against AKD's **170 us** — 1.97x from probes per level,
+1.47x from key order.
 
 Four things did most of the work, and three of them are simplifications:
 
@@ -686,3 +692,45 @@ cache shrinks**: 28% when the tree is fully cached, 52% when it is not, which is
 the regime a 10^10-leaf directory is permanently in. Length-major sorts a path's
 nodes by depth, so the 27 records of one lookup are spread over 27 regions of
 the keyspace; value-major puts the deep ones together.
+
+### 11.4 The two decisions, isolated
+
+The two things design A changes about AKD's storage layout are **how many
+records a path costs** (one per level, because an inner record carries both
+children's hashes, against AKD's two) and **where those records sit** (§11.3).
+Both can be measured on the *same* tree, in the *same* engine, because AKD's
+probe set is nameable in our store: the node and its sibling at each level are
+both prefixes of the label with at most one bit flipped. So `-lenmajor` crossed
+with the two probe sets is a 2x2 with everything else held fixed. Storage time
+only, p50 over 2,000 lookups, 5M leaves, 1.9 GB LSM:
+
+**Under `MemoryMax=512M`** — the tree does not fit in the cache, which is the
+regime a 10^10-leaf directory is permanently in:
+
+| p50 us | value-major keys | length-major keys | |
+|---|---|---|---|
+| **1 probe/level** (27 probes) | **59** | 88 | +49% |
+| **2 probes/level** (53 probes) | 116 | **170** | +47% |
+| | +97% | +93% | |
+
+With the page cache warm:
+
+| p50 us | value-major | length-major | |
+|---|---|---|---|
+| 1 probe/level | **59** | 76 | +29% |
+| 2 probes/level | 116 | **119** | +3% |
+
+So \vkt's corner against AKD's corner is **59 us against 170 us, 2.9x**, and it
+factors cleanly: **1.97x from the probe count, 1.47x from the key order**. The
+probe-count factor is exactly the 2x the record format predicts and does not
+move with the cache. The key-order factor is the one that appears only when the
+cache is too small — 1.47x cold against 1.03x warm for AKD's shape — which is
+why an in-memory benchmark cannot see it and a persistent deployment cannot
+avoid it.
+
+Two honest caveats. This is AKD's *access pattern* against \vkt's tree and
+Pebble, not AKD: it isolates the layout decisions and says nothing about the
+rest of either implementation. And AKD's probes are *dependent* — it learns a
+child's key by reading the parent — which costs nothing extra against a local
+LSM and is the difference between 1 round trip and ~24 against anything remote
+(§2). Both of those understate the gap rather than overstate it.
