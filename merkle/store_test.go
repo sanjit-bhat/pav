@@ -105,6 +105,60 @@ func (s *memStore) loadFrom(t *testing.T, m *Map, label []byte, maxD uint64) {
 // probeExtend is how much deeper to probe when a path outruns the bound.
 const probeExtend uint64 = 16
 
+// loadBatch loads every label's path with one deduped batch read, which is
+// what a writer does with an epoch and a reader does with one label. paths
+// that outran maxD cost a second, much smaller read.
+func (s *memStore) loadBatch(t *testing.T, m *Map, labels [][]byte, maxD uint64) {
+	seen := make(map[[StoreKeyLen]byte]int, len(labels)*int(maxD))
+	var keys [][]byte
+	pks := make([][][]byte, len(labels))
+	minDs := make([]uint64, len(labels))
+	var kb [StoreKeyLen]byte
+	for i, l := range labels {
+		minD, pk, needed := m.PathNeeds(l, maxD)
+		if !needed {
+			continue
+		}
+		minDs[i], pks[i] = minD, pk
+		for _, k := range pk {
+			copy(kb[:], k)
+			if _, ok := seen[kb]; !ok {
+				seen[kb] = len(keys)
+				keys = append(keys, k)
+			}
+		}
+	}
+	if len(keys) == 0 {
+		return
+	}
+	got := s.get(keys)
+
+	var deep [][]byte
+	for i, l := range labels {
+		if pks[i] == nil {
+			continue
+		}
+		recs := make([][]byte, len(pks[i]))
+		for j, k := range pks[i] {
+			copy(kb[:], k)
+			recs[j] = got[seen[kb]]
+		}
+		complete, err := m.LoadPath(l, minDs[i], recs)
+		if err {
+			t.Fatal("load")
+		}
+		if !complete {
+			deep = append(deep, l)
+		}
+	}
+	if len(deep) > 0 {
+		if maxD == maxDepth {
+			t.Fatal("path past maxDepth")
+		}
+		s.loadBatch(t, m, deep, min(maxD+probeExtend, maxDepth))
+	}
+}
+
 func TestStoreRoundTrip(t *testing.T) {
 	const n = 20_000
 	const probeD = 40

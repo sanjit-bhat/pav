@@ -135,9 +135,7 @@ func seedStore(t *testing.T, sz uint64) (store *memStore, dig []byte, labels [][
 		ls, vs := mkBatch(n)
 		labels = append(labels, ls...)
 		oc := NewCut(dig)
-		for _, l := range ls {
-			store.loadFrom(t, oc, l, maxD)
-		}
+		store.loadBatch(t, oc, ls, maxD)
 		if _, err := oc.Update(ls, vs); err {
 			t.Fatal("seed")
 		}
