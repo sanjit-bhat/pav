@@ -4,7 +4,7 @@ Running log for the work of turning `merkle` into something that meets
 `persistent-server-design.md`'s requirements at
 `akd-workload-measurements.md`'s workload, at performance comparable to AKD.
 Newest entry last. Every number here was measured on the box described in
-§0.1 unless it says *(est.)*.
+§0.2 unless it says *(est.)*.
 
 ## 0. State of play
 
@@ -54,10 +54,36 @@ Four things did most of the work, and three of them are simplifications:
    single-version store the records and HEAD have to go in one atomic batch,
    which a local engine gives for free. §12 crash-tests both.
 
-Read next: §7 for the scaling and the 10^10 extrapolation, §9 for where the
-storage should live, §8 for what is not done.
+Read next: §0.1 for what "probe" means, since every table below counts them;
+§7 for the scaling and the 10^10 extrapolation; §15 and §16 for how the design
+was arrived at and where the speed comes from; §8 and §13 for what is not done.
 
-### 0.1 The box, the toolchains, how to reproduce
+### 0.1 The four counts
+
+These are the structural metrics the whole log leans on, so they are worth
+stating exactly. They are properties of the *design*, not of anyone's storage
+configuration, which is why they are the honest way to compare two systems whose
+stores you cannot make identical.
+
+- **probe** — one point read handed to the storage engine: one key in, one
+  record or "not found" out. `db.Get(k)`, `Txn.Read(k)`, one row by primary key.
+- **hit** — a probe that found a record. `probes - hits` is the waste from not
+  knowing in advance how deep a path goes: the caller probes to `log2(N) + slack`
+  and the leaf turns up earlier (§3.1).
+- **round trip** — one latency-bound exchange with the store. **Not the same as
+  a probe**, and the difference is the point of the design: 27 probes whose keys
+  are all computable up front go in *one* round trip, while 27 probes where each
+  key is learned by reading the previous record are 27 round trips. Against a
+  local LSM that distinction is nearly free; against Tulip it is 27 x 93 us.
+- **write** — one record written back.
+
+"per op" means per lookup. **"Per insert" means the epoch's total divided by the
+batch size**, after deduplicating keys across the batch — which is why it is
+`log2(N/B)` and not `log2(N)`: 46,000 insertions share the top of the tree, so
+the first ~16 levels are probed once for the whole epoch rather than once each.
+That sharing is also why a bigger epoch is cheaper per insertion (§11.1).
+
+### 0.2 The box, the toolchains, how to reproduce
 
 A 9-core, 21 GB OrbStack Linux VM (aarch64) on an M1 Pro MacBook Pro with 32 GB.
 Everything — both systems, all six Tulip replicas, paxos, and the clients — runs
