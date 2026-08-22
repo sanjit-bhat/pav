@@ -4,15 +4,69 @@ Running log for the work of turning `merkle` into something that meets
 `persistent-server-design.md`'s requirements at
 `akd-workload-measurements.md`'s workload, at performance comparable to AKD.
 Newest entry last. Every number here was measured on the box described in
-§0 unless it says *(est.)*.
+§0.1 unless it says *(est.)*.
 
-## 0. The box, and the baselines
+## 0. State of play
 
-aarch64, 9 cores, 21 GB RAM, Linux (OrbStack). Go 1.27.0, Rust 1.98.0 — both
-the latest stable as of 2026-08-22, and both a bump from what was installed
-(1.26.4 / 1.96.1). Go 1.27 rejects the empty package pattern that
-`packages.Load` passed to `go list`, which is the one source change the bump
-needed (`serde/compiler.go`).
+Design A is built, in `merkle/update.go` and `merkle/store.go` — about 500
+lines, with `merkle/merkle.go` slightly *smaller* than before. It is faster than
+AKD on every axis measured except one, and the exception is 9%.
+
+At 1M leaves, epochs of 46k, both against an in-memory store, one thread:
+
+| | AKD | \vkt |
+|---|---|---|
+| insert incl. audit proof | 51.8 us, 23.7 probes | **3.45 us, 7.95 probes** |
+| lookup | 29.2 us, 42.2 probes, ~21 round trips | **9.0 us, 25.8 probes, 1 round trip** |
+| audit proof | 255 B/insert | **178 B/insert** |
+| records written per insert | **7.05** | 7.72 |
+
+Against a live 3-replica Tulip, at the measured 46k-per-30 s workload: **10 s
+per epoch**, of which the tree is 6 us of 208 us per insert.
+
+Four things did most of the work, and three of them are simplifications:
+
+1. **One proof per epoch, not per insert** (§1). The tape.
+2. **An inner record carries its children's hashes** (§3), so a path fetch is
+   one probe per level and answers membership *and* non-membership with the
+   proof, in one round trip. This is the change to the doc's design A.
+3. **`ApplyUpdate` + `Evict`** (§3), so the audit proof a replica already
+   downloads *is* its cache-warming stream.
+4. **HEAD written last** (§5), so the atomic step of an epoch commit is one key
+   under MVCC — no transaction over the batch, which the doc reserves for
+   design B.
+
+Read next: §7 for the scaling and the 10^10 extrapolation, §9 for where the
+storage should live, §8 for what is not done.
+
+### 0.1 The box, the toolchains, how to reproduce
+
+A 9-core, 21 GB OrbStack Linux VM (aarch64) on an M1 Pro MacBook Pro with 32 GB.
+Everything — both systems, all six Tulip replicas, paxos, and the clients — runs
+on it, often at once, so absolute latencies are floors with a lot of contention
+in them and the structural counts are the durable part.
+
+Go 1.27.0, Rust 1.98.0, both the latest stable as of 2026-08-22 and both a bump
+from what was installed (1.26.4 / 1.96.1). Go 1.27 rejects the empty package
+pattern that `packages.Load` passed to `go list`, which is the one source change
+the bump needed (`serde/compiler.go`).
+
+```sh
+# \vkt. PAV_BENCH_SEED sets the tree size; the store benches seed out of core,
+# so the ceiling is the store rather than the 730 B/leaf resident tree.
+PAV_BENCH_SEED=1000000 go test -count=1 ./merkle/ -run TestBenchMerk -v -timeout 90m
+
+# AKD: seed, batch, epochs, threads (0 = sequential), use_txn.
+# CACHE=1 turns on its TimedCache, AUDIT=1 adds append-only proof generation.
+cd ~/akd-bench && AUDIT=1 LOOKUPS=2000 ./target/release/akd-bench 1000000 46000 5 0 1
+
+# Tulip on its own, and the persistent server on Tulip.
+cd etc/bench/tulipbench && go build . && ./tulipbench -keys 20000 -probes 64
+cd etc/bench/ktbench   && go build . && ./ktbench -seed 1000000 -batch 46000 -warm 16
+```
+
+`~/tulip` has one local patch, `keyToGroup` (§2, finding 4). `~/akd-bench` has a
+counting `Database` wrapper plus lookup and audit phases added for §4.
 
 Baselines, both at a 1M-leaf tree, single-threaded, no storage:
 
@@ -47,7 +101,7 @@ a path terminates at an empty slot or at a leaf roughly equally often, so
 Carrying the leaf's **value**, not just its hash, is a soundness requirement
 rather than a convenience, and the reason is worth writing down.
 
-A sub-tree holding one leaf hashes to that leaf's hash, at any depth — kt
+A sub-tree holding one leaf hashes to that leaf's hash, at any depth — \vkt
 compresses single-leaf sub-trees. So if the tape said `leaf(label, hash)`, the
 *old* digest the verifier computes would be that `hash` **whatever label the
 tape claimed**. A malicious server could therefore name the wrong label: the old
@@ -345,7 +399,7 @@ has a precise cause. Seeding 1M leaves produces **2,441,724 records**, i.e.
 1.4417 inner nodes per leaf — `1/ln 2`, the classic figure for an uncompressed
 binary trie. `put` materializes one inner node per bit along a shared path,
 where a path-compressed trie would collapse each such chain into one node and
-have exactly `N-1`. So kt stores ~22% more records than it strictly must, and
+have exactly `N-1`. So \vkt stores ~22% more records than it strictly must, and
 rewrites ~9% more of them per insert.
 
 Fixing it does not require touching the hash structure — a unary chain is
