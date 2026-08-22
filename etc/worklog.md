@@ -202,8 +202,9 @@ A node's storage key is its position in the trie: the label prefix it covers
 with the deeper bits zeroed, then the depth. Two things follow.
 
 Every node on `label`'s path is a prefix of `label`, so a whole path's keys are
-computable before any I/O, and value-major ordering puts them next to each
-other. That is the doc's design A.
+computable before any I/O. That is the doc's design A. Value-major ordering also
+clusters the *deep* keys — the key at depth `d` shares `label`'s first `d/8`
+bytes — though not the shallow ones, which the doc overstates (§10).
 
 The change: **an inner node's record holds its two children's hashes**, where
 AKD's names its children but does not carry their hashes. So the path's records
