@@ -466,8 +466,13 @@ for one record per node, which assumed 150 B records where these are ~70 B.
   batch at the top few levels and the sub-trees are disjoint — and AKD's 8-thread
   row is the thing to beat if that ever matters. It does not yet: \vkt on one
   core is already 6x AKD on eight.
-- **`alicebob`'s end-to-end test is timing-flaky**, 9/20 failures on pristine
-  `main` against 6/20 here. Pre-existing, not touched.
+- **`alicebob`'s end-to-end test is timing-flaky and fails about half the time**,
+  which makes `just ci` unreliable. Pre-existing and unrelated to this work:
+  9/20 failures on pristine `main`, 11/20 here, and it is no better on an idle
+  box than a loaded one. The cause is that `epochTime` is **1 ms**
+  (`alicebob.go:19`) while the test sleeps `2 * epochTime` and then *asserts an
+  exact epoch number* — 2 ms of slack against Go timer slop in a VM. Raising
+  `epochTime` fixes it; left alone because it is not this work's to change.
 
 ## 9. Where the storage should live, given the numbers
 
