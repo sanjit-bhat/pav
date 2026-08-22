@@ -340,7 +340,20 @@ The slopes are the design, stated numerically. \vkt pays one probe per level
 because an inner record carries both child hashes; AKD pays two, and its insert
 path pays closer to three. \vkt's audit proof grows by one 32 B cut hash per
 level plus a fraction of a byte of opcode; AKD's by one 49 B `AzksElement`.
-Write volume is the one place they are the same, and AKD is ~9% ahead.
+Write volume is the one place they are the same, and AKD is ~9% ahead. That gap
+has a precise cause. Seeding 1M leaves produces **2,441,724 records**, i.e.
+1.4417 inner nodes per leaf — `1/ln 2`, the classic figure for an uncompressed
+binary trie. `put` materializes one inner node per bit along a shared path,
+where a path-compressed trie would collapse each such chain into one node and
+have exactly `N-1`. So kt stores ~22% more records than it strictly must, and
+rewrites ~9% more of them per insert.
+
+Fixing it does not require touching the hash structure — a unary chain is
+determined by its endpoints, so one *record* could stand for a chain while the
+hashing stays binary, which is §3.4's hash-unit rule again. It is not worth it
+here: 0.44 records per leaf, against a record format that stops being "a node"
+and a gluing argument that stops being one node deep. Recorded because it is the
+one column where AKD is ahead and it is nice to know exactly why.
 
 Extrapolated to `N = 10^10`, the size the depth profile in
 `akd-workload-measurements.md` §5 implies, i.e. 10.3 doublings past 8M *(est.)*:
