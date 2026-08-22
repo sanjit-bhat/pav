@@ -17,16 +17,15 @@ are medians of three runs; every count was identical across runs.
 
 | | AKD | \vkt |
 |---|---|---|
-| insert incl. audit proof | 34.7 us, 23.7 probes | **13.0 us, 7.94 probes** |
-| lookup | 20.0 us, 42.2 probes, ~21 round trips | **13.2 us, 25.8 probes, 1 round trip** |
+| insert incl. audit proof | 51.8 us, 23.7 probes | **13.0 us, 7.94 probes** |
+| lookup | 29.9 us, 42.2 probes, ~21 round trips | **13.2 us, 25.8 probes, 1 round trip** |
 | audit proof | 255 B/insert | **178 B/insert** |
 | records written per insert | **7.05** | 7.71 |
 
-AKD here is the `no-key-serialization` branch of `~/akd`, not `main`: `main`
-carries storage-layer overhead in the in-memory path that has nothing to do with
-its design (37.9 us/insert against 25.6), and comparing against that would be
-comparing against a bug. On one core \vkt is 2.7x AKD; **AKD's best 8-thread
-wall clock, 13.6 us/insert, is a dead heat with \vkt on one core.**
+AKD here is `~/akd` `main`, and §4 explains why rather than its
+`no-key-serialization` branch: that branch removes key serialization from the
+storage interface, which is exactly the work a *persistent* store cannot skip.
+It is the right baseline for an in-memory ceiling and the wrong one here.
 
 Both microsecond columns are dominated by each system's in-process store, not by
 its tree: of \vkt's 13.0 us to insert, **3.0 us is `Update` including the audit
@@ -77,21 +76,21 @@ cd etc/bench/tulipbench && go build . && ./tulipbench -keys 20000 -probes 64
 cd etc/bench/ktbench   && go build . && ./ktbench -seed 1000000 -batch 46000 -warm 16
 ```
 
-`~/tulip` has one local patch, `keyToGroup` (§2, finding 4). `~/akd` must be on
-branch `no-key-serialization` (§4). `~/akd-bench` has a counting `Database`
-wrapper plus lookup and audit phases added for §4.
+`~/tulip` has one local patch, `keyToGroup` (§2, finding 4). `~/akd` is on
+`main` (§4.0). `~/akd-bench` has a counting `Database` wrapper plus lookup and
+audit phases added for §4.
 
 Baselines, both at a 1M-leaf tree, single-threaded, no storage:
 
 | | us/insert |
 |---|---|
-| AKD `batch_insert_nodes`, 46k batches, in-memory db, no cache | 25.6 |
+| AKD `batch_insert_nodes`, 46k batches, in-memory db, no cache | 37.9 |
 | \vkt `Map.Put`, one at a time, incl. per-insert proof | 5.95 |
 
 AKD's harness is `~/akd-bench` against `AsyncInMemoryDatabase` +
-`StorageManager::new_no_cache`, i.e. AKD's in-memory ceiling, on the
-`no-key-serialization` branch (§4). It does *not* produce an audit proof;
-\vkt's `Put` does.
+`StorageManager::new_no_cache`, i.e. AKD's in-memory ceiling, on `main` (see
+§4.0 for why not the `no-key-serialization` branch). It does *not* produce an
+audit proof; \vkt's `Put` does.
 
 ## 1. Batched epoch update (commit `ba8c4e6`)
 
@@ -274,24 +273,37 @@ which is not comparable). \vkt's harness is `merkle/bench_test.go`; AKD's is
 `~/akd-bench`, extended with a counting `Database` wrapper and a lookup and
 audit phase.
 
-AKD is measured on its `no-key-serialization` branch (`688fbd1`), which strips
-key serialization, hashing, and error-formatting overhead out of the in-memory
-storage hot path. On `main` (`f14dcfa`) the same run is 37.9 us/insert against
-25.6, and every structural count is identical, so `main` would only flatter
-\vkt for a reason unrelated to either design.
+### 4.0 Which AKD
 
-**N = 1M, epochs of 46k insertions**, medians of three runs:
+`~/akd` has a `no-key-serialization` branch (`688fbd1`) that replaces the
+`Database` trait's byte-string keys with a typed `IndexKey` enum and a cheap
+hasher, dropping a heap `Vec<u8>` and a SipHash per storage operation. It was
+built for a different comparison: AKD's **in-memory ceiling**, where the "store"
+is an in-process `DashMap` and serializing a key is pure overhead.
+
+It is the wrong baseline for this one. A persistent store is byte-keyed — you
+cannot hand a Rust enum to a KV — so producing a byte key per record is work the
+persistent path genuinely does, in both systems. \vkt pays it too: `StoreKey`
+builds a 34-byte key for every probe, and those bytes are what the harness store
+and Tulip are keyed by. So **`main` is the like-for-like baseline**, and the
+branch bounds how much of AKD's CPU is attributable to that one interface
+choice. Both are in the table in §6.
+
+Structural counts are identical on the two branches, so §7's scaling is
+unaffected by the choice.
+
+**N = 1M, epochs of 46k insertions**, medians of three runs, AKD on `main`:
 
 | | AKD | \vkt |
 |---|---|---|
-| insert, us/op | 25.64 | **12.96** (9.97 store + **2.99 tree**) |
+| insert, us/op | 37.92 | **12.96** (9.97 store + **2.99 tree**) |
 | insert, probes/op | 13.24 | **7.94** |
 | insert, hits/op | 13.24 | **5.27** |
 | insert, writes/op | **7.05** | 7.71 |
 | audit proof, B/insert | 255.0 | **178.4** |
 | audit proof, extra probes/insert | 10.41 | **0** |
-| audit proof, extra us/insert | 9.04 | **0** |
-| membership, us/op | 20.01 | **13.20** |
+| audit proof, extra us/insert | 13.88 | **0** |
+| membership, us/op | 29.86 | **13.20** |
 | membership, probes/op | 42.21 | **25.81** |
 | membership, round trips | ~21, dependent | **1** |
 | non-membership, probes/op | 45.07 | **0 extra** |
@@ -305,11 +317,11 @@ over the tree that re-reads 10.4 records per insertion.
 
 | | AKD | \vkt |
 |---|---|---|
-| insert, us/op | 38.78 | 4.99 tree |
+| insert, us/op | 73.05 | 4.99 tree |
 | insert, probes/op | 18.82 | 9.92 |
 | audit proof, B/insert | 341.8 | 238.9 |
 | membership, probes/op | 45.67 | 27.83 |
-| membership, us/op | 28.28 | 12.20 |
+| membership, us/op | 39.56 | 12.20 |
 
 Reading the two together: both scale in `log2(N)`, AKD at ~2 probes per level
 and \vkt at ~1, and \vkt's audit proof is ~0.70x AKD's at both sizes. \vkt's
@@ -377,10 +389,11 @@ of 46k. The `insert` column excludes the audit proof; `total` adds it.
 
 | AKD configuration | insert us | audit us | **total us** | probes/insert | lookup us | lookup probes |
 |---|---|---|---|---|---|---|
-| no cache, 1 thread (AKD's own bench setting) | 25.64 | 9.04 | **34.7** | 23.7 | 20.01 | 42.21 |
-| **cache on**, 1 thread | 46.04 | 26.91 | **73.0** | **0.1** | 32.91 | 0.11 |
-| no cache, **8 threads** | 10.68 | 2.90 | **13.6** | 23.7 | 21.88 | 42.21 |
-| `main` instead of `no-key-serialization`, no cache, 1 thread | 37.92 | 13.88 | 51.8 | 23.7 | 29.86 | 42.21 |
+| `main`, no cache, 1 thread (AKD's own bench setting) | 37.92 | 13.88 | **51.8** | 23.7 | 29.86 | 42.21 |
+| `main`, **cache on**, 1 thread | 58.36 | 28.19 | **86.6** | **0.4** | 33.98 | 0.33 |
+| `main`, no cache, **8 threads** | 17.44 | 4.11 | **21.6** | 23.7 | 31.91 | 42.21 |
+| `no-key-serialization`, no cache, 1 thread | 25.64 | 9.04 | 34.7 | 23.7 | 20.01 | 42.21 |
+| `no-key-serialization`, no cache, 8 threads | 10.68 | 2.90 | 13.6 | 23.7 | 21.88 | 42.21 |
 | \vkt, no cache, 1 thread | 12.96 | 0 | **13.0** | **7.94** | 13.20 | 25.81 |
 
 Two things worth being precise about.
@@ -389,21 +402,25 @@ Two things worth being precise about.
 the entire 1M-leaf tree, so probes go to ~0 — but that is R1 turned off. At the
 10^10 leaves the audit log implies, a bounded cache over a tree four orders
 larger has a low hit rate and you pay for both the misses and the bookkeeping.
-And the bookkeeping is not free: turning the cache on *raised* CPU by 80% on
-insert and 198% on audit-proof generation. So the two rows bracket AKD rather
+And the bookkeeping is not free: turning the cache on *raised* CPU by 54% on
+insert and 103% on audit-proof generation. So the two rows bracket AKD rather
 than one of them being the fair one, and \vkt is ahead of both.
 
-**The 8-thread row is AKD's best wall-clock, and it ties \vkt on one core** —
-13.6 us against 13.0. That is the cleanest single statement of the result:
-same wall clock, one eighth the CPU, a third of the storage operations, and a
-twenty-first of the round trips. `Map.Update` parallelizes trivially — partition
-the batch at the top few levels and the sub-trees are disjoint — but there is no
-reason to spend verification budget on it while one core already keeps up. `Map.Update` parallelizes trivially — partition the batch
+**The 8-thread rows are AKD's best wall-clock.** On the like-for-like `main`,
+21.6 us/insert against \vkt's 13.0 on one core. Strip the storage interface too
+and AKD reaches 13.6 us on eight cores, which ties \vkt on one. That last pair
+is the cleanest statement of where the design lands: **same wall clock, one
+eighth the CPU, a third of the storage operations, a twenty-first of the round
+trips — and against an AKD that has been given an interface a persistent
+deployment cannot have.** `Map.Update` parallelizes trivially (partition the
+batch at the top few levels; the sub-trees are disjoint), but there is no reason
+to spend verification budget on it while one core already keeps up. `Map.Update` parallelizes trivially — partition the batch
 at the top few levels and the sub-trees are disjoint — but there is no reason
 to spend the verification budget on that yet.
 
 Lookups do not parallelize within one lookup in either system, so that column is
-like-for-like: 13.2 us and 1 round trip against 20–33 us and ~21 dependent ones.
+like-for-like: 13.2 us and 1 round trip against 30–34 us and ~21 dependent ones,
+or 20–22 us with AKD's storage interface replaced.
 
 ## 7. Scaling, and what it says about 10^10
 
