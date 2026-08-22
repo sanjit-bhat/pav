@@ -17,7 +17,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cockroachdb/pebble"
@@ -38,21 +37,23 @@ var (
 	reuse    = flag.Bool("reuse", false, "reuse an existing LSM directory and its digest")
 )
 
-type store struct {
-	db     *pebble.DB
+type counters struct {
 	probes int
 	hits   int
 	rbytes int
 	writes int
 	wbytes int
-	mu     sync.Mutex
+}
+
+type store struct {
+	db *pebble.DB
+	counters
 }
 
 func (s *store) get(keys [][]byte) [][]byte {
 	out := make([][]byte, len(keys))
-	var probes, hits, rbytes int
 	for i, k := range keys {
-		probes++
+		s.probes++
 		v, closer, err := s.db.Get(k)
 		if err == pebble.ErrNotFound {
 			continue
@@ -61,19 +62,27 @@ func (s *store) get(keys [][]byte) [][]byte {
 			panic(err)
 		}
 		out[i] = append([]byte(nil), v...)
-		hits++
-		rbytes += len(v)
+		s.hits++
+		s.rbytes += len(v)
 		closer.Close()
 	}
-	s.mu.Lock()
-	s.probes += probes
-	s.hits += hits
-	s.rbytes += rbytes
-	s.mu.Unlock()
 	return out
 }
 
+// put writes without an fsync. node records do not need one: nothing reads
+// them until HEAD names the digest they add up to, so a crash before putHead
+// leaves records no reader can reach.
 func (s *store) put(keys, vals [][]byte) {
+	s.commit(keys, vals, pebble.NoSync)
+}
+
+// putHead is the epoch's one durable write, and its one fsync -- O(1) in the
+// batch, however many records the epoch touched.
+func (s *store) putHead(dig []byte) {
+	s.commit([][]byte{headKey}, [][]byte{dig}, pebble.Sync)
+}
+
+func (s *store) commit(keys, vals [][]byte, opts *pebble.WriteOptions) {
 	b := s.db.NewBatch()
 	for i, k := range keys {
 		if err := b.Set(k, vals[i], nil); err != nil {
@@ -82,7 +91,7 @@ func (s *store) put(keys, vals [][]byte) {
 		s.wbytes += len(k) + len(vals[i])
 		s.writes++
 	}
-	if err := b.Commit(pebble.NoSync); err != nil {
+	if err := b.Commit(opts); err != nil {
 		panic(err)
 	}
 }
@@ -208,7 +217,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "seeded %d/%d in %v\n", done+n, *nSeed, time.Since(t0))
 		}
 	}
-	s.put([][]byte{headKey}, [][]byte{dig})
+	s.putHead(dig)
 	if err := db.Flush(); err != nil {
 		panic(err)
 	}
@@ -220,8 +229,8 @@ func main() {
 	}
 
 	// measured epochs.
-	base := *s
-	var tLoad, tUpd, tWrite time.Duration
+	base := s.counters
+	var tLoad, tUpd, tWrite, tSync time.Duration
 	var tapeBytes int
 	var warm *merkle.Map
 	for e := 0; e < *nEpochs; e++ {
@@ -240,8 +249,10 @@ func main() {
 		t2 := time.Now()
 		s.put(wk, wr)
 		dig = oc.Hash()
-		s.put([][]byte{headKey}, [][]byte{dig})
 		t3 := time.Now()
+		s.putHead(dig)
+		t4 := time.Now()
+		tSync += t4.Sub(t3)
 
 		tapeBytes += len(tape)
 		tLoad += t1.Sub(t0)
@@ -257,7 +268,7 @@ func main() {
 		}
 	}
 	n := float64(*nBatch * *nEpochs)
-	fmt.Printf("epoch:  %.1f us/insert (load %.1f, upd %.1f, write %.1f)  %.2f probes  %.2f hits  %.2f writes  %.0f B tape  |  %.2f s/epoch\n",
+	fmt.Printf("epoch:  %.1f us/insert (load %.1f, upd %.1f, write %.1f)  %.2f probes  %.2f hits  %.2f writes  %.0f B tape  |  %.2f s/epoch, HEAD fsync %.2f ms/epoch\n",
 		float64((tLoad+tUpd+tWrite).Microseconds())/n,
 		float64(tLoad.Microseconds())/n,
 		float64(tUpd.Microseconds())/n,
@@ -266,14 +277,15 @@ func main() {
 		float64(s.hits-base.hits)/n,
 		float64(s.writes-base.writes)/n,
 		float64(tapeBytes)/n,
-		float64((tLoad+tUpd+tWrite).Seconds())/float64(*nEpochs))
+		float64((tLoad+tUpd+tWrite).Seconds())/float64(*nEpochs),
+		float64(tSync.Microseconds())/1e3/float64(*nEpochs))
 
 	// lookups, from a cold page cache so the reads reach the device.
 	if err := db.Flush(); err != nil {
 		panic(err)
 	}
 	dropCaches()
-	base = *s
+	base = s.counters
 	ds := make([]time.Duration, 0, *nLookups)
 	for i := 0; i < *nLookups; i++ {
 		l := sample[rand.IntN(len(sample))]
@@ -302,7 +314,7 @@ func main() {
 		}
 		s.db = db
 		dropCaches()
-		base = *s
+		base = s.counters
 		ds = ds[:0]
 		for i := 0; i < *nLookups; i++ {
 			l := sample[rand.IntN(len(sample))]
@@ -333,7 +345,7 @@ func parseSweep(spec string) (out []int) {
 	return
 }
 
-func report(s *store, base store, ds []time.Duration, cacheMB int) {
+func report(s *store, base counters, ds []time.Duration, cacheMB int) {
 	sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
 	var sum time.Duration
 	for _, d := range ds {
