@@ -618,7 +618,9 @@ Local Set Default Proof Using "All".
   {|
     typed_pointsto_def l v dq :=
       (
-      "Updates" ∷ l.[(ktcore.AuditProof.t), "Updates"] ↦{dq} v.(ktcore.AuditProof.Updates') ∗
+      "MapLabels" ∷ l.[(ktcore.AuditProof.t), "MapLabels"] ↦{dq} v.(ktcore.AuditProof.MapLabels') ∗
+      "MapVals" ∷ l.[(ktcore.AuditProof.t), "MapVals"] ↦{dq} v.(ktcore.AuditProof.MapVals') ∗
+      "UpdProof" ∷ l.[(ktcore.AuditProof.t), "UpdProof"] ↦{dq} v.(ktcore.AuditProof.UpdProof') ∗
       "LinkSig" ∷ l.[(ktcore.AuditProof.t), "LinkSig"] ↦{dq} v.(ktcore.AuditProof.LinkSig') ∗
       "_" ∷ True
       )%I
@@ -629,18 +631,44 @@ Final Obligation. solve_typed_pointsto_agree. Qed.
    :
   IntoValTypedUnderlying (ktcore.AuditProof.t) (ktcore.AuditProofⁱᵐᵖˡ).
 Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance AuditProof_access_load_Updates l (v : (ktcore.AuditProof.t)) dq :
+#[global] Instance AuditProof_access_load_MapLabels l (v : (ktcore.AuditProof.t)) dq :
   AccessStrict
-    (l.[(ktcore.AuditProof.t), "Updates"] ↦{dq} (v.(ktcore.AuditProof.Updates')))
-    (l.[(ktcore.AuditProof.t), "Updates"] ↦{dq} (v.(ktcore.AuditProof.Updates')))
+    (l.[(ktcore.AuditProof.t), "MapLabels"] ↦{dq} (v.(ktcore.AuditProof.MapLabels')))
+    (l.[(ktcore.AuditProof.t), "MapLabels"] ↦{dq} (v.(ktcore.AuditProof.MapLabels')))
     (l ↦{dq} v) (l ↦{dq} v)%I.
 Proof. solve_pointsto_access_struct. Qed.
 
-#[global] Instance AuditProof_access_store_Updates l (v : (ktcore.AuditProof.t)) Updates' :
+#[global] Instance AuditProof_access_store_MapLabels l (v : (ktcore.AuditProof.t)) MapLabels' :
   AccessStrict
-    (l.[(ktcore.AuditProof.t), "Updates"] ↦ (v.(ktcore.AuditProof.Updates')))
-    (l.[(ktcore.AuditProof.t), "Updates"] ↦ Updates')
-    (l ↦ v) (l ↦ (v <|(ktcore.AuditProof.Updates') := Updates'|>))%I.
+    (l.[(ktcore.AuditProof.t), "MapLabels"] ↦ (v.(ktcore.AuditProof.MapLabels')))
+    (l.[(ktcore.AuditProof.t), "MapLabels"] ↦ MapLabels')
+    (l ↦ v) (l ↦ (v <|(ktcore.AuditProof.MapLabels') := MapLabels'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance AuditProof_access_load_MapVals l (v : (ktcore.AuditProof.t)) dq :
+  AccessStrict
+    (l.[(ktcore.AuditProof.t), "MapVals"] ↦{dq} (v.(ktcore.AuditProof.MapVals')))
+    (l.[(ktcore.AuditProof.t), "MapVals"] ↦{dq} (v.(ktcore.AuditProof.MapVals')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance AuditProof_access_store_MapVals l (v : (ktcore.AuditProof.t)) MapVals' :
+  AccessStrict
+    (l.[(ktcore.AuditProof.t), "MapVals"] ↦ (v.(ktcore.AuditProof.MapVals')))
+    (l.[(ktcore.AuditProof.t), "MapVals"] ↦ MapVals')
+    (l ↦ v) (l ↦ (v <|(ktcore.AuditProof.MapVals') := MapVals'|>))%I.
+Proof. solve_pointsto_access_struct. Qed.
+#[global] Instance AuditProof_access_load_UpdProof l (v : (ktcore.AuditProof.t)) dq :
+  AccessStrict
+    (l.[(ktcore.AuditProof.t), "UpdProof"] ↦{dq} (v.(ktcore.AuditProof.UpdProof')))
+    (l.[(ktcore.AuditProof.t), "UpdProof"] ↦{dq} (v.(ktcore.AuditProof.UpdProof')))
+    (l ↦{dq} v) (l ↦{dq} v)%I.
+Proof. solve_pointsto_access_struct. Qed.
+
+#[global] Instance AuditProof_access_store_UpdProof l (v : (ktcore.AuditProof.t)) UpdProof' :
+  AccessStrict
+    (l.[(ktcore.AuditProof.t), "UpdProof"] ↦ (v.(ktcore.AuditProof.UpdProof')))
+    (l.[(ktcore.AuditProof.t), "UpdProof"] ↦ UpdProof')
+    (l ↦ v) (l ↦ (v <|(ktcore.AuditProof.UpdProof') := UpdProof'|>))%I.
 Proof. solve_pointsto_access_struct. Qed.
 #[global] Instance AuditProof_access_load_LinkSig l (v : (ktcore.AuditProof.t)) dq :
   AccessStrict
@@ -658,74 +686,5 @@ Proof. solve_pointsto_access_struct. Qed.
 
 End def.
 End AuditProof.
-
-Module UpdateProof.
-Section def.
-
-Context `{!heapGS Σ}.
-Context {sem : go.Semantics}.
-Context {package_sem' : ktcore.Assumptions}.
-
-Local Set Default Proof Using "All".
-
-#[global]Program Instance UpdateProof_typed_pointsto  :
-  TypedPointsto (Σ:=Σ) (ktcore.UpdateProof.t) :=
-  {|
-    typed_pointsto_def l v dq :=
-      (
-      "MapLabel" ∷ l.[(ktcore.UpdateProof.t), "MapLabel"] ↦{dq} v.(ktcore.UpdateProof.MapLabel') ∗
-      "MapVal" ∷ l.[(ktcore.UpdateProof.t), "MapVal"] ↦{dq} v.(ktcore.UpdateProof.MapVal') ∗
-      "NonMembProof" ∷ l.[(ktcore.UpdateProof.t), "NonMembProof"] ↦{dq} v.(ktcore.UpdateProof.NonMembProof') ∗
-      "_" ∷ True
-      )%I
-  |}.
-Final Obligation. solve_typed_pointsto_agree. Qed.
-
-#[global] Instance UpdateProof_into_val_typed
-   :
-  IntoValTypedUnderlying (ktcore.UpdateProof.t) (ktcore.UpdateProofⁱᵐᵖˡ).
-Proof. solve_into_val_typed_struct. Qed.
-#[global] Instance UpdateProof_access_load_MapLabel l (v : (ktcore.UpdateProof.t)) dq :
-  AccessStrict
-    (l.[(ktcore.UpdateProof.t), "MapLabel"] ↦{dq} (v.(ktcore.UpdateProof.MapLabel')))
-    (l.[(ktcore.UpdateProof.t), "MapLabel"] ↦{dq} (v.(ktcore.UpdateProof.MapLabel')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance UpdateProof_access_store_MapLabel l (v : (ktcore.UpdateProof.t)) MapLabel' :
-  AccessStrict
-    (l.[(ktcore.UpdateProof.t), "MapLabel"] ↦ (v.(ktcore.UpdateProof.MapLabel')))
-    (l.[(ktcore.UpdateProof.t), "MapLabel"] ↦ MapLabel')
-    (l ↦ v) (l ↦ (v <|(ktcore.UpdateProof.MapLabel') := MapLabel'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance UpdateProof_access_load_MapVal l (v : (ktcore.UpdateProof.t)) dq :
-  AccessStrict
-    (l.[(ktcore.UpdateProof.t), "MapVal"] ↦{dq} (v.(ktcore.UpdateProof.MapVal')))
-    (l.[(ktcore.UpdateProof.t), "MapVal"] ↦{dq} (v.(ktcore.UpdateProof.MapVal')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance UpdateProof_access_store_MapVal l (v : (ktcore.UpdateProof.t)) MapVal' :
-  AccessStrict
-    (l.[(ktcore.UpdateProof.t), "MapVal"] ↦ (v.(ktcore.UpdateProof.MapVal')))
-    (l.[(ktcore.UpdateProof.t), "MapVal"] ↦ MapVal')
-    (l ↦ v) (l ↦ (v <|(ktcore.UpdateProof.MapVal') := MapVal'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-#[global] Instance UpdateProof_access_load_NonMembProof l (v : (ktcore.UpdateProof.t)) dq :
-  AccessStrict
-    (l.[(ktcore.UpdateProof.t), "NonMembProof"] ↦{dq} (v.(ktcore.UpdateProof.NonMembProof')))
-    (l.[(ktcore.UpdateProof.t), "NonMembProof"] ↦{dq} (v.(ktcore.UpdateProof.NonMembProof')))
-    (l ↦{dq} v) (l ↦{dq} v)%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-#[global] Instance UpdateProof_access_store_NonMembProof l (v : (ktcore.UpdateProof.t)) NonMembProof' :
-  AccessStrict
-    (l.[(ktcore.UpdateProof.t), "NonMembProof"] ↦ (v.(ktcore.UpdateProof.NonMembProof')))
-    (l.[(ktcore.UpdateProof.t), "NonMembProof"] ↦ NonMembProof')
-    (l ↦ v) (l ↦ (v <|(ktcore.UpdateProof.NonMembProof') := NonMembProof'|>))%I.
-Proof. solve_pointsto_access_struct. Qed.
-
-End def.
-End UpdateProof.
 
 End ktcore.

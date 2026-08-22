@@ -1092,8 +1092,10 @@ Definition Server__Putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
 
 (* History gives key history for uid, excluding first prevVerLen versions.
    the caller already saw prevEpoch.
+   TODO: i don't think caller needs to have seen prevEpoch.
+   strengthen API to use prevEpochs, which allows prevEpochs=0.
 
-   go: server.go:74:18 *)
+   go: server.go:76:18 *)
 Definition Server__Historyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "prevEpoch" "prevVerLen",
     with_defer: (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1150,7 +1152,7 @@ Definition Server__Historyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
 
 (* Audit errors if args out of bounds.
 
-   go: server.go:96:18 *)
+   go: server.go:98:18 *)
 Definition Server__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "prevEpoch",
     with_defer: (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1181,7 +1183,7 @@ Definition Server__Auditⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  ("proof" <-[go.SliceType (go.PointerType ktcore.AuditProof)] "$r0");;;
     return: (![go.SliceType (go.PointerType ktcore.AuditProof)] "proof", ![go.bool] "err")).
 
-(* go: server.go:119:18 *)
+(* go: server.go:121:18 *)
 Definition Server__workerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     exception_do (let: "s" := (GoAlloc (go.PointerType Server) "s") in
@@ -1200,7 +1202,7 @@ Definition Server__workerⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
 (* New starts a [Server] with epochTime, the time between epochs.
    AKD uses an epochTime of ~1 second.
 
-   go: server.go:134:6 *)
+   go: server.go:136:6 *)
 Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "epochTime",
     exception_do (let: "epochTime" := (GoAlloc time.Duration "epochTime") in
@@ -1286,7 +1288,7 @@ Definition Newⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     do:  (Fork ("$go" #()));;;
     return: (![go.PointerType Server] "s", ![cryptoffi.SigPublicKey] "sigPk")).
 
-(* go: server.go:160:18 *)
+(* go: server.go:162:18 *)
 Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" <>,
     exception_do (let: "work" := (GoAlloc (go.SliceType (go.PointerType work)) (GoZeroVal (go.SliceType (go.PointerType work)) #())) in
@@ -1311,7 +1313,7 @@ Definition Server__getWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
         do:  ("work" <-[go.SliceType (go.PointerType work)] "$r0")
         ))]))).
 
-(* go: server.go:174:18 *)
+(* go: server.go:176:18 *)
 Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "work",
     with_defer: (let: "s" := (GoAlloc (go.PointerType Server) "s") in
@@ -1323,10 +1325,14 @@ Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
       "$f" #();;
       "$oldf" #()
       )));;;
-    let: "upd" := (GoAlloc (go.SliceType (go.PointerType ktcore.UpdateProof)) (GoZeroVal (go.SliceType (go.PointerType ktcore.UpdateProof)) #())) in
-    let: "$r0" := ((FuncResolve go.make3 [go.SliceType (go.PointerType ktcore.UpdateProof)] #()) #(W64 0) (let: "$a0" := (![go.SliceType (go.PointerType work)] "work") in
+    let: "labels" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType (go.SliceType go.byte)] #()) #(W64 0) (let: "$a0" := (![go.SliceType (go.PointerType work)] "work") in
     (FuncResolve go.len [go.SliceType (go.PointerType work)] #()) "$a0")) in
-    do:  ("upd" <-[go.SliceType (go.PointerType ktcore.UpdateProof)] "$r0");;;
+    do:  ("labels" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
+    let: "vals" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType (go.SliceType go.byte)] #()) #(W64 0) (let: "$a0" := (![go.SliceType (go.PointerType work)] "work") in
+    (FuncResolve go.len [go.SliceType (go.PointerType work)] #()) "$a0")) in
+    do:  ("vals" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
     let: "$range" := (![go.SliceType (go.PointerType work)] "work") in
     (let: "w" := (GoAlloc (go.PointerType work) (GoZeroVal (go.PointerType work) #())) in
     slice.for_range (go.PointerType work) "$range" (λ: "$key" "$value",
@@ -1339,27 +1345,32 @@ Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
       (if: Convert go.untyped_bool go.bool ((![go.uint64] (StructFieldRef work "ver"%go (![go.PointerType work] "w"))) ≠⟨go.uint64⟩ (![go.uint64] "nextVer"))
       then continue: #()
       else do:  #());;;
-      let: "proof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef work "mapLabel"%go (![go.PointerType work] "w"))) in
-      let: "$a1" := (![go.SliceType go.byte] (StructFieldRef work "mapVal"%go (![go.PointerType work] "w"))) in
-      (MethodResolve (go.PointerType merkle.Map) "Put"%go (![go.PointerType merkle.Map] (StructFieldRef keyStore "hidden"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s")))))) "$a0" "$a1") in
-      do:  ("proof" <-[go.SliceType go.byte] "$r0");;;
       let: "$r0" := (let: "$a0" := (map.lookup1 go.uint64 (go.SliceType (go.SliceType go.byte)) (![go.MapType go.uint64 (go.SliceType (go.SliceType go.byte))] (StructFieldRef keyStore "plain"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s"))))) (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "w")))) in
       let: "$a1" := ((let: "$sl0" := (![go.SliceType go.byte] (StructFieldRef work "pk"%go (![go.PointerType work] "w"))) in
       CompositeLiteral (go.SliceType (go.SliceType go.byte)) (LiteralValue [KeyedElement None (ElementExpression (go.SliceType go.byte) "$sl0")]))) in
       (FuncResolve go.append [go.SliceType (go.SliceType go.byte)] #()) "$a0" "$a1") in
       do:  (map.insert go.uint64 (![go.MapType go.uint64 (go.SliceType (go.SliceType go.byte))] (StructFieldRef keyStore "plain"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s"))))) (![go.uint64] (StructFieldRef work "uid"%go (![go.PointerType work] "w"))) "$r0");;;
-      let: "info" := (GoAlloc (go.PointerType ktcore.UpdateProof) (GoZeroVal (go.PointerType ktcore.UpdateProof) #())) in
-      let: "$r0" := (GoAlloc ktcore.UpdateProof (let: "$v0" := (![go.SliceType go.byte] (StructFieldRef work "mapLabel"%go (![go.PointerType work] "w"))) in
-      let: "$v1" := (![go.SliceType go.byte] (StructFieldRef work "mapVal"%go (![go.PointerType work] "w"))) in
-      let: "$v2" := (![go.SliceType go.byte] "proof") in
-      CompositeLiteral ktcore.UpdateProof (LiteralValue [KeyedElement (Some (KeyField "MapLabel"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "MapVal"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "NonMembProof"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
-      do:  ("info" <-[go.PointerType ktcore.UpdateProof] "$r0");;;
-      let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType ktcore.UpdateProof)] "upd") in
-      let: "$a1" := ((let: "$sl0" := (![go.PointerType ktcore.UpdateProof] "info") in
-      CompositeLiteral (go.SliceType (go.PointerType ktcore.UpdateProof)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType ktcore.UpdateProof) "$sl0")]))) in
-      (FuncResolve go.append [go.SliceType (go.PointerType ktcore.UpdateProof)] #()) "$a0" "$a1") in
-      do:  ("upd" <-[go.SliceType (go.PointerType ktcore.UpdateProof)] "$r0")));;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+      let: "$a1" := ((let: "$sl0" := (![go.SliceType go.byte] (StructFieldRef work "mapLabel"%go (![go.PointerType work] "w"))) in
+      CompositeLiteral (go.SliceType (go.SliceType go.byte)) (LiteralValue [KeyedElement None (ElementExpression (go.SliceType go.byte) "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType (go.SliceType go.byte)] #()) "$a0" "$a1") in
+      do:  ("labels" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+      let: "$a1" := ((let: "$sl0" := (![go.SliceType go.byte] (StructFieldRef work "mapVal"%go (![go.PointerType work] "w"))) in
+      CompositeLiteral (go.SliceType (go.SliceType go.byte)) (LiteralValue [KeyedElement None (ElementExpression (go.SliceType go.byte) "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType (go.SliceType go.byte)] #()) "$a0" "$a1") in
+      do:  ("vals" <-[go.SliceType (go.SliceType go.byte)] "$r0")));;;
+    let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "updProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    let: "$a1" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+    (MethodResolve (go.PointerType merkle.Map) "Update"%go (![go.PointerType merkle.Map] (StructFieldRef keyStore "hidden"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s")))))) "$a0" "$a1") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    do:  ("updProof" <-[go.SliceType go.byte] "$r0");;;
+    do:  ("err" <-[go.bool] "$r1");;;
+    do:  (let: "$a0" := (⟨go.bool⟩! (![go.bool] "err")) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
     let: "dig" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "$r0" := ((MethodResolve (go.PointerType merkle.Map) "Hash"%go (![go.PointerType merkle.Map] (StructFieldRef keyStore "hidden"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s")))))) #()) in
     do:  ("dig" <-[go.SliceType go.byte] "$r0");;;
@@ -1377,10 +1388,15 @@ Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     let: "$a2" := (![go.SliceType go.byte] "link") in
     (FuncResolve ktcore.SignLink [] #()) "$a0" "$a1" "$a2") in
     do:  ("sig" <-[go.SliceType go.byte] "$r0");;;
+    let: "p" := (GoAlloc (go.PointerType ktcore.AuditProof) (GoZeroVal (go.PointerType ktcore.AuditProof) #())) in
+    let: "$r0" := (GoAlloc ktcore.AuditProof (let: "$v0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    let: "$v1" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+    let: "$v2" := (![go.SliceType go.byte] "updProof") in
+    let: "$v3" := (![go.SliceType go.byte] "sig") in
+    CompositeLiteral ktcore.AuditProof (LiteralValue [KeyedElement (Some (KeyField "MapLabels"%go)) (ElementExpression (go.SliceType (go.SliceType go.byte)) "$v0"); KeyedElement (Some (KeyField "MapVals"%go)) (ElementExpression (go.SliceType (go.SliceType go.byte)) "$v1"); KeyedElement (Some (KeyField "UpdProof"%go)) (ElementExpression (go.SliceType go.byte) "$v2"); KeyedElement (Some (KeyField "LinkSig"%go)) (ElementExpression (go.SliceType go.byte) "$v3")]))) in
+    do:  ("p" <-[go.PointerType ktcore.AuditProof] "$r0");;;
     let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType ktcore.AuditProof)] (StructFieldRef history "audits"%go (![go.PointerType history] (StructFieldRef Server "hist"%go (![go.PointerType Server] "s"))))) in
-    let: "$a1" := ((let: "$sl0" := (GoAlloc ktcore.AuditProof (let: "$v0" := (![go.SliceType (go.PointerType ktcore.UpdateProof)] "upd") in
-    let: "$v1" := (![go.SliceType go.byte] "sig") in
-    CompositeLiteral ktcore.AuditProof (LiteralValue [KeyedElement (Some (KeyField "Updates"%go)) (ElementExpression (go.SliceType (go.PointerType ktcore.UpdateProof)) "$v0"); KeyedElement (Some (KeyField "LinkSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1")]))) in
+    let: "$a1" := ((let: "$sl0" := (![go.PointerType ktcore.AuditProof] "p") in
     CompositeLiteral (go.SliceType (go.PointerType ktcore.AuditProof)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType ktcore.AuditProof) "$sl0")]))) in
     (FuncResolve go.append [go.SliceType (go.PointerType ktcore.AuditProof)] #()) "$a0" "$a1") in
     do:  ((StructFieldRef history "audits"%go (![go.PointerType history] (StructFieldRef Server "hist"%go (![go.PointerType Server] "s")))) <-[go.SliceType (go.PointerType ktcore.AuditProof)] "$r0");;;
@@ -1388,7 +1404,7 @@ Definition Server__doWorkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
 
 (* getHist returns a history of membership proofs for all post-prefix versions.
 
-   go: server.go:200:18 *)
+   go: server.go:206:18 *)
 Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "prefixLen",
     exception_do (let: "hist" := (GoAlloc (go.SliceType (go.PointerType ktcore.Memb)) (GoZeroVal (go.SliceType (go.PointerType ktcore.Memb)) #())) in
@@ -1418,16 +1434,21 @@ Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
       let: "$r1" := "$ret1" in
       do:  ("label" <-[go.SliceType go.byte] "$r0");;;
       do:  ("labelProof" <-[go.SliceType go.byte] "$r1");;;
+      let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
       let: "mapProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
       let: "inMap" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "label") in
+      let: ((("$ret0", "$ret1"), "$ret2"), "$ret3") := (let: "$a0" := (![go.SliceType go.byte] "label") in
       (MethodResolve (go.PointerType merkle.Map) "Prove"%go (![go.PointerType merkle.Map] (StructFieldRef keyStore "hidden"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s")))))) "$a0") in
       let: "$r0" := "$ret0" in
       let: "$r1" := "$ret1" in
       let: "$r2" := "$ret2" in
+      let: "$r3" := "$ret3" in
       do:  ("inMap" <-[go.bool] "$r0");;;
       do:  "$r1";;;
       do:  ("mapProof" <-[go.SliceType go.byte] "$r2");;;
+      do:  ("err" <-[go.bool] "$r3");;;
+      do:  (let: "$a0" := (⟨go.bool⟩! (![go.bool] "err")) in
+      (FuncResolve std.Assert [] #()) "$a0");;;
       do:  (let: "$a0" := (![go.bool] "inMap") in
       (FuncResolve std.Assert [] #()) "$a0");;;
       let: "rand" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
@@ -1455,7 +1476,7 @@ Definition Server__getHistⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
 
 (* getBound returns a non-membership proof for the boundary version.
 
-   go: server.go:217:18 *)
+   go: server.go:224:18 *)
 Definition Server__getBoundⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "s" "uid" "numVers",
     exception_do (let: "bound" := (GoAlloc (go.PointerType ktcore.NonMemb) (GoZeroVal (go.PointerType ktcore.NonMemb) #())) in
@@ -1472,16 +1493,21 @@ Definition Server__getBoundⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
     let: "$r1" := "$ret1" in
     do:  ("label" <-[go.SliceType go.byte] "$r0");;;
     do:  ("labelProof" <-[go.SliceType go.byte] "$r1");;;
+    let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "mapProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "inMap" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "label") in
+    let: ((("$ret0", "$ret1"), "$ret2"), "$ret3") := (let: "$a0" := (![go.SliceType go.byte] "label") in
     (MethodResolve (go.PointerType merkle.Map) "Prove"%go (![go.PointerType merkle.Map] (StructFieldRef keyStore "hidden"%go (![go.PointerType keyStore] (StructFieldRef Server "keys"%go (![go.PointerType Server] "s")))))) "$a0") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
+    let: "$r3" := "$ret3" in
     do:  ("inMap" <-[go.bool] "$r0");;;
     do:  "$r1";;;
     do:  ("mapProof" <-[go.SliceType go.byte] "$r2");;;
+    do:  ("err" <-[go.bool] "$r3");;;
+    do:  (let: "$a0" := (⟨go.bool⟩! (![go.bool] "err")) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
     do:  (let: "$a0" := (⟨go.bool⟩! (![go.bool] "inMap")) in
     (FuncResolve std.Assert [] #()) "$a0");;;
     let: "$r0" := (GoAlloc ktcore.NonMemb (let: "$v0" := (![go.SliceType go.byte] "labelProof") in

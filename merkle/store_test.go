@@ -290,3 +290,46 @@ func TestWarmFromTape(t *testing.T) {
 	t.Logf("probes/lookup: warm %.1f, cold %.1f",
 		float64(warmProbes)/500, float64(coldProbes)/500)
 }
+
+func TestEvictPath(t *testing.T) {
+	mem := &Map{}
+	labels, vals := mkSeeded(20_000, 6)
+	if _, err := mem.Update(labels, vals); err {
+		t.Fatal()
+	}
+	dig := mem.Hash()
+	store := newMemStore()
+	store.put(mem.Records())
+
+	// evicting one path must leave the digest alone and must leave every
+	// other loaded path where it was.
+	m := NewCut(dig)
+	for i := 0; i < 50; i++ {
+		store.loadFrom(t, m, labels[i], 30)
+	}
+	if !bytes.Equal(m.Hash(), dig) {
+		t.Fatal()
+	}
+	m.EvictPath(labels[0], 8)
+	if !bytes.Equal(m.Hash(), dig) {
+		t.Fatal("evict changed the digest")
+	}
+	if _, _, _, err := m.Prove(labels[0]); !err {
+		t.Fatal("evicted path still answered")
+	}
+	for i := 1; i < 50; i++ {
+		if _, _, _, err := m.Prove(labels[i]); err {
+			// a sibling path may share the evicted sub-tree, so only
+			// require that reloading it works.
+			store.loadFrom(t, m, labels[i], 30)
+		}
+		inMap, val, proof, err := m.Prove(labels[i])
+		if err || !inMap {
+			t.Fatal("reload after evict")
+		}
+		h, err := VerifyMemb(labels[i], val, proof)
+		if err || !bytes.Equal(h, dig) {
+			t.Fatal()
+		}
+	}
+}

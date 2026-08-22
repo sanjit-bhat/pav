@@ -71,10 +71,14 @@ func (s *snapshot) group(key string) uint64 {
 	return h % s.ngroups
 }
 
+// readSid is a timestamp site reserved for snapshot reads, so a read never
+// picks the same timestamp as a writer and abort it.
+const readSid = 1023
+
 func (s *snapshot) begin() uint64 {
 	ts := trusted_time.GetTime()
 	n := params.N_TXN_SITES
-	tid := (ts + n) / n * n
+	tid := (ts+n)/n*n + readSid
 	for trusted_time.GetTime() <= tid {
 	}
 	for _, gcs := range s.pool {
@@ -104,6 +108,18 @@ func (s *store) get(keys [][]byte) [][]byte {
 	}
 	return s.getTxn(keys)
 }
+
+// headKey holds the published epoch: its number and its digest. it is written
+// last, and read in the same snapshot as the nodes.
+//
+// that is the whole of R2 and R3 under MVCC. the node writes for an epoch may
+// land in any order, in as many transactions as convenient, because nothing
+// reads them until HEAD names the digest they add up to, and a reader that
+// took HEAD at ts sees exactly the versions that were committed by ts. a crash
+// before the HEAD write leaves records no reader can reach. so the atomic step
+// is one key, O(1) in the batch, with no transaction over the batch and no
+// write-ordering discipline beyond "HEAD last".
+var headKey = append(make([]byte, merkle.StoreKeyLen-1), 0xff)
 
 func (s *store) getSnap(keys [][]byte) [][]byte {
 	out := make([][]byte, len(keys))
@@ -317,6 +333,7 @@ func main() {
 	t0 := time.Now()
 	sk, sr := mem.Records()
 	s.put(sk, sr)
+	s.put([][]byte{headKey}, [][]byte{dig})
 	fmt.Fprintf(os.Stderr, "seeded %d leaves as %d records in %v\n", *nSeed, len(sk), time.Since(t0))
 	mem = nil
 
@@ -343,9 +360,11 @@ func main() {
 		wk, wr := oc.Records()
 		t2 := time.Now()
 		s.put(wk, wr)
+		// HEAD last, and on its own, so it is the one atomic step.
+		dig = oc.Hash()
+		s.put([][]byte{headKey}, [][]byte{dig})
 		t3 := time.Now()
 
-		dig = oc.Hash()
 		tapeBytes += len(tape)
 		if *warmD >= 0 {
 			w, hOld, err := merkle.ApplyUpdate(labels, vals, tape)
@@ -377,9 +396,12 @@ func main() {
 	for i := 0; i < *nLookups; i++ {
 		l := seedLabels[rand.IntN(len(seedLabels))]
 		t := time.Now()
+		// HEAD comes back in the same snapshot as the path, so the records
+		// are the ones the digest it names is made of.
+		head := s.get([][]byte{headKey})[0]
 		m := warm
-		if m == nil {
-			m = merkle.NewCut(dig)
+		if m == nil || string(head) != string(dig) {
+			m = merkle.NewCut(head)
 		}
 		loadBatch(s, m, [][]byte{l}, maxDRead)
 		inMap, _, _, err := m.Prove(l)
@@ -387,7 +409,7 @@ func main() {
 			panic("lookup")
 		}
 		if warm != nil {
-			warm.Evict(uint64(*warmD))
+			warm.EvictPath(l, uint64(*warmD))
 		}
 		ds = append(ds, time.Since(t))
 	}

@@ -1,3 +1,5 @@
+go_path = "."
+
 packages = [
   "./advrpc",
   "./alicebob",

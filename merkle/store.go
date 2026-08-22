@@ -107,6 +107,31 @@ func (m *Map) Evict(depth uint64) {
 	evict(&m.root, 0, depth)
 }
 
+// EvictPath is Evict along one label, which is what undoes one LoadPath.
+// walking the whole map to shed one path costs more than the lookup did.
+func (m *Map) EvictPath(label []byte, depth uint64) {
+	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
+	evictPath(&m.root, 0, label, depth)
+}
+
+func evictPath(n0 **node, depth uint64, label []byte, maxD uint64) {
+	n := *n0
+	if n == nil {
+		return
+	}
+	if n.nodeTy == cutNodeTy {
+		return
+	}
+	if depth >= maxD {
+		*n0 = &node{nodeTy: cutNodeTy, hash: n.hash}
+		return
+	}
+	if n.nodeTy == innerNodeTy {
+		c, _ := n.getChild(label, depth)
+		evictPath(c, depth+1, label, maxD)
+	}
+}
+
 func evict(n0 **node, depth, maxD uint64) {
 	n := *n0
 	if n == nil {

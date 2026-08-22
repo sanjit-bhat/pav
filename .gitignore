@@ -2,3 +2,4 @@
 *.test
 *.prof
 etc/bench/tulipbench/tulipbench
+etc/bench/ktbench/ktbench

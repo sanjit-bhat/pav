@@ -41,6 +41,16 @@ Definition innerNodeTy {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #
 
 Definition maxDepth {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 256).
 
+Definition StoreKeyLen {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 34).
+
+Definition tapeSplit {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W8 0).
+
+Definition tapeEmpty {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W8 1).
+
+Definition tapeCut {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W8 2).
+
+Definition tapeLeaf {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W8 3).
+
 Definition emptyHash {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.emptyHash"%go.
 
 Definition put {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.put"%go.
@@ -50,8 +60,6 @@ Definition getProofCap {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_strin
 Definition VerifyMemb {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.VerifyMemb"%go.
 
 Definition VerifyNonMemb {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.VerifyNonMemb"%go.
-
-Definition VerifyUpdate {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.VerifyUpdate"%go.
 
 Definition proofToTree {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.proofToTree"%go.
 
@@ -69,30 +77,51 @@ Definition ProofEncode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_strin
 
 Definition ProofDecode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.ProofDecode"%go.
 
+Definition StoreKey {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.StoreKey"%go.
+
+Definition PathKeys {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.PathKeys"%go.
+
+Definition firstCut {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.firstCut"%go.
+
+Definition evictPath {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.evictPath"%go.
+
+Definition evict {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.evict"%go.
+
+Definition NewCut {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.NewCut"%go.
+
+Definition mkCut {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.mkCut"%go.
+
+Definition loadPath {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.loadPath"%go.
+
+Definition records {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.records"%go.
+
+Definition encodeNode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.encodeNode"%go.
+
+Definition decodeNode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.decodeNode"%go.
+
+Definition update {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.update"%go.
+
+Definition putAll {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.putAll"%go.
+
+Definition partition {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.partition"%go.
+
+Definition VerifyUpdate {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.VerifyUpdate"%go.
+
+Definition ApplyUpdate {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.ApplyUpdate"%go.
+
+Definition tapeToTree {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/merkle.tapeToTree"%go.
+
 (* Put adds the leaf (label, val), storing immutable references to both.
    for liveness and safety reasons, it expects the label to have fixed length.
 
    go: merkle.go:60:15 *)
 Definition Map__Putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" "label" "val",
-    exception_do (let: "updProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "m" := (GoAlloc (go.PointerType Map) "m") in
+    exception_do (let: "m" := (GoAlloc (go.PointerType Map) "m") in
     let: "val" := (GoAlloc (go.SliceType go.byte) "val") in
     let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
     do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "label") in
     (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) =⟨go.uint64⟩ cryptoffi.HashLen) in
-    (FuncResolve std.Assert [] #()) "$a0");;;
-    let: "inMap" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "label") in
-    let: "$a1" := #true in
-    (MethodResolve (go.PointerType node) "prove"%go (![go.PointerType node] (StructFieldRef Map "root"%go (![go.PointerType Map] "m")))) "$a0" "$a1") in
-    let: "$r0" := "$ret0" in
-    let: "$r1" := "$ret1" in
-    let: "$r2" := "$ret2" in
-    do:  ("inMap" <-[go.bool] "$r0");;;
-    do:  "$r1";;;
-    do:  ("updProof" <-[go.SliceType go.byte] "$r2");;;
-    do:  (let: "$a0" := (⟨go.bool⟩! (![go.bool] "inMap")) in
     (FuncResolve std.Assert [] #()) "$a0");;;
     do:  (let: "$a0" := (⟨go.bool⟩! (let: "$a0" := (StructFieldRef Map "root"%go (![go.PointerType Map] "m")) in
     let: "$a1" := #(W64 0) in
@@ -100,13 +129,14 @@ Definition Map__Putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
     let: "$a3" := (![go.SliceType go.byte] "val") in
     (FuncResolve put [] #()) "$a0" "$a1" "$a2" "$a3")) in
     (FuncResolve std.Assert [] #()) "$a0");;;
-    return: (![go.SliceType go.byte] "updProof")).
+    return: #()).
 
 (* put inserts leaf node (label, val) into the n0 sub-tree.
-   it errors iff there's an insert into a cut node, since that almost always
-   leaves the tree in an unintended state.
+   it errors on an insert into a cut node, since that almost always leaves the
+   tree in an unintended state, and on a label already in the sub-tree, since
+   every caller only ever inserts fresh labels.
 
-   go: merkle.go:74:6 *)
+   go: merkle.go:69:6 *)
 Definition putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n0" "depth" "label" "val",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -140,14 +170,7 @@ Definition putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
       (if: let: "$a0" := (![go.SliceType go.byte] (StructFieldRef node "label"%go (![go.PointerType node] "n"))) in
       let: "$a1" := (![go.SliceType go.byte] "label") in
       (FuncResolve bytes.Equal [] #()) "$a0" "$a1"
-      then
-        let: "$r0" := (![go.SliceType go.byte] "val") in
-        do:  ((StructFieldRef node "val"%go (![go.PointerType node] "n")) <-[go.SliceType go.byte] "$r0");;;
-        let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "label") in
-        let: "$a1" := (![go.SliceType go.byte] "val") in
-        (FuncResolve compLeafHash [] #()) "$a0" "$a1") in
-        do:  ((StructFieldRef node "hash"%go (![go.PointerType node] "n")) <-[go.SliceType go.byte] "$r0");;;
-        return: (![go.bool] "err")
+      then return: (#true)
       else do:  #());;;
       let: "inner" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
       let: "$r0" := (GoAlloc node (let: "$v0" := innerNodeTy in
@@ -215,11 +238,14 @@ Definition putⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :
     return: (#true)).
 
 (* Prove the membership of label.
+   it errors iff label's path runs into a cut, i.e. the map is out-of-core and
+   the path was not loaded.
 
-   go: merkle.go:121:15 *)
+   go: merkle.go:115:15 *)
 Definition Map__Proveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" "label",
-    exception_do (let: "entryProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "entryProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "val" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "inMap" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "m" := (GoAlloc (go.PointerType Map) "m") in
@@ -227,17 +253,16 @@ Definition Map__Proveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
     do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "label") in
     (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) =⟨go.uint64⟩ cryptoffi.HashLen) in
     (FuncResolve std.Assert [] #()) "$a0");;;
-    let: (("$ret0", "$ret1"), "$ret2") := ((let: "$a0" := (![go.SliceType go.byte] "label") in
+    let: ((("$ret0", "$ret1"), "$ret2"), "$ret3") := ((let: "$a0" := (![go.SliceType go.byte] "label") in
     let: "$a1" := #true in
     (MethodResolve (go.PointerType node) "prove"%go (![go.PointerType node] (StructFieldRef Map "root"%go (![go.PointerType Map] "m")))) "$a0" "$a1")) in
-    return: ("$ret0", "$ret1", "$ret2")).
+    return: ("$ret0", "$ret1", "$ret2", "$ret3")).
 
-(* prove expects no cut nodes along label.
-
-   go: merkle.go:129:16 *)
+(* go: merkle.go:120:16 *)
 Definition node__proveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n" "label" "getProof",
-    exception_do (let: "proof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "proof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "val" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "inTree" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "n" := (GoAlloc (go.PointerType node) "n") in
@@ -245,7 +270,7 @@ Definition node__proveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
     let: "foundLabel" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "found" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: ((("$ret0", "$ret1"), "$ret2"), "$ret3") := (let: "$a0" := #(W64 0) in
+    let: (((("$ret0", "$ret1"), "$ret2"), "$ret3"), "$ret4") := (let: "$a0" := #(W64 0) in
     let: "$a1" := (![go.SliceType go.byte] "label") in
     let: "$a2" := (![go.bool] "getProof") in
     (MethodResolve (go.PointerType node) "find"%go (![go.PointerType node] "n")) "$a0" "$a1" "$a2") in
@@ -253,10 +278,15 @@ Definition node__proveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
     let: "$r3" := "$ret3" in
+    let: "$r4" := "$ret4" in
     do:  ("found" <-[go.bool] "$r0");;;
     do:  ("foundLabel" <-[go.SliceType go.byte] "$r1");;;
     do:  ("val" <-[go.SliceType go.byte] "$r2");;;
     do:  ("proof" <-[go.SliceType go.byte] "$r3");;;
+    do:  ("err" <-[go.bool] "$r4");;;
+    (if: ![go.bool] "err"
+    then return: (#false, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
     (if: ![go.bool] "getProof"
     then
       do:  (let: "$a0" := (![go.SliceType go.byte] "proof") in
@@ -281,7 +311,7 @@ Definition node__proveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
         (FuncResolve marshal.WriteInt [] #()) "$a0" "$a1") in
         do:  ("proof" <-[go.SliceType go.byte] "$r0")
       else do:  #());;;
-      return: (![go.bool] "inTree", ![go.SliceType go.byte] "val", ![go.SliceType go.byte] "proof")
+      return: (![go.bool] "inTree", ![go.SliceType go.byte] "val", ![go.SliceType go.byte] "proof", ![go.bool] "err")
     else do:  #());;;
     (if: (⟨go.bool⟩! (let: "$a0" := (![go.SliceType go.byte] "foundLabel") in
     let: "$a1" := (![go.SliceType go.byte] "label") in
@@ -312,7 +342,7 @@ Definition node__proveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
         (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1") in
         do:  ("proof" <-[go.SliceType go.byte] "$r0")
       else do:  #());;;
-      return: (![go.bool] "inTree", ![go.SliceType go.byte] "val", ![go.SliceType go.byte] "proof")
+      return: (![go.bool] "inTree", ![go.SliceType go.byte] "val", ![go.SliceType go.byte] "proof", ![go.bool] "err")
     else do:  #());;;
     (if: ![go.bool] "getProof"
     then
@@ -331,15 +361,16 @@ Definition node__proveⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     else do:  #());;;
     let: "$r0" := #true in
     do:  ("inTree" <-[go.bool] "$r0");;;
-    return: (![go.bool] "inTree", ![go.SliceType go.byte] "val", ![go.SliceType go.byte] "proof")).
+    return: (![go.bool] "inTree", ![go.SliceType go.byte] "val", ![go.SliceType go.byte] "proof", ![go.bool] "err")).
 
 (* find searches the tree for a leaf node down path label.
-   it expects no cut nodes along label.
+   it errors iff it runs into a cut, which hides whether label is there.
 
-   go: merkle.go:164:16 *)
+   go: merkle.go:158:16 *)
 Definition node__findⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n" "depth" "label" "getProof",
-    exception_do (let: "sibs" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "sibs" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "foundVal" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "foundLabel" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
     let: "found" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -355,7 +386,7 @@ Definition node__findⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
         (FuncResolve getProofCap [] #()) "$a0")) in
         do:  ("sibs" <-[go.SliceType go.byte] "$r0")
       else do:  #());;;
-      return: (![go.bool] "found", ![go.SliceType go.byte] "foundLabel", ![go.SliceType go.byte] "foundVal", ![go.SliceType go.byte] "sibs")
+      return: (![go.bool] "found", ![go.SliceType go.byte] "foundLabel", ![go.SliceType go.byte] "foundVal", ![go.SliceType go.byte] "sibs", ![go.bool] "err")
     else do:  #());;;
     (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ leafNodeTy)
     then
@@ -371,7 +402,7 @@ Definition node__findⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
         (FuncResolve getProofCap [] #()) "$a0")) in
         do:  ("sibs" <-[go.SliceType go.byte] "$r0")
       else do:  #());;;
-      return: (![go.bool] "found", ![go.SliceType go.byte] "foundLabel", ![go.SliceType go.byte] "foundVal", ![go.SliceType go.byte] "sibs")
+      return: (![go.bool] "found", ![go.SliceType go.byte] "foundLabel", ![go.SliceType go.byte] "foundVal", ![go.SliceType go.byte] "sibs", ![go.bool] "err")
     else do:  #());;;
     (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ innerNodeTy)
     then
@@ -384,7 +415,7 @@ Definition node__findⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
       let: "$r1" := "$ret1" in
       do:  ("child" <-[go.PointerType (go.PointerType node)] "$r0");;;
       do:  ("sib" <-[go.PointerType (go.PointerType node)] "$r1");;;
-      let: ((("$ret0", "$ret1"), "$ret2"), "$ret3") := (let: "$a0" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: (((("$ret0", "$ret1"), "$ret2"), "$ret3"), "$ret4") := (let: "$a0" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
       let: "$a1" := (![go.SliceType go.byte] "label") in
       let: "$a2" := (![go.bool] "getProof") in
       (MethodResolve (go.PointerType node) "find"%go (![go.PointerType node] (![go.PointerType (go.PointerType node)] "child"))) "$a0" "$a1" "$a2") in
@@ -392,10 +423,15 @@ Definition node__findⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
       let: "$r1" := "$ret1" in
       let: "$r2" := "$ret2" in
       let: "$r3" := "$ret3" in
+      let: "$r4" := "$ret4" in
       do:  ("found" <-[go.bool] "$r0");;;
       do:  ("foundLabel" <-[go.SliceType go.byte] "$r1");;;
       do:  ("foundVal" <-[go.SliceType go.byte] "$r2");;;
       do:  ("sibs" <-[go.SliceType go.byte] "$r3");;;
+      do:  ("err" <-[go.bool] "$r4");;;
+      (if: ![go.bool] "err"
+      then return: (#false, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+      else do:  #());;;
       (if: ![go.bool] "getProof"
       then
         let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "sibs") in
@@ -403,12 +439,13 @@ Definition node__findⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
         (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
         do:  ("sibs" <-[go.SliceType go.byte] "$r0")
       else do:  #());;;
-      return: (![go.bool] "found", ![go.SliceType go.byte] "foundLabel", ![go.SliceType go.byte] "foundVal", ![go.SliceType go.byte] "sibs")
+      return: (![go.bool] "found", ![go.SliceType go.byte] "foundLabel", ![go.SliceType go.byte] "foundVal", ![go.SliceType go.byte] "sibs", ![go.bool] "err")
     else do:  #());;;
-    do:  (let: "$a0" := (Convert go.string (go.InterfaceType []) #"merkle: find into cut node"%go) in
-    (FuncResolve go.panic [] #()) "$a0")).
+    do:  (let: "$a0" := ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ cutNodeTy) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    return: (#false, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)).
 
-(* go: merkle.go:199:6 *)
+(* go: merkle.go:197:6 *)
 Definition getProofCapⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "depth",
     exception_do (let: "depth" := (GoAlloc go.uint64 "depth") in
@@ -418,7 +455,7 @@ Definition getProofCapⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
    to save on bandwidth, some callers get hash from Verify.
    callers that expect some hash should check that they got the right one.
 
-   go: merkle.go:209:6 *)
+   go: merkle.go:207:6 *)
 Definition VerifyMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "label" "val" "entryProof",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -437,19 +474,23 @@ Definition VerifyMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
     (if: ![go.bool] "err"
     then return: (![go.SliceType go.byte] "hash", ![go.bool] "err")
     else do:  #());;;
-    do:  (let: "$a0" := (⟨go.bool⟩! (let: "$a0" := "tr" in
+    (if: let: "$a0" := "tr" in
     let: "$a1" := #(W64 0) in
     let: "$a2" := (![go.SliceType go.byte] "label") in
     let: "$a3" := (![go.SliceType go.byte] "val") in
-    (FuncResolve put [] #()) "$a0" "$a1" "$a2" "$a3")) in
-    (FuncResolve std.Assert [] #()) "$a0");;;
+    (FuncResolve put [] #()) "$a0" "$a1" "$a2" "$a3"
+    then
+      let: "$r0" := #true in
+      do:  ("err" <-[go.bool] "$r0");;;
+      return: (![go.SliceType go.byte] "hash", ![go.bool] "err")
+    else do:  #());;;
     let: "$r0" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] "tr")) #()) in
     do:  ("hash" <-[go.SliceType go.byte] "$r0");;;
     return: (![go.SliceType go.byte] "hash", ![go.bool] "err")).
 
 (* VerifyNonMemb checks that label not in tree described by proof.
 
-   go: merkle.go:220:6 *)
+   go: merkle.go:221:6 *)
 Definition VerifyNonMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "label" "entryProof",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -471,42 +512,7 @@ Definition VerifyNonMembⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     do:  ("hash" <-[go.SliceType go.byte] "$r0");;;
     return: (![go.SliceType go.byte] "hash", ![go.bool] "err")).
 
-(* VerifyUpdate returns the hash for an old tree without label and
-   the hash after inserting (label, val).
-
-   go: merkle.go:231:6 *)
-Definition VerifyUpdateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "label" "val" "updProof",
-    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "hashNew" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "hashOld" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "updProof" := (GoAlloc (go.SliceType go.byte) "updProof") in
-    let: "val" := (GoAlloc (go.SliceType go.byte) "val") in
-    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
-    let: "tr" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
-    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType go.byte] "label") in
-    let: "$a1" := (![go.SliceType go.byte] "updProof") in
-    (FuncResolve proofToTree [] #()) "$a0" "$a1") in
-    let: "$r0" := "$ret0" in
-    let: "$r1" := "$ret1" in
-    do:  ("tr" <-[go.PointerType node] "$r0");;;
-    do:  ("err" <-[go.bool] "$r1");;;
-    (if: ![go.bool] "err"
-    then return: (![go.SliceType go.byte] "hashOld", ![go.SliceType go.byte] "hashNew", ![go.bool] "err")
-    else do:  #());;;
-    let: "$r0" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] "tr")) #()) in
-    do:  ("hashOld" <-[go.SliceType go.byte] "$r0");;;
-    do:  (let: "$a0" := (⟨go.bool⟩! (let: "$a0" := "tr" in
-    let: "$a1" := #(W64 0) in
-    let: "$a2" := (![go.SliceType go.byte] "label") in
-    let: "$a3" := (![go.SliceType go.byte] "val") in
-    (FuncResolve put [] #()) "$a0" "$a1" "$a2" "$a3")) in
-    (FuncResolve std.Assert [] #()) "$a0");;;
-    let: "$r0" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] "tr")) #()) in
-    do:  ("hashNew" <-[go.SliceType go.byte] "$r0");;;
-    return: (![go.SliceType go.byte] "hashOld", ![go.SliceType go.byte] "hashNew", ![go.bool] "err")).
-
-(* go: merkle.go:242:15 *)
+(* go: merkle.go:230:15 *)
 Definition Map__Hashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" <>,
     exception_do (let: "m" := (GoAlloc (go.PointerType Map) "m") in
@@ -514,7 +520,7 @@ Definition Map__Hashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
 
 (* proofToTree guarantees that label not in tree and that label has fixed len.
 
-   go: merkle.go:247:6 *)
+   go: merkle.go:235:6 *)
 Definition proofToTreeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "label" "proof",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -591,7 +597,7 @@ Definition proofToTreeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     else do:  #());;;
     return: (![go.PointerType node] "tr", ![go.bool] "err")).
 
-(* go: merkle.go:282:6 *)
+(* go: merkle.go:270:6 *)
 Definition newShellⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "depth" "label" "sibs",
     exception_do (let: "n" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
@@ -647,7 +653,7 @@ Definition newShellⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
     do:  ((StructFieldRef node "hash"%go (![go.PointerType node] "inner")) <-[go.SliceType go.byte] "$r0");;;
     return: (![go.PointerType node] "inner")).
 
-(* go: merkle.go:299:16 *)
+(* go: merkle.go:287:16 *)
 Definition node__getHashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n" <>,
     exception_do (let: "n" := (GoAlloc (go.PointerType node) "n") in
@@ -656,14 +662,14 @@ Definition node__getHashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     else do:  #());;;
     return: (![go.SliceType go.byte] (StructFieldRef node "hash"%go (![go.PointerType node] "n")))).
 
-(* go: merkle.go:306:6 *)
+(* go: merkle.go:294:6 *)
 Definition compEmptyHashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: <>,
     exception_do (return: (let: "$a0" := (let: "$v0" := emptyNodeTag in
      CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$v0")])) in
      (FuncResolve cryptoutil.Hash [] #()) "$a0")).
 
-(* go: merkle.go:310:6 *)
+(* go: merkle.go:298:6 *)
 Definition compLeafHashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "label" "val",
     exception_do (let: "val" := (GoAlloc (go.SliceType go.byte) "val") in
@@ -691,7 +697,7 @@ Definition compLeafHashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     return: (let: "$a0" := (Convert go.untyped_nil (go.SliceType go.byte) UntypedNil) in
      (MethodResolve (go.PointerType cryptoffi.Hasher) "Sum"%go (![go.PointerType cryptoffi.Hasher] "hr")) "$a0")).
 
-(* go: merkle.go:320:6 *)
+(* go: merkle.go:308:6 *)
 Definition compInnerHashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "child0" "child1",
     exception_do (let: "child1" := (GoAlloc (go.SliceType go.byte) "child1") in
@@ -712,7 +718,7 @@ Definition compInnerHashⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
 (* getChild returns a child and its sibling child,
    relative to the bit referenced by label and depth.
 
-   go: merkle.go:330:16 *)
+   go: merkle.go:318:16 *)
 Definition node__getChildⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n" "label" "depth",
     exception_do (let: "n" := (GoAlloc (go.PointerType node) "n") in
@@ -727,7 +733,7 @@ Definition node__getChildⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
 (* getBit returns false if the nth bit of b is 0.
    if n exceeds b, it returns true.
 
-   go: merkle.go:340:6 *)
+   go: merkle.go:328:6 *)
 Definition getBitⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b" "n",
     exception_do (let: "n" := (GoAlloc go.uint64 "n") in
@@ -839,6 +845,1043 @@ Definition ProofDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
      let: "$v3" := (![go.SliceType go.byte] "a4") in
      CompositeLiteral Proof (LiteralValue [KeyedElement (Some (KeyField "Siblings"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "IsOtherLeaf"%go)) (ElementExpression go.bool "$v1"); KeyedElement (Some (KeyField "LeafLabel"%go)) (ElementExpression (go.SliceType go.byte) "$v2"); KeyedElement (Some (KeyField "LeafVal"%go)) (ElementExpression (go.SliceType go.byte) "$v3")])), ![go.SliceType go.byte] "b4", #false)).
 
+(* StoreKey returns the storage key of the node covering label's depth-length
+   prefix.
+
+   go: store.go:43:6 *)
+Definition StoreKeyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "label" "depth",
+    exception_do (let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
+    do:  (let: "$a0" := ((![go.uint64] "depth") ≤⟨go.uint64⟩ maxDepth) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    let: "k" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType go.byte] #()) #(W64 0) StoreKeyLen) in
+    do:  ("k" <-[go.SliceType go.byte] "$r0");;;
+    let: "full" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+    let: "$r0" := ((![go.uint64] "depth") /⟨go.uint64⟩ #(W64 8)) in
+    do:  ("full" <-[go.uint64] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "k") in
+    let: "$a1" := (let: "$s" := (![go.SliceType go.byte] "label") in
+    Slice (go.SliceType go.byte) ("$s", #(W64 0), ![go.uint64] "full")) in
+    (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1") in
+    do:  ("k" <-[go.SliceType go.byte] "$r0");;;
+    (if: Convert go.untyped_bool go.bool ((![go.uint64] "full") <⟨go.uint64⟩ cryptoffi.HashLen)
+    then
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "k") in
+      let: "$a1" := ((let: "$sl0" := ((![go.byte] (IndexRef (go.SliceType go.byte) (![go.SliceType go.byte] "label", Convert go.uint64 go.int (![go.uint64] "full")))) &⟨go.byte⟩ ((#(W8 1) <<⟨go.byte⟩ (Convert go.uint64 go.byte ((![go.uint64] "depth") %⟨go.uint64⟩ #(W64 8)))) -⟨go.byte⟩ #(W8 1))) in
+      CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
+      do:  ("k" <-[go.SliceType go.byte] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "k") in
+      let: "$a1" := ((FuncResolve go.make2 [go.SliceType go.byte] #()) ((cryptoffi.HashLen -⟨go.uint64⟩ (![go.uint64] "full")) -⟨go.uint64⟩ #(W64 1))) in
+      (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1") in
+      do:  ("k" <-[go.SliceType go.byte] "$r0")
+    else do:  #());;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "k") in
+    let: "$a1" := ((let: "$sl0" := (Convert go.uint64 go.byte (![go.uint64] "depth")) in
+    CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+    (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
+    do:  ("k" <-[go.SliceType go.byte] "$r0");;;
+    return: (let: "$a0" := (![go.SliceType go.byte] "k") in
+     let: "$a1" := ((let: "$sl0" := (Convert go.uint64 go.byte ((![go.uint64] "depth") >>⟨go.uint64⟩ (Convert go.untyped_int go.uint64 #8))) in
+     CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+     (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1")).
+
+(* PathKeys returns the storage keys of every node on label's path, for depths
+   minD through maxD, in that order.
+
+   go: store.go:60:6 *)
+Definition PathKeysⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "label" "minD" "maxD",
+    exception_do (let: "keys" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "maxD" := (GoAlloc go.uint64 "maxD") in
+    let: "minD" := (GoAlloc go.uint64 "minD") in
+    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
+    do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "label") in
+    (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) =⟨go.uint64⟩ cryptoffi.HashLen) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    do:  (let: "$a0" := ((![go.uint64] "maxD") ≤⟨go.uint64⟩ maxDepth) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType (go.SliceType go.byte)] #()) #(W64 0) (((![go.uint64] "maxD") -⟨go.uint64⟩ (![go.uint64] "minD")) +⟨go.uint64⟩ #(W64 1))) in
+    do:  ("keys" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
+    (let: "d" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+    let: "$r0" := (![go.uint64] "minD") in
+    do:  ("d" <-[go.uint64] "$r0");;;
+    (for: (λ: <>, (![go.uint64] "d") ≤⟨go.uint64⟩ (![go.uint64] "maxD")); (λ: <>, do:  ("d" <-[go.uint64] ((![go.uint64] "d") +⟨go.uint64⟩ #(W64 1)))) := λ: <>,
+      let: "$r0" := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "keys") in
+      let: "$a1" := ((let: "$sl0" := (let: "$a0" := (![go.SliceType go.byte] "label") in
+      let: "$a1" := (![go.uint64] "d") in
+      (FuncResolve StoreKey [] #()) "$a0" "$a1") in
+      CompositeLiteral (go.SliceType (go.SliceType go.byte)) (LiteralValue [KeyedElement None (ElementExpression (go.SliceType go.byte) "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType (go.SliceType go.byte)] #()) "$a0" "$a1") in
+      do:  ("keys" <-[go.SliceType (go.SliceType go.byte)] "$r0")));;;
+    return: (![go.SliceType (go.SliceType go.byte)] "keys")).
+
+(* PathNeeds returns the depth of the first cut on label's path, and the keys
+   from there through maxD. everything above it the map already holds, so this
+   is the read a LoadPath actually needs. needed is false if the path is
+   already complete.
+
+   go: store.go:74:15 *)
+Definition Map__PathNeedsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "m" "label" "maxD",
+    exception_do (let: "needed" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "keys" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "minD" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+    let: "m" := (GoAlloc (go.PointerType Map) "m") in
+    let: "maxD" := (GoAlloc go.uint64 "maxD") in
+    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
+    do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "label") in
+    (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) =⟨go.uint64⟩ cryptoffi.HashLen) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType node] (StructFieldRef Map "root"%go (![go.PointerType Map] "m"))) in
+    let: "$a1" := #(W64 0) in
+    let: "$a2" := (![go.SliceType go.byte] "label") in
+    (FuncResolve firstCut [] #()) "$a0" "$a1" "$a2") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    do:  ("minD" <-[go.uint64] "$r0");;;
+    do:  ("needed" <-[go.bool] "$r1");;;
+    (if: (⟨go.bool⟩! (![go.bool] "needed"))
+    then return: (#(W64 0), Convert go.untyped_nil (go.SliceType (go.SliceType go.byte)) UntypedNil, #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.uint64] "minD") >⟨go.uint64⟩ (![go.uint64] "maxD"))
+    then
+      let: "$r0" := (![go.uint64] "minD") in
+      do:  ("maxD" <-[go.uint64] "$r0")
+    else do:  #());;;
+    return: (![go.uint64] "minD", let: "$a0" := (![go.SliceType go.byte] "label") in
+     let: "$a1" := (![go.uint64] "minD") in
+     let: "$a2" := (![go.uint64] "maxD") in
+     (FuncResolve PathKeys [] #()) "$a0" "$a1" "$a2", #true)).
+
+(* go: store.go:86:6 *)
+Definition firstCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "n" "depth" "label",
+    exception_do (let: "found" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "minD" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "n" := (GoAlloc (go.PointerType node) "n") in
+    (if: Convert go.untyped_bool go.bool ((![go.PointerType node] "n") =⟨go.PointerType node⟩ (Convert go.untyped_nil (go.PointerType node) UntypedNil))
+    then return: (#(W64 0), #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ cutNodeTy)
+    then return: (![go.uint64] "depth", #true)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ leafNodeTy)
+    then return: (#(W64 0), #false)
+    else do:  #());;;
+    do:  (let: "$a0" := ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ innerNodeTy) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    (if: Convert go.untyped_bool go.bool ((![go.uint64] "depth") =⟨go.uint64⟩ maxDepth)
+    then return: (#(W64 0), #false)
+    else do:  #());;;
+    let: "c" := (GoAlloc (go.PointerType (go.PointerType node)) (GoZeroVal (go.PointerType (go.PointerType node)) #())) in
+    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType go.byte] "label") in
+    let: "$a1" := (![go.uint64] "depth") in
+    (MethodResolve (go.PointerType node) "getChild"%go (![go.PointerType node] "n")) "$a0" "$a1") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    do:  ("c" <-[go.PointerType (go.PointerType node)] "$r0");;;
+    do:  "$r1";;;
+    let: ("$ret0", "$ret1") := ((let: "$a0" := (![go.PointerType node] (![go.PointerType (go.PointerType node)] "c")) in
+    let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+    let: "$a2" := (![go.SliceType go.byte] "label") in
+    (FuncResolve firstCut [] #()) "$a0" "$a1" "$a2")) in
+    return: ("$ret0", "$ret1")).
+
+(* Evict replaces every node at or below depth with a cut, bounding what the
+   map holds. an evicted sub-tree is reloadable from the store.
+
+   go: store.go:106:15 *)
+Definition Map__Evictⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "m" "depth",
+    exception_do (let: "m" := (GoAlloc (go.PointerType Map) "m") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    do:  (let: "$a0" := (StructFieldRef Map "root"%go (![go.PointerType Map] "m")) in
+    let: "$a1" := #(W64 0) in
+    let: "$a2" := (![go.uint64] "depth") in
+    (FuncResolve evict [] #()) "$a0" "$a1" "$a2");;;
+    return: #()).
+
+(* EvictPath is Evict along one label, which is what undoes one LoadPath.
+   walking the whole map to shed one path costs more than the lookup did.
+
+   go: store.go:112:15 *)
+Definition Map__EvictPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "m" "label" "depth",
+    exception_do (let: "m" := (GoAlloc (go.PointerType Map) "m") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
+    do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "label") in
+    (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) =⟨go.uint64⟩ cryptoffi.HashLen) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    do:  (let: "$a0" := (StructFieldRef Map "root"%go (![go.PointerType Map] "m")) in
+    let: "$a1" := #(W64 0) in
+    let: "$a2" := (![go.SliceType go.byte] "label") in
+    let: "$a3" := (![go.uint64] "depth") in
+    (FuncResolve evictPath [] #()) "$a0" "$a1" "$a2" "$a3");;;
+    return: #()).
+
+(* go: store.go:117:6 *)
+Definition evictPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "n0" "depth" "label" "maxD",
+    exception_do (let: "maxD" := (GoAlloc go.uint64 "maxD") in
+    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "n0" := (GoAlloc (go.PointerType (go.PointerType node)) "n0") in
+    let: "n" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+    let: "$r0" := (![go.PointerType node] (![go.PointerType (go.PointerType node)] "n0")) in
+    do:  ("n" <-[go.PointerType node] "$r0");;;
+    (if: Convert go.untyped_bool go.bool ((![go.PointerType node] "n") =⟨go.PointerType node⟩ (Convert go.untyped_nil (go.PointerType node) UntypedNil))
+    then return: (#())
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ cutNodeTy)
+    then return: (#())
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.uint64] "depth") ≥⟨go.uint64⟩ (![go.uint64] "maxD"))
+    then
+      let: "$r0" := (GoAlloc node (let: "$v0" := cutNodeTy in
+      let: "$v1" := (![go.SliceType go.byte] (StructFieldRef node "hash"%go (![go.PointerType node] "n"))) in
+      CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "hash"%go)) (ElementExpression (go.SliceType go.byte) "$v1")]))) in
+      do:  ((![go.PointerType (go.PointerType node)] "n0") <-[go.PointerType node] "$r0");;;
+      return: (#())
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ innerNodeTy)
+    then
+      let: "c" := (GoAlloc (go.PointerType (go.PointerType node)) (GoZeroVal (go.PointerType (go.PointerType node)) #())) in
+      let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType go.byte] "label") in
+      let: "$a1" := (![go.uint64] "depth") in
+      (MethodResolve (go.PointerType node) "getChild"%go (![go.PointerType node] "n")) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      do:  ("c" <-[go.PointerType (go.PointerType node)] "$r0");;;
+      do:  "$r1";;;
+      do:  (let: "$a0" := (![go.PointerType (go.PointerType node)] "c") in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: "$a2" := (![go.SliceType go.byte] "label") in
+      let: "$a3" := (![go.uint64] "maxD") in
+      (FuncResolve evictPath [] #()) "$a0" "$a1" "$a2" "$a3")
+    else do:  #());;;
+    return: #()).
+
+(* go: store.go:135:6 *)
+Definition evictⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "n0" "depth" "maxD",
+    exception_do (let: "maxD" := (GoAlloc go.uint64 "maxD") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "n0" := (GoAlloc (go.PointerType (go.PointerType node)) "n0") in
+    let: "n" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+    let: "$r0" := (![go.PointerType node] (![go.PointerType (go.PointerType node)] "n0")) in
+    do:  ("n" <-[go.PointerType node] "$r0");;;
+    (if: Convert go.untyped_bool go.bool ((![go.PointerType node] "n") =⟨go.PointerType node⟩ (Convert go.untyped_nil (go.PointerType node) UntypedNil))
+    then return: (#())
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ cutNodeTy)
+    then return: (#())
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.uint64] "depth") ≥⟨go.uint64⟩ (![go.uint64] "maxD"))
+    then
+      let: "$r0" := (GoAlloc node (let: "$v0" := cutNodeTy in
+      let: "$v1" := (![go.SliceType go.byte] (StructFieldRef node "hash"%go (![go.PointerType node] "n"))) in
+      CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "hash"%go)) (ElementExpression (go.SliceType go.byte) "$v1")]))) in
+      do:  ((![go.PointerType (go.PointerType node)] "n0") <-[go.PointerType node] "$r0");;;
+      return: (#())
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ innerNodeTy)
+    then
+      do:  (let: "$a0" := (StructFieldRef node "child0"%go (![go.PointerType node] "n")) in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: "$a2" := (![go.uint64] "maxD") in
+      (FuncResolve evict [] #()) "$a0" "$a1" "$a2");;;
+      do:  (let: "$a0" := (StructFieldRef node "child1"%go (![go.PointerType node] "n")) in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: "$a2" := (![go.uint64] "maxD") in
+      (FuncResolve evict [] #()) "$a0" "$a1" "$a2")
+    else do:  #());;;
+    return: #()).
+
+(* NewCut returns a map that is entirely unloaded, standing for the map with
+   the given hash.
+
+   go: store.go:155:6 *)
+Definition NewCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "hash",
+    exception_do (let: "hash" := (GoAlloc (go.SliceType go.byte) "hash") in
+    return: (GoAlloc Map (let: "$v0" := (let: "$a0" := (![go.SliceType go.byte] "hash") in
+     (FuncResolve mkCut [] #()) "$a0") in
+     CompositeLiteral Map (LiteralValue [KeyedElement (Some (KeyField "root"%go)) (ElementExpression (go.PointerType node) "$v0")])))).
+
+(* mkCut returns the unloaded stand-in for a sub-tree with the given hash,
+   which for an empty sub-tree is the empty node itself.
+
+   go: store.go:161:6 *)
+Definition mkCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "hash",
+    exception_do (let: "hash" := (GoAlloc (go.SliceType go.byte) "hash") in
+    (if: let: "$a0" := (![go.SliceType go.byte] "hash") in
+    let: "$a1" := (![go.SliceType go.byte] (GlobalVarAddr emptyHash #())) in
+    (FuncResolve bytes.Equal [] #()) "$a0" "$a1"
+    then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil)
+    else do:  #());;;
+    return: (GoAlloc node (let: "$v0" := cutNodeTy in
+     let: "$v1" := (![go.SliceType go.byte] "hash") in
+     CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "hash"%go)) (ElementExpression (go.SliceType go.byte) "$v1")])))).
+
+(* LoadPath grafts label's path into the map, where recs[i] is the record
+   stored under PathKeys(label, minD, maxD)[i], or nil if the store has none.
+   complete reports that the path reached a leaf or an empty sub-tree; if it is
+   false and there is no error, the path runs past maxD and the caller must
+   probe deeper.
+
+   go: store.go:173:15 *)
+Definition Map__LoadPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "m" "label" "minD" "recs",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "complete" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "m" := (GoAlloc (go.PointerType Map) "m") in
+    let: "recs" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "recs") in
+    let: "minD" := (GoAlloc go.uint64 "minD") in
+    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
+    do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "label") in
+    (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) =⟨go.uint64⟩ cryptoffi.HashLen) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    let: ("$ret0", "$ret1") := ((let: "$a0" := (StructFieldRef Map "root"%go (![go.PointerType Map] "m")) in
+    let: "$a1" := #(W64 0) in
+    let: "$a2" := (![go.SliceType go.byte] "label") in
+    let: "$a3" := (![go.uint64] "minD") in
+    let: "$a4" := (![go.SliceType (go.SliceType go.byte)] "recs") in
+    (FuncResolve loadPath [] #()) "$a0" "$a1" "$a2" "$a3" "$a4")) in
+    return: ("$ret0", "$ret1")).
+
+(* go: store.go:178:6 *)
+Definition loadPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "n0" "depth" "label" "minD" "recs",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "complete" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "recs" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "recs") in
+    let: "minD" := (GoAlloc go.uint64 "minD") in
+    let: "label" := (GoAlloc (go.SliceType go.byte) "label") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "n0" := (GoAlloc (go.PointerType (go.PointerType node)) "n0") in
+    let: "n" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+    let: "$r0" := (![go.PointerType node] (![go.PointerType (go.PointerType node)] "n0")) in
+    do:  ("n" <-[go.PointerType node] "$r0");;;
+    (if: Convert go.untyped_bool go.bool ((![go.PointerType node] "n") =⟨go.PointerType node⟩ (Convert go.untyped_nil (go.PointerType node) UntypedNil))
+    then return: (#true, #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ leafNodeTy)
+    then return: (#true, #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ innerNodeTy)
+    then
+      (if: Convert go.untyped_bool go.bool ((![go.uint64] "depth") =⟨go.uint64⟩ maxDepth)
+      then return: (#false, #true)
+      else do:  #());;;
+      let: "c" := (GoAlloc (go.PointerType (go.PointerType node)) (GoZeroVal (go.PointerType (go.PointerType node)) #())) in
+      let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType go.byte] "label") in
+      let: "$a1" := (![go.uint64] "depth") in
+      (MethodResolve (go.PointerType node) "getChild"%go (![go.PointerType node] "n")) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      do:  ("c" <-[go.PointerType (go.PointerType node)] "$r0");;;
+      do:  "$r1";;;
+      let: ("$ret0", "$ret1") := ((let: "$a0" := (![go.PointerType (go.PointerType node)] "c") in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: "$a2" := (![go.SliceType go.byte] "label") in
+      let: "$a3" := (![go.uint64] "minD") in
+      let: "$a4" := (![go.SliceType (go.SliceType go.byte)] "recs") in
+      (FuncResolve loadPath [] #()) "$a0" "$a1" "$a2" "$a3" "$a4")) in
+      return: ("$ret0", "$ret1")
+    else do:  #());;;
+    do:  (let: "$a0" := ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ cutNodeTy) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    (if: Convert go.untyped_bool go.bool (((![go.uint64] "depth") <⟨go.uint64⟩ (![go.uint64] "minD")) || (((![go.uint64] "depth") -⟨go.uint64⟩ (![go.uint64] "minD")) ≥⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "recs") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0"))))
+    then return: (#false, #false)
+    else do:  #());;;
+    let: "loaded" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+    let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "recs", Convert go.uint64 go.int ((![go.uint64] "depth") -⟨go.uint64⟩ (![go.uint64] "minD"))))) in
+    (FuncResolve decodeNode [] #()) "$a0") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    do:  ("loaded" <-[go.PointerType node] "$r0");;;
+    do:  ("err" <-[go.bool] "$r1");;;
+    (if: ![go.bool] "err"
+    then return: (#false, #true)
+    else do:  #());;;
+    (if: (⟨go.bool⟩! (let: "$a0" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] "loaded")) #()) in
+    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef node "hash"%go (![go.PointerType node] "n"))) in
+    (FuncResolve bytes.Equal [] #()) "$a0" "$a1"))
+    then return: (#false, #true)
+    else do:  #());;;
+    let: "$r0" := (![go.PointerType node] "loaded") in
+    do:  ((![go.PointerType (go.PointerType node)] "n0") <-[go.PointerType node] "$r0");;;
+    let: ("$ret0", "$ret1") := ((let: "$a0" := (![go.PointerType (go.PointerType node)] "n0") in
+    let: "$a1" := (![go.uint64] "depth") in
+    let: "$a2" := (![go.SliceType go.byte] "label") in
+    let: "$a3" := (![go.uint64] "minD") in
+    let: "$a4" := (![go.SliceType (go.SliceType go.byte)] "recs") in
+    (FuncResolve loadPath [] #()) "$a0" "$a1" "$a2" "$a3" "$a4")) in
+    return: ("$ret0", "$ret1")).
+
+(* Records returns the storage key and record of every node the map holds,
+   which after a LoadPath and an Update is exactly the set the update changed.
+
+   go: store.go:214:15 *)
+Definition Map__Recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "m" <>,
+    exception_do (let: "recs" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "keys" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
+    let: "m" := (GoAlloc (go.PointerType Map) "m") in
+    let: ("$ret0", "$ret1") := ((let: "$a0" := (![go.PointerType node] (StructFieldRef Map "root"%go (![go.PointerType Map] "m"))) in
+    let: "$a1" := #(W64 0) in
+    let: "$a2" := ((FuncResolve go.make2 [go.SliceType go.byte] #()) cryptoffi.HashLen) in
+    let: "$a3" := (Convert go.untyped_nil (go.SliceType (go.SliceType go.byte)) UntypedNil) in
+    let: "$a4" := (Convert go.untyped_nil (go.SliceType (go.SliceType go.byte)) UntypedNil) in
+    (FuncResolve records [] #()) "$a0" "$a1" "$a2" "$a3" "$a4")) in
+    return: ("$ret0", "$ret1")).
+
+(* go: store.go:218:6 *)
+Definition recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "n" "depth" "prefix" "keys" "recs",
+    exception_do (let: "recs" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "recs") in
+    let: "keys" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "keys") in
+    let: "prefix" := (GoAlloc (go.SliceType go.byte) "prefix") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "n" := (GoAlloc (go.PointerType node) "n") in
+    (if: Convert go.untyped_bool go.bool ((![go.PointerType node] "n") =⟨go.PointerType node⟩ (Convert go.untyped_nil (go.PointerType node) UntypedNil))
+    then return: (![go.SliceType (go.SliceType go.byte)] "keys", ![go.SliceType (go.SliceType go.byte)] "recs")
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ cutNodeTy)
+    then return: (![go.SliceType (go.SliceType go.byte)] "keys", ![go.SliceType (go.SliceType go.byte)] "recs")
+    else do:  #());;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "keys") in
+    let: "$a1" := ((let: "$sl0" := (let: "$a0" := (![go.SliceType go.byte] "prefix") in
+    let: "$a1" := (![go.uint64] "depth") in
+    (FuncResolve StoreKey [] #()) "$a0" "$a1") in
+    CompositeLiteral (go.SliceType (go.SliceType go.byte)) (LiteralValue [KeyedElement None (ElementExpression (go.SliceType go.byte) "$sl0")]))) in
+    (FuncResolve go.append [go.SliceType (go.SliceType go.byte)] #()) "$a0" "$a1") in
+    do:  ("keys" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "recs") in
+    let: "$a1" := ((let: "$sl0" := (let: "$a0" := (![go.PointerType node] "n") in
+    (FuncResolve encodeNode [] #()) "$a0") in
+    CompositeLiteral (go.SliceType (go.SliceType go.byte)) (LiteralValue [KeyedElement None (ElementExpression (go.SliceType go.byte) "$sl0")]))) in
+    (FuncResolve go.append [go.SliceType (go.SliceType go.byte)] #()) "$a0" "$a1") in
+    do:  ("recs" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ innerNodeTy)
+    then
+      let: "slot" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+      let: "$r0" := ((![go.uint64] "depth") /⟨go.uint64⟩ #(W64 8)) in
+      do:  ("slot" <-[go.uint64] "$r0");;;
+      let: "bit" := (GoAlloc go.byte (GoZeroVal go.byte #())) in
+      let: "$r0" := (#(W8 1) <<⟨go.byte⟩ (Convert go.uint64 go.byte ((![go.uint64] "depth") %⟨go.uint64⟩ #(W64 8)))) in
+      do:  ("bit" <-[go.byte] "$r0");;;
+      let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType node] (StructFieldRef node "child0"%go (![go.PointerType node] "n"))) in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: "$a2" := (![go.SliceType go.byte] "prefix") in
+      let: "$a3" := (![go.SliceType (go.SliceType go.byte)] "keys") in
+      let: "$a4" := (![go.SliceType (go.SliceType go.byte)] "recs") in
+      (FuncResolve records [] #()) "$a0" "$a1" "$a2" "$a3" "$a4") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      do:  ("keys" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
+      do:  ("recs" <-[go.SliceType (go.SliceType go.byte)] "$r1");;;
+      do:  ((IndexRef (go.SliceType go.byte) (![go.SliceType go.byte] "prefix", Convert go.uint64 go.int (![go.uint64] "slot"))) <-[go.byte] ((![go.byte] (IndexRef (go.SliceType go.byte) (![go.SliceType go.byte] "prefix", Convert go.uint64 go.int (![go.uint64] "slot")))) |⟨go.byte⟩ (![go.byte] "bit")));;;
+      let: ("$ret0", "$ret1") := (let: "$a0" := (![go.PointerType node] (StructFieldRef node "child1"%go (![go.PointerType node] "n"))) in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: "$a2" := (![go.SliceType go.byte] "prefix") in
+      let: "$a3" := (![go.SliceType (go.SliceType go.byte)] "keys") in
+      let: "$a4" := (![go.SliceType (go.SliceType go.byte)] "recs") in
+      (FuncResolve records [] #()) "$a0" "$a1" "$a2" "$a3" "$a4") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      do:  ("keys" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
+      do:  ("recs" <-[go.SliceType (go.SliceType go.byte)] "$r1");;;
+      do:  ((IndexRef (go.SliceType go.byte) (![go.SliceType go.byte] "prefix", Convert go.uint64 go.int (![go.uint64] "slot"))) <-[go.byte] ((![go.byte] (IndexRef (go.SliceType go.byte) (![go.SliceType go.byte] "prefix", Convert go.uint64 go.int (![go.uint64] "slot")))) &^⟨go.byte⟩ (![go.byte] "bit")))
+    else do:  #());;;
+    return: (![go.SliceType (go.SliceType go.byte)] "keys", ![go.SliceType (go.SliceType go.byte)] "recs")).
+
+(* a record is an inner node's two child hashes, or a leaf's label and value.
+
+   go: store.go:239:6 *)
+Definition encodeNodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "n",
+    exception_do (let: "n" := (GoAlloc (go.PointerType node) "n") in
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ innerNodeTy)
+    then
+      let: "b" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: "$r0" := ((FuncResolve go.make3 [go.SliceType go.byte] #()) #(W64 0) (#(W64 1) +⟨go.uint64⟩ (#(W64 2) *⟨go.uint64⟩ cryptoffi.HashLen))) in
+      do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+      let: "$a1" := ((let: "$sl0" := innerNodeTag in
+      CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
+      do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+      let: "$a1" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] (StructFieldRef node "child0"%go (![go.PointerType node] "n")))) #()) in
+      (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1") in
+      do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+      return: (let: "$a0" := (![go.SliceType go.byte] "b") in
+       let: "$a1" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] (StructFieldRef node "child1"%go (![go.PointerType node] "n")))) #()) in
+       (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1")
+    else do:  #());;;
+    do:  (let: "$a0" := ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ leafNodeTy) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    let: "b" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "$r0" := ((FuncResolve go.make3 [go.SliceType go.byte] #()) #(W64 0) ((#(W64 1) +⟨go.uint64⟩ cryptoffi.HashLen) +⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef node "val"%go (![go.PointerType node] "n"))) in
+    (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")))) in
+    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+    let: "$a1" := ((let: "$sl0" := leafNodeTag in
+    CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+    (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
+    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef node "label"%go (![go.PointerType node] "n"))) in
+    (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1") in
+    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+    return: (let: "$a0" := (![go.SliceType go.byte] "b") in
+     let: "$a1" := (![go.SliceType go.byte] (StructFieldRef node "val"%go (![go.PointerType node] "n"))) in
+     (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1")).
+
+(* go: store.go:253:6 *)
+Definition decodeNodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "rec",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "n" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+    let: "rec" := (GoAlloc (go.SliceType go.byte) "rec") in
+    let: "rem" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "tag" := (GoAlloc go.byte (GoZeroVal go.byte #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rec") in
+    (FuncResolve safemarshal.ReadByte [] #()) "$a0") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    do:  ("tag" <-[go.byte] "$r0");;;
+    do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err"
+    then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, #true)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] "tag") =⟨go.byte⟩ innerNodeTag)
+    then
+      let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+      let: "rem" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: "h0" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      let: "$a1" := cryptoffi.HashLen in
+      (FuncResolve safemarshal.ReadBytes [] #()) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      let: "$r2" := "$ret2" in
+      do:  ("h0" <-[go.SliceType go.byte] "$r0");;;
+      do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+      do:  ("err" <-[go.bool] "$r2");;;
+      (if: ![go.bool] "err"
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, #true)
+      else do:  #());;;
+      let: "h1" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      let: "$a1" := cryptoffi.HashLen in
+      (FuncResolve safemarshal.ReadBytes [] #()) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      let: "$r2" := "$ret2" in
+      do:  ("h1" <-[go.SliceType go.byte] "$r0");;;
+      do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+      do:  ("err" <-[go.bool] "$r2");;;
+      (if: ![go.bool] "err"
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, #true)
+      else do:  #());;;
+      (if: Convert go.untyped_bool go.bool ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) ≠⟨go.uint64⟩ #(W64 0))
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, #true)
+      else do:  #());;;
+      let: "inner" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+      let: "$r0" := (GoAlloc node (let: "$v0" := innerNodeTy in
+      let: "$v1" := (let: "$a0" := (![go.SliceType go.byte] "h0") in
+      (FuncResolve mkCut [] #()) "$a0") in
+      let: "$v2" := (let: "$a0" := (![go.SliceType go.byte] "h1") in
+      (FuncResolve mkCut [] #()) "$a0") in
+      CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "child0"%go)) (ElementExpression (go.PointerType node) "$v1"); KeyedElement (Some (KeyField "child1"%go)) (ElementExpression (go.PointerType node) "$v2")]))) in
+      do:  ("inner" <-[go.PointerType node] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "h0") in
+      let: "$a1" := (![go.SliceType go.byte] "h1") in
+      (FuncResolve compInnerHash [] #()) "$a0" "$a1") in
+      do:  ((StructFieldRef node "hash"%go (![go.PointerType node] "inner")) <-[go.SliceType go.byte] "$r0");;;
+      return: (![go.PointerType node] "inner", #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] "tag") =⟨go.byte⟩ leafNodeTag)
+    then
+      let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+      let: "val" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: "label" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      let: "$a1" := cryptoffi.HashLen in
+      (FuncResolve safemarshal.ReadBytes [] #()) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      let: "$r2" := "$ret2" in
+      do:  ("label" <-[go.SliceType go.byte] "$r0");;;
+      do:  ("val" <-[go.SliceType go.byte] "$r1");;;
+      do:  ("err" <-[go.bool] "$r2");;;
+      (if: ![go.bool] "err"
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, #true)
+      else do:  #());;;
+      let: "leaf" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+      let: "$r0" := (GoAlloc node (let: "$v0" := leafNodeTy in
+      let: "$v1" := (![go.SliceType go.byte] "label") in
+      let: "$v2" := (![go.SliceType go.byte] "val") in
+      CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "label"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "val"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
+      do:  ("leaf" <-[go.PointerType node] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "label") in
+      let: "$a1" := (![go.SliceType go.byte] "val") in
+      (FuncResolve compLeafHash [] #()) "$a0" "$a1") in
+      do:  ((StructFieldRef node "hash"%go (![go.PointerType node] "leaf")) <-[go.SliceType go.byte] "$r0");;;
+      return: (![go.PointerType node] "leaf", #false)
+    else do:  #());;;
+    return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, #true)).
+
+(* Update inserts the batch of (labels[i], vals[i]) leaves and returns a proof
+   that the new map is the old map plus exactly those leaves.
+   it errors iff some label is already in the map or repeats within the batch.
+   it stores immutable references to the labels and vals,
+   and it reorders both slices in place.
+
+   go: update.go:34:15 *)
+Definition Map__Updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "m" "labels" "vals",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "updProof" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "m" := (GoAlloc (go.PointerType Map) "m") in
+    let: "vals" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "vals") in
+    let: "labels" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "labels") in
+    do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")) =⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0"))) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    let: "$range" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    (let: "l" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    slice.for_range (go.SliceType go.byte) "$range" (λ: "$key" "$value",
+      do:  ("l" <-[go.SliceType go.byte] "$value");;;
+      do:  "$key";;;
+      do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "l") in
+      (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) =⟨go.uint64⟩ cryptoffi.HashLen) in
+      (FuncResolve std.Assert [] #()) "$a0")));;;
+    let: ("$ret0", "$ret1") := ((let: "$a0" := (StructFieldRef Map "root"%go (![go.PointerType Map] "m")) in
+    let: "$a1" := #(W64 0) in
+    let: "$a2" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    let: "$a3" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+    let: "$a4" := (Convert go.untyped_nil (go.SliceType go.byte) UntypedNil) in
+    (FuncResolve update [] #()) "$a0" "$a1" "$a2" "$a3" "$a4")) in
+    return: ("$ret0", "$ret1")).
+
+(* update inserts the batch into the n0 sub-tree, which sits at depth,
+   appending the sub-tree's tape to tape.
+   every label in the batch must have the depth-length prefix that n0 covers.
+
+   go: update.go:45:6 *)
+Definition updateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "n0" "depth" "labels" "vals" "tape",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "tapeOut" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "tape" := (GoAlloc (go.SliceType go.byte) "tape") in
+    let: "vals" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "vals") in
+    let: "labels" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "labels") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "n0" := (GoAlloc (go.PointerType (go.PointerType node)) "n0") in
+    do:  (let: "$a0" := ((![go.uint64] "depth") ≤⟨go.uint64⟩ maxDepth) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    let: "n" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+    let: "$r0" := (![go.PointerType node] (![go.PointerType (go.PointerType node)] "n0")) in
+    do:  ("n" <-[go.PointerType node] "$r0");;;
+    (if: Convert go.untyped_bool go.bool ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")) =⟨go.uint64⟩ #(W64 0))
+    then
+      (if: Convert go.untyped_bool go.bool ((![go.PointerType node] "n") =⟨go.PointerType node⟩ (Convert go.untyped_nil (go.PointerType node) UntypedNil))
+      then
+        return: (let: "$a0" := (![go.SliceType go.byte] "tape") in
+         let: "$a1" := ((let: "$sl0" := tapeEmpty in
+         CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+         (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1", #false)
+      else do:  #());;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "tape") in
+      let: "$a1" := ((let: "$sl0" := tapeCut in
+      CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
+      do:  ("tape" <-[go.SliceType go.byte] "$r0");;;
+      return: (let: "$a0" := (![go.SliceType go.byte] "tape") in
+       let: "$a1" := (![go.SliceType go.byte] (StructFieldRef node "hash"%go (![go.PointerType node] "n"))) in
+       (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1", #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.PointerType node] "n") =⟨go.PointerType node⟩ (Convert go.untyped_nil (go.PointerType node) UntypedNil))
+    then
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "tape") in
+      let: "$a1" := ((let: "$sl0" := tapeEmpty in
+      CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
+      do:  ("tape" <-[go.SliceType go.byte] "$r0");;;
+      return: (![go.SliceType go.byte] "tape", let: "$a0" := (![go.PointerType (go.PointerType node)] "n0") in
+       let: "$a1" := (![go.uint64] "depth") in
+       let: "$a2" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+       let: "$a3" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+       (FuncResolve putAll [] #()) "$a0" "$a1" "$a2" "$a3")
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ leafNodeTy)
+    then
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "tape") in
+      let: "$a1" := ((let: "$sl0" := tapeLeaf in
+      CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
+      do:  ("tape" <-[go.SliceType go.byte] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "tape") in
+      let: "$a1" := (![go.SliceType go.byte] (StructFieldRef node "label"%go (![go.PointerType node] "n"))) in
+      (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1") in
+      do:  ("tape" <-[go.SliceType go.byte] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "tape") in
+      let: "$a1" := (![go.SliceType go.byte] (StructFieldRef node "val"%go (![go.PointerType node] "n"))) in
+      (FuncResolve safemarshal.WriteSlice1D [] #()) "$a0" "$a1") in
+      do:  ("tape" <-[go.SliceType go.byte] "$r0");;;
+      return: (![go.SliceType go.byte] "tape", let: "$a0" := (![go.PointerType (go.PointerType node)] "n0") in
+       let: "$a1" := (![go.uint64] "depth") in
+       let: "$a2" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+       let: "$a3" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+       (FuncResolve putAll [] #()) "$a0" "$a1" "$a2" "$a3")
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ innerNodeTy)
+    then
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "tape") in
+      let: "$a1" := ((let: "$sl0" := tapeSplit in
+      CompositeLiteral (go.SliceType go.byte) (LiteralValue [KeyedElement None (ElementExpression go.byte "$sl0")]))) in
+      (FuncResolve go.append [go.SliceType go.byte] #()) "$a0" "$a1") in
+      do:  ("tape" <-[go.SliceType go.byte] "$r0");;;
+      let: "mid" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+      let: "$r0" := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+      let: "$a1" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+      let: "$a2" := (![go.uint64] "depth") in
+      (FuncResolve partition [] #()) "$a0" "$a1" "$a2") in
+      do:  ("mid" <-[go.uint64] "$r0");;;
+      let: ("$ret0", "$ret1") := (let: "$a0" := (StructFieldRef node "child0"%go (![go.PointerType node] "n")) in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: "$a2" := (let: "$s" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+      Slice (go.SliceType (go.SliceType go.byte)) ("$s", #(W64 0), ![go.uint64] "mid")) in
+      let: "$a3" := (let: "$s" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+      Slice (go.SliceType (go.SliceType go.byte)) ("$s", #(W64 0), ![go.uint64] "mid")) in
+      let: "$a4" := (![go.SliceType go.byte] "tape") in
+      (FuncResolve update [] #()) "$a0" "$a1" "$a2" "$a3" "$a4") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      do:  ("tape" <-[go.SliceType go.byte] "$r0");;;
+      do:  ("err" <-[go.bool] "$r1");;;
+      (if: ![go.bool] "err"
+      then return: (![go.SliceType go.byte] "tape", ![go.bool] "err")
+      else do:  #());;;
+      let: ("$ret0", "$ret1") := (let: "$a0" := (StructFieldRef node "child1"%go (![go.PointerType node] "n")) in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      let: "$a2" := (let: "$s" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+      Slice (go.SliceType (go.SliceType go.byte)) ("$s", ![go.uint64] "mid", FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #() (![go.SliceType (go.SliceType go.byte)] "labels"))) in
+      let: "$a3" := (let: "$s" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+      Slice (go.SliceType (go.SliceType go.byte)) ("$s", ![go.uint64] "mid", FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #() (![go.SliceType (go.SliceType go.byte)] "vals"))) in
+      let: "$a4" := (![go.SliceType go.byte] "tape") in
+      (FuncResolve update [] #()) "$a0" "$a1" "$a2" "$a3" "$a4") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      do:  ("tape" <-[go.SliceType go.byte] "$r0");;;
+      do:  ("err" <-[go.bool] "$r1");;;
+      (if: ![go.bool] "err"
+      then return: (![go.SliceType go.byte] "tape", ![go.bool] "err")
+      else do:  #());;;
+      let: "$r0" := (let: "$a0" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] (StructFieldRef node "child0"%go (![go.PointerType node] "n")))) #()) in
+      let: "$a1" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] (StructFieldRef node "child1"%go (![go.PointerType node] "n")))) #()) in
+      (FuncResolve compInnerHash [] #()) "$a0" "$a1") in
+      do:  ((StructFieldRef node "hash"%go (![go.PointerType node] "n")) <-[go.SliceType go.byte] "$r0");;;
+      return: (![go.SliceType go.byte] "tape", #false)
+    else do:  #());;;
+    do:  (let: "$a0" := ((![go.byte] (StructFieldRef node "nodeTy"%go (![go.PointerType node] "n"))) =⟨go.byte⟩ cutNodeTy) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
+    return: (![go.SliceType go.byte] "tape", #true)).
+
+(* go: update.go:90:6 *)
+Definition putAllⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "n0" "depth" "labels" "vals",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "vals" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "vals") in
+    let: "labels" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "labels") in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "n0" := (GoAlloc (go.PointerType (go.PointerType node)) "n0") in
+    (let: "i" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+    let: "$r0" := #(W64 0) in
+    do:  ("i" <-[go.uint64] "$r0");;;
+    (for: (λ: <>, (![go.uint64] "i") <⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0"))); (λ: <>, do:  ("i" <-[go.uint64] ((![go.uint64] "i") +⟨go.uint64⟩ #(W64 1)))) := λ: <>,
+      (if: let: "$a0" := (![go.PointerType (go.PointerType node)] "n0") in
+      let: "$a1" := (![go.uint64] "depth") in
+      let: "$a2" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "labels", Convert go.uint64 go.int (![go.uint64] "i")))) in
+      let: "$a3" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "vals", Convert go.uint64 go.int (![go.uint64] "i")))) in
+      (FuncResolve put [] #()) "$a0" "$a1" "$a2" "$a3"
+      then return: (#true)
+      else do:  #())));;;
+    return: (#false)).
+
+(* partition reorders labels and vals so that the labels with a 0 bit at depth
+   come first, and returns how many there are.
+
+   go: update.go:101:6 *)
+Definition partitionⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "labels" "vals" "depth",
+    exception_do (let: "mid" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "vals" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "vals") in
+    let: "labels" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "labels") in
+    (let: "j" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
+    let: "$r0" := #(W64 0) in
+    do:  ("j" <-[go.uint64] "$r0");;;
+    (for: (λ: <>, (![go.uint64] "j") <⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0"))); (λ: <>, do:  ("j" <-[go.uint64] ((![go.uint64] "j") +⟨go.uint64⟩ #(W64 1)))) := λ: <>,
+      (if: (⟨go.bool⟩! (let: "$a0" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "labels", Convert go.uint64 go.int (![go.uint64] "j")))) in
+      let: "$a1" := (![go.uint64] "depth") in
+      (FuncResolve getBit [] #()) "$a0" "$a1"))
+      then
+        let: "l" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+        let: "$r0" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "labels", Convert go.uint64 go.int (![go.uint64] "mid")))) in
+        do:  ("l" <-[go.SliceType go.byte] "$r0");;;
+        let: "$r0" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "labels", Convert go.uint64 go.int (![go.uint64] "j")))) in
+        do:  ((IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "labels", Convert go.uint64 go.int (![go.uint64] "mid"))) <-[go.SliceType go.byte] "$r0");;;
+        let: "$r0" := (![go.SliceType go.byte] "l") in
+        do:  ((IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "labels", Convert go.uint64 go.int (![go.uint64] "j"))) <-[go.SliceType go.byte] "$r0");;;
+        let: "v" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+        let: "$r0" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "vals", Convert go.uint64 go.int (![go.uint64] "mid")))) in
+        do:  ("v" <-[go.SliceType go.byte] "$r0");;;
+        let: "$r0" := (![go.SliceType go.byte] (IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "vals", Convert go.uint64 go.int (![go.uint64] "j")))) in
+        do:  ((IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "vals", Convert go.uint64 go.int (![go.uint64] "mid"))) <-[go.SliceType go.byte] "$r0");;;
+        let: "$r0" := (![go.SliceType go.byte] "v") in
+        do:  ((IndexRef (go.SliceType (go.SliceType go.byte)) (![go.SliceType (go.SliceType go.byte)] "vals", Convert go.uint64 go.int (![go.uint64] "j"))) <-[go.SliceType go.byte] "$r0");;;
+        do:  ("mid" <-[go.uint64] ((![go.uint64] "mid") +⟨go.uint64⟩ #(W64 1)))
+      else do:  #())));;;
+    return: (![go.uint64] "mid")).
+
+(* VerifyUpdate returns the hash of an old map without any of the labels and
+   the hash after inserting the batch into it.
+
+   go: update.go:118:6 *)
+Definition VerifyUpdateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "labels" "vals" "updProof",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "hashNew" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "hashOld" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "updProof" := (GoAlloc (go.SliceType go.byte) "updProof") in
+    let: "vals" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "vals") in
+    let: "labels" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "labels") in
+    let: "m" := (GoAlloc (go.PointerType Map) (GoZeroVal (go.PointerType Map) #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    let: "$a1" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+    let: "$a2" := (![go.SliceType go.byte] "updProof") in
+    (FuncResolve ApplyUpdate [] #()) "$a0" "$a1" "$a2") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    do:  ("m" <-[go.PointerType Map] "$r0");;;
+    do:  ("hashOld" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err"
+    then return: (Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    return: (![go.SliceType go.byte] "hashOld", (MethodResolve (go.PointerType Map) "Hash"%go (![go.PointerType Map] "m")) #(), #false)).
+
+(* ApplyUpdate is VerifyUpdate, keeping the map it built. every node the epoch
+   changed is in it and everything else is a cut, so a party holding only the
+   epoch's proof ends up holding the new tree's top, checked against hashOld.
+
+   go: update.go:129:6 *)
+Definition ApplyUpdateⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "labels" "vals" "updProof",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "hashOld" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "m" := (GoAlloc (go.PointerType Map) (GoZeroVal (go.PointerType Map) #())) in
+    let: "updProof" := (GoAlloc (go.SliceType go.byte) "updProof") in
+    let: "vals" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "vals") in
+    let: "labels" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "labels") in
+    (if: Convert go.untyped_bool go.bool ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")) ≠⟨go.uint64⟩ (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+    (FuncResolve go.len [go.SliceType (go.SliceType go.byte)] #()) "$a0")))
+    then return: (Convert go.untyped_nil (go.PointerType Map) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    let: "$range" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    (let: "l" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    slice.for_range (go.SliceType go.byte) "$range" (λ: "$key" "$value",
+      do:  ("l" <-[go.SliceType go.byte] "$value");;;
+      do:  "$key";;;
+      (if: Convert go.untyped_bool go.bool ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "l") in
+      (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) ≠⟨go.uint64⟩ cryptoffi.HashLen)
+      then return: (Convert go.untyped_nil (go.PointerType Map) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+      else do:  #())));;;
+    let: "rem" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "tr" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "updProof") in
+    let: "$a1" := #(W64 0) in
+    (FuncResolve tapeToTree [] #()) "$a0" "$a1") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    do:  ("tr" <-[go.PointerType node] "$r0");;;
+    do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err"
+    then return: (Convert go.untyped_nil (go.PointerType Map) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "rem") in
+    (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) ≠⟨go.uint64⟩ #(W64 0))
+    then return: (Convert go.untyped_nil (go.PointerType Map) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    let: "$r0" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] "tr")) #()) in
+    do:  ("hashOld" <-[go.SliceType go.byte] "$r0");;;
+    (if: let: "$a0" := "tr" in
+    let: "$a1" := #(W64 0) in
+    let: "$a2" := (![go.SliceType (go.SliceType go.byte)] "labels") in
+    let: "$a3" := (![go.SliceType (go.SliceType go.byte)] "vals") in
+    (FuncResolve putAll [] #()) "$a0" "$a1" "$a2" "$a3"
+    then return: (Convert go.untyped_nil (go.PointerType Map) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    return: (GoAlloc Map (let: "$v0" := (![go.PointerType node] "tr") in
+     CompositeLiteral Map (LiteralValue [KeyedElement (Some (KeyField "root"%go)) (ElementExpression (go.PointerType node) "$v0")])), ![go.SliceType go.byte] "hashOld", #false)).
+
+(* tapeToTree parses one sub-tree, sitting at depth, off the front of tape.
+
+   go: update.go:153:6 *)
+Definition tapeToTreeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
+  λ: "tape" "depth",
+    exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "rem" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "n" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+    let: "depth" := (GoAlloc go.uint64 "depth") in
+    let: "tape" := (GoAlloc (go.SliceType go.byte) "tape") in
+    (if: Convert go.untyped_bool go.bool ((![go.uint64] "depth") >⟨go.uint64⟩ maxDepth)
+    then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    let: "op" := (GoAlloc go.byte (GoZeroVal go.byte #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "tape") in
+    (FuncResolve safemarshal.ReadByte [] #()) "$a0") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    do:  ("op" <-[go.byte] "$r0");;;
+    do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err"
+    then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] "op") =⟨go.byte⟩ tapeEmpty)
+    then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, ![go.SliceType go.byte] "rem", #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] "op") =⟨go.byte⟩ tapeCut)
+    then
+      let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+      let: "rem" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: "h" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      let: "$a1" := cryptoffi.HashLen in
+      (FuncResolve safemarshal.ReadBytes [] #()) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      let: "$r2" := "$ret2" in
+      do:  ("h" <-[go.SliceType go.byte] "$r0");;;
+      do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+      do:  ("err" <-[go.bool] "$r2");;;
+      (if: ![go.bool] "err"
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+      else do:  #());;;
+      return: (GoAlloc node (let: "$v0" := cutNodeTy in
+       let: "$v1" := (![go.SliceType go.byte] "h") in
+       CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "hash"%go)) (ElementExpression (go.SliceType go.byte) "$v1")])), ![go.SliceType go.byte] "rem", #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] "op") =⟨go.byte⟩ tapeLeaf)
+    then
+      let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+      let: "rem" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: "label" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      let: "$a1" := cryptoffi.HashLen in
+      (FuncResolve safemarshal.ReadBytes [] #()) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      let: "$r2" := "$ret2" in
+      do:  ("label" <-[go.SliceType go.byte] "$r0");;;
+      do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+      do:  ("err" <-[go.bool] "$r2");;;
+      (if: ![go.bool] "err"
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+      else do:  #());;;
+      let: "val" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      (FuncResolve safemarshal.ReadSlice1D [] #()) "$a0") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      let: "$r2" := "$ret2" in
+      do:  ("val" <-[go.SliceType go.byte] "$r0");;;
+      do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+      do:  ("err" <-[go.bool] "$r2");;;
+      (if: ![go.bool] "err"
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+      else do:  #());;;
+      let: "leaf" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+      let: "$r0" := (GoAlloc node (let: "$v0" := leafNodeTy in
+      let: "$v1" := (![go.SliceType go.byte] "label") in
+      let: "$v2" := (![go.SliceType go.byte] "val") in
+      CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "label"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "val"%go)) (ElementExpression (go.SliceType go.byte) "$v2")]))) in
+      do:  ("leaf" <-[go.PointerType node] "$r0");;;
+      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "label") in
+      let: "$a1" := (![go.SliceType go.byte] "val") in
+      (FuncResolve compLeafHash [] #()) "$a0" "$a1") in
+      do:  ((StructFieldRef node "hash"%go (![go.PointerType node] "leaf")) <-[go.SliceType go.byte] "$r0");;;
+      return: (![go.PointerType node] "leaf", ![go.SliceType go.byte] "rem", #false)
+    else do:  #());;;
+    (if: Convert go.untyped_bool go.bool ((![go.byte] "op") =⟨go.byte⟩ tapeSplit)
+    then
+      let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+      let: "rem" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+      let: "c0" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      (FuncResolve tapeToTree [] #()) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      let: "$r2" := "$ret2" in
+      do:  ("c0" <-[go.PointerType node] "$r0");;;
+      do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+      do:  ("err" <-[go.bool] "$r2");;;
+      (if: ![go.bool] "err"
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+      else do:  #());;;
+      let: "c1" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "rem") in
+      let: "$a1" := ((![go.uint64] "depth") +⟨go.uint64⟩ #(W64 1)) in
+      (FuncResolve tapeToTree [] #()) "$a0" "$a1") in
+      let: "$r0" := "$ret0" in
+      let: "$r1" := "$ret1" in
+      let: "$r2" := "$ret2" in
+      do:  ("c1" <-[go.PointerType node] "$r0");;;
+      do:  ("rem" <-[go.SliceType go.byte] "$r1");;;
+      do:  ("err" <-[go.bool] "$r2");;;
+      (if: ![go.bool] "err"
+      then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+      else do:  #());;;
+      let: "inner" := (GoAlloc (go.PointerType node) (GoZeroVal (go.PointerType node) #())) in
+      let: "$r0" := (GoAlloc node (let: "$v0" := innerNodeTy in
+      let: "$v1" := (![go.PointerType node] "c0") in
+      let: "$v2" := (![go.PointerType node] "c1") in
+      CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "child0"%go)) (ElementExpression (go.PointerType node) "$v1"); KeyedElement (Some (KeyField "child1"%go)) (ElementExpression (go.PointerType node) "$v2")]))) in
+      do:  ("inner" <-[go.PointerType node] "$r0");;;
+      let: "$r0" := (let: "$a0" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] "c0")) #()) in
+      let: "$a1" := ((MethodResolve (go.PointerType node) "getHash"%go (![go.PointerType node] "c1")) #()) in
+      (FuncResolve compInnerHash [] #()) "$a0" "$a1") in
+      do:  ((StructFieldRef node "hash"%go (![go.PointerType node] "inner")) <-[go.SliceType go.byte] "$r0");;;
+      return: (![go.PointerType node] "inner", ![go.SliceType go.byte] "rem", #false)
+    else do:  #());;;
+    return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)).
+
 #[global] Instance info' : PkgInfo pkg_id.merkle :=
 {|
   pkg_imported_pkgs := [code.bytes.pkg_id.bytes; code.encoding.binary.pkg_id.binary; code.github_com.goose_lang.std.pkg_id.std; code.github_com.sanjit_bhat.pav.cryptoffi.pkg_id.cryptoffi; code.github_com.sanjit_bhat.pav.cryptoutil.pkg_id.cryptoutil; code.github_com.tchajed.marshal.pkg_id.marshal; code.github_com.sanjit_bhat.pav.safemarshal.pkg_id.safemarshal]
@@ -888,9 +1931,15 @@ Class Map_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} 
   #[global] Map_underlying :: (Map) <u (Mapⁱᵐᵖˡ);
   #[global] Map_get_root (x : Map.t) :: ⟦StructFieldGet (Mapⁱᵐᵖˡ) "root", #x⟧ ⤳[under] #x.(Map.root');
   #[global] Map_set_root (x : Map.t) y :: ⟦StructFieldSet (Mapⁱᵐᵖˡ) "root", (#x, #y)⟧ ⤳[under] #(x <|Map.root' := y|>);
+  #[global] Map'ptr_Evict_unfold :: MethodUnfold (go.PointerType (Map)) "Evict" (Map__Evictⁱᵐᵖˡ);
+  #[global] Map'ptr_EvictPath_unfold :: MethodUnfold (go.PointerType (Map)) "EvictPath" (Map__EvictPathⁱᵐᵖˡ);
   #[global] Map'ptr_Hash_unfold :: MethodUnfold (go.PointerType (Map)) "Hash" (Map__Hashⁱᵐᵖˡ);
+  #[global] Map'ptr_LoadPath_unfold :: MethodUnfold (go.PointerType (Map)) "LoadPath" (Map__LoadPathⁱᵐᵖˡ);
+  #[global] Map'ptr_PathNeeds_unfold :: MethodUnfold (go.PointerType (Map)) "PathNeeds" (Map__PathNeedsⁱᵐᵖˡ);
   #[global] Map'ptr_Prove_unfold :: MethodUnfold (go.PointerType (Map)) "Prove" (Map__Proveⁱᵐᵖˡ);
   #[global] Map'ptr_Put_unfold :: MethodUnfold (go.PointerType (Map)) "Put" (Map__Putⁱᵐᵖˡ);
+  #[global] Map'ptr_Records_unfold :: MethodUnfold (go.PointerType (Map)) "Records" (Map__Recordsⁱᵐᵖˡ);
+  #[global] Map'ptr_Update_unfold :: MethodUnfold (go.PointerType (Map)) "Update" (Map__Updateⁱᵐᵖˡ);
 }.
 
 Module node.
@@ -1000,7 +2049,6 @@ Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions
   #[global] getProofCap_unfold :: FuncUnfold getProofCap [] (getProofCapⁱᵐᵖˡ);
   #[global] VerifyMemb_unfold :: FuncUnfold VerifyMemb [] (VerifyMembⁱᵐᵖˡ);
   #[global] VerifyNonMemb_unfold :: FuncUnfold VerifyNonMemb [] (VerifyNonMembⁱᵐᵖˡ);
-  #[global] VerifyUpdate_unfold :: FuncUnfold VerifyUpdate [] (VerifyUpdateⁱᵐᵖˡ);
   #[global] proofToTree_unfold :: FuncUnfold proofToTree [] (proofToTreeⁱᵐᵖˡ);
   #[global] newShell_unfold :: FuncUnfold newShell [] (newShellⁱᵐᵖˡ);
   #[global] compEmptyHash_unfold :: FuncUnfold compEmptyHash [] (compEmptyHashⁱᵐᵖˡ);
@@ -1009,6 +2057,23 @@ Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions
   #[global] getBit_unfold :: FuncUnfold getBit [] (getBitⁱᵐᵖˡ);
   #[global] ProofEncode_unfold :: FuncUnfold ProofEncode [] (ProofEncodeⁱᵐᵖˡ);
   #[global] ProofDecode_unfold :: FuncUnfold ProofDecode [] (ProofDecodeⁱᵐᵖˡ);
+  #[global] StoreKey_unfold :: FuncUnfold StoreKey [] (StoreKeyⁱᵐᵖˡ);
+  #[global] PathKeys_unfold :: FuncUnfold PathKeys [] (PathKeysⁱᵐᵖˡ);
+  #[global] firstCut_unfold :: FuncUnfold firstCut [] (firstCutⁱᵐᵖˡ);
+  #[global] evictPath_unfold :: FuncUnfold evictPath [] (evictPathⁱᵐᵖˡ);
+  #[global] evict_unfold :: FuncUnfold evict [] (evictⁱᵐᵖˡ);
+  #[global] NewCut_unfold :: FuncUnfold NewCut [] (NewCutⁱᵐᵖˡ);
+  #[global] mkCut_unfold :: FuncUnfold mkCut [] (mkCutⁱᵐᵖˡ);
+  #[global] loadPath_unfold :: FuncUnfold loadPath [] (loadPathⁱᵐᵖˡ);
+  #[global] records_unfold :: FuncUnfold records [] (recordsⁱᵐᵖˡ);
+  #[global] encodeNode_unfold :: FuncUnfold encodeNode [] (encodeNodeⁱᵐᵖˡ);
+  #[global] decodeNode_unfold :: FuncUnfold decodeNode [] (decodeNodeⁱᵐᵖˡ);
+  #[global] update_unfold :: FuncUnfold update [] (updateⁱᵐᵖˡ);
+  #[global] putAll_unfold :: FuncUnfold putAll [] (putAllⁱᵐᵖˡ);
+  #[global] partition_unfold :: FuncUnfold partition [] (partitionⁱᵐᵖˡ);
+  #[global] VerifyUpdate_unfold :: FuncUnfold VerifyUpdate [] (VerifyUpdateⁱᵐᵖˡ);
+  #[global] ApplyUpdate_unfold :: FuncUnfold ApplyUpdate [] (ApplyUpdateⁱᵐᵖˡ);
+  #[global] tapeToTree_unfold :: FuncUnfold tapeToTree [] (tapeToTreeⁱᵐᵖˡ);
   #[global] import_bytes_Assumption :: bytes.Assumptions;
   #[global] import_binary_Assumption :: binary.Assumptions;
   #[global] import_std_Assumption :: std.Assumptions;

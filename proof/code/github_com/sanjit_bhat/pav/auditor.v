@@ -370,7 +370,7 @@ Definition getNextLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
     let: "$r0" := ((![go.uint64] "prevEp") +⟨go.uint64⟩ #(W64 1)) in
     do:  ("ep" <-[go.uint64] "$r0");;;
     (let: ("$ret0", "$ret1") := (let: "$a0" := (![go.SliceType go.byte] "prevDig") in
-    let: "$a1" := (![go.SliceType (go.PointerType ktcore.UpdateProof)] (StructFieldRef ktcore.AuditProof "Updates"%go (![go.PointerType ktcore.AuditProof] "p"))) in
+    let: "$a1" := (![go.PointerType ktcore.AuditProof] "p") in
     (FuncResolve getNextDig [] #()) "$a0" "$a1") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
@@ -397,46 +397,39 @@ Definition getNextLinkⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
 
 (* go: auditor.go:146:6 *)
 Definition getNextDigⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "prevDig" "updates",
+  λ: "prevDig" "p",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "dig" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "updates" := (GoAlloc (go.SliceType (go.PointerType ktcore.UpdateProof)) "updates") in
+    let: "p" := (GoAlloc (go.PointerType ktcore.AuditProof) "p") in
     let: "prevDig" := (GoAlloc (go.SliceType go.byte) "prevDig") in
-    let: "$r0" := (![go.SliceType go.byte] "prevDig") in
+    let: "next" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "prev" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType (go.SliceType go.byte)] (StructFieldRef ktcore.AuditProof "MapLabels"%go (![go.PointerType ktcore.AuditProof] "p"))) in
+    let: "$a1" := (![go.SliceType (go.SliceType go.byte)] (StructFieldRef ktcore.AuditProof "MapVals"%go (![go.PointerType ktcore.AuditProof] "p"))) in
+    let: "$a2" := (![go.SliceType go.byte] (StructFieldRef ktcore.AuditProof "UpdProof"%go (![go.PointerType ktcore.AuditProof] "p"))) in
+    (FuncResolve merkle.VerifyUpdate [] #()) "$a0" "$a1" "$a2") in
+    let: "$r0" := "$ret0" in
+    let: "$r1" := "$ret1" in
+    let: "$r2" := "$ret2" in
+    do:  ("prev" <-[go.SliceType go.byte] "$r0");;;
+    do:  ("next" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err"
+    then return: (![go.SliceType go.byte] "dig", ![go.bool] "err")
+    else do:  #());;;
+    (if: (⟨go.bool⟩! (let: "$a0" := (![go.SliceType go.byte] "prevDig") in
+    let: "$a1" := (![go.SliceType go.byte] "prev") in
+    (FuncResolve bytes.Equal [] #()) "$a0" "$a1"))
+    then
+      let: "$r0" := #true in
+      do:  ("err" <-[go.bool] "$r0");;;
+      return: (![go.SliceType go.byte] "dig", ![go.bool] "err")
+    else do:  #());;;
+    let: "$r0" := (![go.SliceType go.byte] "next") in
     do:  ("dig" <-[go.SliceType go.byte] "$r0");;;
-    let: "$range" := (![go.SliceType (go.PointerType ktcore.UpdateProof)] "updates") in
-    (let: "u" := (GoAlloc (go.PointerType ktcore.UpdateProof) (GoZeroVal (go.PointerType ktcore.UpdateProof) #())) in
-    slice.for_range (go.PointerType ktcore.UpdateProof) "$range" (λ: "$key" "$value",
-      do:  ("u" <-[go.PointerType ktcore.UpdateProof] "$value");;;
-      do:  "$key";;;
-      let: "next" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-      let: "prev" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] (StructFieldRef ktcore.UpdateProof "MapLabel"%go (![go.PointerType ktcore.UpdateProof] "u"))) in
-      let: "$a1" := (![go.SliceType go.byte] (StructFieldRef ktcore.UpdateProof "MapVal"%go (![go.PointerType ktcore.UpdateProof] "u"))) in
-      let: "$a2" := (![go.SliceType go.byte] (StructFieldRef ktcore.UpdateProof "NonMembProof"%go (![go.PointerType ktcore.UpdateProof] "u"))) in
-      (FuncResolve merkle.VerifyUpdate [] #()) "$a0" "$a1" "$a2") in
-      let: "$r0" := "$ret0" in
-      let: "$r1" := "$ret1" in
-      let: "$r2" := "$ret2" in
-      do:  ("prev" <-[go.SliceType go.byte] "$r0");;;
-      do:  ("next" <-[go.SliceType go.byte] "$r1");;;
-      do:  ("err" <-[go.bool] "$r2");;;
-      (if: ![go.bool] "err"
-      then return: (![go.SliceType go.byte] "dig", ![go.bool] "err")
-      else do:  #());;;
-      (if: (⟨go.bool⟩! (let: "$a0" := (![go.SliceType go.byte] "dig") in
-      let: "$a1" := (![go.SliceType go.byte] "prev") in
-      (FuncResolve bytes.Equal [] #()) "$a0" "$a1"))
-      then
-        let: "$r0" := #true in
-        do:  ("err" <-[go.bool] "$r0");;;
-        return: (![go.SliceType go.byte] "dig", ![go.bool] "err")
-      else do:  #());;;
-      let: "$r0" := (![go.SliceType go.byte] "next") in
-      do:  ("dig" <-[go.SliceType go.byte] "$r0")));;;
     return: (![go.SliceType go.byte] "dig", ![go.bool] "err")).
 
-(* go: auditor.go:163:6 *)
+(* go: auditor.go:159:6 *)
 Definition CheckStartChainⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "chain",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -499,7 +492,7 @@ Definition CheckStartChainⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCont
     else do:  #());;;
     return: (![go.uint64] "ep", ![go.SliceType go.byte] "dig", ![go.SliceType go.byte] "link", ![go.bool] "err")).
 
-(* go: auditor.go:190:6 *)
+(* go: auditor.go:186:6 *)
 Definition CheckStartVrfⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "servPk" "vrf",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in

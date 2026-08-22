@@ -57,10 +57,6 @@ Definition AuditProof {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type :
 
 #[global] Opaque AuditProof.
 
-Definition UpdateProof {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.Named "github.com/sanjit-bhat/pav/ktcore.UpdateProof"%go [].
-
-#[global] Opaque UpdateProof.
-
 Definition BlameNone {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 0).
 
 Definition BlameServSig {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val := #(W64 1).
@@ -124,14 +120,6 @@ Definition NonMembDecode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_str
 Definition AuditProofEncode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/ktcore.AuditProofEncode"%go.
 
 Definition AuditProofDecode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/ktcore.AuditProofDecode"%go.
-
-Definition UpdateProofEncode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/ktcore.UpdateProofEncode"%go.
-
-Definition UpdateProofDecode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/ktcore.UpdateProofDecode"%go.
-
-Definition UpdateProofSlice1DEncode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/ktcore.UpdateProofSlice1DEncode"%go.
-
-Definition UpdateProofSlice1DDecode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/ktcore.UpdateProofSlice1DDecode"%go.
 
 Definition MembSlice1DEncode {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go_string := "github.com/sanjit-bhat/pav/ktcore.MembSlice1DEncode"%go.
 
@@ -765,8 +753,16 @@ Definition AuditProofEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
     let: "$r0" := (![go.SliceType go.byte] "b0") in
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
-    let: "$a1" := (![go.SliceType (go.PointerType UpdateProof)] (StructFieldRef AuditProof "Updates"%go (![go.PointerType AuditProof] "o"))) in
-    (FuncResolve UpdateProofSlice1DEncode [] #()) "$a0" "$a1") in
+    let: "$a1" := (![go.SliceType (go.SliceType go.byte)] (StructFieldRef AuditProof "MapLabels"%go (![go.PointerType AuditProof] "o"))) in
+    (FuncResolve safemarshal.WriteSlice2D [] #()) "$a0" "$a1") in
+    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+    let: "$a1" := (![go.SliceType (go.SliceType go.byte)] (StructFieldRef AuditProof "MapVals"%go (![go.PointerType AuditProof] "o"))) in
+    (FuncResolve safemarshal.WriteSlice2D [] #()) "$a0" "$a1") in
+    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
+    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
+    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef AuditProof "UpdProof"%go (![go.PointerType AuditProof] "o"))) in
+    (FuncResolve safemarshal.WriteSlice1D [] #()) "$a0" "$a1") in
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
     let: "$a1" := (![go.SliceType go.byte] (StructFieldRef AuditProof "LinkSig"%go (![go.PointerType AuditProof] "o"))) in
@@ -774,19 +770,19 @@ Definition AuditProofEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
     do:  ("b" <-[go.SliceType go.byte] "$r0");;;
     return: (![go.SliceType go.byte] "b")).
 
-(* go: serde.out.go:128:6 *)
+(* go: serde.out.go:130:6 *)
 Definition AuditProofDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b0",
     exception_do (let: "b0" := (GoAlloc (go.SliceType go.byte) "b0") in
     let: "err1" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "b1" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "a1" := (GoAlloc (go.SliceType (go.PointerType UpdateProof)) (GoZeroVal (go.SliceType (go.PointerType UpdateProof)) #())) in
+    let: "a1" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
     let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b0") in
-    (FuncResolve UpdateProofSlice1DDecode [] #()) "$a0") in
+    (FuncResolve safemarshal.ReadSlice2D [] #()) "$a0") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    do:  ("a1" <-[go.SliceType (go.PointerType UpdateProof)] "$r0");;;
+    do:  ("a1" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
     do:  ("b1" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err1" <-[go.bool] "$r2");;;
     (if: ![go.bool] "err1"
@@ -794,75 +790,17 @@ Definition AuditProofDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCon
     else do:  #());;;
     let: "err2" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "b2" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "a2" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "a2" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
     let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b1") in
-    (FuncResolve safemarshal.ReadSlice1D [] #()) "$a0") in
+    (FuncResolve safemarshal.ReadSlice2D [] #()) "$a0") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    do:  ("a2" <-[go.SliceType go.byte] "$r0");;;
+    do:  ("a2" <-[go.SliceType (go.SliceType go.byte)] "$r0");;;
     do:  ("b2" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err2" <-[go.bool] "$r2");;;
     (if: ![go.bool] "err2"
     then return: (Convert go.untyped_nil (go.PointerType AuditProof) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
-    else do:  #());;;
-    return: (GoAlloc AuditProof (let: "$v0" := (![go.SliceType (go.PointerType UpdateProof)] "a1") in
-     let: "$v1" := (![go.SliceType go.byte] "a2") in
-     CompositeLiteral AuditProof (LiteralValue [KeyedElement (Some (KeyField "Updates"%go)) (ElementExpression (go.SliceType (go.PointerType UpdateProof)) "$v0"); KeyedElement (Some (KeyField "LinkSig"%go)) (ElementExpression (go.SliceType go.byte) "$v1")])), ![go.SliceType go.byte] "b2", #false)).
-
-(* go: serde.out.go:139:6 *)
-Definition UpdateProofEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "b0" "o",
-    exception_do (let: "o" := (GoAlloc (go.PointerType UpdateProof) "o") in
-    let: "b0" := (GoAlloc (go.SliceType go.byte) "b0") in
-    let: "b" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "$r0" := (![go.SliceType go.byte] "b0") in
-    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
-    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
-    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef UpdateProof "MapLabel"%go (![go.PointerType UpdateProof] "o"))) in
-    (FuncResolve safemarshal.WriteSlice1D [] #()) "$a0" "$a1") in
-    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
-    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
-    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef UpdateProof "MapVal"%go (![go.PointerType UpdateProof] "o"))) in
-    (FuncResolve safemarshal.WriteSlice1D [] #()) "$a0" "$a1") in
-    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
-    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
-    let: "$a1" := (![go.SliceType go.byte] (StructFieldRef UpdateProof "NonMembProof"%go (![go.PointerType UpdateProof] "o"))) in
-    (FuncResolve safemarshal.WriteSlice1D [] #()) "$a0" "$a1") in
-    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
-    return: (![go.SliceType go.byte] "b")).
-
-(* go: serde.out.go:146:6 *)
-Definition UpdateProofDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "b0",
-    exception_do (let: "b0" := (GoAlloc (go.SliceType go.byte) "b0") in
-    let: "err1" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "b1" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "a1" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b0") in
-    (FuncResolve safemarshal.ReadSlice1D [] #()) "$a0") in
-    let: "$r0" := "$ret0" in
-    let: "$r1" := "$ret1" in
-    let: "$r2" := "$ret2" in
-    do:  ("a1" <-[go.SliceType go.byte] "$r0");;;
-    do:  ("b1" <-[go.SliceType go.byte] "$r1");;;
-    do:  ("err1" <-[go.bool] "$r2");;;
-    (if: ![go.bool] "err1"
-    then return: (Convert go.untyped_nil (go.PointerType UpdateProof) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
-    else do:  #());;;
-    let: "err2" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "b2" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "a2" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b1") in
-    (FuncResolve safemarshal.ReadSlice1D [] #()) "$a0") in
-    let: "$r0" := "$ret0" in
-    let: "$r1" := "$ret1" in
-    let: "$r2" := "$ret2" in
-    do:  ("a2" <-[go.SliceType go.byte] "$r0");;;
-    do:  ("b2" <-[go.SliceType go.byte] "$r1");;;
-    do:  ("err2" <-[go.bool] "$r2");;;
-    (if: ![go.bool] "err2"
-    then return: (Convert go.untyped_nil (go.PointerType UpdateProof) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
     else do:  #());;;
     let: "err3" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
     let: "b3" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
@@ -876,96 +814,29 @@ Definition UpdateProofDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCo
     do:  ("b3" <-[go.SliceType go.byte] "$r1");;;
     do:  ("err3" <-[go.bool] "$r2");;;
     (if: ![go.bool] "err3"
-    then return: (Convert go.untyped_nil (go.PointerType UpdateProof) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    then return: (Convert go.untyped_nil (go.PointerType AuditProof) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
     else do:  #());;;
-    return: (GoAlloc UpdateProof (let: "$v0" := (![go.SliceType go.byte] "a1") in
-     let: "$v1" := (![go.SliceType go.byte] "a2") in
-     let: "$v2" := (![go.SliceType go.byte] "a3") in
-     CompositeLiteral UpdateProof (LiteralValue [KeyedElement (Some (KeyField "MapLabel"%go)) (ElementExpression (go.SliceType go.byte) "$v0"); KeyedElement (Some (KeyField "MapVal"%go)) (ElementExpression (go.SliceType go.byte) "$v1"); KeyedElement (Some (KeyField "NonMembProof"%go)) (ElementExpression (go.SliceType go.byte) "$v2")])), ![go.SliceType go.byte] "b3", #false)).
-
-(* go: serde_misc.go:8:6 *)
-Definition UpdateProofSlice1DEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "b0" "o",
-    exception_do (let: "o" := (GoAlloc (go.SliceType (go.PointerType UpdateProof)) "o") in
-    let: "b0" := (GoAlloc (go.SliceType go.byte) "b0") in
-    let: "b" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "$r0" := (![go.SliceType go.byte] "b0") in
-    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
-    let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
-    let: "$a1" := (Convert go.int go.uint64 (let: "$a0" := (![go.SliceType (go.PointerType UpdateProof)] "o") in
-    (FuncResolve go.len [go.SliceType (go.PointerType UpdateProof)] #()) "$a0")) in
-    (FuncResolve marshal.WriteInt [] #()) "$a0" "$a1") in
-    do:  ("b" <-[go.SliceType go.byte] "$r0");;;
-    let: "$range" := (![go.SliceType (go.PointerType UpdateProof)] "o") in
-    (let: "e" := (GoAlloc (go.PointerType UpdateProof) (GoZeroVal (go.PointerType UpdateProof) #())) in
-    slice.for_range (go.PointerType UpdateProof) "$range" (λ: "$key" "$value",
-      do:  ("e" <-[go.PointerType UpdateProof] "$value");;;
-      do:  "$key";;;
-      let: "$r0" := (let: "$a0" := (![go.SliceType go.byte] "b") in
-      let: "$a1" := (![go.PointerType UpdateProof] "e") in
-      (FuncResolve UpdateProofEncode [] #()) "$a0" "$a1") in
-      do:  ("b" <-[go.SliceType go.byte] "$r0")));;;
-    return: (![go.SliceType go.byte] "b")).
-
-(* go: serde_misc.go:17:6 *)
-Definition UpdateProofSlice1DDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
-  λ: "b0",
-    exception_do (let: "b0" := (GoAlloc (go.SliceType go.byte) "b0") in
-    let: "err1" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "b1" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "length" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b0") in
-    (FuncResolve safemarshal.ReadInt [] #()) "$a0") in
+    let: "err4" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
+    let: "b4" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: "a4" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
+    let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "b3") in
+    (FuncResolve safemarshal.ReadSlice1D [] #()) "$a0") in
     let: "$r0" := "$ret0" in
     let: "$r1" := "$ret1" in
     let: "$r2" := "$ret2" in
-    do:  ("length" <-[go.uint64] "$r0");;;
-    do:  ("b1" <-[go.SliceType go.byte] "$r1");;;
-    do:  ("err1" <-[go.bool] "$r2");;;
-    (if: (![go.bool] "err1") || ((Convert go.uint64 go.int (![go.uint64] "length")) <⟨go.int⟩ #(W64 0))
-    then return: (Convert go.untyped_nil (go.SliceType (go.PointerType UpdateProof)) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
+    do:  ("a4" <-[go.SliceType go.byte] "$r0");;;
+    do:  ("b4" <-[go.SliceType go.byte] "$r1");;;
+    do:  ("err4" <-[go.bool] "$r2");;;
+    (if: ![go.bool] "err4"
+    then return: (Convert go.untyped_nil (go.PointerType AuditProof) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
     else do:  #());;;
-    let: "loopO" := (GoAlloc (go.SliceType (go.PointerType UpdateProof)) (GoZeroVal (go.SliceType (go.PointerType UpdateProof)) #())) in
-    let: "$r0" := ((FuncResolve go.make3 [go.SliceType (go.PointerType UpdateProof)] #()) #(W64 0) (![go.uint64] "length")) in
-    do:  ("loopO" <-[go.SliceType (go.PointerType UpdateProof)] "$r0");;;
-    let: "loopErr" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-    let: "loopB" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-    let: "$r0" := (![go.SliceType go.byte] "b1") in
-    do:  ("loopB" <-[go.SliceType go.byte] "$r0");;;
-    (let: "i" := (GoAlloc go.uint64 (GoZeroVal go.uint64 #())) in
-    let: "$r0" := #(W64 0) in
-    do:  ("i" <-[go.uint64] "$r0");;;
-    (for: (λ: <>, (![go.uint64] "i") <⟨go.uint64⟩ (![go.uint64] "length")); (λ: <>, do:  ("i" <-[go.uint64] ((![go.uint64] "i") +⟨go.uint64⟩ #(W64 1)))) := λ: <>,
-      let: "err2" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
-      let: "loopB1" := (GoAlloc (go.SliceType go.byte) (GoZeroVal (go.SliceType go.byte) #())) in
-      let: "a2" := (GoAlloc (go.PointerType UpdateProof) (GoZeroVal (go.PointerType UpdateProof) #())) in
-      let: (("$ret0", "$ret1"), "$ret2") := (let: "$a0" := (![go.SliceType go.byte] "loopB") in
-      (FuncResolve UpdateProofDecode [] #()) "$a0") in
-      let: "$r0" := "$ret0" in
-      let: "$r1" := "$ret1" in
-      let: "$r2" := "$ret2" in
-      do:  ("a2" <-[go.PointerType UpdateProof] "$r0");;;
-      do:  ("loopB1" <-[go.SliceType go.byte] "$r1");;;
-      do:  ("err2" <-[go.bool] "$r2");;;
-      let: "$r0" := (![go.SliceType go.byte] "loopB1") in
-      do:  ("loopB" <-[go.SliceType go.byte] "$r0");;;
-      (if: ![go.bool] "err2"
-      then
-        let: "$r0" := #true in
-        do:  ("loopErr" <-[go.bool] "$r0");;;
-        break: #()
-      else do:  #());;;
-      let: "$r0" := (let: "$a0" := (![go.SliceType (go.PointerType UpdateProof)] "loopO") in
-      let: "$a1" := ((let: "$sl0" := (![go.PointerType UpdateProof] "a2") in
-      CompositeLiteral (go.SliceType (go.PointerType UpdateProof)) (LiteralValue [KeyedElement None (ElementExpression (go.PointerType UpdateProof) "$sl0")]))) in
-      (FuncResolve go.append [go.SliceType (go.PointerType UpdateProof)] #()) "$a0" "$a1") in
-      do:  ("loopO" <-[go.SliceType (go.PointerType UpdateProof)] "$r0")));;;
-    (if: ![go.bool] "loopErr"
-    then return: (Convert go.untyped_nil (go.SliceType (go.PointerType UpdateProof)) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
-    else do:  #());;;
-    return: (![go.SliceType (go.PointerType UpdateProof)] "loopO", ![go.SliceType go.byte] "loopB", #false)).
+    return: (GoAlloc AuditProof (let: "$v0" := (![go.SliceType (go.SliceType go.byte)] "a1") in
+     let: "$v1" := (![go.SliceType (go.SliceType go.byte)] "a2") in
+     let: "$v2" := (![go.SliceType go.byte] "a3") in
+     let: "$v3" := (![go.SliceType go.byte] "a4") in
+     CompositeLiteral AuditProof (LiteralValue [KeyedElement (Some (KeyField "MapLabels"%go)) (ElementExpression (go.SliceType (go.SliceType go.byte)) "$v0"); KeyedElement (Some (KeyField "MapVals"%go)) (ElementExpression (go.SliceType (go.SliceType go.byte)) "$v1"); KeyedElement (Some (KeyField "UpdProof"%go)) (ElementExpression (go.SliceType go.byte) "$v2"); KeyedElement (Some (KeyField "LinkSig"%go)) (ElementExpression (go.SliceType go.byte) "$v3")])), ![go.SliceType go.byte] "b4", #false)).
 
-(* go: serde_misc.go:40:6 *)
+(* go: serde_misc.go:8:6 *)
 Definition MembSlice1DEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b0" "o",
     exception_do (let: "o" := (GoAlloc (go.SliceType (go.PointerType Memb)) "o") in
@@ -989,7 +860,7 @@ Definition MembSlice1DEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCo
       do:  ("b" <-[go.SliceType go.byte] "$r0")));;;
     return: (![go.SliceType go.byte] "b")).
 
-(* go: serde_misc.go:49:6 *)
+(* go: serde_misc.go:17:6 *)
 Definition MembSlice1DDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b0",
     exception_do (let: "b0" := (GoAlloc (go.SliceType go.byte) "b0") in
@@ -1047,7 +918,7 @@ Definition MembSlice1DDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalCo
     else do:  #());;;
     return: (![go.SliceType (go.PointerType Memb)] "loopO", ![go.SliceType go.byte] "loopB", #false)).
 
-(* go: serde_misc.go:72:6 *)
+(* go: serde_misc.go:40:6 *)
 Definition AuditProofSlice1DEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b0" "o",
     exception_do (let: "o" := (GoAlloc (go.SliceType (go.PointerType AuditProof)) "o") in
@@ -1071,7 +942,7 @@ Definition AuditProofSlice1DEncodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGl
       do:  ("b" <-[go.SliceType go.byte] "$r0")));;;
     return: (![go.SliceType go.byte] "b")).
 
-(* go: serde_misc.go:81:6 *)
+(* go: serde_misc.go:49:6 *)
 Definition AuditProofSlice1DDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "b0",
     exception_do (let: "b0" := (GoAlloc (go.SliceType go.byte) "b0") in
@@ -1510,18 +1381,22 @@ Section def.
 Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
 Record t :=
 mk {
-  Updates' : slice.t;
+  MapLabels' : slice.t;
+  MapVals' : slice.t;
+  UpdProof' : slice.t;
   LinkSig' : slice.t;
 }.
 
-#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _)|}.
+#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _) (zero_val _)|}.
 #[global] Arguments mk : clear implicits.
 #[global] Arguments t : clear implicits.
 End def.
 End AuditProof.
 
 Definition AuditProof'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
-  (go.FieldDecl "Updates"%go (go.SliceType (go.PointerType UpdateProof)));
+  (go.FieldDecl "MapLabels"%go (go.SliceType (go.SliceType go.byte)));
+  (go.FieldDecl "MapVals"%go (go.SliceType (go.SliceType go.byte)));
+  (go.FieldDecl "UpdProof"%go (go.SliceType go.byte));
   (go.FieldDecl "LinkSig"%go (go.SliceType go.byte))
 ].
 Program Definition AuditProof'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (AuditProof'fds_unsealed).
@@ -1534,49 +1409,14 @@ Class AuditProof_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalCo
 {
   #[global] AuditProof_type_repr  :: go.TypeReprUnderlying AuditProofⁱᵐᵖˡ AuditProof.t;
   #[global] AuditProof_underlying :: (AuditProof) <u (AuditProofⁱᵐᵖˡ);
-  #[global] AuditProof_get_Updates (x : AuditProof.t) :: ⟦StructFieldGet (AuditProofⁱᵐᵖˡ) "Updates", #x⟧ ⤳[under] #x.(AuditProof.Updates');
-  #[global] AuditProof_set_Updates (x : AuditProof.t) y :: ⟦StructFieldSet (AuditProofⁱᵐᵖˡ) "Updates", (#x, #y)⟧ ⤳[under] #(x <|AuditProof.Updates' := y|>);
+  #[global] AuditProof_get_MapLabels (x : AuditProof.t) :: ⟦StructFieldGet (AuditProofⁱᵐᵖˡ) "MapLabels", #x⟧ ⤳[under] #x.(AuditProof.MapLabels');
+  #[global] AuditProof_set_MapLabels (x : AuditProof.t) y :: ⟦StructFieldSet (AuditProofⁱᵐᵖˡ) "MapLabels", (#x, #y)⟧ ⤳[under] #(x <|AuditProof.MapLabels' := y|>);
+  #[global] AuditProof_get_MapVals (x : AuditProof.t) :: ⟦StructFieldGet (AuditProofⁱᵐᵖˡ) "MapVals", #x⟧ ⤳[under] #x.(AuditProof.MapVals');
+  #[global] AuditProof_set_MapVals (x : AuditProof.t) y :: ⟦StructFieldSet (AuditProofⁱᵐᵖˡ) "MapVals", (#x, #y)⟧ ⤳[under] #(x <|AuditProof.MapVals' := y|>);
+  #[global] AuditProof_get_UpdProof (x : AuditProof.t) :: ⟦StructFieldGet (AuditProofⁱᵐᵖˡ) "UpdProof", #x⟧ ⤳[under] #x.(AuditProof.UpdProof');
+  #[global] AuditProof_set_UpdProof (x : AuditProof.t) y :: ⟦StructFieldSet (AuditProofⁱᵐᵖˡ) "UpdProof", (#x, #y)⟧ ⤳[under] #(x <|AuditProof.UpdProof' := y|>);
   #[global] AuditProof_get_LinkSig (x : AuditProof.t) :: ⟦StructFieldGet (AuditProofⁱᵐᵖˡ) "LinkSig", #x⟧ ⤳[under] #x.(AuditProof.LinkSig');
   #[global] AuditProof_set_LinkSig (x : AuditProof.t) y :: ⟦StructFieldSet (AuditProofⁱᵐᵖˡ) "LinkSig", (#x, #y)⟧ ⤳[under] #(x <|AuditProof.LinkSig' := y|>);
-}.
-
-Module UpdateProof.
-Section def.
-Context {ext : ffi_syntax} {go_gctx : GoGlobalContext}.
-Record t :=
-mk {
-  MapLabel' : slice.t;
-  MapVal' : slice.t;
-  NonMembProof' : slice.t;
-}.
-
-#[global] Instance zero_val : ZeroVal t := {| zero_val := mk (zero_val _) (zero_val _) (zero_val _)|}.
-#[global] Arguments mk : clear implicits.
-#[global] Arguments t : clear implicits.
-End def.
-End UpdateProof.
-
-Definition UpdateProof'fds_unsealed {ext : ffi_syntax} {go_gctx : GoGlobalContext} : list go.field_decl := [
-  (go.FieldDecl "MapLabel"%go (go.SliceType go.byte));
-  (go.FieldDecl "MapVal"%go (go.SliceType go.byte));
-  (go.FieldDecl "NonMembProof"%go (go.SliceType go.byte))
-].
-Program Definition UpdateProof'fds {ext : ffi_syntax} {go_gctx : GoGlobalContext} := sealed (UpdateProof'fds_unsealed).
-Global Instance equals_unfold_UpdateProof {ext : ffi_syntax} {go_gctx : GoGlobalContext} : UpdateProof'fds =→ UpdateProof'fds_unsealed.
-Proof. rewrite /UpdateProof'fds seal_eq //. Qed.
-
-Definition UpdateProofⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : go.type := go.StructType (UpdateProof'fds).
-
-Class UpdateProof_Assumptions {ext : ffi_syntax} `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
-{
-  #[global] UpdateProof_type_repr  :: go.TypeReprUnderlying UpdateProofⁱᵐᵖˡ UpdateProof.t;
-  #[global] UpdateProof_underlying :: (UpdateProof) <u (UpdateProofⁱᵐᵖˡ);
-  #[global] UpdateProof_get_MapLabel (x : UpdateProof.t) :: ⟦StructFieldGet (UpdateProofⁱᵐᵖˡ) "MapLabel", #x⟧ ⤳[under] #x.(UpdateProof.MapLabel');
-  #[global] UpdateProof_set_MapLabel (x : UpdateProof.t) y :: ⟦StructFieldSet (UpdateProofⁱᵐᵖˡ) "MapLabel", (#x, #y)⟧ ⤳[under] #(x <|UpdateProof.MapLabel' := y|>);
-  #[global] UpdateProof_get_MapVal (x : UpdateProof.t) :: ⟦StructFieldGet (UpdateProofⁱᵐᵖˡ) "MapVal", #x⟧ ⤳[under] #x.(UpdateProof.MapVal');
-  #[global] UpdateProof_set_MapVal (x : UpdateProof.t) y :: ⟦StructFieldSet (UpdateProofⁱᵐᵖˡ) "MapVal", (#x, #y)⟧ ⤳[under] #(x <|UpdateProof.MapVal' := y|>);
-  #[global] UpdateProof_get_NonMembProof (x : UpdateProof.t) :: ⟦StructFieldGet (UpdateProofⁱᵐᵖˡ) "NonMembProof", #x⟧ ⤳[under] #x.(UpdateProof.NonMembProof');
-  #[global] UpdateProof_set_NonMembProof (x : UpdateProof.t) y :: ⟦StructFieldSet (UpdateProofⁱᵐᵖˡ) "NonMembProof", (#x, #y)⟧ ⤳[under] #(x <|UpdateProof.NonMembProof' := y|>);
 }.
 
 Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions} : Prop :=
@@ -1592,7 +1432,6 @@ Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions
   #[global] Memb_instance :: Memb_Assumptions;
   #[global] NonMemb_instance :: NonMemb_Assumptions;
   #[global] AuditProof_instance :: AuditProof_Assumptions;
-  #[global] UpdateProof_instance :: UpdateProof_Assumptions;
   #[global] SignVrf_unfold :: FuncUnfold SignVrf [] (SignVrfⁱᵐᵖˡ);
   #[global] VerifyVrfSig_unfold :: FuncUnfold VerifyVrfSig [] (VerifyVrfSigⁱᵐᵖˡ);
   #[global] SignLink_unfold :: FuncUnfold SignLink [] (SignLinkⁱᵐᵖˡ);
@@ -1616,10 +1455,6 @@ Class Assumptions `{!GoGlobalContext} `{!GoLocalContext} `{!GoSemanticsFunctions
   #[global] NonMembDecode_unfold :: FuncUnfold NonMembDecode [] (NonMembDecodeⁱᵐᵖˡ);
   #[global] AuditProofEncode_unfold :: FuncUnfold AuditProofEncode [] (AuditProofEncodeⁱᵐᵖˡ);
   #[global] AuditProofDecode_unfold :: FuncUnfold AuditProofDecode [] (AuditProofDecodeⁱᵐᵖˡ);
-  #[global] UpdateProofEncode_unfold :: FuncUnfold UpdateProofEncode [] (UpdateProofEncodeⁱᵐᵖˡ);
-  #[global] UpdateProofDecode_unfold :: FuncUnfold UpdateProofDecode [] (UpdateProofDecodeⁱᵐᵖˡ);
-  #[global] UpdateProofSlice1DEncode_unfold :: FuncUnfold UpdateProofSlice1DEncode [] (UpdateProofSlice1DEncodeⁱᵐᵖˡ);
-  #[global] UpdateProofSlice1DDecode_unfold :: FuncUnfold UpdateProofSlice1DDecode [] (UpdateProofSlice1DDecodeⁱᵐᵖˡ);
   #[global] MembSlice1DEncode_unfold :: FuncUnfold MembSlice1DEncode [] (MembSlice1DEncodeⁱᵐᵖˡ);
   #[global] MembSlice1DDecode_unfold :: FuncUnfold MembSlice1DDecode [] (MembSlice1DDecodeⁱᵐᵖˡ);
   #[global] AuditProofSlice1DEncode_unfold :: FuncUnfold AuditProofSlice1DEncode [] (AuditProofSlice1DEncodeⁱᵐᵖˡ);
