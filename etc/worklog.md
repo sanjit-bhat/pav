@@ -34,8 +34,8 @@ tape** and 10.0 us is the harness store's own lookups and copies.
 Against a live 3-replica Tulip, at the measured 46k-per-30 s workload: **8.3 s
 per epoch** (7.7–10.5 over five runs), of which the tree is 6 us of 180 us per
 insert. **With the tree on a disk** (Pebble, 5M leaves, 1.9 GB): **8.8 s per
-epoch**, one 2.3 ms fsync, and a lookup at p50 67–72 us whether or not the page
-cache can hold the tree (§11).
+epoch**, one atomic durable commit, and a lookup at p50 67–72 us whether or not
+the page cache can hold the tree (§11).
 
 Isolating the two layout decisions on one tree and one engine (§11.4), a lookup
 costs \vkt **59 us** against AKD's **170 us** — 1.97x from probes per level,
@@ -625,6 +625,12 @@ cache sizes.
 
 ### 11.1 One fsync per epoch
 
+*Corrected by §12: this section measured HEAD's fsync alone, on the assumption
+that the node records did not need to be in it. On a single-version store they
+do, and the durable commit is 118 ms/epoch at 46k insertions rather than 2.3 ms.
+What survives is the shape — one fsync, one atomic step — and the batch-size
+sweep below, whose point is the second one.*
+
 The epoch commit writes node records with no fsync and then HEAD with one. That
 is sound for the reason in §5: nothing reads the records until HEAD names the
 digest they add up to, so a crash before the HEAD write leaves records no reader
@@ -654,7 +660,7 @@ knee; the design would rather they were larger.
 |---|---|
 | epoch | **8.8 s** (191 us/insert: 183 load, 5 update+tape, 3 write) |
 | | 10.75 probes, 7.50 hits, 9.96 writes, 242 B tape per insert |
-| epoch durability | **one fsync, 2.3 ms** |
+| epoch durability | **one atomic commit, one fsync** (118 ms at this batch size, §12) |
 | lookup, page cache warm | p50 **71 us**, p99 133 us |
 | lookup, `MemoryMax=512M` so the 1.9 GB tree cannot be cached | p50 **67 us**, mean 88, p99 346 |
 | | 27.00 probes, 24.0 hits, 1.56 KB read |
