@@ -33,9 +33,10 @@ tape** and 10.0 us is the harness store's own lookups and copies.
 
 Against a live 3-replica Tulip, at the measured 46k-per-30 s workload: **8.3 s
 per epoch** (7.7–10.5 over five runs), of which the tree is 6 us of 180 us per
-insert. **With the tree on a disk** (Pebble, 5M leaves, 1.9 GB): **8.8 s per
-epoch**, one atomic durable commit, and a lookup at p50 67–72 us whether or not
-the page cache can hold the tree (§11).
+insert. **With the tree on a disk** (Pebble): **8.8 s per epoch** at 5M leaves
+and **11.4 s at 20M / 5.0 GB**, one atomic durable commit each, and a lookup at
+p50 67–87 us — including from a process allowed 512 MB against that 5.0 GB tree,
+ten times what it can cache (§11, §14).
 
 Isolating the two layout decisions on one tree and one engine (§11.4), a lookup
 costs \vkt **59 us** against AKD's **170 us** — 1.97x from probes per level,
