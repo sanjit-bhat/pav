@@ -35,7 +35,21 @@ var (
 	warmD    = flag.Int("warm", -1, "keep the tree above this depth resident (-1 to disable)")
 	keep     = flag.Bool("keep", false, "keep the LSM directory afterwards")
 	reuse    = flag.Bool("reuse", false, "reuse an existing LSM directory and its digest")
+	lenMajor = flag.Bool("lenmajor", false, "store keys length-major ([depth][label]) as AKD does, instead of value-major ([label][depth]). same tree, same probes, only locality differs")
 )
+
+// storeKey is the key the LSM actually sees. value-major is what merkle emits;
+// length-major moves the depth to the front, which is how AKD serializes a
+// NodeLabel and scatters one path's nodes across the keyspace by depth.
+func storeKey(k []byte) []byte {
+	if !*lenMajor {
+		return k
+	}
+	n := len(k)
+	out := make([]byte, 0, n)
+	out = append(out, k[n-2:]...)
+	return append(out, k[:n-2]...)
+}
 
 type counters struct {
 	probes int
@@ -54,7 +68,7 @@ func (s *store) get(keys [][]byte) [][]byte {
 	out := make([][]byte, len(keys))
 	for i, k := range keys {
 		s.probes++
-		v, closer, err := s.db.Get(k)
+		v, closer, err := s.db.Get(storeKey(k))
 		if err == pebble.ErrNotFound {
 			continue
 		}
@@ -85,7 +99,7 @@ func (s *store) putHead(dig []byte) {
 func (s *store) commit(keys, vals [][]byte, opts *pebble.WriteOptions) {
 	b := s.db.NewBatch()
 	for i, k := range keys {
-		if err := b.Set(k, vals[i], nil); err != nil {
+		if err := b.Set(storeKey(k), vals[i], nil); err != nil {
 			panic(err)
 		}
 		s.wbytes += len(k) + len(vals[i])
