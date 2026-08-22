@@ -110,16 +110,18 @@ func put(n0 **node, depth uint64, label, val []byte) (err bool) {
 }
 
 // Prove the membership of label.
-func (m *Map) Prove(label []byte) (inMap bool, val, entryProof []byte) {
+// it errors iff label's path runs into a cut, i.e. the map is out-of-core and
+// the path was not loaded.
+func (m *Map) Prove(label []byte) (inMap bool, val, entryProof []byte, err bool) {
 	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
-	// Prove is part of the external API, which does not expose cut trees.
-	// therefore, we meet the precond.
 	return m.root.prove(label, true)
 }
 
-// prove expects no cut nodes along label.
-func (n *node) prove(label []byte, getProof bool) (inTree bool, val, proof []byte) {
-	found, foundLabel, val, proof := n.find(0, label, getProof)
+func (n *node) prove(label []byte, getProof bool) (inTree bool, val, proof []byte, err bool) {
+	found, foundLabel, val, proof, err := n.find(0, label, getProof)
+	if err {
+		return false, nil, nil, true
+	}
 	if getProof {
 		binary.LittleEndian.PutUint64(proof, uint64(len(proof))-8) // SibsLen
 	}
@@ -152,8 +154,8 @@ func (n *node) prove(label []byte, getProof bool) (inTree bool, val, proof []byt
 }
 
 // find searches the tree for a leaf node down path label.
-// it expects no cut nodes along label.
-func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foundLabel, foundVal, sibs []byte) {
+// it errors iff it runs into a cut, which hides whether label is there.
+func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foundLabel, foundVal, sibs []byte, err bool) {
 	// if empty, not found.
 	if n == nil {
 		if getProof {
@@ -177,15 +179,19 @@ func (n *node) find(depth uint64, label []byte, getProof bool) (found bool, foun
 	// recurse down inner.
 	if n.nodeTy == innerNodeTy {
 		child, sib := n.getChild(label, depth)
-		found, foundLabel, foundVal, sibs = (*child).find(depth+1, label, getProof)
+		found, foundLabel, foundVal, sibs, err = (*child).find(depth+1, label, getProof)
+		if err {
+			return false, nil, nil, nil, true
+		}
 		if getProof {
 			// proof will have sibling hash for each inner node.
 			sibs = append(sibs, (*sib).getHash()...)
 		}
 		return
 	}
-	// cut hides the sub-tree, so don't know if there.
-	panic("merkle: find into cut node")
+
+	std.Assert(n.nodeTy == cutNodeTy)
+	return false, nil, nil, nil, true
 }
 
 func getProofCap(depth uint64) uint64 {

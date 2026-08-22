@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"math"
 	"math/rand/v2"
+	"runtime"
 	"testing"
 	"time"
 
@@ -13,7 +14,18 @@ import (
 
 const (
 	defNSeed uint64 = 1_000_000
+	// probeSlack sets the path probe bound at log2(N) + probeSlack. leaf depth
+	// is log2(N) + Geom(1/2), so a 2^-probeSlack tail probes deeper.
+	probeSlack uint64 = 6
 )
+
+func probeBound(n uint64) uint64 {
+	var d uint64
+	for 1<<d < n {
+		d++
+	}
+	return d + probeSlack
+}
 
 func TestBenchMerkPut(t *testing.T) {
 	m, _ := seedMap(defNSeed)
@@ -45,7 +57,7 @@ func TestBenchMerkGenVer(t *testing.T) {
 		l := labels[rand.Uint64N(defNSeed)]
 
 		t0 := time.Now()
-		isReg, v, p := m.Prove(l)
+		isReg, v, p, _ := m.Prove(l)
 		if !isReg {
 			t.Fatal()
 		}
@@ -76,7 +88,7 @@ func TestBenchMerkSize(t *testing.T) {
 	m, labels := seedMap(defNSeed)
 	samp := &stats.Sample{Xs: make([]float64, 0, defNSeed)}
 	for _, label := range labels {
-		isReg, _, p := m.Prove(label)
+		isReg, _, p, _ := m.Prove(label)
 		if !isReg {
 			t.Fatal()
 		}
@@ -190,4 +202,123 @@ func mkRandVal() []byte {
 	x := make([]byte, 40)
 	randRead(x)
 	return x
+}
+
+// TestBenchMerkStoreGet measures what a lookup costs a KV store: one batch
+// read of computable keys, and how many of them hit.
+func TestBenchMerkStoreGet(t *testing.T) {
+	m, labels := seedMap(defNSeed)
+	dig := m.Hash()
+	store := newMemStore()
+	store.put(m.Records())
+	m = nil
+	runtime.GC()
+
+	nOps := 20_000
+	var bytesRead int
+	var totalGen time.Duration
+	for i := 0; i < nOps; i++ {
+		l := labels[rand.Uint64N(defNSeed)]
+		t0 := time.Now()
+		oc := NewCut(dig)
+		before := store.hits
+		store.loadFrom(t, oc, l, probeBound(defNSeed))
+		bytesRead += (store.hits - before) * 65
+		inMap, _, _, err := oc.Prove(l)
+		if err || !inMap {
+			t.Fatal()
+		}
+		totalGen += time.Since(t0)
+	}
+
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: float64(store.probes) / float64(nOps), Unit: "probes/op"},
+		{N: float64(store.hits) / float64(nOps), Unit: "hits/op"},
+		{N: float64(bytesRead) / float64(nOps), Unit: "B/op(read)"},
+		{N: float64(totalGen.Microseconds()) / float64(nOps), Unit: "us/op(cpu)"},
+	})
+}
+
+// TestBenchMerkStoreEpoch measures what one epoch costs a KV store: the
+// deduped prefix probe for the whole batch, then the records it writes back.
+func TestBenchMerkStoreEpoch(t *testing.T) {
+	m, _ := seedMap(defNSeed)
+	dig := m.Hash()
+	store := newMemStore()
+	store.put(m.Records())
+	m = nil
+	runtime.GC()
+
+	const batch = 46_000
+	nEpochs := 3
+	var bytesRead, bytesWrit, nWrit int
+	var totalLoad, totalUpd time.Duration
+	for i := 0; i < nEpochs; i++ {
+		labels, vals := mkBatch(batch)
+
+		t0 := time.Now()
+		oc := NewCut(dig)
+		// the whole batch's keys are computable up front, so this is one
+		// batch read. dedup, since the top of the tree is shared.
+		seen := make(map[string]bool, batch*probeBound(defNSeed))
+		var keys [][]byte
+		for _, l := range labels {
+			for _, k := range PathKeys(l, probeBound(defNSeed)) {
+				if !seen[string(k)] {
+					seen[string(k)] = true
+					keys = append(keys, k)
+				}
+			}
+		}
+		got := store.get(keys)
+		fetched := make(map[string][]byte, len(keys))
+		for j, k := range keys {
+			if got[j] != nil {
+				fetched[string(k)] = got[j]
+				bytesRead += len(got[j])
+			}
+		}
+		for _, l := range labels {
+			pk := PathKeys(l, probeBound(defNSeed))
+			recs := make([][]byte, len(pk))
+			for j, k := range pk {
+				recs[j] = fetched[string(k)]
+			}
+			complete, err := oc.LoadPath(l, recs)
+			if err {
+				t.Fatal("load")
+			}
+			if !complete {
+				// the rare path past the bound: a second, tiny round trip.
+				store.loadFrom(t, oc, l, probeBound(defNSeed)+probeExtend)
+			}
+		}
+		t1 := time.Now()
+
+		if _, err := oc.Update(labels, vals); err {
+			t.Fatal("update")
+		}
+		wk, wr := oc.Records()
+		t2 := time.Now()
+		store.put(wk, wr)
+		dig = oc.Hash()
+
+		nWrit += len(wk)
+		for _, r := range wr {
+			bytesWrit += len(r) + int(StoreKeyLen)
+		}
+		totalLoad += t1.Sub(t0)
+		totalUpd += t2.Sub(t1)
+	}
+
+	nOps := batch * nEpochs
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: float64(store.probes) / float64(nOps), Unit: "probes/op"},
+		{N: float64(store.hits) / float64(nOps), Unit: "hits/op"},
+		{N: float64(nWrit) / float64(nOps), Unit: "writes/op"},
+		{N: float64(bytesRead) / float64(nOps), Unit: "B/op(read)"},
+		{N: float64(bytesWrit) / float64(nOps), Unit: "B/op(writ)"},
+		{N: float64(totalLoad.Microseconds()) / float64(nOps), Unit: "us/op(load)"},
+		{N: float64(totalUpd.Microseconds()) / float64(nOps), Unit: "us/op(upd)"},
+	})
 }

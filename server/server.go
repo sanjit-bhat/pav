@@ -209,7 +209,8 @@ func (s *Server) getHist(uid, prefixLen uint64) (hist []*ktcore.Memb) {
 	hist = make([]*ktcore.Memb, 0, numVers-prefixLen)
 	for ver := prefixLen; ver < numVers; ver++ {
 		label, labelProof := ktcore.ProveMapLabel(s.secs.vrf, uid, ver)
-		inMap, _, mapProof := s.keys.hidden.Prove(label)
+		inMap, _, mapProof, err := s.keys.hidden.Prove(label)
+		std.Assert(!err)
 		std.Assert(inMap)
 		rand := ktcore.GetCommitRand(s.secs.commit, label)
 		open := &ktcore.CommitOpen{Val: pks[ver], Rand: rand}
@@ -222,7 +223,8 @@ func (s *Server) getHist(uid, prefixLen uint64) (hist []*ktcore.Memb) {
 // getBound returns a non-membership proof for the boundary version.
 func (s *Server) getBound(uid, numVers uint64) (bound *ktcore.NonMemb) {
 	label, labelProof := ktcore.ProveMapLabel(s.secs.vrf, uid, numVers)
-	inMap, _, mapProof := s.keys.hidden.Prove(label)
+	inMap, _, mapProof, err := s.keys.hidden.Prove(label)
+	std.Assert(!err)
 	std.Assert(!inMap)
 	bound = &ktcore.NonMemb{LabelProof: labelProof, MerkleProof: mapProof}
 	return

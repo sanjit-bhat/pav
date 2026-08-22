@@ -59,7 +59,7 @@ func TestMap(t *testing.T) {
 }
 
 func proveAndVerify(t *testing.T, m *Map, label []byte, expInMap bool, expVal []byte) {
-	inMap, val, proof := m.Prove(label)
+	inMap, val, proof, _ := m.Prove(label)
 	if inMap != expInMap {
 		t.Fatal()
 	}
