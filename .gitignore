@@ -3,3 +3,4 @@
 *.prof
 etc/bench/tulipbench/tulipbench
 etc/bench/ktbench/ktbench
+etc/bench/diskbench/diskbench
