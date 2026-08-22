@@ -636,3 +636,53 @@ the epoch grows**, because probes, writes, and proof bytes are all `log2(N/B)`
 per insertion — the top of the tree is shared across the batch, so a bigger
 epoch amortizes more of it. AKD's measured 46k-insertion epochs are near the
 knee; the design would rather they were larger.
+
+### 11.2 An epoch, and a lookup, with the tree on disk
+
+5M leaves seeded entirely out of core in 500k batches: **25.8M record writes,
+2.6 GB written, 1.9 GB on disk after compaction**, 6m21s. Then the etc/ workload
+— epochs of 46,000 — and 2,000 lookups.
+
+| | |
+|---|---|
+| epoch | **8.8 s** (191 us/insert: 183 load, 5 update+tape, 3 write) |
+| | 10.75 probes, 7.50 hits, 9.96 writes, 242 B tape per insert |
+| epoch durability | **one fsync, 2.3 ms** |
+| lookup, page cache warm | p50 **71 us**, p99 133 us |
+| lookup, `MemoryMax=512M` so the 1.9 GB tree cannot be cached | p50 **67 us**, mean 88, p99 346 |
+| | 27.00 probes, 24.0 hits, 1.56 KB read |
+
+**8.8 s per epoch against the 30 s cadence, with the tree on a disk.** The tree's
+own CPU is 5 us of the 191; the rest is the LSM. And a lookup barely notices
+losing the page cache — p50 67 us under a memory limit that can hold a quarter
+of the tree, against 71 us with all of it cached. That is the value-major key
+doing its job: a path's deep probes land in a handful of blocks, so the working
+set per lookup is a few blocks rather than 27 scattered ones.
+
+### 11.3 Key order is worth 21–59%, at identical probe counts
+
+The design note argues for value-major keys against AKD's length-major
+`[type][label_len BE][label_val]` and does not measure it. `-lenmajor` moves the
+depth to the front of the key and changes nothing else: same tree, same records,
+**same 27.00 probes and 24.0 hits per lookup**. Only where the keys land in the
+sorted keyspace differs.
+
+| | value-major | length-major | |
+|---|---|---|---|
+| epoch, us/insert | 191.4 | 233.1 | **+22%** |
+| epoch, s | 8.81 | 10.72 | +22% |
+| lookup p50, page cache warm | 71 us | 91 us | **+28%** |
+| lookup p50, `MemoryMax=512M` | 67 us | 102 us | **+52%** |
+| lookup mean, `MemoryMax=512M` | 88 us | 140 us | +59% |
+| lookup p99, `MemoryMax=512M` | 346 us | 551 us | +59% |
+| on disk | 1.88 GB | 1.98 GB | +6% |
+
+Reproduced across two independent seedings, which agreed to within 2%.
+
+Two things worth taking from this. The claim is **confirmed and it is not small**
+— a key layout decision, with the probe count held exactly fixed, is worth a
+fifth of the epoch and half the lookup latency. And **the gap widens as the
+cache shrinks**: 28% when the tree is fully cached, 52% when it is not, which is
+the regime a 10^10-leaf directory is permanently in. Length-major sorts a path's
+nodes by depth, so the 27 records of one lookup are spread over 27 regions of
+the keyspace; value-major puts the deep ones together.

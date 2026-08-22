@@ -201,7 +201,9 @@ func main() {
 	}
 	defer func() {
 		db.Close()
-		if !*keep {
+		// -reuse implies keep: it is a second pass over a tree someone else
+		// seeded, and deleting it would strand the next pass.
+		if !*keep && !*reuse {
 			os.RemoveAll(*dir)
 		}
 	}()
