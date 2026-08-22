@@ -60,7 +60,7 @@ func (c *compiler) getStructs(src string) []types.Object {
 		Mode: mode,
 		Dir:  dir,
 	}
-	pkgs, err := packages.Load(cfg, "")
+	pkgs, err := packages.Load(cfg, ".")
 	if err != nil {
 		log.Panic(err)
 	}
