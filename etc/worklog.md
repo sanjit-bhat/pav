@@ -49,9 +49,10 @@ Four things did most of the work, and three of them are simplifications:
    proof, in one round trip. This is the change to the doc's design A.
 3. **`ApplyUpdate` + `Evict`** (§3), so the audit proof a replica already
    downloads *is* its cache-warming stream.
-4. **HEAD written last** (§5), so the atomic step of an epoch commit is one key
-   under MVCC — no transaction over the batch, which the doc reserves for
-   design B.
+4. **A one-key atomic epoch commit** (§5, corrected in §12) — but only under
+   MVCC, and only if HEAD names the timestamp readers must use. On a
+   single-version store the records and HEAD have to go in one atomic batch,
+   which a local engine gives for free. §12 crash-tests both.
 
 Read next: §7 for the scaling and the 10^10 extrapolation, §9 for where the
 storage should live, §8 for what is not done.
@@ -570,11 +571,11 @@ oversights. Each is against a claim stated in `persistent-server-design.md` or
   probes, since AKD's two-probes-per-level is exactly the cost of *not* doing it.
 
 - **"Immutable-then-CAS ... available only in design B, since it needs immutable
-  keys"** (design §2.3). Design A gets the same O(1) atomic step. A reader
-  pinning a timestamp does the same work as a key that never changes: write the
-  nodes in any order, write HEAD last, and a reader that took HEAD at `ts` sees
-  exactly the versions committed by `ts`. No transaction over the batch, and the
-  §2.3 "the atomic step is O(B)" caveat goes away.
+  keys"** (design §2.3). Half right, and §12 says which half. Design A does get
+  the O(1) atomic step, but only on an MVCC store *and* only if HEAD carries the
+  timestamp readers are to use — a reader that reads HEAD and then reads nodes
+  at "now" is broken by exactly the crash MVCC was supposed to cover. On a
+  single-version store the note's O(B) transaction is required, and is free.
 
 - **Self-verification is design B's dividend** (design §2.2). Design A has it
   too, for free. An inner record's hash is derived from the two hashes it
@@ -734,3 +735,49 @@ rest of either implementation. And AKD's probes are *dependent* — it learns a
 child's key by reading the parent — which costs nothing extra against a local
 LSM and is the difference between 1 round trip and ~24 against anything remote
 (§2). Both of those understate the gap rather than overstate it.
+
+## 12. Crash safety, tested rather than argued
+
+§5 claimed that writing the node records and then HEAD was all of R2 and R3,
+with an atomic step of one key. Crash-testing it showed that is true only under
+conditions §5 did not state. `etc/bench/diskbench/crashtest` seeds a tree,
+applies one more epoch, `SIGKILL`s the writer at a chosen point, reopens, reads
+whatever HEAD survived, and then **re-proves every committed label against it**
+— which walks exactly the records an aborted epoch may have overwritten.
+
+The thing §5 missed is that **design A's node keys are mutable**. A node's
+record is rewritten by every epoch that touches it, so epoch `e+1`'s writes
+destroy the records that epoch `e`'s digest still points through.
+
+| store | commit shape | crash point | result |
+|---|---|---|---|
+| single-version (Pebble) | records, then HEAD | after records | **FAIL** — HEAD names epoch 0 and the store cannot serve it |
+| single-version (Pebble) | one atomic batch | before commit | OK, epoch 0 whole |
+| single-version (Pebble) | one atomic batch | right after commit | OK, epoch 1 whole, records included |
+
+The failure is **fail-stop, not silent**: `LoadPath` checks each record's hash
+against the cut it fills, so the reader errors rather than producing a proof
+against a tree that was never published. That is worth something, but the tree
+is unreadable until the writer replays the epoch, and permanently wrong if
+recovery commits a *different* batch.
+
+**Two correct commit shapes, and which store gets which:**
+
+- **Single-version store** — put the records and HEAD in one atomic batch. The
+  atomic step is O(B), which is what the design note's §2.3 said and which this
+  log wrongly claimed to have improved on. It costs nothing extra on a local
+  engine: one Pebble batch is all-or-nothing and still one fsync. Measured at
+  46k insertions, that commit is **118 ms/epoch**, against 30 s — not the 2.3 ms
+  §11.1 reported for HEAD alone, which was timing the wrong thing.
+- **MVCC store** — HEAD-last does work, and the atomic step really is one key,
+  **provided HEAD carries the timestamp its node writes had all committed by and
+  readers read the nodes at that timestamp.** Reading HEAD and then reading
+  nodes at "now" is broken by precisely the crash in the table above: the
+  surviving HEAD names epoch `e`, but the records at "now" are epoch `e+1`'s.
+  `ktbench` now stores `digest || ts` in HEAD and pins its reads there. This one
+  is reasoned and implemented, not crash-tested — killing a replicated Tulip
+  deployment mid-commit is a bigger harness than this work needed.
+
+So the O(1) atomic step survives as a real property of MVCC, and the honest
+version of §5 is: *the epoch commit needs one atomic step, and how big it has to
+be is a property of the store, not of the tree.*

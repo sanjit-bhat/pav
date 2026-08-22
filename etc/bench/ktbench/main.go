@@ -81,6 +81,16 @@ func (s *snapshot) begin() uint64 {
 	tid := (ts+n)/n*n + readSid
 	for trusted_time.GetTime() <= tid {
 	}
+	return s.at(tid)
+}
+
+// at pins the read to a timestamp someone else chose, which is what reading an
+// epoch requires: HEAD names the timestamp its node writes had all committed
+// by, and the nodes must be read there rather than at "now". reading at "now"
+// is wrong precisely in the case MVCC was supposed to cover -- a writer that
+// died after its node writes and before HEAD leaves newer versions of records
+// the surviving HEAD still points through.
+func (s *snapshot) at(tid uint64) uint64 {
 	for _, gcs := range s.pool {
 		for _, gc := range gcs {
 			gc.Attach(tid)
@@ -103,13 +113,6 @@ type store struct {
 	aborts int
 }
 
-func (s *store) get(keys [][]byte) [][]byte {
-	if *snapRead {
-		return s.getSnap(keys)
-	}
-	return s.getTxn(keys)
-}
-
 // headKey holds the published epoch: its number and its digest. it is written
 // last, and read in the same snapshot as the nodes.
 //
@@ -122,9 +125,28 @@ func (s *store) get(keys [][]byte) [][]byte {
 // write-ordering discipline beyond "HEAD last".
 var headKey = append(make([]byte, merkle.StoreKeyLen-1), 0xff)
 
-func (s *store) getSnap(keys [][]byte) [][]byte {
+func (s *store) get(keys [][]byte) [][]byte {
+	if *snapRead {
+		return s.getSnap(keys, 0)
+	}
+	return s.getTxn(keys)
+}
+
+// getAt reads at the epoch's own timestamp.
+func (s *store) getAt(keys [][]byte, ts uint64) [][]byte {
+	if *snapRead {
+		return s.getSnap(keys, ts)
+	}
+	return s.getTxn(keys)
+}
+
+func (s *store) getSnap(keys [][]byte, ts uint64) [][]byte {
 	out := make([][]byte, len(keys))
-	ts := s.snap.begin()
+	if ts == 0 {
+		ts = s.snap.begin()
+	} else {
+		s.snap.at(ts)
+	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	n := *nWorkers
@@ -188,6 +210,35 @@ func (s *store) getTxn(keys [][]byte) [][]byte {
 	return out
 }
 
+// putHead publishes an epoch: the digest, plus the timestamp its node writes
+// had all committed by. a reader must read the nodes *at that timestamp*, not
+// at "now" -- that is what makes HEAD-last sound here and unsound on a
+// single-version store. a writer that died after its node writes and before
+// HEAD leaves newer versions of records the surviving HEAD points through;
+// reading at the surviving HEAD's timestamp does not see them.
+func (s *store) putHead(dig []byte) {
+	ts := trusted_time.GetTime()
+	v := make([]byte, 0, len(dig)+8)
+	v = append(v, dig...)
+	for i := 0; i < 8; i++ {
+		v = append(v, byte(ts>>(8*i)))
+	}
+	s.put([][]byte{headKey}, [][]byte{v})
+}
+
+// readHead returns the published digest and the timestamp to read nodes at.
+func (s *store) readHead() ([]byte, uint64) {
+	v := s.get([][]byte{headKey})[0]
+	if len(v) != 40 {
+		panic("HEAD")
+	}
+	var ts uint64
+	for i := 7; i >= 0; i-- {
+		ts = ts<<8 | uint64(v[32+i])
+	}
+	return v[:32], ts
+}
+
 func (s *store) put(keys, vals [][]byte) {
 	for lo := 0; lo < len(keys); lo += *writeChnk {
 		hi := min(lo+*writeChnk, len(keys))
@@ -228,6 +279,10 @@ func probeBound(n int, slack uint64) uint64 {
 // loadBatch loads every label's path into m with one deduped batch read,
 // then a second, small read for the paths that outran the bound.
 func loadBatch(s *store, m *merkle.Map, labels [][]byte, maxD uint64) {
+	loadBatchAt(s, m, labels, maxD, 0)
+}
+
+func loadBatchAt(s *store, m *merkle.Map, labels [][]byte, maxD uint64, ts uint64) {
 	seen := make(map[string]int, len(labels)*int(maxD))
 	var keys [][]byte
 	pks := make([][][]byte, len(labels))
@@ -251,7 +306,7 @@ func loadBatch(s *store, m *merkle.Map, labels [][]byte, maxD uint64) {
 	if len(keys) == 0 {
 		return
 	}
-	got := s.get(keys)
+	got := s.getAt(keys, ts)
 
 	var deep [][]byte
 	for i, l := range labels {
@@ -271,7 +326,7 @@ func loadBatch(s *store, m *merkle.Map, labels [][]byte, maxD uint64) {
 		}
 	}
 	if len(deep) > 0 {
-		loadBatch(s, m, deep, min(maxD+16, 256))
+		loadBatchAt(s, m, deep, min(maxD+16, 256), ts)
 	}
 }
 
@@ -345,7 +400,7 @@ func main() {
 	t0 := time.Now()
 	sk, sr := mem.Records()
 	s.put(sk, sr)
-	s.put([][]byte{headKey}, [][]byte{dig})
+	s.putHead(dig)
 	fmt.Fprintf(os.Stderr, "seeded %d leaves as %d records in %v\n", *nSeed, len(sk), time.Since(t0))
 	mem = nil
 
@@ -372,9 +427,10 @@ func main() {
 		wk, wr := oc.Records()
 		t2 := time.Now()
 		s.put(wk, wr)
-		// HEAD last, and on its own, so it is the one atomic step.
+		// HEAD last, and on its own, so it is the one atomic step -- see
+		// putHead for why that needs the timestamp.
 		dig = oc.Hash()
-		s.put([][]byte{headKey}, [][]byte{dig})
+		s.putHead(dig)
 		t3 := time.Now()
 
 		tapeBytes += len(tape)
@@ -408,14 +464,13 @@ func main() {
 	for i := 0; i < *nLookups; i++ {
 		l := seedLabels[rand.IntN(len(seedLabels))]
 		t := time.Now()
-		// HEAD comes back in the same snapshot as the path, so the records
-		// are the ones the digest it names is made of.
-		head := s.get([][]byte{headKey})[0]
+		// read HEAD, then read the nodes at the timestamp it names.
+		head, headTs := s.readHead()
 		m := warm
 		if m == nil || string(head) != string(dig) {
 			m = merkle.NewCut(head)
 		}
-		loadBatch(s, m, [][]byte{l}, maxDRead)
+		loadBatchAt(s, m, [][]byte{l}, maxDRead, headTs)
 		inMap, _, _, err := m.Prove(l)
 		if err || !inMap {
 			panic("lookup")

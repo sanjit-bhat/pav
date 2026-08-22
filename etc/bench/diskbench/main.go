@@ -202,6 +202,22 @@ func mkLabels(rnd *rand.ChaCha8, n int) (labels, vals [][]byte) {
 
 var headKey = append(make([]byte, merkle.StoreKeyLen-1), 0xff)
 
+// peakRSS is the high-water mark of resident memory. it is the number that
+// says whether a tree bigger than RAM is possible: the writer holds the
+// batch's paths, the reader holds one, and neither is O(N).
+func peakRSS() string {
+	b, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return "?"
+	}
+	for _, ln := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(ln, "VmHWM:") {
+			return strings.TrimSpace(strings.TrimPrefix(ln, "VmHWM:"))
+		}
+	}
+	return "?"
+}
+
 // dropCaches empties the OS page cache, so a measured read really goes to the
 // device rather than to the kernel's copy of it.
 func dropCaches() {
@@ -292,6 +308,7 @@ func main() {
 	if du, err := exec.Command("du", "-sb", *dir).Output(); err == nil {
 		fmt.Printf("        on disk: %s", du)
 	}
+	fmt.Printf("        peak RSS after seeding: %s\n", peakRSS())
 
 	// measured epochs.
 	base := s.counters
@@ -323,7 +340,7 @@ func main() {
 		t3 := time.Now()
 		s.commitEpoch(wk, wr, dig)
 		t4 := time.Now()
-		tSync += t4.Sub(t3) - (t3.Sub(t2) - t3.Sub(t2))
+		tSync += t4.Sub(t3)
 		if *crashAt == "after" {
 			fmt.Printf("CRASH after commit, digest %x\n", dig)
 			os.Stdout.Sync()
@@ -344,19 +361,22 @@ func main() {
 		}
 	}
 	n := float64(*nBatch * *nEpochs)
-	fmt.Printf("epoch:  %.1f us/insert (load %.1f, upd %.1f, write %.1f)  %.2f probes  %.2f hits  %.2f writes  %.0f B tape  |  %.2f s/epoch, HEAD fsync %.2f ms/epoch\n",
-		float64((tLoad+tUpd+tWrite).Microseconds())/n,
+	fmt.Printf("epoch:  %.1f us/insert (load %.1f, upd %.1f, commit %.1f)  %.2f probes  %.2f hits  %.2f writes  %.0f B tape  |  %.2f s/epoch, durable commit %.0f ms/epoch (%s)\n",
+		float64((tLoad+tUpd+tSync).Microseconds())/n,
 		float64(tLoad.Microseconds())/n,
 		float64(tUpd.Microseconds())/n,
-		float64(tWrite.Microseconds())/n,
+		float64(tSync.Microseconds())/n,
 		float64(s.probes-base.probes)/n,
 		float64(s.hits-base.hits)/n,
 		float64(s.writes-base.writes)/n,
 		float64(tapeBytes)/n,
-		float64((tLoad+tUpd+tWrite).Seconds())/float64(*nEpochs),
-		float64(tSync.Microseconds())/1e3/float64(*nEpochs))
+		float64((tLoad+tUpd+tSync).Seconds())/float64(*nEpochs),
+		float64(tSync.Microseconds())/1e3/float64(*nEpochs),
+		*commitMode)
 
+	fmt.Printf("        peak RSS after epochs: %s\n", peakRSS())
 	lookups(s, dig, sample, maxDRead, warm)
+	fmt.Printf("        peak RSS at exit: %s\n", peakRSS())
 }
 
 // lookups measures one path load plus a proof, from a cold page cache, at each
