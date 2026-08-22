@@ -9,46 +9,79 @@ import (
 )
 
 // memStore stands in for the KV store, and counts what a real one would
-// charge for: probes issued and probes that hit.
+// charge for: probes issued and probes that hit. records live in fixed slots
+// in one arena, keyed by a fixed-size array, so the harness costs a map probe
+// and a copy per hit rather than a string allocation per probe -- the copy is
+// what a real client pays anyway, and the allocation is not.
+const slotSize = 1 + 1 + cryptoffi.HashLen + 40 // length, tag, label, value
+
+// the arena is chunked, since one slice big enough for tens of millions of
+// records cannot be grown by doubling on a box this size.
+const chunkSlots = 1 << 20
+
 type memStore struct {
-	m      map[string][]byte
+	idx    map[[StoreKeyLen]byte]uint64
+	chunks [][]byte
+	used   uint64
 	probes int
 	hits   int
 }
 
-func newMemStore() *memStore { return &memStore{m: make(map[string][]byte)} }
+func newMemStore() *memStore {
+	return &memStore{idx: make(map[[StoreKeyLen]byte]uint64)}
+}
+
+func (s *memStore) slot(i uint64) []byte {
+	c := s.chunks[i/chunkSlots]
+	off := (i % chunkSlots) * slotSize
+	return c[off : off+slotSize]
+}
 
 func (s *memStore) put(keys, recs [][]byte) {
 	for i, k := range keys {
-		s.m[string(k)] = recs[i]
+		rec := recs[i]
+		if uint64(len(rec)) >= slotSize {
+			panic("record does not fit a slot")
+		}
+		var key [StoreKeyLen]byte
+		copy(key[:], k)
+		at, ok := s.idx[key]
+		if !ok {
+			if s.used/chunkSlots == uint64(len(s.chunks)) {
+				s.chunks = append(s.chunks, make([]byte, chunkSlots*slotSize))
+			}
+			at = s.used
+			s.used++
+			s.idx[key] = at
+		}
+		sl := s.slot(at)
+		sl[0] = byte(len(rec))
+		copy(sl[1:], rec)
 	}
 }
 
-func (s *memStore) get1(key []byte) []byte {
+func (s *memStore) get1(k []byte) []byte {
 	s.probes++
-	v, ok := s.m[string(key)]
-	if ok {
-		s.hits++
+	var key [StoreKeyLen]byte
+	copy(key[:], k)
+	at, ok := s.idx[key]
+	if !ok {
+		return nil
 	}
-	return v
+	s.hits++
+	sl := s.slot(at)
+	return bytes.Clone(sl[1 : 1+uint64(sl[0])])
 }
 
 // get is the one batch read a path costs.
 func (s *memStore) get(keys [][]byte) [][]byte {
 	out := make([][]byte, len(keys))
 	for i, k := range keys {
-		s.probes++
-		v, ok := s.m[string(k)]
-		if ok {
-			s.hits++
-			out[i] = v
-		}
+		out[i] = s.get1(k)
 	}
 	return out
 }
 
-// loadFrom loads label's path, asking the map which records it needs and
-// extending the probe if the bound was short.
 func (s *memStore) loadFrom(t *testing.T, m *Map, label []byte, maxD uint64) {
 	for {
 		minD, keys, needed := m.PathNeeds(label, maxD)
@@ -171,7 +204,7 @@ func TestStoreReject(t *testing.T) {
 		bad.put(keys, recs)
 		tampered := bytes.Clone(recs[i])
 		tampered[len(tampered)-1] ^= 1
-		bad.m[string(keys[i])] = tampered
+		bad.put([][]byte{keys[i]}, [][]byte{tampered})
 
 		var caught bool
 		for _, l := range labels {
