@@ -1234,9 +1234,13 @@ Definition loadPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
     return: ("$ret0", "$ret1")).
 
 (* Records returns the storage key and record of every node the map holds,
-   which after a LoadPath and an Update is exactly the set the update changed.
+   which after a LoadPath and an Update is exactly the set the update changed,
+   since every node loaded for a batch is an ancestor of one of its new leaves.
+   a writer that instead kept its map warm across epochs would need to track
+   which nodes are dirty; it would trade ~28% of its read probes for that
+   bookkeeping.
 
-   go: store.go:224:15 *)
+   go: store.go:228:15 *)
 Definition Map__Recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" <>,
     exception_do (let: "recs" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
@@ -1250,7 +1254,7 @@ Definition Map__Recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     (FuncResolve records [] #()) "$a0" "$a1" "$a2" "$a3" "$a4")) in
     return: ("$ret0", "$ret1")).
 
-(* go: store.go:228:6 *)
+(* go: store.go:232:6 *)
 Definition recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n" "depth" "prefix" "keys" "recs",
     exception_do (let: "recs" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "recs") in
@@ -1312,7 +1316,7 @@ Definition recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
 
 (* a record is an inner node's two child hashes, or a leaf's label and value.
 
-   go: store.go:249:6 *)
+   go: store.go:253:6 *)
 Definition encodeNodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n",
     exception_do (let: "n" := (GoAlloc (go.PointerType node) "n") in
@@ -1353,7 +1357,7 @@ Definition encodeNodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
      let: "$a1" := (![go.SliceType go.byte] (StructFieldRef node "val"%go (![go.PointerType node] "n"))) in
      (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1")).
 
-(* go: store.go:263:6 *)
+(* go: store.go:267:6 *)
 Definition decodeNodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "rec",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
