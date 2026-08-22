@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cockroachdb/pebble"
@@ -24,18 +25,20 @@ import (
 )
 
 var (
-	dir      = flag.String("dir", "/var/tmp/diskbench", "where the LSM lives; must not be tmpfs")
-	nSeed    = flag.Int("seed", 20_000_000, "leaves to seed")
-	seedStep = flag.Int("seedstep", 500_000, "leaves per seeding batch")
-	nBatch   = flag.Int("batch", 46_000, "insertions per measured epoch")
-	nEpochs  = flag.Int("epochs", 2, "epochs to measure")
-	nLookups = flag.Int("lookups", 2000, "lookups to measure")
-	cacheMB  = flag.Int("cache", 64, "pebble block cache, MB")
-	sweep    = flag.String("sweep", "", "comma-separated block cache sizes in MB to re-measure lookups at, reopening the LSM each time")
-	warmD    = flag.Int("warm", -1, "keep the tree above this depth resident (-1 to disable)")
-	keep     = flag.Bool("keep", false, "keep the LSM directory afterwards")
-	reuse    = flag.Bool("reuse", false, "reuse an existing LSM: read HEAD and the saved sample labels, skip seeding and epochs, measure lookups only. run it under a memory cgroup to make reads reach the device")
-	lenMajor = flag.Bool("lenmajor", false, "store keys length-major ([depth][label]) as AKD does, instead of value-major ([label][depth]). same tree, same probes, only locality differs")
+	dir        = flag.String("dir", "/var/tmp/diskbench", "where the LSM lives; must not be tmpfs")
+	nSeed      = flag.Int("seed", 20_000_000, "leaves to seed")
+	seedStep   = flag.Int("seedstep", 500_000, "leaves per seeding batch")
+	nBatch     = flag.Int("batch", 46_000, "insertions per measured epoch")
+	nEpochs    = flag.Int("epochs", 2, "epochs to measure")
+	nLookups   = flag.Int("lookups", 2000, "lookups to measure")
+	cacheMB    = flag.Int("cache", 64, "pebble block cache, MB")
+	sweep      = flag.String("sweep", "", "comma-separated block cache sizes in MB to re-measure lookups at, reopening the LSM each time")
+	warmD      = flag.Int("warm", -1, "keep the tree above this depth resident (-1 to disable)")
+	keep       = flag.Bool("keep", false, "keep the LSM directory afterwards")
+	reuse      = flag.Bool("reuse", false, "reuse an existing LSM: read HEAD and the saved sample labels, skip seeding and epochs, measure lookups only. run it under a memory cgroup to make reads reach the device")
+	commitMode = flag.String("commit", "atomic", "epoch commit shape: \"atomic\" (records and HEAD in one batch) or \"headlast\" (records, then HEAD, which needs MVCC to be safe)")
+	crashAt    = flag.String("crashat", "", "SIGKILL the process at a point in the epoch: \"mid\" (records written, HEAD not) or \"after\" (HEAD written)")
+	lenMajor   = flag.Bool("lenmajor", false, "store keys length-major ([depth][label]) as AKD does, instead of value-major ([label][depth]). same tree, same probes, only locality differs")
 )
 
 // storeKey is the key the LSM actually sees. value-major is what merkle emits;
@@ -83,17 +86,36 @@ func (s *store) get(keys [][]byte) [][]byte {
 	return out
 }
 
-// put writes without an fsync. node records do not need one: nothing reads
-// them until HEAD names the digest they add up to, so a crash before putHead
-// leaves records no reader can reach.
+// put writes node records without an fsync.
 func (s *store) put(keys, vals [][]byte) {
 	s.commit(keys, vals, pebble.NoSync)
 }
 
-// putHead is the epoch's one durable write, and its one fsync -- O(1) in the
-// batch, however many records the epoch touched.
+// putHead is the epoch's one durable write, and its one fsync.
 func (s *store) putHead(dig []byte) {
 	s.commit([][]byte{headKey}, [][]byte{dig}, pebble.Sync)
+}
+
+// commitEpoch publishes an epoch. which shape is correct depends on whether
+// the store keeps old versions.
+//
+// "headlast" writes the node records, then HEAD, and is what the design note's
+// §2.3 and this log's §5 argue for. it is sound *under MVCC*, where a reader
+// pinned at the old timestamp still sees the versions that epoch replaced. it
+// is NOT sound on a single-version store: design A's node keys are mutable, so
+// writing epoch e+1's records overwrites the ones HEAD still points through,
+// and a crash before the HEAD write leaves the surviving digest unreachable.
+//
+// "atomic" puts the records and HEAD in one batch. a local engine gives that
+// for free -- one Pebble batch is all-or-nothing and one fsync -- so the atomic
+// step is O(B) but costs no more than HEAD alone did.
+func (s *store) commitEpoch(keys, vals [][]byte, dig []byte) {
+	if *commitMode == "headlast" {
+		s.put(keys, vals)
+		s.putHead(dig)
+		return
+	}
+	s.commit(append(keys, headKey), append(vals, dig), pebble.Sync)
 }
 
 func (s *store) commit(keys, vals [][]byte, opts *pebble.WriteOptions) {
@@ -290,12 +312,23 @@ func main() {
 		}
 		wk, wr := oc.Records()
 		t2 := time.Now()
-		s.put(wk, wr)
 		dig = oc.Hash()
+		if *crashAt == "mid" {
+			// only the records, then die: the case HEAD-last has to survive.
+			s.put(wk, wr)
+			fmt.Println("CRASH mid-epoch, records written, HEAD not")
+			os.Stdout.Sync()
+			syscall.Kill(syscall.Getpid(), syscall.SIGKILL)
+		}
 		t3 := time.Now()
-		s.putHead(dig)
+		s.commitEpoch(wk, wr, dig)
 		t4 := time.Now()
-		tSync += t4.Sub(t3)
+		tSync += t4.Sub(t3) - (t3.Sub(t2) - t3.Sub(t2))
+		if *crashAt == "after" {
+			fmt.Printf("CRASH after commit, digest %x\n", dig)
+			os.Stdout.Sync()
+			syscall.Kill(syscall.Getpid(), syscall.SIGKILL)
+		}
 
 		tapeBytes += len(tape)
 		tLoad += t1.Sub(t0)
