@@ -121,34 +121,18 @@ func NonMembDecode(b0 []byte) (*NonMemb, []byte, bool) {
 }
 func AuditProofEncode(b0 []byte, o *AuditProof) []byte {
 	var b = b0
-	b = UpdateProofSlice1DEncode(b, o.Updates)
+	b = safemarshal.WriteSlice2D(b, o.MapLabels)
+	b = safemarshal.WriteSlice2D(b, o.MapVals)
+	b = safemarshal.WriteSlice1D(b, o.UpdProof)
 	b = safemarshal.WriteSlice1D(b, o.LinkSig)
 	return b
 }
 func AuditProofDecode(b0 []byte) (*AuditProof, []byte, bool) {
-	a1, b1, err1 := UpdateProofSlice1DDecode(b0)
+	a1, b1, err1 := safemarshal.ReadSlice2D(b0)
 	if err1 {
 		return nil, nil, true
 	}
-	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
-	if err2 {
-		return nil, nil, true
-	}
-	return &AuditProof{Updates: a1, LinkSig: a2}, b2, false
-}
-func UpdateProofEncode(b0 []byte, o *UpdateProof) []byte {
-	var b = b0
-	b = safemarshal.WriteSlice1D(b, o.MapLabel)
-	b = safemarshal.WriteSlice1D(b, o.MapVal)
-	b = safemarshal.WriteSlice1D(b, o.NonMembProof)
-	return b
-}
-func UpdateProofDecode(b0 []byte) (*UpdateProof, []byte, bool) {
-	a1, b1, err1 := safemarshal.ReadSlice1D(b0)
-	if err1 {
-		return nil, nil, true
-	}
-	a2, b2, err2 := safemarshal.ReadSlice1D(b1)
+	a2, b2, err2 := safemarshal.ReadSlice2D(b1)
 	if err2 {
 		return nil, nil, true
 	}
@@ -156,5 +140,9 @@ func UpdateProofDecode(b0 []byte) (*UpdateProof, []byte, bool) {
 	if err3 {
 		return nil, nil, true
 	}
-	return &UpdateProof{MapLabel: a1, MapVal: a2, NonMembProof: a3}, b3, false
+	a4, b4, err4 := safemarshal.ReadSlice1D(b3)
+	if err4 {
+		return nil, nil, true
+	}
+	return &AuditProof{MapLabels: a1, MapVals: a2, UpdProof: a3, LinkSig: a4}, b4, false
 }

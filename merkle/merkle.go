@@ -57,20 +57,15 @@ type node struct {
 
 // Put adds the leaf (label, val), storing immutable references to both.
 // for liveness and safety reasons, it expects the label to have fixed length.
-func (m *Map) Put(label []byte, val []byte) (updProof []byte) {
+func (m *Map) Put(label []byte, val []byte) {
 	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
-	// Put is part of external API, which does not expose cut trees.
-	// therefore, we meet the precond for node.prove and put.
-	inMap, _, updProof := m.root.prove(label, true)
-	// for now, [VerifyUpdate] only works for monotonic update.
-	std.Assert(!inMap)
 	std.Assert(!put(&m.root, 0, label, val))
-	return
 }
 
 // put inserts leaf node (label, val) into the n0 sub-tree.
-// it errors iff there's an insert into a cut node, since that almost always
-// leaves the tree in an unintended state.
+// it errors on an insert into a cut node, since that almost always leaves the
+// tree in an unintended state, and on a label already in the sub-tree, since
+// every caller only ever inserts fresh labels.
 func put(n0 **node, depth uint64, label, val []byte) (err bool) {
 	std.Assert(depth <= maxDepth)
 	n := *n0
@@ -85,14 +80,11 @@ func put(n0 **node, depth uint64, label, val []byte) (err bool) {
 	}
 
 	if n.nodeTy == leafNodeTy {
-		// on exact label match, replace val.
 		if bytes.Equal(n.label, label) {
-			n.val = val
-			n.hash = compLeafHash(label, val)
-			return
+			return true
 		}
 
-		// otherwise, replace with inner node that links
+		// replace with inner node that links
 		// to existing leaf, and recurse.
 		inner := &node{nodeTy: innerNodeTy}
 		*n0 = inner
@@ -211,7 +203,10 @@ func VerifyMemb(label, val, entryProof []byte) (hash []byte, err bool) {
 	if err {
 		return
 	}
-	std.Assert(!put(&tr, 0, label, val))
+	if put(&tr, 0, label, val) {
+		err = true
+		return
+	}
 	hash = tr.getHash()
 	return
 }
@@ -223,19 +218,6 @@ func VerifyNonMemb(label, entryProof []byte) (hash []byte, err bool) {
 		return
 	}
 	hash = tr.getHash()
-	return
-}
-
-// VerifyUpdate returns the hash for an old tree without label and
-// the hash after inserting (label, val).
-func VerifyUpdate(label, val, updProof []byte) (hashOld, hashNew []byte, err bool) {
-	tr, err := proofToTree(label, updProof)
-	if err {
-		return
-	}
-	hashOld = tr.getHash()
-	std.Assert(!put(&tr, 0, label, val))
-	hashNew = tr.getHash()
 	return
 }
 

@@ -90,13 +90,70 @@ func TestBenchMerkSize(t *testing.T) {
 func seedMap(sz uint64) (m *Map, labels [][]byte) {
 	m = &Map{}
 	labels = make([][]byte, 0, sz)
-	for i := uint64(0); i < sz; i++ {
-		l := mkRandLabel()
-		labels = append(labels, bytes.Clone(l))
-		v := mkRandVal()
-		m.Put(l, v)
+	const chunk = 100_000
+	for done := uint64(0); done < sz; done += chunk {
+		n := min(chunk, sz-done)
+		ls, vs := mkBatch(n)
+		labels = append(labels, ls...)
+		if _, err := m.Update(ls, vs); err {
+			panic("seed")
+		}
 	}
 	return
+}
+
+func mkBatch(n uint64) (labels, vals [][]byte) {
+	labels = make([][]byte, 0, n)
+	vals = make([][]byte, 0, n)
+	for i := uint64(0); i < n; i++ {
+		labels = append(labels, mkRandLabel())
+		vals = append(vals, mkRandVal())
+	}
+	return
+}
+
+// TestBenchMerkEpoch is the etc/ workload: an epoch is one batch of ~46k
+// insertions into a tree that already holds nSeed leaves.
+func TestBenchMerkEpoch(t *testing.T) {
+	m, _ := seedMap(defNSeed)
+	const batch = 46_000
+	nEpochs := 10
+
+	var totalUpd, totalVer time.Duration
+	var totalProof int
+	dig := m.Hash()
+	for i := 0; i < nEpochs; i++ {
+		labels, vals := mkBatch(batch)
+		t0 := time.Now()
+		p, err := m.Update(labels, vals)
+		if err {
+			t.Fatal()
+		}
+		t1 := time.Now()
+		digNew := m.Hash()
+
+		dOld, dNew, err := VerifyUpdate(labels, vals, p)
+		if err {
+			t.Fatal()
+		}
+		t2 := time.Now()
+		if !bytes.Equal(dOld, dig) || !bytes.Equal(dNew, digNew) {
+			t.Fatal()
+		}
+		dig = digNew
+
+		totalUpd += t1.Sub(t0)
+		totalVer += t2.Sub(t1)
+		totalProof += len(p)
+	}
+
+	nOps := batch * nEpochs
+	benchutil.Report(nOps, []*benchutil.Metric{
+		{N: float64(totalUpd.Microseconds()) / float64(nOps), Unit: "us/op(upd)"},
+		{N: float64(totalVer.Microseconds()) / float64(nOps), Unit: "us/op(ver)"},
+		{N: float64(totalProof) / float64(nOps), Unit: "B/op(proof)"},
+		{N: float64(totalUpd.Milliseconds()) / float64(nEpochs), Unit: "ms/epoch"},
+	})
 }
 
 func lePutUint64(b []byte, v uint64) {

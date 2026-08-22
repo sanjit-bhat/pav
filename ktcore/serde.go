@@ -38,12 +38,8 @@ type NonMemb struct {
 }
 
 type AuditProof struct {
-	Updates []*UpdateProof
-	LinkSig []byte
-}
-
-type UpdateProof struct {
-	MapLabel     []byte
-	MapVal       []byte
-	NonMembProof []byte
+	MapLabels [][]byte
+	MapVals   [][]byte
+	UpdProof  []byte
+	LinkSig   []byte
 }

@@ -132,7 +132,7 @@ func getNextLink(sigPk cryptoffi.SigPublicKey, prevEp uint64, prevDig, prevLink 
 		return
 	}
 	ep = prevEp + 1
-	if dig, err = getNextDig(prevDig, p.Updates); err {
+	if dig, err = getNextDig(prevDig, p); err {
 		return
 	}
 	link = hashchain.GetNextLink(prevLink, dig)
@@ -143,20 +143,16 @@ func getNextLink(sigPk cryptoffi.SigPublicKey, prevEp uint64, prevDig, prevLink 
 	return
 }
 
-func getNextDig(prevDig []byte, updates []*ktcore.UpdateProof) (dig []byte, err bool) {
-	dig = prevDig
-	for _, u := range updates {
-		var prev, next []byte
-		prev, next, err = merkle.VerifyUpdate(u.MapLabel, u.MapVal, u.NonMembProof)
-		if err {
-			return
-		}
-		if !bytes.Equal(dig, prev) {
-			err = true
-			return
-		}
-		dig = next
+func getNextDig(prevDig []byte, p *ktcore.AuditProof) (dig []byte, err bool) {
+	prev, next, err := merkle.VerifyUpdate(p.MapLabels, p.MapVals, p.UpdProof)
+	if err {
+		return
 	}
+	if !bytes.Equal(prevDig, prev) {
+		err = true
+		return
+	}
+	dig = next
 	return
 }
 

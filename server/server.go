@@ -41,7 +41,7 @@ type history struct {
 	// chain is a hashchain of merkle digests across the epochs.
 	chain *hashchain.HashChain
 	// audits has auditing info for all epochs.
-	// for epoch 0, the UpdateProof is invalid (there is no prior epoch),
+	// for epoch 0, the update proof is invalid (there is no prior epoch),
 	// but [Server.Audit] will never return it.
 	audits   []*ktcore.AuditProof
 	vrfPkSig []byte
@@ -176,26 +176,30 @@ func (s *Server) getWork() (work []*work) {
 func (s *Server) doWork(work []*work) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	upd := make([]*ktcore.UpdateProof, 0, len(work))
+	labels := make([][]byte, 0, len(work))
+	vals := make([][]byte, 0, len(work))
 	for _, w := range work {
 		// check: for each uid, maintain contiguous seq of versions.
 		nextVer := uint64(len(s.keys.plain[w.uid]))
 		if w.ver != nextVer {
 			continue
 		}
-
-		// update.
-		proof := s.keys.hidden.Put(w.mapLabel, w.mapVal)
 		s.keys.plain[w.uid] = append(s.keys.plain[w.uid], w.pk)
-		info := &ktcore.UpdateProof{MapLabel: w.mapLabel, MapVal: w.mapVal, NonMembProof: proof}
-		upd = append(upd, info)
+		labels = append(labels, w.mapLabel)
+		vals = append(vals, w.mapVal)
 	}
+
+	// one tree update for the whole epoch, with one proof for the auditor.
+	// [merkle.Map.Update] reorders labels and vals to match its own tape.
+	updProof, err := s.keys.hidden.Update(labels, vals)
+	std.Assert(!err)
 
 	dig := s.keys.hidden.Hash()
 	link := s.hist.chain.Append(dig)
 	epoch := uint64(len(s.hist.audits))
 	sig := ktcore.SignLink(s.secs.sig, epoch, link)
-	s.hist.audits = append(s.hist.audits, &ktcore.AuditProof{Updates: upd, LinkSig: sig})
+	p := &ktcore.AuditProof{MapLabels: labels, MapVals: vals, UpdProof: updProof, LinkSig: sig}
+	s.hist.audits = append(s.hist.audits, p)
 }
 
 // getHist returns a history of membership proofs for all post-prefix versions.
