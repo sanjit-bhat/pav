@@ -362,6 +362,60 @@ func lookups(s *store, dig []byte, sample [][]byte, maxDRead uint64, warm *merkl
 		}
 		report(s, base, ds, mb)
 	}
+	probeShapes(s, sample, maxDRead)
+}
+
+// akdKeys is AKD's probe set for a path: at every level it fetches the node
+// *and* its sibling, because a TreeNode record names its children but does not
+// carry their hashes. both are prefixes of the label with at most the last bit
+// flipped, so they are nameable in our own store, and this measures AKD's
+// access pattern against the same tree and the same engine.
+func akdKeys(label []byte, maxD uint64) (keys [][]byte) {
+	flip := make([]byte, len(label))
+	for d := uint64(0); d <= maxD; d++ {
+		keys = append(keys, merkle.StoreKey(label, d))
+		if d == 0 {
+			continue
+		}
+		copy(flip, label)
+		flip[(d-1)/8] ^= 1 << ((d - 1) % 8)
+		keys = append(keys, merkle.StoreKey(flip, d))
+	}
+	return
+}
+
+// probeShapes times the storage work alone for the two access patterns, so the
+// comparison is probe set against probe set with everything else held fixed.
+func probeShapes(s *store, sample [][]byte, maxD uint64) {
+	for _, shape := range []string{"pav (one probe per level)", "AKD (node and sibling per level)"} {
+		dropCaches()
+		base := s.counters
+		ds := make([]time.Duration, 0, *nLookups)
+		for i := 0; i < *nLookups; i++ {
+			l := sample[rand.IntN(len(sample))]
+			var keys [][]byte
+			if shape[0] == 'p' {
+				keys = merkle.PathKeys(l, 0, maxD)
+			} else {
+				keys = akdKeys(l, maxD)
+			}
+			t := time.Now()
+			s.get(keys)
+			ds = append(ds, time.Since(t))
+		}
+		sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
+		var sum time.Duration
+		for _, d := range ds {
+			sum += d
+		}
+		fmt.Printf("probes: %-34s mean %6.0f us  p50 %6.0f us  p99 %7.0f us  %.1f probes  %.1f hits\n",
+			shape,
+			float64(sum.Microseconds())/float64(len(ds)),
+			float64(ds[len(ds)/2].Microseconds()),
+			float64(ds[len(ds)*99/100].Microseconds()),
+			float64(s.probes-base.probes)/float64(*nLookups),
+			float64(s.hits-base.hits)/float64(*nLookups))
+	}
 }
 
 func parseSweep(spec string) (out []int) {
