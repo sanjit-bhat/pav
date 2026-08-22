@@ -34,7 +34,7 @@ var (
 	sweep    = flag.String("sweep", "", "comma-separated block cache sizes in MB to re-measure lookups at, reopening the LSM each time")
 	warmD    = flag.Int("warm", -1, "keep the tree above this depth resident (-1 to disable)")
 	keep     = flag.Bool("keep", false, "keep the LSM directory afterwards")
-	reuse    = flag.Bool("reuse", false, "reuse an existing LSM directory and its digest")
+	reuse    = flag.Bool("reuse", false, "reuse an existing LSM: read HEAD and the saved sample labels, skip seeding and epochs, measure lookups only. run it under a memory cgroup to make reads reach the device")
 	lenMajor = flag.Bool("lenmajor", false, "store keys length-major ([depth][label]) as AKD does, instead of value-major ([label][depth]). same tree, same probes, only locality differs")
 )
 
@@ -212,6 +212,26 @@ func main() {
 	dig := (&merkle.Map{}).Hash()
 	maxDWrite := probeBound(*nSeed, 2)
 	maxDRead := probeBound(*nSeed, 3)
+	samplePath := *dir + ".sample"
+
+	if *reuse {
+		v, closer, err := db.Get(storeKey(headKey))
+		if err != nil {
+			panic(err)
+		}
+		dig = append([]byte(nil), v...)
+		closer.Close()
+		raw, err := os.ReadFile(samplePath)
+		if err != nil {
+			panic(err)
+		}
+		var sample [][]byte
+		for i := 0; i+32 <= len(raw); i += 32 {
+			sample = append(sample, raw[i:i+32])
+		}
+		lookups(s, dig, sample, maxDRead, nil)
+		return
+	}
 
 	// seed entirely out of core, in batches, which is what a writer does.
 	t0 := time.Now()
@@ -233,6 +253,13 @@ func main() {
 	}
 	s.putHead(dig)
 	if err := db.Flush(); err != nil {
+		panic(err)
+	}
+	var flat []byte
+	for _, l := range sample {
+		flat = append(flat, l...)
+	}
+	if err := os.WriteFile(samplePath, flat, 0o644); err != nil {
 		panic(err)
 	}
 	seedWrites, seedBytes := s.writes, s.wbytes
@@ -294,52 +321,44 @@ func main() {
 		float64((tLoad+tUpd+tWrite).Seconds())/float64(*nEpochs),
 		float64(tSync.Microseconds())/1e3/float64(*nEpochs))
 
-	// lookups, from a cold page cache so the reads reach the device.
-	if err := db.Flush(); err != nil {
+	lookups(s, dig, sample, maxDRead, warm)
+}
+
+// lookups measures one path load plus a proof, from a cold page cache, at each
+// requested block cache size.
+func lookups(s *store, dig []byte, sample [][]byte, maxDRead uint64, warm *merkle.Map) {
+	if err := s.db.Flush(); err != nil {
 		panic(err)
 	}
-	dropCaches()
-	base = s.counters
-	ds := make([]time.Duration, 0, *nLookups)
-	for i := 0; i < *nLookups; i++ {
-		l := sample[rand.IntN(len(sample))]
-		t := time.Now()
-		m := warm
-		if m == nil {
-			m = merkle.NewCut(dig)
+	sizes := append([]int{*cacheMB}, parseSweep(*sweep)...)
+	for n, mb := range sizes {
+		if n > 0 {
+			s.db.Close()
+			db, err := pebble.Open(*dir, &pebble.Options{Cache: pebble.NewCache(int64(mb) << 20)})
+			if err != nil {
+				panic(err)
+			}
+			s.db = db
 		}
-		loadBatch(s, m, [][]byte{l}, maxDRead)
-		inMap, _, _, err := m.Prove(l)
-		if err || !inMap {
-			panic("lookup")
-		}
-		ds = append(ds, time.Since(t))
-		if warm != nil {
-			warm.EvictPath(l, uint64(*warmD))
-		}
-	}
-	report(s, base, ds, *cacheMB)
-
-	for _, mb := range parseSweep(*sweep) {
-		db.Close()
-		db, err = pebble.Open(*dir, &pebble.Options{Cache: pebble.NewCache(int64(mb) << 20)})
-		if err != nil {
-			panic(err)
-		}
-		s.db = db
 		dropCaches()
-		base = s.counters
-		ds = ds[:0]
+		base := s.counters
+		ds := make([]time.Duration, 0, *nLookups)
 		for i := 0; i < *nLookups; i++ {
 			l := sample[rand.IntN(len(sample))]
 			t := time.Now()
-			m := merkle.NewCut(dig)
+			m := warm
+			if m == nil {
+				m = merkle.NewCut(dig)
+			}
 			loadBatch(s, m, [][]byte{l}, maxDRead)
 			inMap, _, _, err := m.Prove(l)
 			if err || !inMap {
 				panic("lookup")
 			}
 			ds = append(ds, time.Since(t))
+			if warm != nil {
+				warm.EvictPath(l, uint64(*warmD))
+			}
 		}
 		report(s, base, ds, mb)
 	}
