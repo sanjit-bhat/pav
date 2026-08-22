@@ -2,6 +2,7 @@ package merkle
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/rand/v2"
 	"testing"
 
@@ -179,5 +180,85 @@ func TestUpdateReject(t *testing.T) {
 	// reach the digest the server signed.
 	if _, dNew, err := VerifyUpdate(labels[:1], vals[:1], p); !err && bytes.Equal(dNew, m.Hash()) {
 		t.Fatal("wrong batch reached the right digest")
+	}
+}
+
+// TestUpdateTamper is the property the auditor leans on: no altered tape and
+// no altered batch reaches both the old digest the auditor already trusts and
+// a new digest, except the one the server actually produced.
+func TestUpdateTamper(t *testing.T) {
+	m := &Map{}
+	var seed [32]byte
+	seed[0] = 7
+	rnd := rand.NewChaCha8(seed)
+	mk := func(n int) ([][]byte, [][]byte) {
+		ls := make([][]byte, 0, n)
+		vs := make([][]byte, 0, n)
+		for i := 0; i < n; i++ {
+			l := make([]byte, cryptoffi.HashLen)
+			v := make([]byte, 32)
+			rnd.Read(l)
+			rnd.Read(v)
+			ls = append(ls, l)
+			vs = append(vs, v)
+		}
+		return ls, vs
+	}
+
+	labels, vals := mk(20_000)
+	if _, err := m.Update(labels, vals); err {
+		t.Fatal()
+	}
+	dOld := m.Hash()
+	newLabels, newVals := mk(500)
+	tape, err := m.Update(cloneAll(newLabels), cloneAll(newVals))
+	if err {
+		t.Fatal()
+	}
+	dNew := m.Hash()
+
+	accept := func(ls, vs [][]byte, p []byte) bool {
+		o, n, err := VerifyUpdate(ls, vs, p)
+		return !err && bytes.Equal(o, dOld) && bytes.Equal(n, dNew)
+	}
+	if !accept(newLabels, newVals, tape) {
+		t.Fatal("the real proof did not verify")
+	}
+
+	var b [8]byte
+	for i := 0; i < 3_000; i++ {
+		rnd.Read(b[:])
+		pos := int(binary.LittleEndian.Uint64(b[:]) % uint64(len(tape)))
+		bit := byte(1) << (b[0] % 8)
+		bad := bytes.Clone(tape)
+		bad[pos] ^= bit
+		if accept(newLabels, newVals, bad) {
+			t.Fatalf("altered tape byte %d accepted", pos)
+		}
+	}
+	// a batch the server did not insert must not reach dNew either.
+	for i := 0; i < 500; i++ {
+		rnd.Read(b[:])
+		j := int(binary.LittleEndian.Uint64(b[:]) % uint64(len(newLabels)))
+		bad := cloneAll(newVals)
+		bad[j] = bytes.Clone(bad[j])
+		bad[j][0] ^= 1
+		if accept(newLabels, bad, tape) {
+			t.Fatal("altered value accepted")
+		}
+		badL := cloneAll(newLabels)
+		badL[j] = bytes.Clone(badL[j])
+		badL[j][0] ^= 1
+		if accept(badL, newVals, tape) {
+			t.Fatal("altered label accepted")
+		}
+	}
+	// dropping or repeating an entry must not reach dNew.
+	if accept(newLabels[:len(newLabels)-1], newVals[:len(newVals)-1], tape) {
+		t.Fatal("short batch accepted")
+	}
+	if accept(append(cloneAll(newLabels), newLabels[0]),
+		append(cloneAll(newVals), newVals[0]), tape) {
+		t.Fatal("repeated entry accepted")
 	}
 }

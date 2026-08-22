@@ -255,3 +255,43 @@ Two things this harness had to do that are worth recording:
   `N_TXN_SITES` plus the site id, so a reader that uses site 0 collides with
   writer 0 and aborts its transaction. Intermittent, and it looks like a bug in
   the epoch commit rather than in the reader.
+
+### 5.1 One caveat, observed once
+
+One `ktbench` run wedged for 22 minutes with the process at 8% CPU — blocked,
+not spinning — and had to be killed. Every other run of the same command
+finished in about a minute. Not reproduced, so not diagnosed, but a read that
+never returns and never resends is a different failure from the 400 ms cliff in
+§2, and worth knowing about before trusting Tulip with a serving path.
+
+## 6. AKD in its best configurations
+
+A self-built baseline of someone else's system invites "you configured it
+wrong", so here is AKD in three configurations, same workload, N = 1M, epochs
+of 46k. The `insert` column excludes the audit proof; `total` adds it.
+
+| AKD configuration | insert us | audit us | **total us** | probes/insert | lookup us | lookup probes |
+|---|---|---|---|---|---|---|
+| no cache, 1 thread (AKD's own bench setting) | 38.85 | 12.97 | **51.8** | 23.7 | 29.23 | 42.21 |
+| **cache on**, 1 thread | 57.47 | 28.67 | **86.1** | **0.4** | 35.57 | 0.33 |
+| no cache, **8 threads** | 16.54 | 3.90 | **20.4** | 23.7 | 30.98 | 42.21 |
+| \vkt, no cache, 1 thread | 3.45 | 0 | **3.45** | **7.95** | 9.00 | 25.81 |
+
+Two things worth being precise about.
+
+**The cache row is not a deployment.** With no byte limit the `TimedCache` holds
+the entire 1M-leaf tree, so probes go to ~0 — but that is R1 turned off. At the
+10^10 leaves the audit log implies, a bounded cache over a tree four orders
+larger has a low hit rate and you pay for both the misses and the bookkeeping.
+And the bookkeeping is not free: turning the cache on *raised* CPU by 48% on
+insert and 121% on audit-proof generation. So the two rows bracket AKD rather
+than one of them being the fair one, and \vkt is ahead of both.
+
+**The 8-thread row is AKD's best wall-clock**, and the right thing to compare
+against a future parallel `Update`. \vkt is 6x faster than it on one core, so
+~47x in CPU-seconds. `Map.Update` parallelizes trivially — partition the batch
+at the top few levels and the sub-trees are disjoint — but there is no reason
+to spend the verification budget on that yet.
+
+Lookups do not parallelize within one lookup in either system, so that column is
+like-for-like: 9.00 us and 1 round trip against 29–36 us and ~21 dependent ones.
