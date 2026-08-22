@@ -116,6 +116,17 @@ func partition(labels, vals [][]byte, depth uint64) (mid uint64) {
 // VerifyUpdate returns the hash of an old map without any of the labels and
 // the hash after inserting the batch into it.
 func VerifyUpdate(labels, vals [][]byte, updProof []byte) (hashOld, hashNew []byte, err bool) {
+	m, hashOld, err := ApplyUpdate(labels, vals, updProof)
+	if err {
+		return nil, nil, true
+	}
+	return hashOld, m.Hash(), false
+}
+
+// ApplyUpdate is VerifyUpdate, keeping the map it built. every node the epoch
+// changed is in it and everything else is a cut, so a party holding only the
+// epoch's proof ends up holding the new tree's top, checked against hashOld.
+func ApplyUpdate(labels, vals [][]byte, updProof []byte) (m *Map, hashOld []byte, err bool) {
 	if uint64(len(labels)) != uint64(len(vals)) {
 		return nil, nil, true
 	}
@@ -135,8 +146,7 @@ func VerifyUpdate(labels, vals [][]byte, updProof []byte) (hashOld, hashNew []by
 	if putAll(&tr, 0, labels, vals) {
 		return nil, nil, true
 	}
-	hashNew = tr.getHash()
-	return hashOld, hashNew, false
+	return &Map{root: tr}, hashOld, false
 }
 
 // tapeToTree parses one sub-tree, sitting at depth, off the front of tape.

@@ -28,6 +28,12 @@ import (
 // unloaded sub-trees are cut nodes, which the tree already had. a record's
 // hash is checked against the cut it replaces, so the store is trusted for
 // liveness only.
+//
+// the caller picks how deep to probe. a leaf sits at depth log2(N) + Geom(1/2),
+// so a bound of log2(N) + slack leaves a 2^-slack tail to a second read, and
+// the two callers want different slack: an epoch's retry is one much smaller
+// batch read, so a writer minimizes probes at slack 1-2, while a lookup's
+// retry is a whole extra round trip, so a reader minimizes at 3.
 
 // StoreKeyLen is the length of every storage key: a label, then a depth.
 const StoreKeyLen = cryptoffi.HashLen + 2
@@ -50,15 +56,73 @@ func StoreKey(label []byte, depth uint64) []byte {
 }
 
 // PathKeys returns the storage keys of every node on label's path, for depths
-// 0 through maxD, in that order.
-func PathKeys(label []byte, maxD uint64) (keys [][]byte) {
+// minD through maxD, in that order.
+func PathKeys(label []byte, minD, maxD uint64) (keys [][]byte) {
 	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
 	std.Assert(maxD <= maxDepth)
-	keys = make([][]byte, 0, maxD+1)
-	for d := uint64(0); d <= maxD; d++ {
+	keys = make([][]byte, 0, maxD-minD+1)
+	for d := minD; d <= maxD; d++ {
 		keys = append(keys, StoreKey(label, d))
 	}
 	return
+}
+
+// PathNeeds returns the depth of the first cut on label's path, and the keys
+// from there through maxD. everything above it the map already holds, so this
+// is the read a LoadPath actually needs. needed is false if the path is
+// already complete.
+func (m *Map) PathNeeds(label []byte, maxD uint64) (minD uint64, keys [][]byte, needed bool) {
+	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
+	minD, needed = firstCut(m.root, 0, label)
+	if !needed {
+		return 0, nil, false
+	}
+	if minD > maxD {
+		maxD = minD
+	}
+	return minD, PathKeys(label, minD, maxD), true
+}
+
+func firstCut(n *node, depth uint64, label []byte) (minD uint64, found bool) {
+	if n == nil {
+		return 0, false
+	}
+	if n.nodeTy == cutNodeTy {
+		return depth, true
+	}
+	if n.nodeTy == leafNodeTy {
+		return 0, false
+	}
+	std.Assert(n.nodeTy == innerNodeTy)
+	if depth == maxDepth {
+		return 0, false
+	}
+	c, _ := n.getChild(label, depth)
+	return firstCut(*c, depth+1, label)
+}
+
+// Evict replaces every node at or below depth with a cut, bounding what the
+// map holds. an evicted sub-tree is reloadable from the store.
+func (m *Map) Evict(depth uint64) {
+	evict(&m.root, 0, depth)
+}
+
+func evict(n0 **node, depth, maxD uint64) {
+	n := *n0
+	if n == nil {
+		return
+	}
+	if n.nodeTy == cutNodeTy {
+		return
+	}
+	if depth >= maxD {
+		*n0 = &node{nodeTy: cutNodeTy, hash: n.hash}
+		return
+	}
+	if n.nodeTy == innerNodeTy {
+		evict(&n.child0, depth+1, maxD)
+		evict(&n.child1, depth+1, maxD)
+	}
 }
 
 // NewCut returns a map that is entirely unloaded, standing for the map with
@@ -76,17 +140,17 @@ func mkCut(hash []byte) *node {
 	return &node{nodeTy: cutNodeTy, hash: hash}
 }
 
-// LoadPath grafts label's path into the map, where recs[d] is the record
-// stored under PathKeys(label, maxD)[d], or nil if the store has none.
+// LoadPath grafts label's path into the map, where recs[i] is the record
+// stored under PathKeys(label, minD, maxD)[i], or nil if the store has none.
 // complete reports that the path reached a leaf or an empty sub-tree; if it is
 // false and there is no error, the path runs past maxD and the caller must
 // probe deeper.
-func (m *Map) LoadPath(label []byte, recs [][]byte) (complete, err bool) {
+func (m *Map) LoadPath(label []byte, minD uint64, recs [][]byte) (complete, err bool) {
 	std.Assert(uint64(len(label)) == cryptoffi.HashLen)
-	return loadPath(&m.root, 0, label, recs)
+	return loadPath(&m.root, 0, label, minD, recs)
 }
 
-func loadPath(n0 **node, depth uint64, label []byte, recs [][]byte) (complete, err bool) {
+func loadPath(n0 **node, depth uint64, label []byte, minD uint64, recs [][]byte) (complete, err bool) {
 	n := *n0
 	// empty and leaf both terminate the path.
 	if n == nil {
@@ -100,16 +164,16 @@ func loadPath(n0 **node, depth uint64, label []byte, recs [][]byte) (complete, e
 			return false, true
 		}
 		c, _ := n.getChild(label, depth)
-		return loadPath(c, depth+1, label, recs)
+		return loadPath(c, depth+1, label, minD, recs)
 	}
 
 	std.Assert(n.nodeTy == cutNodeTy)
-	if depth >= uint64(len(recs)) {
-		// the path is deeper than the caller probed.
+	if depth < minD || depth-minD >= uint64(len(recs)) {
+		// the path is outside what the caller probed.
 		return false, false
 	}
 	// a cut is never the empty sub-tree, so the store owes us a record.
-	loaded, err := decodeNode(recs[depth])
+	loaded, err := decodeNode(recs[depth-minD])
 	if err {
 		return false, true
 	}
@@ -117,7 +181,7 @@ func loadPath(n0 **node, depth uint64, label []byte, recs [][]byte) (complete, e
 		return false, true
 	}
 	*n0 = loaded
-	return loadPath(n0, depth, label, recs)
+	return loadPath(n0, depth, label, minD, recs)
 }
 
 // Records returns the storage key and record of every node the map holds,

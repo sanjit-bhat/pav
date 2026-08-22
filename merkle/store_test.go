@@ -47,15 +47,15 @@ func (s *memStore) get(keys [][]byte) [][]byte {
 	return out
 }
 
-// loadFrom loads label's path, extending the probe if the bound was short.
-// only the new depths are fetched; LoadPath re-walks what it already has.
+// loadFrom loads label's path, asking the map which records it needs and
+// extending the probe if the bound was short.
 func (s *memStore) loadFrom(t *testing.T, m *Map, label []byte, maxD uint64) {
-	var recs [][]byte
-	for lo := uint64(0); ; {
-		for d := lo; d <= maxD; d++ {
-			recs = append(recs, s.get1(StoreKey(label, d)))
+	for {
+		minD, keys, needed := m.PathNeeds(label, maxD)
+		if !needed {
+			return
 		}
-		complete, err := m.LoadPath(label, recs)
+		complete, err := m.LoadPath(label, minD, s.get(keys))
 		if err {
 			t.Fatal("load")
 		}
@@ -65,7 +65,6 @@ func (s *memStore) loadFrom(t *testing.T, m *Map, label []byte, maxD uint64) {
 		if maxD == maxDepth {
 			t.Fatal("path past maxDepth")
 		}
-		lo = maxD + 1
 		maxD = min(maxD+probeExtend, maxDepth)
 	}
 }
@@ -177,7 +176,7 @@ func TestStoreReject(t *testing.T) {
 		var caught bool
 		for _, l := range labels {
 			m := NewCut(dig)
-			if _, err := m.LoadPath(l, bad.get(PathKeys(l, 40))); err {
+			if _, err := m.LoadPath(l, 0, bad.get(PathKeys(l, 0, 40))); err {
 				caught = true
 				break
 			}
@@ -218,4 +217,76 @@ func cloneAll(xs [][]byte) [][]byte {
 	out := make([][]byte, len(xs))
 	copy(out, xs)
 	return out
+}
+
+// TestWarmFromTape is the read-replica path: a party that only has the epoch's
+// audit proof ends up holding the new tree's top, self-checked against the
+// digest, and can then serve lookups by loading only the deep records.
+func TestWarmFromTape(t *testing.T) {
+	const n = 50_000
+	const probeD = 40
+
+	mem := &Map{}
+	labels, vals := mkSeeded(n, 4)
+	if _, err := mem.Update(labels, vals); err {
+		t.Fatal()
+	}
+	digOld := mem.Hash()
+	store := newMemStore()
+	store.put(mem.Records())
+
+	newLabels, newVals := mkSeeded(5_000, 5)
+	oc := NewCut(digOld)
+	for _, l := range newLabels {
+		store.loadFrom(t, oc, l, probeD)
+	}
+	tape, err := oc.Update(cloneAll(newLabels), cloneAll(newVals))
+	if err {
+		t.Fatal()
+	}
+	store.put(oc.Records())
+	dig := oc.Hash()
+
+	// the replica sees only (labels, vals, tape).
+	warm, hOld, err := ApplyUpdate(newLabels, newVals, tape)
+	if err || !bytes.Equal(hOld, digOld) || !bytes.Equal(warm.Hash(), dig) {
+		t.Fatal("apply")
+	}
+	const keepD = 12
+	warm.Evict(keepD)
+	if !bytes.Equal(warm.Hash(), dig) {
+		t.Fatal("evict changed the digest")
+	}
+
+	cold := NewCut(dig)
+	var warmProbes, coldProbes int
+	for i := 0; i < 500; i++ {
+		l := labels[rand.IntN(n)]
+
+		before := store.probes
+		store.loadFrom(t, warm, l, probeD)
+		inMap, val, proof, err := warm.Prove(l)
+		if err || !inMap {
+			t.Fatal("warm lookup")
+		}
+		h, err := VerifyMemb(l, val, proof)
+		if err || !bytes.Equal(h, dig) {
+			t.Fatal()
+		}
+		warmProbes += store.probes - before
+		warm.Evict(keepD)
+
+		before = store.probes
+		store.loadFrom(t, cold, l, probeD)
+		if _, _, _, err := cold.Prove(l); err {
+			t.Fatal("cold lookup")
+		}
+		coldProbes += store.probes - before
+		cold = NewCut(dig)
+	}
+	if warmProbes >= coldProbes {
+		t.Fatalf("warm map probed %d, cold %d", warmProbes, coldProbes)
+	}
+	t.Logf("probes/lookup: warm %.1f, cold %.1f",
+		float64(warmProbes)/500, float64(coldProbes)/500)
 }

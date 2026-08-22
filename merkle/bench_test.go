@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"math"
 	"math/rand/v2"
+	"os"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
@@ -12,19 +14,39 @@ import (
 	"github.com/sanjit-bhat/pav/benchutil"
 )
 
-const (
-	defNSeed uint64 = 1_000_000
-	// probeSlack sets the path probe bound at log2(N) + probeSlack. leaf depth
-	// is log2(N) + Geom(1/2), so a 2^-probeSlack tail probes deeper.
-	probeSlack uint64 = 6
+// defNSeed is the seeded tree size; PAV_BENCH_SEED overrides it, since the
+// interesting comparisons are against log2(N).
+var defNSeed = envSeed()
+
+func envSeed() uint64 { return envInt("PAV_BENCH_SEED", 1_000_000) }
+
+// the path probe bound is log2(N) + slack. leaf depth is log2(N) + Geom(1/2),
+// so a 2^-slack tail costs a second read. measured, the two callers want
+// different slack: an epoch's retry is one much smaller batch read, so the
+// writer minimizes at 1-2, while a lookup's retry is a whole extra round trip
+// on the critical path, so the reader minimizes at 3.
+var (
+	writeSlack = envInt("PAV_BENCH_WSLACK", 2)
+	readSlack  = envInt("PAV_BENCH_RSLACK", 3)
 )
 
-func probeBound(n uint64) uint64 {
+func envInt(name string, def uint64) uint64 {
+	if s := os.Getenv(name); s != "" {
+		n, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		return n
+	}
+	return def
+}
+
+func probeBound(n, slack uint64) uint64 {
 	var d uint64
 	for 1<<d < n {
 		d++
 	}
-	return d + probeSlack
+	return d + slack
 }
 
 func TestBenchMerkPut(t *testing.T) {
@@ -222,7 +244,7 @@ func TestBenchMerkStoreGet(t *testing.T) {
 		t0 := time.Now()
 		oc := NewCut(dig)
 		before := store.hits
-		store.loadFrom(t, oc, l, probeBound(defNSeed))
+		store.loadFrom(t, oc, l, probeBound(defNSeed, readSlack))
 		bytesRead += (store.hits - before) * 65
 		inMap, _, _, err := oc.Prove(l)
 		if err || !inMap {
@@ -260,10 +282,10 @@ func TestBenchMerkStoreEpoch(t *testing.T) {
 		oc := NewCut(dig)
 		// the whole batch's keys are computable up front, so this is one
 		// batch read. dedup, since the top of the tree is shared.
-		seen := make(map[string]bool, batch*probeBound(defNSeed))
+		seen := make(map[string]bool, batch*probeBound(defNSeed, writeSlack))
 		var keys [][]byte
 		for _, l := range labels {
-			for _, k := range PathKeys(l, probeBound(defNSeed)) {
+			for _, k := range PathKeys(l, 0, probeBound(defNSeed, writeSlack)) {
 				if !seen[string(k)] {
 					seen[string(k)] = true
 					keys = append(keys, k)
@@ -279,18 +301,18 @@ func TestBenchMerkStoreEpoch(t *testing.T) {
 			}
 		}
 		for _, l := range labels {
-			pk := PathKeys(l, probeBound(defNSeed))
+			pk := PathKeys(l, 0, probeBound(defNSeed, writeSlack))
 			recs := make([][]byte, len(pk))
 			for j, k := range pk {
 				recs[j] = fetched[string(k)]
 			}
-			complete, err := oc.LoadPath(l, recs)
+			complete, err := oc.LoadPath(l, 0, recs)
 			if err {
 				t.Fatal("load")
 			}
 			if !complete {
 				// the rare path past the bound: a second, tiny round trip.
-				store.loadFrom(t, oc, l, probeBound(defNSeed)+probeExtend)
+				store.loadFrom(t, oc, l, probeBound(defNSeed, writeSlack)+probeExtend)
 			}
 		}
 		t1 := time.Now()
