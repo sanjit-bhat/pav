@@ -760,6 +760,10 @@ destroy the records that epoch `e`'s digest still points through.
 | single-version (Pebble) | records, then HEAD | after records | **FAIL** — HEAD names epoch 0 and the store cannot serve it |
 | single-version (Pebble) | one atomic batch | before commit | OK, epoch 0 whole |
 | single-version (Pebble) | one atomic batch | right after commit | OK, epoch 1 whole, records included |
+| single-version (Pebble) | either shape | no crash | OK |
+
+`etc/bench/diskbench/crashtest/run.sh` runs all five and checks each against the
+row above, so this is re-runnable rather than a transcript.
 
 The failure is **fail-stop, not silent**: `LoadPath` checks each record's hash
 against the cut it fills, so the reader errors rather than producing a proof
