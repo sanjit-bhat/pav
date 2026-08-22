@@ -823,3 +823,74 @@ verified server package was left on the in-core path — moving it also means
 persisting the uid rows and the hashchain, which is a proof change rather than a
 merkle one. So R1 is met by the component this work was asked to adapt, and the
 system that ships it is still the small-deployment mode of note §4.3.
+
+## 14. Does resident memory depend on the tree size?
+
+This is the question behind R1, and "the tree is out of core" is not an answer
+to it — you have to show what the process actually holds. Two things are
+resident during an epoch: the batch's **skeleton** (the union of its paths, which
+`Records` then writes back) and the write batch itself. Both are
+`O(B x log(N/B))`, so the prediction is that resident memory grows with the
+*depth* of the tree and not its size.
+
+Measured on disk, epochs of 46,000 — the workload's batch — with live heap taken
+after a forced GC:
+
+| N | tree on disk | records/insert | **live heap, epoch phase** | live heap, lookup phase | peak RSS |
+|---|---|---|---|---|---|
+| 500k | 187 MB | 6.70 | **70 MB** | 37 MB | 0.82 GB |
+| 2M | 501 MB | 8.61 | **118 MB** | 71 MB | 1.23 GB |
+| 8M | 1.79 GB | 10.62 | **131 MB** | 73 MB | 1.47 GB |
+
+**The tree grew 16x and 9.6x on disk; the live heap grew 1.9x**, tracking
+records-per-insert, which is `log2(N/B)`. Extrapolating the ~25 MB per doubling
+to `N = 10^10` gives a writer holding **~0.4 GB** for a 1.3 TB tree *(est.)*. A
+reader holds one path — tens of KB — plus whatever warm top it chooses to keep,
+which `Evict` bounds explicitly.
+
+Peak RSS is larger and also grows, but that is Pebble's block cache, table
+metadata, and whatever the Go allocator has not returned; it is a tuning
+parameter, not a property of the design.
+
+### 14.1 What was and was not demonstrated
+
+Being precise, because "bigger than RAM" is easy to assert:
+
+- **Demonstrated:** resident cost is sub-linear in `N` over a 16x range while the
+  on-disk tree grew ~10x (above). And a tree **3.5x the memory the process was
+  allowed** — 1.9 GB of LSM under `MemoryMax=512M` — served 2,000 lookups at
+  p50 67–68 us with no degradation against the fully-cached case (§11.2, §11.4).
+  From the process's point of view that tree *is* bigger than its RAM.
+- **Not demonstrated:** a tree larger than the machine's 21 GB. The largest built
+  here is 8M leaves / 1.79 GB, because seeding is the slow part — 15 minutes for
+  8M, and it is superlinear. Nothing in the design or the measurements suggests a
+  cliff, but that is an extrapolation and not a run.
+- **Also worth saying:** Tulip cannot do this at all, whatever the merkle library
+  does. See §14.2.
+
+### 14.2 What part of Tulip is on disk
+
+Checked in the source, since it decides whether the Tulip numbers in §5 mean
+what they look like.
+
+**On disk:** two append-only logs per replica, both via `grove_ffi.FileAppend` —
+the replica's own (`logRead`, `logAcquire`, `logFastPrepare`, `logAccept`,
+`logAdvance`, `replica/replica.go:987-1050`) and paxos's
+(`paxos/paxos.go:1093-1147`). `resume()` replays the whole file at startup
+(`replica.go:935`).
+
+**In memory: everything you would read.** `index.Index` is a
+`map[string]*tuple.Tuple` with no disk backing and no eviction
+(`index/index.go:9`), and a `tuple.Tuple` is `vers []tulip.Version` — *every
+version ever written*, append-only, never truncated (`tuple/tuple.go:8`);
+`KillVersion` appends a not-present version rather than freeing anything.
+
+So Tulip is **crash-safe but not out-of-core**: the log gives durability, and the
+serving state is entirely RAM and grows monotonically, in both the dataset and
+its whole version history. Restart time grows with the log, which is never
+compacted. It meets R1 only by sharding across enough machines to hold
+everything in aggregate memory, which is the design note's §5 conclusion and the
+reason §9 recommends it for the epoch commit and a local store for reads.
+
+**Where "bigger than RAM" actually comes from, then, is Pebble, not Tulip** —
+`etc/bench/diskbench`, §11 and §14.
