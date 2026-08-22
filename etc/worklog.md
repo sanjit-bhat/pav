@@ -482,3 +482,56 @@ cheap rather than a new subsystem:
 The doc's §4.7 table says a private store costs "hours" to spin up a new
 replica. That stands, and it is the real argument against; it is an argument
 about bulk loading, not about the steady state.
+
+## 10. What building it reversed
+
+In the design note's own §10 spirit, so the reversals are not mistaken for
+oversights. Each is against a claim stated in `persistent-server-design.md` or
+`akd-workload-measurements.md`.
+
+- **"AKD's batch-shared encoding is more efficient per update, not less"**
+  (measurements §3, comparing AKD's 906–1006 B/insert against \vkt's ~1.1 KB
+  per-update non-membership proof). Reversed. That compared a *batched* proof
+  against an *unbatched* one. Batching \vkt gives ~590 B/insert at 10^10
+  *(est.)*, **0.66x AKD**, because a cut is 32 B of hash with its position
+  implied by the tape's shape where an `AzksElement` is 49 B with an explicit
+  `NodeLabel`. This was the note's argument for not spending effort here; the
+  effort turned out to be one function.
+
+- **"Non-membership needs a second hop"** (design §2.1). No. Put the children's
+  hashes in the parent's record and the blocking leaf sits at a prefix of `L`
+  like everything else, so one batch read answers both. This also halves the
+  probes, since AKD's two-probes-per-level is exactly the cost of *not* doing it.
+
+- **"Immutable-then-CAS ... available only in design B, since it needs immutable
+  keys"** (design §2.3). Design A gets the same O(1) atomic step. A reader
+  pinning a timestamp does the same work as a key that never changes: write the
+  nodes in any order, write HEAD last, and a reader that took HEAD at `ts` sees
+  exactly the versions committed by `ts`. No transaction over the batch, and the
+  §2.3 "the atomic step is O(B)" caveat goes away.
+
+- **Self-verification is design B's dividend** (design §2.2). Design A has it
+  too, for free. An inner record's hash is derived from the two hashes it
+  already carries, so checking it against the cut it replaces is one compare.
+  The store is trusted for liveness only either way.
+
+- **"~64 probes per path"** (design §2.1, §3.1). Measured: `log2(N) + slack`
+  with slack 2–3, so ~36 at 10^10, and ~16 for a replica warmed to depth 20.
+  The slack is not a free parameter either — §3.1 shows the writer and the
+  reader minimize at different values, and guessing 6 costs the writer 46%.
+
+- **"~300 B/label" of storage** (design §3.1, from ~2N nodes at ~150 B).
+  Measured 2.44 records per label at 65–73 B, so **~165 B/label**. The 2.44 is
+  itself higher than it needs to be — see §7's `1/ln 2`.
+
+- **"a tuned AKD would also be at 1–3 round trips ... the honest difference is
+  probes per lookup"** (design §3.5). The honest difference is probes, and it is
+  2x on lookup and ~2.9x on insert, structurally, because of the record format.
+  A tuned AKD closes the round trips and not the probes.
+
+- **§8's first question, "what does a 64-key `batch_get` cost on Tulip? This
+  single number decides A vs. B."** Answered — 12–35 us/key in parallel, ~83k
+  reads/s aggregate — but it decides something else. B was already ruled out on
+  write volume, and what the number actually says is that **no per-node
+  distributed KV can serve the read path**, whichever of A or B is on top of it
+  (§9).

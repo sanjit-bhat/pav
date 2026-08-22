@@ -10,6 +10,11 @@ Citations are `file:line` into `~/akd` (f14dcfa), `~/pav` (602b9f2),
 against the primary source this session. Numbers I derive are *(est.)*.
 §10 lists the things this draft reverses relative to earlier ones.
 
+> **Design A was subsequently built and measured. See `worklog.md`** — its §0
+> for what it costs against AKD, and its §10 for the seven claims below that
+> building it reversed, including the second hop in §2.1, the O(B) atomic step
+> in §2.3, and the "do not bother shrinking the append-only proof" conclusion.
+
 ---
 
 ## 0. Recommendation
