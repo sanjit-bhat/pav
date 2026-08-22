@@ -848,7 +848,7 @@ Definition ProofDecodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext}
 (* StoreKey returns the storage key of the node covering label's depth-length
    prefix.
 
-   go: store.go:43:6 *)
+   go: store.go:49:6 *)
 Definition StoreKeyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "label" "depth",
     exception_do (let: "depth" := (GoAlloc go.uint64 "depth") in
@@ -891,7 +891,7 @@ Definition StoreKeyⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
 (* PathKeys returns the storage keys of every node on label's path, for depths
    minD through maxD, in that order.
 
-   go: store.go:60:6 *)
+   go: store.go:66:6 *)
 Definition PathKeysⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "label" "minD" "maxD",
     exception_do (let: "keys" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
@@ -923,7 +923,7 @@ Definition PathKeysⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
    is the read a LoadPath actually needs. needed is false if the path is
    already complete.
 
-   go: store.go:74:15 *)
+   go: store.go:80:15 *)
 Definition Map__PathNeedsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" "label" "maxD",
     exception_do (let: "needed" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -956,7 +956,7 @@ Definition Map__PathNeedsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
      let: "$a2" := (![go.uint64] "maxD") in
      (FuncResolve PathKeys [] #()) "$a0" "$a1" "$a2", #true)).
 
-(* go: store.go:86:6 *)
+(* go: store.go:92:6 *)
 Definition firstCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n" "depth" "label",
     exception_do (let: "found" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -995,7 +995,7 @@ Definition firstCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
 (* Evict replaces every node at or below depth with a cut, bounding what the
    map holds. an evicted sub-tree is reloadable from the store.
 
-   go: store.go:106:15 *)
+   go: store.go:112:15 *)
 Definition Map__Evictⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" "depth",
     exception_do (let: "m" := (GoAlloc (go.PointerType Map) "m") in
@@ -1009,7 +1009,7 @@ Definition Map__Evictⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
 (* EvictPath is Evict along one label, which is what undoes one LoadPath.
    walking the whole map to shed one path costs more than the lookup did.
 
-   go: store.go:112:15 *)
+   go: store.go:118:15 *)
 Definition Map__EvictPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" "label" "depth",
     exception_do (let: "m" := (GoAlloc (go.PointerType Map) "m") in
@@ -1025,7 +1025,7 @@ Definition Map__EvictPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalConte
     (FuncResolve evictPath [] #()) "$a0" "$a1" "$a2" "$a3");;;
     return: #()).
 
-(* go: store.go:117:6 *)
+(* go: store.go:123:6 *)
 Definition evictPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n0" "depth" "label" "maxD",
     exception_do (let: "maxD" := (GoAlloc go.uint64 "maxD") in
@@ -1067,7 +1067,7 @@ Definition evictPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} :
     else do:  #());;;
     return: #()).
 
-(* go: store.go:135:6 *)
+(* go: store.go:141:6 *)
 Definition evictⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n0" "depth" "maxD",
     exception_do (let: "maxD" := (GoAlloc go.uint64 "maxD") in
@@ -1106,10 +1106,13 @@ Definition evictⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val
 (* NewCut returns a map that is entirely unloaded, standing for the map with
    the given hash.
 
-   go: store.go:155:6 *)
+   go: store.go:161:6 *)
 Definition NewCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "hash",
     exception_do (let: "hash" := (GoAlloc (go.SliceType go.byte) "hash") in
+    do:  (let: "$a0" := ((Convert go.int go.uint64 (let: "$a0" := (![go.SliceType go.byte] "hash") in
+    (FuncResolve go.len [go.SliceType go.byte] #()) "$a0")) =⟨go.uint64⟩ cryptoffi.HashLen) in
+    (FuncResolve std.Assert [] #()) "$a0");;;
     return: (GoAlloc Map (let: "$v0" := (let: "$a0" := (![go.SliceType go.byte] "hash") in
      (FuncResolve mkCut [] #()) "$a0") in
      CompositeLiteral Map (LiteralValue [KeyedElement (Some (KeyField "root"%go)) (ElementExpression (go.PointerType node) "$v0")])))).
@@ -1117,7 +1120,7 @@ Definition NewCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : va
 (* mkCut returns the unloaded stand-in for a sub-tree with the given hash,
    which for an empty sub-tree is the empty node itself.
 
-   go: store.go:161:6 *)
+   go: store.go:168:6 *)
 Definition mkCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "hash",
     exception_do (let: "hash" := (GoAlloc (go.SliceType go.byte) "hash") in
@@ -1130,13 +1133,16 @@ Definition mkCutⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val
      let: "$v1" := (![go.SliceType go.byte] "hash") in
      CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "hash"%go)) (ElementExpression (go.SliceType go.byte) "$v1")])))).
 
-(* LoadPath grafts label's path into the map, where recs[i] is the record
+(* LoadPath stores immutable references into recs: a grafted node's label,
+   value, and hashes are sub-slices of the record it came from.
+
+   LoadPath grafts label's path into the map, where recs[i] is the record
    stored under PathKeys(label, minD, maxD)[i], or nil if the store has none.
    complete reports that the path reached a leaf or an empty sub-tree; if it is
    false and there is no error, the path runs past maxD and the caller must
    probe deeper.
 
-   go: store.go:173:15 *)
+   go: store.go:183:15 *)
 Definition Map__LoadPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" "label" "minD" "recs",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1156,7 +1162,7 @@ Definition Map__LoadPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContex
     (FuncResolve loadPath [] #()) "$a0" "$a1" "$a2" "$a3" "$a4")) in
     return: ("$ret0", "$ret1")).
 
-(* go: store.go:178:6 *)
+(* go: store.go:188:6 *)
 Definition loadPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n0" "depth" "label" "minD" "recs",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1230,7 +1236,7 @@ Definition loadPathⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : 
 (* Records returns the storage key and record of every node the map holds,
    which after a LoadPath and an Update is exactly the set the update changed.
 
-   go: store.go:214:15 *)
+   go: store.go:224:15 *)
 Definition Map__Recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "m" <>,
     exception_do (let: "recs" := (GoAlloc (go.SliceType (go.SliceType go.byte)) (GoZeroVal (go.SliceType (go.SliceType go.byte)) #())) in
@@ -1244,7 +1250,7 @@ Definition Map__Recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext
     (FuncResolve records [] #()) "$a0" "$a1" "$a2" "$a3" "$a4")) in
     return: ("$ret0", "$ret1")).
 
-(* go: store.go:218:6 *)
+(* go: store.go:228:6 *)
 Definition recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n" "depth" "prefix" "keys" "recs",
     exception_do (let: "recs" := (GoAlloc (go.SliceType (go.SliceType go.byte)) "recs") in
@@ -1306,7 +1312,7 @@ Definition recordsⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : v
 
 (* a record is an inner node's two child hashes, or a leaf's label and value.
 
-   go: store.go:239:6 *)
+   go: store.go:249:6 *)
 Definition encodeNodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "n",
     exception_do (let: "n" := (GoAlloc (go.PointerType node) "n") in
@@ -1347,7 +1353,7 @@ Definition encodeNodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
      let: "$a1" := (![go.SliceType go.byte] (StructFieldRef node "val"%go (![go.PointerType node] "n"))) in
      (FuncResolve marshal.WriteBytes [] #()) "$a0" "$a1")).
 
-(* go: store.go:253:6 *)
+(* go: store.go:263:6 *)
 Definition decodeNodeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} : val :=
   λ: "rec",
     exception_do (let: "err" := (GoAlloc go.bool (GoZeroVal go.bool #())) in
@@ -1793,9 +1799,8 @@ Definition tapeToTreeⁱᵐᵖˡ {ext : ffi_syntax} {go_gctx : GoGlobalContext} 
       (if: ![go.bool] "err"
       then return: (Convert go.untyped_nil (go.PointerType node) UntypedNil, Convert go.untyped_nil (go.SliceType go.byte) UntypedNil, #true)
       else do:  #());;;
-      return: (GoAlloc node (let: "$v0" := cutNodeTy in
-       let: "$v1" := (![go.SliceType go.byte] "h") in
-       CompositeLiteral node (LiteralValue [KeyedElement (Some (KeyField "nodeTy"%go)) (ElementExpression go.byte "$v0"); KeyedElement (Some (KeyField "hash"%go)) (ElementExpression (go.SliceType go.byte) "$v1")])), ![go.SliceType go.byte] "rem", #false)
+      return: (let: "$a0" := (![go.SliceType go.byte] "h") in
+       (FuncResolve mkCut [] #()) "$a0", ![go.SliceType go.byte] "rem", #false)
     else do:  #());;;
     (if: Convert go.untyped_bool go.bool ((![go.byte] "op") =⟨go.byte⟩ tapeLeaf)
     then
