@@ -12,17 +12,23 @@ Design A is built, in `merkle/update.go` and `merkle/store.go` — about 500
 lines, with `merkle/merkle.go` slightly *smaller* than before. It is faster than
 AKD on every axis measured except one, and the exception is 9%.
 
-At 1M leaves, epochs of 46k, both against an in-memory store, one thread:
+At 1M leaves, epochs of 46k, both against an in-memory store, one thread. Times
+are medians of three runs; every count was identical across runs.
 
 | | AKD | \vkt |
 |---|---|---|
-| insert incl. audit proof | 51.8 us, 23.7 probes | **3.45 us, 7.95 probes** |
-| lookup | 29.2 us, 42.2 probes, ~21 round trips | **9.0 us, 25.8 probes, 1 round trip** |
+| insert incl. audit proof | 51.8 us, 23.7 probes | **13.0 us, 7.94 probes** |
+| lookup | 29.9 us, 42.2 probes, ~21 round trips | **13.2 us, 25.8 probes, 1 round trip** |
 | audit proof | 255 B/insert | **178 B/insert** |
-| records written per insert | **7.05** | 7.72 |
+| records written per insert | **7.05** | 7.71 |
 
-Against a live 3-replica Tulip, at the measured 46k-per-30 s workload: **10 s
-per epoch**, of which the tree is 6 us of 208 us per insert.
+Both microsecond columns are dominated by each system's in-process store, not by
+its tree: of \vkt's 13.0 us to insert, **3.0 us is `Update` including the audit
+tape** and 10.0 us is the harness store's own lookups and copies.
+
+Against a live 3-replica Tulip, at the measured 46k-per-30 s workload: **8.3 s
+per epoch** (7.7–10.5 over five runs), of which the tree is 6 us of 180 us per
+insert.
 
 Four things did most of the work, and three of them are simplifications:
 
@@ -261,21 +267,26 @@ which is not comparable). \vkt's harness is `merkle/bench_test.go`; AKD's is
 `~/akd-bench`, extended with a counting `Database` wrapper and a lookup and
 audit phase.
 
-**N = 1M, epochs of 46k insertions:**
+**N = 1M, epochs of 46k insertions**, medians of three runs:
 
 | | AKD | \vkt |
 |---|---|---|
-| insert, us/op | 38.85 | **3.45** |
-| insert, probes/op | 13.24 | **7.95** |
+| insert, us/op | 37.92 | **12.96** (9.97 store + **2.99 tree**) |
+| insert, probes/op | 13.24 | **7.94** |
 | insert, hits/op | 13.24 | **5.27** |
-| insert, writes/op | **7.05** | 7.72 |
-| audit proof, B/insert | 255.0 | **178.5** |
+| insert, writes/op | **7.05** | 7.71 |
+| audit proof, B/insert | 255.0 | **178.4** |
 | audit proof, extra probes/insert | 10.41 | **0** |
-| audit proof, extra us/insert | 12.97 | **0** |
-| membership, us/op | 29.23 | **9.00** |
+| audit proof, extra us/insert | 13.88 | **0** |
+| membership, us/op | 29.86 | **13.20** |
 | membership, probes/op | 42.21 | **25.81** |
 | membership, round trips | ~21, dependent | **1** |
 | non-membership, probes/op | 45.07 | **0 extra** |
+
+The audit-proof row is the one to look at twice. \vkt's is smaller *and* free:
+`Update` emits the tape during the descent it was already making, so it adds no
+traversal and no storage read. AKD's `get_append_only_proof` is a second walk
+over the tree that re-reads 10.4 records per insertion.
 
 **N = 4M:**
 
@@ -307,14 +318,14 @@ compete for the same cores. 1M-leaf tree, epochs of **46,000** insertions, which
 is `akd-workload-measurements.md`'s median epoch.
 
 ```
-epoch:  233 us/insert (load 163, update+tape 6, write 65)
-        7.93 probes  5.24 hits  7.67 writes  165 B tape   |  10.7 s/epoch
-lookup: mean 680 us  p50 563 us  p99 2158 us  10.24 probes  6.67 hits
+epoch:  180 us/insert (load 123, update+tape 6, write 47)
+        7.93 probes  5.24 hits  7.67 writes  165 B tape   |  8.3 s/epoch
+lookup: mean 623 us  p50 440 us  p99 1639 us  11.1 probes  7.7 hits
 ```
 
-**10.7–12.8 s/epoch against the measured 30 s cadence**, on a laptop running the
-entire storage system in the same process. The tree is 6 us of the 233; Tulip
-is the other 227. Which is the point: the merkle work is not the cost, and the
+**7.7–10.5 s/epoch over five runs, against the measured 30 s cadence**, on a
+laptop running the entire storage system in the same process. The tree is 6 us
+of the 180; Tulip is the other 174. Which is the point: the merkle work is not the cost, and the
 number to optimize is probes.
 
 Warming the map from the epoch tape, then evicting below depth 16, takes a
@@ -353,10 +364,10 @@ of 46k. The `insert` column excludes the audit proof; `total` adds it.
 
 | AKD configuration | insert us | audit us | **total us** | probes/insert | lookup us | lookup probes |
 |---|---|---|---|---|---|---|
-| no cache, 1 thread (AKD's own bench setting) | 38.85 | 12.97 | **51.8** | 23.7 | 29.23 | 42.21 |
-| **cache on**, 1 thread | 57.47 | 28.67 | **86.1** | **0.4** | 35.57 | 0.33 |
-| no cache, **8 threads** | 16.54 | 3.90 | **20.4** | 23.7 | 30.98 | 42.21 |
-| \vkt, no cache, 1 thread | 3.45 | 0 | **3.45** | **7.95** | 9.00 | 25.81 |
+| no cache, 1 thread (AKD's own bench setting) | 37.92 | 13.88 | **51.8** | 23.7 | 29.86 | 42.21 |
+| **cache on**, 1 thread | 58.36 | 28.19 | **86.6** | **0.4** | 33.98 | 0.33 |
+| no cache, **8 threads** | 17.44 | 4.11 | **21.6** | 23.7 | 31.91 | 42.21 |
+| \vkt, no cache, 1 thread | 12.96 | 0 | **13.0** | **7.94** | 13.20 | 25.81 |
 
 Two things worth being precise about.
 
@@ -364,18 +375,19 @@ Two things worth being precise about.
 the entire 1M-leaf tree, so probes go to ~0 — but that is R1 turned off. At the
 10^10 leaves the audit log implies, a bounded cache over a tree four orders
 larger has a low hit rate and you pay for both the misses and the bookkeeping.
-And the bookkeeping is not free: turning the cache on *raised* CPU by 48% on
-insert and 121% on audit-proof generation. So the two rows bracket AKD rather
+And the bookkeeping is not free: turning the cache on *raised* CPU by 54% on
+insert and 103% on audit-proof generation. So the two rows bracket AKD rather
 than one of them being the fair one, and \vkt is ahead of both.
 
 **The 8-thread row is AKD's best wall-clock**, and the right thing to compare
-against a future parallel `Update`. \vkt is 6x faster than it on one core, so
-~47x in CPU-seconds. `Map.Update` parallelizes trivially — partition the batch
+against a future parallel `Update`. \vkt is 1.7x faster than it on one core, so
+~13x in CPU-seconds — and \vkt's figure is mostly its own harness store, where
+AKD's 8-thread figure is already net of parallelism. `Map.Update` parallelizes trivially — partition the batch
 at the top few levels and the sub-trees are disjoint — but there is no reason
 to spend the verification budget on that yet.
 
 Lookups do not parallelize within one lookup in either system, so that column is
-like-for-like: 9.00 us and 1 round trip against 29–36 us and ~21 dependent ones.
+like-for-like: 13.2 us and 1 round trip against 30–34 us and ~21 dependent ones.
 
 ## 7. Scaling, and what it says about 10^10
 
@@ -389,7 +401,8 @@ extrapolate.
 | 2M | 26.79 | 43.89 | 8.94 | 15.97 | 207.3 | 296.6 | 8.67 | 7.97 |
 | 4M | 27.83 | 45.67 | 9.92 | 18.82 | 238.9 | 341.8 | 9.63 | 8.93 |
 | 8M | 28.77 | 47.64 | 10.93 | 21.71 | 271.4 | 387.5 | 10.63 | 9.90 |
-| **slope, per doubling** | **0.99** | **1.81** | **0.99** | **2.85** | **31.0** | **44.2** | **0.97** | **0.95** |
+| 16M | 29.83 | — | 11.92 | — | — | — | 11.62 | — |
+| **slope, per doubling** | **1.01** | **1.81** | **0.99** | **2.85** | **31.0** | **44.2** | **0.98** | **0.95** |
 
 The slopes are the design, stated numerically. \vkt pays one probe per level
 because an inner record carries both child hashes; AKD pays two, and its insert
@@ -472,8 +485,9 @@ place on (§3.3's "correct operation" theorem).
 lookup wants ~16 probes at `N = 10^10` with a map warmed to depth 20. That is
 ~5k lookups/s per deployment, against R4's target of ~190k/s per replica. Three
 orders of magnitude of the gap is the substrate, not the tree: the same lookup
-costs **9.8 us of CPU against an in-process store**, of which the tree's own
-work is a few microseconds — next to `VRF Prove`'s 143.7 us. So served locally,
+costs **13.2 us of CPU against an in-process store**, and most of that is the
+store: proof generation from a resident tree is 2.9 us. Next to `VRF Prove`'s
+143.7 us. So served locally,
 the tree is ~7% of a lookup, which is exactly R4's "the tree's job is not to add
 round trips".
 

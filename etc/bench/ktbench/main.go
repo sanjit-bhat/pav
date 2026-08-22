@@ -100,6 +100,7 @@ type store struct {
 	rbytes int
 	wbytes int
 	writes int
+	aborts int
 }
 
 func (s *store) get(keys [][]byte) [][]byte {
@@ -190,16 +191,27 @@ func (s *store) getTxn(keys [][]byte) [][]byte {
 func (s *store) put(keys, vals [][]byte) {
 	for lo := 0; lo < len(keys); lo += *writeChnk {
 		hi := min(lo+*writeChnk, len(keys))
-		ok := s.pool[0].Run(func(tx *txn.Txn) bool {
-			for i := lo; i < hi; i++ {
-				tx.Write(string(keys[i]), string(vals[i]))
-				s.wbytes += len(keys[i]) + len(vals[i])
-				s.writes++
+		// Tulip aborts a write txn occasionally even with one writer and no
+		// concurrent readers -- about 1 in 7,000 observed. a real writer
+		// retries, so do that, and count it.
+		var ok bool
+		for try := 0; try < 10 && !ok; try++ {
+			if try > 0 {
+				s.aborts++
 			}
-			return true
-		})
+			ok = s.pool[0].Run(func(tx *txn.Txn) bool {
+				for i := lo; i < hi; i++ {
+					tx.Write(string(keys[i]), string(vals[i]))
+				}
+				return true
+			})
+		}
 		if !ok {
-			panic("write txn aborted")
+			panic("write txn aborted ten times")
+		}
+		for i := lo; i < hi; i++ {
+			s.wbytes += len(keys[i]) + len(vals[i])
+			s.writes++
 		}
 	}
 }
@@ -418,6 +430,7 @@ func main() {
 	for _, d := range ds {
 		sum += d
 	}
+	fmt.Printf("write txn retries: %d over %d txns\n", s.aborts, s.writes / *writeChnk)
 	fmt.Printf("lookup: mean %.0f us  p50 %.0f us  p99 %.0f us  %.2f probes  %.2f hits\n",
 		float64(sum.Microseconds())/float64(len(ds)),
 		float64(ds[len(ds)/2].Microseconds()),
