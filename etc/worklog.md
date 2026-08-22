@@ -604,3 +604,35 @@ oversights. Each is against a claim stated in `persistent-server-design.md` or
   write volume, and what the number actually says is that **no per-node
   distributed KV can serve the read path**, whichever of A or B is on top of it
   (§9).
+
+## 11. On disk
+
+Everything above puts the tree in memory: the harness store is a Go map, and
+Tulip's replicas are `map[string]*tuple.Tuple` with no disk backing (§5 of the
+design note says as much). The target stores state to disk, so `etc/bench/
+diskbench` runs the same out-of-core map against **Pebble**, an on-disk LSM —
+§5.1's "embedded LSM, sorted, block-cached", and the substrate the note predicts
+design A wins on. It seeds entirely out of core, in batches, the way a writer
+does, and measures lookups from a **cold OS page cache** at a sweep of block
+cache sizes.
+
+### 11.1 One fsync per epoch
+
+The epoch commit writes node records with no fsync and then HEAD with one. That
+is sound for the reason in §5: nothing reads the records until HEAD names the
+digest they add up to, so a crash before the HEAD write leaves records no reader
+can reach. **The durability cost of an epoch is therefore one fsync, O(1) in the
+batch**, and measurement agrees — 300k-leaf tree, varying the epoch:
+
+| insertions per epoch | us/insert | probes/insert | tape B/insert | s/epoch | **HEAD fsync** |
+|---|---|---|---|---|---|
+| 1,000 | 81.5 | 12.29 | 291 | 0.08 | **3.66 ms** |
+| 20,000 | 41.5 | 7.96 | 150 | 0.83 | **3.98 ms** |
+| 100,000 | 32.8 | 5.72 | 89 | 3.28 | **2.56 ms** |
+
+Two things fall out. The fsync is flat across a 100x change in batch size, as
+the design says it must be. And **everything else gets cheaper per insertion as
+the epoch grows**, because probes, writes, and proof bytes are all `log2(N/B)`
+per insertion — the top of the tree is shared across the batch, so a bigger
+epoch amortizes more of it. AKD's measured 46k-insertion epochs are near the
+knee; the design would rather they were larger.
