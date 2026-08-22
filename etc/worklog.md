@@ -685,7 +685,7 @@ knee; the design would rather they were larger.
 
 | | |
 |---|---|
-| epoch | **8.8 s** (191 us/insert: 183 load, 5 update+tape, 3 write) |
+| epoch | **8.8 s** (191 us/insert: 183 load, 5 update+tape, 3 write); 11.4 s at 20M leaves |
 | | 10.75 probes, 7.50 hits, 9.96 writes, 242 B tape per insert |
 | epoch durability | **one atomic commit, one fsync** (126–213 ms depending on tree size, §12) |
 | lookup, page cache warm | p50 **71 us**, p99 133 us |
@@ -761,6 +761,11 @@ move with the cache. The key-order factor is the one that appears only when the
 cache is too small — 1.47x cold against 1.03x warm for AKD's shape — which is
 why an in-memory benchmark cannot see it and a persistent deployment cannot
 avoid it.
+
+**Confirmed at 20M leaves / 5.0 GB**, a tree ~10x the 512 MB the process was
+allowed: p50 **79 us** for one probe per level against **156 us** for two —
+1.97x, the same ratio as at 5M, on a tree the reader cannot cache any part of
+proportionally. The probe-count factor really does not move.
 
 Two honest caveats. This is AKD's *access pattern* against \vkt's tree and
 Pebble, not AKD: it isolates the layout decisions and says nothing about the
@@ -874,12 +879,20 @@ after a forced GC:
 | 500k | 187 MB | 6.70 | **70 MB** | 37 MB | 0.82 GB |
 | 2M | 501 MB | 8.61 | **118 MB** | 71 MB | 1.23 GB |
 | 8M | 1.79 GB | 10.62 | **131 MB** | 73 MB | 1.47 GB |
+| 20M | 5.0 GB | 11.94 | **138 MB** | 75 MB | (7.3 GB, see below) |
 
-**The tree grew 16x and 9.6x on disk; the live heap grew 1.9x**, tracking
-records-per-insert, which is `log2(N/B)`. Extrapolating the ~25 MB per doubling
-to `N = 10^10` gives a writer holding **~0.4 GB** for a 1.3 TB tree *(est.)*. A
-reader holds one path — tens of KB — plus whatever warm top it chooses to keep,
-which `Evict` bounds explicitly.
+**The tree grew 40x, and 27x on disk; the live heap grew 2.0x**, tracking
+records-per-insert, which is `log2(N/B)`. That is ~13 MB per doubling, so
+`N = 10^10` puts the writer at **~0.25 GB** for a 1.3 TB tree *(est.)*. A reader
+holds one path — tens of KB — plus whatever warm top it chooses, which `Evict`
+bounds explicitly.
+
+The 20M row's peak RSS is 7.3 GB and is **not** a counter-example: that run
+seeded in 500k-leaf batches for speed, and peak RSS follows the *batch*, which
+was 11x the workload's. Its epoch and lookup phases, at the workload's 46k, sat
+at 138 MB and 75 MB of live heap like the rest of the column. Peak RSS in the
+46k rows tops out at 1.47 GB, most of it Pebble's caches and unreturned
+allocator pages.
 
 Peak RSS is larger and also grows, but that is Pebble's block cache, table
 metadata, and whatever the Go allocator has not returned; it is a tuning
@@ -889,15 +902,24 @@ parameter, not a property of the design.
 
 Being precise, because "bigger than RAM" is easy to assert:
 
-- **Demonstrated:** resident cost is sub-linear in `N` over a 16x range while the
-  on-disk tree grew ~10x (above). And a tree **3.5x the memory the process was
-  allowed** — 1.9 GB of LSM under `MemoryMax=512M` — served 2,000 lookups at
-  p50 67–68 us with no degradation against the fully-cached case (§11.2, §11.4).
-  From the process's point of view that tree *is* bigger than its RAM.
-- **Not demonstrated:** a tree larger than the machine's 21 GB. The largest built
-  here is 8M leaves / 1.79 GB, because seeding is the slow part — 15 minutes for
-  8M, and it is superlinear. Nothing in the design or the measurements suggests a
-  cliff, but that is an extrapolation and not a run.
+- **Demonstrated:** resident cost is sub-linear in `N` over a **40x** range while
+  the on-disk tree grew 27x (above). And a **5.0 GB tree read by a process
+  allowed 512 MB** — ~10x — serving 1,000 lookups at **p50 87 us**, with the
+  probe-shape gap intact (below). From the process's point of view that tree is
+  an order of magnitude bigger than its RAM, and nothing degrades.
+- **Not demonstrated:** a tree larger than the *machine's* 21 GB. The largest
+  built here is 20M leaves / 5.0 GB, because seeding is the slow part — 46
+  minutes, and superlinear. Nothing in the design or the measurements suggests a
+  cliff, but past 20M is extrapolation.
+- **A measurement artifact worth recording**, because it nearly went in as a
+  result. The 20M run's *first* lookup phase, in the same process straight after
+  a 46-minute seed, reported p50 388 us and had the AKD-shaped probe set coming
+  out *faster* than ours — which is backwards. Pebble was still compacting: the
+  LSM went from 4.97 GB at seed-end to 3.8 GB afterwards. The phase that ran
+  first absorbed the stall. Re-run as a separate process against a settled LSM,
+  the same tree gives p50 87 us and the expected ordering. **Do not measure reads
+  against an LSM that is still compacting**, and treat a result that inverts a
+  structural ratio as a bug in the harness first.
 - **Also worth saying:** Tulip cannot do this at all, whatever the merkle library
   does. See §14.2.
 
