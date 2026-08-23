@@ -210,11 +210,11 @@ func TestStoreRoundTrip(t *testing.T) {
 	for _, l := range newLabels {
 		store.loadFrom(t, oc, l, probeD)
 	}
-	tape, err := oc.Update(cloneAll(newLabels), cloneAll(newVals))
+	tape, err := oc.Update(newLabels, newVals)
 	if err {
 		t.Fatal()
 	}
-	if _, err := mem.Update(cloneAll(newLabels), cloneAll(newVals)); err {
+	if _, err := mem.Update(newLabels, newVals); err {
 		t.Fatal()
 	}
 	if !bytes.Equal(oc.Hash(), mem.Hash()) {
@@ -278,7 +278,7 @@ func TestStoreReject(t *testing.T) {
 	if _, _, _, err := m.Prove(labels[0]); !err {
 		t.Fatal("proved from a cut")
 	}
-	if _, err := m.Update(cloneAll(labels[:1]), cloneAll(vals[:1])); !err {
+	if _, err := m.Update(labels[:1], vals[:1]); !err {
 		t.Fatal("updated into a cut")
 	}
 }
@@ -327,7 +327,7 @@ func TestWarmFromTape(t *testing.T) {
 	for _, l := range newLabels {
 		store.loadFrom(t, oc, l, probeD)
 	}
-	tape, err := oc.Update(cloneAll(newLabels), cloneAll(newVals))
+	tape, err := oc.Update(newLabels, newVals)
 	if err {
 		t.Fatal()
 	}
@@ -439,7 +439,7 @@ func TestReplicaLoop(t *testing.T) {
 		labels, vals := mkSeeded(4_000, byte(20+ep))
 		all = append(all, labels...)
 		digOld := dig
-		tape, err := writer.Update(cloneAll(labels), cloneAll(vals))
+		tape, err := writer.Update(labels, vals)
 		if err {
 			t.Fatal()
 		}

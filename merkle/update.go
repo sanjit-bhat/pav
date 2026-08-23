@@ -11,7 +11,8 @@ import (
 // the smallest sub-tree that covers every inserted label, with everything off
 // that sub-tree replaced by an opaque cut.
 // the verifier rebuilds the tape into a tree, hashes it for the old digest,
-// [put]'s the batch into it, and hashes again for the new digest.
+// [put]'s the batch into it, and hashes again for the new digest. the prover
+// runs the mirror of that: [serialize], then the same [putAll].
 // so the tape's meaning is "the part of the old tree an insert can reach",
 // and everything else about the update is decided by [put], which both sides
 // run.
@@ -28,23 +29,39 @@ const (
 
 // Update inserts the batch of (labels[i], vals[i]) leaves and returns a proof
 // that the new map is the old map plus exactly those leaves.
-// it errors iff some label is already in the map or repeats within the batch.
-// it stores immutable references to the labels and vals,
-// and it reorders both slices in place.
+// it errors iff some label is already in the map or repeats within the batch,
+// or the batch reaches an unloaded sub-tree.
+// it stores immutable references to the labels and vals, and it leaves both
+// slices in the caller's order.
+// on error, the map may already hold a prefix of the batch, so callers discard
+// it rather than reusing it.
 func (m *Map) Update(labels, vals [][]byte) (updProof []byte, err bool) {
 	std.Assert(uint64(len(labels)) == uint64(len(vals)))
+	// [serialize] partitions the labels into trie order, so it gets its own
+	// copy of the slice headers.
+	ownLabels := make([][]byte, 0, uint64(len(labels)))
 	for _, l := range labels {
 		std.Assert(uint64(len(l)) == cryptoffi.HashLen)
+		ownLabels = append(ownLabels, l)
 	}
-	return update(&m.root, 0, labels, vals, nil)
+
+	// the same two passes the verifier runs, in the same order: say what the
+	// old tree looked like where the batch can reach, then [put] the batch in.
+	tape, err := serialize(m.root, 0, ownLabels, nil)
+	if err {
+		return nil, true
+	}
+	if putAll(&m.root, labels, vals) {
+		return nil, true
+	}
+	return tape, false
 }
 
-// update inserts the batch into the n0 sub-tree, which sits at depth,
-// appending the sub-tree's tape to tape.
-// every label in the batch must have the depth-length prefix that n0 covers.
-func update(n0 **node, depth uint64, labels, vals [][]byte, tape []byte) (tapeOut []byte, err bool) {
+// serialize appends to tape the sub-tree n, which sits at depth and covers
+// every label in the batch. it is the inverse of [tapeToTree].
+// it errors iff the batch reaches a cut, which hides where the leaves land.
+func serialize(n *node, depth uint64, labels [][]byte, tape []byte) (tapeOut []byte, err bool) {
 	std.Assert(depth <= maxDepth)
-	n := *n0
 
 	// nothing inserted here, so the sub-tree is unchanged.
 	if uint64(len(labels)) == 0 {
@@ -58,55 +75,45 @@ func update(n0 **node, depth uint64, labels, vals [][]byte, tape []byte) (tapeOu
 	// the batch reaches the bottom of the old tree.
 	// [put] takes it from here, and the tape says what it started from.
 	if n == nil {
-		tape = append(tape, tapeEmpty)
-		return tape, putAll(n0, depth, labels, vals)
+		return append(tape, tapeEmpty), false
 	}
 	if n.nodeTy == leafNodeTy {
 		tape = append(tape, tapeLeaf)
 		tape = marshal.WriteBytes(tape, n.label)
-		tape = safemarshal.WriteSlice1D(tape, n.val)
-		return tape, putAll(n0, depth, labels, vals)
+		return safemarshal.WriteSlice1D(tape, n.val), false
 	}
 
 	if n.nodeTy == innerNodeTy {
 		tape = append(tape, tapeSplit)
-		mid := partition(labels, vals, depth)
-		tape, err = update(&n.child0, depth+1, labels[:mid], vals[:mid], tape)
+		mid := partition(labels, depth)
+		tape, err = serialize(n.child0, depth+1, labels[:mid], tape)
 		if err {
-			return tape, err
+			return tape, true
 		}
-		tape, err = update(&n.child1, depth+1, labels[mid:], vals[mid:], tape)
-		if err {
-			return tape, err
-		}
-		n.hash = compInnerHash(n.child0.getHash(), n.child1.getHash())
-		return tape, false
+		return serialize(n.child1, depth+1, labels[mid:], tape)
 	}
 
 	std.Assert(n.nodeTy == cutNodeTy)
 	return tape, true
 }
 
-func putAll(n0 **node, depth uint64, labels, vals [][]byte) (err bool) {
+func putAll(n0 **node, labels, vals [][]byte) (err bool) {
 	for i := uint64(0); i < uint64(len(labels)); i++ {
-		if put(n0, depth, labels[i], vals[i]) {
+		if put(n0, 0, labels[i], vals[i]) {
 			return true
 		}
 	}
 	return false
 }
 
-// partition reorders labels and vals so that the labels with a 0 bit at depth
-// come first, and returns how many there are.
-func partition(labels, vals [][]byte, depth uint64) (mid uint64) {
+// partition reorders labels so that the ones with a 0 bit at depth come
+// first, and returns how many there are.
+func partition(labels [][]byte, depth uint64) (mid uint64) {
 	for j := uint64(0); j < uint64(len(labels)); j++ {
 		if !getBit(labels[j], depth) {
 			l := labels[mid]
 			labels[mid] = labels[j]
 			labels[j] = l
-			v := vals[mid]
-			vals[mid] = vals[j]
-			vals[j] = v
 			mid++
 		}
 	}
@@ -143,7 +150,7 @@ func ApplyUpdate(labels, vals [][]byte, updProof []byte) (m *Map, hashOld []byte
 		return nil, nil, true
 	}
 	hashOld = tr.getHash()
-	if putAll(&tr, 0, labels, vals) {
+	if putAll(&tr, labels, vals) {
 		return nil, nil, true
 	}
 	return &Map{root: tr}, hashOld, false

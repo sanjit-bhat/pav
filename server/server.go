@@ -190,7 +190,6 @@ func (s *Server) doWork(work []*work) {
 	}
 
 	// one tree update for the whole epoch, with one proof for the auditor.
-	// [merkle.Map.Update] reorders labels and vals to match its own tape.
 	updProof, err := s.keys.hidden.Update(labels, vals)
 	std.Assert(!err)
 

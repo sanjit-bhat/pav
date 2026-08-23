@@ -105,9 +105,15 @@ func TestUpdate(t *testing.T) {
 		}
 
 		dOld := m.Hash()
+		order := cloneAll(labels)
 		p, err := m.Update(labels, vals)
 		if err {
 			t.Fatal()
+		}
+		for i := range labels {
+			if !bytes.Equal(order[i], labels[i]) {
+				t.Fatal("update reordered the caller's slice")
+			}
 		}
 		dNew := m.Hash()
 		if !bytes.Equal(dNew, truth.Hash()) {
@@ -211,7 +217,7 @@ func TestUpdateTamper(t *testing.T) {
 	}
 	dOld := m.Hash()
 	newLabels, newVals := mk(500)
-	tape, err := m.Update(cloneAll(newLabels), cloneAll(newVals))
+	tape, err := m.Update(newLabels, newVals)
 	if err {
 		t.Fatal()
 	}
