@@ -44,8 +44,15 @@ import (
 // StoreKeyLen is the length of every storage key: a label, then a depth.
 const StoreKeyLen = cryptoffi.HashLen + 2
 
+// maxRecValLen caps a leaf value in a record, so a store that is trusted only
+// for liveness cannot hand back an arbitrarily large one. an out-of-core map
+// therefore holds values up to this length.
+const maxRecValLen uint64 = 1024
+
 // StoreKey returns the storage key of the node covering label's depth-length
-// prefix.
+// prefix. the bit order below makes trie order and key order differ within a
+// byte, so the clustering above is a whole-byte argument, and a range scan by
+// trie prefix would not work.
 func StoreKey(label []byte, depth uint64) []byte {
 	std.Assert(depth <= maxDepth)
 	k := make([]byte, 0, StoreKeyLen)
@@ -258,6 +265,7 @@ func encodeNode(n *node) []byte {
 		return marshal.WriteBytes(b, n.child1.getHash())
 	}
 	std.Assert(n.nodeTy == leafNodeTy)
+	std.Assert(uint64(len(n.val)) <= maxRecValLen)
 	b := make([]byte, 0, 1+cryptoffi.HashLen+uint64(len(n.val)))
 	b = append(b, leafNodeTag)
 	b = marshal.WriteBytes(b, n.label)
@@ -290,6 +298,9 @@ func decodeNode(rec []byte) (n *node, err bool) {
 	if tag == leafNodeTag {
 		label, val, err := safemarshal.ReadBytes(rem, cryptoffi.HashLen)
 		if err {
+			return nil, true
+		}
+		if uint64(len(val)) > maxRecValLen {
 			return nil, true
 		}
 		leaf := &node{nodeTy: leafNodeTy, label: label, val: val}
