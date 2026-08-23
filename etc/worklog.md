@@ -17,7 +17,7 @@ are medians of three runs; every count was identical across runs.
 
 | | AKD | \vkt |
 |---|---|---|
-| insert incl. audit proof | 51.8 us, 23.7 probes | **13.0 us, 7.94 probes** |
+| insert incl. audit proof | 51.8 us, 23.7 probes | **16.2 us, 7.94 probes** |
 | lookup | 29.9 us, 42.2 probes, ~21 round trips | **13.2 us, 25.8 probes, 1 round trip** |
 | audit proof | 255 B/insert | **178 B/insert** |
 | records written per insert | **7.05** | 7.71 |
@@ -28,8 +28,10 @@ storage interface, which is exactly the work a *persistent* store cannot skip.
 It is the right baseline for an in-memory ceiling and the wrong one here.
 
 Both microsecond columns are dominated by each system's in-process store, not by
-its tree: of \vkt's 13.0 us to insert, **3.0 us is `Update` including the audit
-tape** and 10.0 us is the harness store's own lookups and copies.
+its tree: of \vkt's 16.2 us to insert, **6.2 us is `Update` including the audit
+tape** and 10.0 us is the harness store's own lookups and copies. That 6.2 was
+3.0 until §17 split `Update` into two passes to make its spec smaller; every
+structural count below is unaffected.
 
 Against a live 3-replica Tulip, at the measured 46k-per-30 s workload: **8.3 s
 per epoch** (7.7–10.5 over five runs), of which the tree is 6 us of 180 us per
@@ -57,7 +59,9 @@ Four things did most of the work, and three of them are simplifications:
 
 Read next: §0.1 for what "probe" means, since every table below counts them;
 §7 for the scaling and the 10^10 extrapolation; §15 and §16 for how the design
-was arrived at and where the speed comes from; §8 and §13 for what is not done.
+was arrived at and where the speed comes from; §8 and §13 for what is not done,
+starting with the fact that the Rocq proofs are broken; §17 for what the review
+changed.
 
 ### 0.1 The four counts
 
@@ -129,9 +133,9 @@ audit proof; \vkt's `Put` does.
 ## 1. Batched epoch update (commit `ba8c4e6`)
 
 The epoch is the unit of update, so it is now the unit of proof.
-`Map.Update(labels, vals)` inserts the whole batch in one descent and returns a
-single **tape**: the DFS pre-order (child0 first) serialization of the smallest
-sub-tree covering the batch, with everything off it replaced by an opaque cut.
+`Map.Update(labels, vals)` inserts the whole batch and returns a single **tape**:
+the DFS pre-order (child0 first) serialization of the smallest sub-tree covering
+the batch, with everything off it replaced by an opaque cut.
 Four instructions — `split`, `empty`, `cut(hash)`, `leaf(label, val)`.
 
 ### 1.1 Why there is a fourth instruction, and why it carries the value
@@ -179,6 +183,9 @@ Measured, 1M-leaf tree, 46k-insertion epochs, 10 epochs:
 | apply + prove | **2.67 us/insert** (123 ms/epoch) |
 | verify | 4.15 us/insert |
 | proof | **178 B/insert** |
+
+The two timings are the one-descent version. §17 split `Update` into two passes
+for the proofs, which costs 2.5x on the first row and leaves the third alone.
 
 vs. 6.05 us/insert one-at-a-time. Two thirds of the old cost was generating a
 separate ~1.1 KB non-membership proof per insert.
@@ -448,9 +455,7 @@ eighth the CPU, a third of the storage operations, a twenty-first of the round
 trips — and against an AKD that has been given an interface a persistent
 deployment cannot have.** `Map.Update` parallelizes trivially (partition the
 batch at the top few levels; the sub-trees are disjoint), but there is no reason
-to spend verification budget on it while one core already keeps up. `Map.Update` parallelizes trivially — partition the batch
-at the top few levels and the sub-trees are disjoint — but there is no reason
-to spend the verification budget on that yet.
+to spend verification budget on it while one core already keeps up.
 
 Lookups do not parallelize within one lookup in either system, so that column is
 like-for-like: 13.2 us and 1 round trip against 30–34 us and ~21 dependent ones,
@@ -513,6 +518,20 @@ for one record per node, which assumed 150 B records where these are ~70 B.
 
 ## 8. What is not done
 
+- **`proof/proof/` was never updated, so this branch does not compile in Rocq.**
+  `proof/code/` and `proof/generatedproof/ktcore.v` were regenerated; the 14k
+  lines of manual specs and proofs were not, so CI's `proof` job fails and
+  everything §13 marks "met" is met in unverified code. The pure layer survives
+  — `merkle_proof/theory.v` compiles as-is — and the break starts one layer up,
+  in `merkle_proof/code.v` at `wp_put`, on the duplicate-label branch §1 added.
+  From there it flows to `ktcore_proof/serde.v` (`AuditProof` changed,
+  `UpdateProof` deleted), `auditor_proof/`, and `server_proof/server.v`;
+  `update.go` and `store.go` have no specs at all. The order that gets back to a
+  verified system fastest is: repair `code.v` for the changed API, then spec
+  `Map.Update`/`ApplyUpdate` (the security-critical one — §1.1's attack is the
+  class of bug only this proof settles), then re-prove serde, auditor, and
+  server. `LoadPath` and `Records` are only needed for a verified out-of-core
+  *server*, which is the next bullet.
 - **`server/server.go` still holds a resident `*merkle.Map`.** The library can
   now live behind a store, and `etc/bench/ktbench` is a working persistent
   server against Tulip, but the verified server package was left on the in-core
@@ -533,13 +552,14 @@ for one record per node, which assumed 150 B records where these are ~70 B.
   batch at the top few levels and the sub-trees are disjoint — and AKD's 8-thread
   row is the thing to beat if that ever matters. It does not yet: \vkt on one
   core is already 6x AKD on eight.
-- **`alicebob`'s end-to-end test is timing-flaky and fails about half the time**,
-  which makes `just ci` unreliable. Pre-existing and unrelated to this work:
-  9/20 failures on pristine `main`, 11/20 here, and it is no better on an idle
-  box than a loaded one. The cause is that `epochTime` is **1 ms**
-  (`alicebob.go:19`) while the test sleeps `2 * epochTime` and then *asserts an
-  exact epoch number* — 2 ms of slack against Go timer slop in a VM. Raising
-  `epochTime` fixes it; left alone because it is not this work's to change.
+- **Nothing tests two concurrent writers.** R6's fork-freedom rests on the
+  store's atomic step, and on §9's topology the contended HEAD write is the only
+  thing defending it. `crashtest` covers a writer that dies mid-publish, not a
+  second writer that publishes at the same time.
+- **`alicebob`'s end-to-end test was timing-flaky**, 13/20 failures on this box,
+  which made `just ci` a coin flip. Pre-existing on `main` and unrelated to this
+  work, but fixed here anyway because the proof-repair branch would pay it too:
+  see §17.
 
 ## 9. Where the storage should live, given the numbers
 
@@ -834,12 +854,13 @@ stands, with "met" meaning *demonstrated*, not *designed for*.
 
 | | requirement | status |
 |---|---|---|
+| **R0** | stays verifiable in Perennial | **not met.** `proof/proof/` was never updated, so the branch does not compile in Rocq and every row below is met in unverified code. This is the design note's own framing sentence, not a new requirement — §8 |
 | **R1** | out-of-core tree | **met in the library**, not in `server/` (below). Resident cost is O(batch x depth), not O(N) — §14 |
 | **R2** | crash-atomic epoch publication | **met and crash-tested** on a single-version store (§12). Reasoned, implemented, not crash-tested on Tulip |
 | **R3** | no torn reads against a publish in flight | **met.** MVCC reads pinned to the timestamp HEAD names, or an atomic commit on a store without MVCC. No `previous_node`, no one-epoch reader window |
 | **R4** | read throughput, proof-generation bound | **met on the tree's side**: 1 round trip, ~3 us of tree CPU, 59–72 us per lookup on disk against 143.7 us of VRF. *Not* demonstrated at R4's ~190k lookups/s — there is no multi-core serving harness here |
 | **R5** | cache coherence across epochs | **met.** `ApplyUpdate` + `Evict` warm a replica from the epoch's own audit proof; no blanket flush, no lock over proof generation. Tested end to end over five epochs (`TestReplicaLoop`) |
-| **R6** | writes batched into epochs, one writer | **met** for the batching (`Map.Update`). Fork-freedom rests on the store's atomic step and is not separately tested |
+| **R6** | writes batched into epochs, one writer | **met** for the batching (`Map.Update`). Fork-freedom rests on the store's atomic step, and nothing here tests two concurrent writers — §8 |
 | **R7** | bulk read APIs | **met**, and it falls out rather than needing a temp-table query: every key is computable, so a batch is one deduped read |
 | **R8** | audit proofs bulk, immutable, out-of-band | **met.** The tape, 178 B/insert at 1M and ~590 at 10^10 *(est.)*, produced inline during the update |
 | **R9** | history proofs bounded independent of version count | **not done.** Marker versions are a client-protocol change (note §7.2) |
@@ -849,8 +870,9 @@ stands, with "met" meaning *demonstrated*, not *designed for*.
 | **R13** | monotonic reads per client session | **not done.** Client protocol |
 | **R14** | no client-supplied parameter controls server work | **not done.** Pagination is a protocol change (note §7.4) |
 
-So: **every storage-layer requirement is met; four client-protocol ones (R9,
-R10, R13, R14) are untouched.** That split is the design note's own — its §7
+So: **every storage-layer requirement is met in code that does not yet verify
+(R0); four client-protocol ones (R9, R10, R13, R14) are untouched.** That split
+is the design note's own — its §7
 gathers exactly those under "protocol changes worth making", separately from the
 storage layer, because they touch the client and the security proof. This work
 did the storage layer.
@@ -1020,14 +1042,14 @@ where its premise did not hold.
 ## 16. Why it is faster than AKD, mechanistically
 
 The headline numbers are not one effect. At 1M leaves, epochs of 46k, insertion
-costs AKD **51.8 us / 23.7 probes** and \vkt **13.0 us / 7.94 probes**. The
-38.8 us decomposes into three separate causes, each measured on its own:
+costs AKD **51.8 us / 23.7 probes** and \vkt **16.2 us / 7.94 probes**. The
+35.6 us decomposes into three separate causes, each measured on its own:
 
 | | us | what it is |
 |---|---|---|
 | **the audit proof is a second traversal** | **13.9** | `get_append_only_proof` walks the tree again and re-reads **10.41 records per insertion**. \vkt emits the tape during the descent it was already making: no second walk, no extra probe. This is also the whole of the 10.4-probe difference in the audit column |
 | **AKD's storage interface** | **12.3** | `main` serializes every key to a heap `Vec<u8>` and SipHashes it per operation. Its `no-key-serialization` branch removes that and drops insert from 37.9 to 25.6. Real work for a persistent store — \vkt's `StoreKey` pays it too — but AKD pays it twice as often, because of the next row |
-| **fewer probes and cheaper tree work** | **12.6** | 13.24 probes against 7.94, plus the tree itself: \vkt's `Update` including the tape is **3.0 us**, and the other 10.0 of its 13.0 is its own store |
+| **fewer probes and cheaper tree work** | **9.4** | 13.24 probes against 7.94, plus the tree itself: \vkt's `Update` including the tape is **6.2 us** (3.0 before §17), and the other 10.0 of its 16.2 is its own store |
 
 For lookups — \vkt 13.2 us / 25.8 probes / **1 round trip**, AKD 29.9 us / 42.2
 probes / **~21 dependent round trips** — there are three causes and they are
@@ -1062,3 +1084,77 @@ already determines. 178 B/insert against 255 at 1M, ~590 against ~856 at 10^10
 **The one column AKD wins**, writes per insertion by 9%, has an equally specific
 cause: `put` materializes one inner node per bit along a shared path, giving
 `1/ln 2` inner nodes per leaf where a path-compressed trie has one (§7).
+
+## 17. After the review: two changes for the proofs, and what one cost
+
+`etc/review.md` asked for two changes to `update.go`, both to shrink specs that
+have yet to be written, plus three smaller hardening items and the `alicebob`
+fix. All of them are in. One of the two is not free, and the review's estimate
+of its cost was wrong, so it gets its own numbers.
+
+**`Update` is two passes now, not one.** It was a single recursion that emitted
+tape and mutated the tree together, calling `putAll` at whatever frontier it
+reached. It is now `serialize` — a pure descent that emits the tape, the exact
+inverse of `tapeToTree` — followed by `putAll` from the root. Prover and verifier
+now run the same two steps in the same order, and the second step is n
+applications of `put` at depth 0 on both sides, so its spec is the verifier's
+spec. `putAll` lost its `depth` argument; every caller passed 0.
+
+**`Update` no longer reorders the caller's slices.** `serialize` wants the labels
+in trie order, so it partitions its own copy of the 46k slice headers (~370 KB,
+dead at epoch end). It never reads the values at all, so only the labels are
+copied and `partition` lost an argument. `Update`'s spec now leaves the caller's
+slices alone, which deletes "a permutation of the batch" from `Map.Update`, the
+serde layer, and the auditor, and a stale comment from `server.doWork`.
+
+**What the split cost.** The review priced it at "one extra in-memory descent
+over the covering sub-tree, noise against the measured 123 ms/epoch". That
+missed where the old `putAll` started: at the *frontier* of the covering
+sub-tree, around depth 17, not at the root. From the root, each of the 46k
+inserts re-walks and re-hashes the ~17 shared levels above its own frontier, so
+an epoch's inner-node hashes go from ~150k to ~900k. Measured here, 1M leaves,
+46k-insertion epochs, medians of three runs:
+
+| | one descent | two passes |
+|---|---|---|
+| `Update` incl. tape | 2.31 us/insert, 106 ms/epoch | **6.60 us/insert, 303 ms/epoch** |
+| `VerifyUpdate` | 4.20 us/insert | 6.44 us/insert |
+| tape | 178.5 B/insert | 178.5 B/insert |
+
+The verifier's code did not change; it is slower because ~750k extra 32-byte
+hash allocations per epoch are GC pressure the whole process pays. Against the
+store benchmark the insert goes 11.7 -> 15.1 us with every structural count
+identical (7.94 probes, 5.26 hits, 7.70 writes, 346 B read, 777 B written),
+which is where §0's 13.0 -> 16.2 and §16's third row come from. Nothing else in
+this log moves: on Tulip the delta is ~150 ms of an 8.3 s epoch, and on disk it
+is a smaller share still.
+
+Whether that is a good trade is the review's own opening premise — the code has
+to be verified, so simplicity beats a constant factor — and 303 ms of a 30 s
+epoch says this constant is affordable. If it stops being affordable, the
+fallback keeps the split and restores only the descent: pass two becomes the old
+recursion with the tape emission deleted, whose invariant relates a partly
+mutated tree to the remaining batch, without the tape prefix the review objected
+to carrying as a third term.
+
+**Three smaller items, from review §5.** `decodeNode` caps a record's leaf value
+at 1 KB and `encodeNode` asserts the same bound, so a store that is trusted only
+for liveness cannot hand back an unbounded record. `StoreKey`'s doc comment now
+says that trie order and key order differ within a byte — harmless for the
+clustering argument, which is about whole-byte prefixes, but it rules out a range
+scan by trie prefix, which is the shape a GC pass would want. And `Update`'s doc
+comment says what the map holds after an error: the old map plus some prefix of
+the batch. The split improved that state, incidentally — `putAll` from the root
+fixes hashes along each path it takes, where before the inner hashes above the
+failure point were left stale. Both callers still discard on error, and the spec,
+when written, should surrender `own_Map` there rather than promise anything.
+
+**`alicebob` is deflaked.** `epochTime` was 1 ms against a test that sleeps
+`2 * epochTime` and then asserts an exact epoch number, which is 2 ms of slack
+against Go timer slop in a VM. At 20 ms it is 20/20 on this box, against 13/20
+at 1 ms. Pre-existing on `main` (§8), fixed here because the proof-repair branch
+would otherwise pay for it too.
+
+**Not done from the review:** the proofs themselves (§8's first bullet), and
+promoting §9's topology conclusion — that one is done, in
+`persistent-server-design.md` §0.

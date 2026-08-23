@@ -40,12 +40,30 @@ would become viable again only at a far lower update rate or a far larger epoch.
 Both share one epoch-commit invariant (§2.3), one story for which epoch a replica
 serves (§2.4), and one rule about client-controlled work (§2.5).
 
+**Where the storage lives: Tulip for the durable epoch commit, a local store per
+read replica.** This reverses fixing on Tulip throughout, and measurement decided
+it rather than preference (worklog §9). Tulip's write path is fine — a
+46k-insertion epoch commits in 9.6–12.8 s against a 30 s cadence, and under MVCC
+the atomic step is one key, so nothing about the commit needs a transaction over
+the batch. Its read path is not: ~83k point reads/s, against a lookup that wants
+~16 probes at 10^10 leaves, is ~5k lookups/s per deployment against R4's ~190k.
+That gap is the substrate and not the tree — the same lookup costs 13.2 us of CPU
+against an in-process store, of which proof generation is 2.9 us, next to `VRF
+Prove`'s 143.7 us. So this is §4.7's replicated-log topology, and design A makes
+it cheap rather than a new subsystem: the epoch tape is already the log entry
+(published for auditors, self-verifying, ~600 B/insert), and `ApplyUpdate` +
+`Evict` turn it into the replica's warm top, so a replica holds the top of the
+tree and reaches for the rest instead of the full 0.3–7 TB copy §4.7 assumes.
+§4.7's objection stands unchanged: a *new* replica is bulk loading, and that is
+hours.
+
 Four changes worth making that are **not** storage changes (§7): log-spaced
 back-pointers over epoch digests, marker versions, freshness measured against the
 auditor rather than a clock, and paginating every client-sized reply.
 
-And the thing to measure first, before any of it: what a 64-key `batch_get`
-actually costs on Tulip (§8).
+The thing this draft said to measure first — what a 64-key `batch_get` costs on
+Tulip (§8) — was measured: 93 us per read, no batch primitive, and that is where
+the read-path conclusion above comes from (worklog §2).
 
 ---
 
@@ -667,8 +685,11 @@ crash-safe local map, which is the same structure with the pointer in a file.
 | must sustain the write rate | no | yes |
 | primitive needed | one atomic step | a replicated log |
 
-Few fat replicas versus many thin ones. If this is the topology, the piece of
-Tulip to build on is `paxos`/`txnlog`, not `txn`.
+Few fat replicas versus many thin ones. **This is the topology** (§0), on the
+read numbers in worklog §9, so the piece of Tulip to build on for reads is
+`paxos`/`txnlog` rather than `txn` — and the log entry is the epoch tape the
+auditor already gets. The "full copy" row is what `Evict` softens: a replica may
+hold the top of the tree and probe its local store for the rest.
 
 ### 4.8 Theta(k)-versions Get
 
