@@ -16,7 +16,9 @@ import (
 const (
 	aliceUid uint64 = iota
 	bobUid
-	epochTime = time.Millisecond
+	// the test sleeps 2*epochTime and then asserts an exact epoch number, so
+	// this has to stay well above the timer slop of a loaded VM.
+	epochTime = 20 * time.Millisecond
 )
 
 func testAliceBob(servAddr uint64, servGood bool, adtrAddrs []uint64) {
