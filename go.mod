@@ -1,6 +1,6 @@
 module github.com/sanjit-bhat/pav
 
-go 1.26
+go 1.26.0
 
 require (
 	filippo.io/edwards25519 v1.2.0
@@ -9,7 +9,7 @@ require (
 	github.com/goose-lang/std v0.7.0
 	github.com/stretchr/testify v1.12.1
 	github.com/tchajed/marshal v0.6.5
-	golang.org/x/tools v0.49.0
+	golang.org/x/tools v0.50.0
 )
 
 tool (
@@ -34,7 +34,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.3 // indirect
-	golang.org/x/mod v0.39.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )
