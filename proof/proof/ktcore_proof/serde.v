@@ -121,6 +121,14 @@ Definition own ptr obj d : iProp Σ :=
 
   "Hsl_VrfPk" ∷ sl_VrfPk ↦*{d} obj.(VrfPk).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iNamed 1.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_VrfPk") as %?.
+  iPureIntro. rewrite /valid. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -134,10 +142,16 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (sl_VrfPk) "[Hstr_VrfSig Hsl_VrfPk]". wp_auto.
   wp_apply (safemarshal.w8.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_VrfPk]") as "* (Hsl_b & Hcap_b & Hsl_VrfPk)".
@@ -275,6 +289,14 @@ Definition own ptr obj d : iProp Σ :=
 
   "Hsl_Link" ∷ sl_Link ↦*{d} obj.(Link).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iNamed 1.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_Link") as %?.
+  iPureIntro. rewrite /valid. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -288,10 +310,16 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (sl_Link) "[Hstr_LinkSig Hsl_Link]". wp_auto.
   wp_apply (safemarshal.w8.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
   wp_apply (safemarshal.w64.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
@@ -446,10 +474,15 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    by rewrite /wish app_nil_r. }
   iDestruct "Hown" as "Hstruct". wp_auto.
   wp_apply (safemarshal.w64.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
   wp_apply (safemarshal.w64.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
@@ -581,6 +614,15 @@ Definition own ptr obj d : iProp Σ :=
   "Hsl_Val" ∷ sl_Val ↦*{d} obj.(Val) ∗
   "Hsl_Rand" ∷ sl_Rand ↦*{d} obj.(Rand).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iNamed 1.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_Val") as %?.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_Rand") as %?.
+  iPureIntro. rewrite /valid. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -594,10 +636,16 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (sl_Val sl_Rand) "(Hstr_CommitOpen & Hsl_Val & Hsl_Rand)". wp_auto.
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Val]") as "* (Hsl_b & Hcap_b & Hsl_Val)".
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Rand]") as "* (Hsl_b & Hcap_b & Hsl_Rand)".
@@ -755,6 +803,16 @@ Definition own ptr obj d : iProp Σ :=
   "Hown_PkOpen" ∷ CommitOpen.own ptr_PkOpen obj.(PkOpen) d ∗
   "Hsl_MerkleProof" ∷ sl_MerkleProof ↦*{d} obj.(MerkleProof).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iNamed 1.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_LabelProof") as %?.
+  iDestruct (CommitOpen.own_valid with "Hown_PkOpen") as %?.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_MerkleProof") as %?.
+  iPureIntro. rewrite /valid. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -768,13 +826,19 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (sl_LabelProof ptr_PkOpen sl_MerkleProof) "(Hstr_Memb & Hsl_LabelProof & Hown_PkOpen & Hsl_MerkleProof)". wp_auto.
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_LabelProof]") as "* (Hsl_b & Hcap_b & Hsl_LabelProof)".
-  wp_apply (CommitOpen.wp_enc with "[$Hsl_b $Hcap_b $Hown_PkOpen]") as "* (Hsl_b & Hcap_b & Hown_PkOpen)".
+  wp_apply (CommitOpen.wp_enc with "[$Hsl_b $Hcap_b $Hown_PkOpen]") as "* (Hsl_b & Hcap_b & Hown_PkOpen & _)".
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_MerkleProof]") as "* (Hsl_b & Hcap_b & Hsl_MerkleProof)".
   iApply "HΦ".
   iSplitL "Hsl_b".
@@ -929,6 +993,19 @@ Definition own ptr obj d : iProp Σ :=
   ([∗ list] ptr;obj ∈ ptr0;obj,
     Memb.own ptr obj d).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iDestruct 1 as (ptr0) "[Hsl Hbig]".
+  iDestruct (own_slice_len with "Hsl") as %[??].
+  iDestruct (big_sepL2_length with "Hbig") as %?.
+  iDestruct (big_sepL2_impl _ (λ _ _ o, ⌜Memb.valid o⌝)%I with "Hbig []") as "Hv".
+  { iIntros "!> * _ _ H". iApply (Memb.own_valid with "H"). }
+  rewrite big_sepL2_const_sepL_r big_sepL_pure.
+  iDestruct "Hv" as "[_ %Hv]".
+  iPureIntro. split; [word|]. apply Forall_lookup. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -942,10 +1019,16 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (ptr0) "[Hsl_obj Hbig]".
   iDestruct (own_slice_len with "Hsl_obj") as %[Hlen0 ?].
   iDestruct (big_sepL2_length with "Hbig") as %Hlen_eq.
@@ -986,7 +1069,7 @@ Proof.
   { eauto. }
   iDestruct (big_sepL2_lookup_acc with "Hbig") as "[Hown_j Hbig_close]";
     [exact Hpj_lookup | exact Hoj_lookup |].
-  wp_apply (Memb.wp_enc with "[$Hsl_b $Hcap_b $Hown_j]") as "* (Hsl_b & Hcap_b & Hown_j)".
+  wp_apply (Memb.wp_enc with "[$Hsl_b $Hcap_b $Hown_j]") as "* (Hsl_b & Hcap_b & Hown_j & _)".
   iDestruct ("Hbig_close" with "Hown_j") as "Hbig".
   wp_for_post.
   iFrame.
@@ -1223,6 +1306,15 @@ Definition own ptr obj d : iProp Σ :=
   "Hsl_LabelProof" ∷ sl_LabelProof ↦*{d} obj.(LabelProof) ∗
   "Hsl_MerkleProof" ∷ sl_MerkleProof ↦*{d} obj.(MerkleProof).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iNamed 1.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_LabelProof") as %?.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_MerkleProof") as %?.
+  iPureIntro. rewrite /valid. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -1236,10 +1328,16 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (sl_LabelProof sl_MerkleProof) "(Hstr_NonMemb & Hsl_LabelProof & Hsl_MerkleProof)". wp_auto.
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_LabelProof]") as "* (Hsl_b & Hcap_b & Hsl_LabelProof)".
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_MerkleProof]") as "* (Hsl_b & Hcap_b & Hsl_MerkleProof)".
@@ -1391,6 +1489,16 @@ Definition own ptr obj d : iProp Σ :=
   "Hsl_MapVal" ∷ sl_MapVal ↦*{d} obj.(MapVal) ∗
   "Hsl_NonMembProof" ∷ sl_NonMembProof ↦*{d} obj.(NonMembProof).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iNamed 1.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_MapLabel") as %?.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_MapVal") as %?.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_NonMembProof") as %?.
+  iPureIntro. rewrite /valid. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -1404,10 +1512,16 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (sl_MapLabel sl_MapVal sl_NonMembProof) "(Hstr_UpdateProof & Hsl_MapLabel & Hsl_MapVal & Hsl_NonMembProof)". wp_auto.
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_MapLabel]") as "* (Hsl_b & Hcap_b & Hsl_MapLabel)".
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_MapVal]") as "* (Hsl_b & Hcap_b & Hsl_MapVal)".
@@ -1564,6 +1678,19 @@ Definition own ptr obj d : iProp Σ :=
   ([∗ list] ptr;obj ∈ ptr0;obj,
     UpdateProof.own ptr obj d).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iDestruct 1 as (ptr0) "[Hsl Hbig]".
+  iDestruct (own_slice_len with "Hsl") as %[??].
+  iDestruct (big_sepL2_length with "Hbig") as %?.
+  iDestruct (big_sepL2_impl _ (λ _ _ o, ⌜UpdateProof.valid o⌝)%I with "Hbig []") as "Hv".
+  { iIntros "!> * _ _ H". iApply (UpdateProof.own_valid with "H"). }
+  rewrite big_sepL2_const_sepL_r big_sepL_pure.
+  iDestruct "Hv" as "[_ %Hv]".
+  iPureIntro. split; [word|]. apply Forall_lookup. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -1577,10 +1704,16 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (ptr0) "[Hsl_obj Hbig]".
   iDestruct (own_slice_len with "Hsl_obj") as %[Hlen0 ?].
   iDestruct (big_sepL2_length with "Hbig") as %Hlen_eq.
@@ -1621,7 +1754,7 @@ Proof.
   { eauto. }
   iDestruct (big_sepL2_lookup_acc with "Hbig") as "[Hown_j Hbig_close]";
     [exact Hpj_lookup | exact Hoj_lookup |].
-  wp_apply (UpdateProof.wp_enc with "[$Hsl_b $Hcap_b $Hown_j]") as "* (Hsl_b & Hcap_b & Hown_j)".
+  wp_apply (UpdateProof.wp_enc with "[$Hsl_b $Hcap_b $Hown_j]") as "* (Hsl_b & Hcap_b & Hown_j & _)".
   iDestruct ("Hbig_close" with "Hown_j") as "Hbig".
   wp_for_post.
   iFrame.
@@ -1867,6 +2000,15 @@ Definition own ptr obj d : iProp Σ :=
   "Hsl_Updates" ∷ UpdateProofSlice1D.own ptr_Updates obj.(Updates) d ∗
   "Hsl_LinkSig" ∷ sl_LinkSig ↦*{d} obj.(LinkSig).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iNamed 1.
+  iDestruct (UpdateProofSlice1D.own_valid with "Hsl_Updates") as %?.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_LinkSig") as %?.
+  iPureIntro. rewrite /valid. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -1880,12 +2022,18 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (ptr_Updates sl_LinkSig) "(Hstr_AuditProof & Hsl_Updates & Hsl_LinkSig)". wp_auto.
-  wp_apply (UpdateProofSlice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Updates]") as "* (Hsl_b & Hcap_b & Hsl_Updates)".
+  wp_apply (UpdateProofSlice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Updates]") as "* (Hsl_b & Hcap_b & Hsl_Updates & _)".
   wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_LinkSig]") as "* (Hsl_b & Hcap_b & Hsl_LinkSig)".
   iApply "HΦ".
   iSplitL "Hsl_b".
@@ -2009,6 +2157,19 @@ Definition own ptr obj d : iProp Σ :=
   ([∗ list] ptr;obj ∈ ptr0;obj,
     ktcore.AuditProof.own ptr obj d).
 
+Lemma own_valid ptr obj d :
+  own ptr obj d ⊢ ⌜valid obj⌝.
+Proof.
+  iDestruct 1 as (ptr0) "[Hsl Hbig]".
+  iDestruct (own_slice_len with "Hsl") as %[??].
+  iDestruct (big_sepL2_length with "Hbig") as %?.
+  iDestruct (big_sepL2_impl _ (λ _ _ o, ⌜AuditProof.valid o⌝)%I with "Hbig []") as "Hv".
+  { iIntros "!> * _ _ H". iApply (AuditProof.own_valid with "H"). }
+  rewrite big_sepL2_const_sepL_r big_sepL_pure.
+  iDestruct "Hv" as "[_ %Hv]".
+  iPureIntro. split; [word|]. apply Forall_lookup. naive_solver.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init ktcore ∗
@@ -2022,10 +2183,16 @@ Lemma wp_enc obj sl_b b ptr_obj d :
     let b' := b ++ pure_enc obj in
     sl_b' ↦* b' ∗
     own_slice_cap w8 sl_b' 1 ∗
-    own ptr_obj obj d
+    own ptr_obj obj d ∗
+    ⌜wish (pure_enc obj) obj []⌝
   }}}.
 Proof.
   wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct (own_valid with "Hown") as %Hvalid.
+  iAssert (∀ sl_b', sl_b' ↦* (b ++ pure_enc obj) ∗ own_slice_cap w8 sl_b' 1 ∗
+    own ptr_obj obj d -∗ Φ #sl_b')%I with "[HΦ]" as "HΦ".
+  { iIntros (?) "(?&?&?)". iApply "HΦ". iFrame. iPureIntro.
+    rewrite /wish app_nil_r. by split. }
   iDestruct "Hown" as (ptr0) "[Hsl_obj Hbig]".
   iDestruct (own_slice_len with "Hsl_obj") as %[Hlen0 ?].
   iDestruct (big_sepL2_length with "Hbig") as %Hlen_eq.
@@ -2066,7 +2233,7 @@ Proof.
   { eauto. }
   iDestruct (big_sepL2_lookup_acc with "Hbig") as "[Hown_j Hbig_close]";
     [exact Hpj_lookup | exact Hoj_lookup |].
-  wp_apply (AuditProof.wp_enc with "[$Hsl_b $Hcap_b $Hown_j]") as "* (Hsl_b & Hcap_b & Hown_j)".
+  wp_apply (AuditProof.wp_enc with "[$Hsl_b $Hcap_b $Hown_j]") as "* (Hsl_b & Hcap_b & Hown_j & _)".
   iDestruct ("Hbig_close" with "Hown_j") as "Hbig".
   wp_for_post.
   iFrame.

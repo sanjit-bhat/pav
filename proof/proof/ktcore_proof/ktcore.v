@@ -65,7 +65,7 @@ Proof.
   { iFrame "#".
     iLeft.
     iSplit; [done|].
-    rewrite /safemarshal.Slice1D.valid. word. }
+    done. }
   iPersist "Hsl_sig".
   iModIntro.
   iApply "HΦ".
@@ -157,7 +157,7 @@ Proof.
   { iFrame "#".
     iRight. repeat iExists _.
     iSplit; [done|].
-    rewrite /safemarshal.Slice1D.valid. word. }
+    done. }
   iPersist "Hsl_sig".
   iModIntro.
   iApply "HΦ".

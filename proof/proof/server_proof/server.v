@@ -1777,7 +1777,7 @@ Proof.
   iDestruct "Hlock_perms" as "[Hlock_perm Hlock_perms]".
   wp_apply (wp_fork with "[Hlock_perm]").
   { by wp_apply (wp_Server_worker with "[$]"). }
-  wp_end. simplify_eq/=. iFrame "∗#".
+  wp_end. simplify_eq/=. by iFrame "∗#".
 Qed.
 
 End proof.

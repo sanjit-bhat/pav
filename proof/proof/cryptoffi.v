@@ -46,16 +46,26 @@ development), which lets us define [hash_fn]/[hash_inv_fn] as plain functions. *
 Local Instance hash_good_dec data : Decision (hash_good data) :=
   excluded_middle_informative _.
 
-Definition hash_fn (data : list w8) : option $ list w8 :=
+Definition hash_fn_def (data : list w8) : option $ list w8 :=
   if decide (hash_good data) then Some (H data) else None.
+(* sealed (not just [Opaque]) so the kernel never unfolds the classical
+definition when checking downstream [Qed]s. *)
+Local Definition hash_fn_aux : seal (@hash_fn_def). Proof. by eexists. Qed.
+Definition hash_fn := hash_fn_aux.(unseal).
+Local Lemma hash_fn_unseal : @hash_fn = @hash_fn_def.
+Proof. rewrite -hash_fn_aux.(seal_eq) //. Qed.
 
 (* [hash_inv_fn] is the partial inverse: pick (classically) some [data] with
 [hash_fn data = Some hash]; by injectivity it is unique. *)
-Definition hash_inv_fn (hash : list w8) : option $ list w8 :=
+Definition hash_inv_fn_def (hash : list w8) : option $ list w8 :=
   match excluded_middle_informative (∃ data, hash_fn data = Some hash) with
   | left pf => Some (proj1_sig (constructive_indefinite_description _ pf))
   | right _ => None
   end.
+Local Definition hash_inv_fn_aux : seal (@hash_inv_fn_def). Proof. by eexists. Qed.
+Definition hash_inv_fn := hash_inv_fn_aux.(unseal).
+Local Lemma hash_inv_fn_unseal : @hash_inv_fn = @hash_inv_fn_def.
+Proof. rewrite -hash_inv_fn_aux.(seal_eq) //. Qed.
 
 (* [hash_fn] and [hash_inv_fn] are partial bijections.
 in particular, we make the forward fn ([hash_fn]) partial
@@ -65,14 +75,14 @@ Lemma hash_bij_l data hash :
   hash_fn data = Some hash →
   hash_inv_fn hash = Some data.
 Proof.
-  intros Hfn. rewrite /hash_inv_fn.
+  intros Hfn. rewrite hash_inv_fn_unseal /hash_inv_fn_def.
   destruct excluded_middle_informative as [pf|n].
   2: { exfalso. apply n. by eexists. }
   destruct constructive_indefinite_description as [data' Hfn']. simpl.
   f_equal.
   (* both [data] and [data'] hash to [hash], and both are well-hashed, so they
   are equal by injectivity. *)
-  move: Hfn Hfn'. rewrite /hash_fn.
+  move: Hfn Hfn'. rewrite hash_fn_unseal /hash_fn_def.
   destruct (decide (hash_good data)) as [Hg|]; [|done].
   destruct (decide (hash_good data')) as [Hg'|]; [|done].
   intros [= <-] [= Heq].
@@ -83,7 +93,7 @@ Lemma hash_bij_r data hash :
   hash_inv_fn hash = Some data →
   hash_fn data = Some hash.
 Proof.
-  rewrite /hash_inv_fn.
+  rewrite hash_inv_fn_unseal /hash_inv_fn_def.
   destruct excluded_middle_informative as [pf|]; [|done].
   destruct constructive_indefinite_description as [data' Hfn']. simpl.
   intros [= <-]. done.
@@ -93,7 +103,7 @@ Lemma is_hash_len data hash :
   hash_fn data = Some hash →
   Z.of_nat $ length hash = hash_len.
 Proof.
-  rewrite /hash_fn. destruct (decide (hash_good data)) as [[Hlen _]|]; [|done].
+  rewrite hash_fn_unseal /hash_fn_def. destruct (decide (hash_good data)) as [[Hlen _]|]; [|done].
   intros [= <-]. done.
 Qed.
 
@@ -227,15 +237,14 @@ Proof.
   rewrite /crypto_ffi.hash_fn in Hcf.
   destruct (crypto_ffi.has_hash _ _) eqn:Hhh; [|done].
   injection Hcf as <-.
-  rewrite /hash_fn. rewrite decide_True; [done|]. apply Hgood.
+  rewrite hash_fn_unseal /hash_fn_def. rewrite decide_True; [done|]. apply Hgood.
 Qed.
 
 End hash_wps.
 
-(* Seal [hash_fn]/[hash_inv_fn] so downstream proofs treat them as opaque,
-matching how they were used when these were [Admitted]. Their only interface is
-[hash_bij_l], [hash_bij_r], [is_hash_len], [is_hash_len']. *)
-#[global] Opaque hash_fn hash_inv_fn.
+(* [hash_fn]/[hash_inv_fn] are sealed above, so downstream proofs treat them as
+opaque, matching how they were used when these were [Admitted]. Their only
+interface is [hash_bij_l], [hash_bij_r], [is_hash_len], [is_hash_len']. *)
 
 Section vrf_defs.
 Context `{!heapGS Σ}.

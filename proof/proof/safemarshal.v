@@ -319,6 +319,14 @@ Context {sem : go.Semantics} {package_sem : safemarshal.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
+(* any in-memory slice has a length that fits in s64. *)
+Lemma own_valid ptr_obj obj d :
+  ptr_obj ↦*{d} obj ⊢ ⌜valid obj⌝.
+Proof.
+  iIntros "Hsl". iDestruct (own_slice_len with "Hsl") as %[??].
+  iPureIntro. rewrite /valid. word.
+Qed.
+
 Lemma wp_enc obj sl_b b ptr_obj d :
   {{{
     is_pkg_init safemarshal ∗
