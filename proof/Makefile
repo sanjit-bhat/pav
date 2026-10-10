@@ -1,5 +1,5 @@
 SRC_DIR := '.'
-PROJ_VFILES := $(shell find $(SRC_DIR) -name "*.v")
+PROJ_VFILES := $(shell find $(SRC_DIR) \( -path './_opam' -o -path './_build' \) -prune -o -name "*.v" -print)
 
 # extract any global arguments for Rocq from _RocqProject
 ROCQPROJECT_ARGS := $(shell sed -E -e '/^\#/d' -e "s/'([^']*)'/\1/g" -e 's/-arg //g' _RocqProject)
