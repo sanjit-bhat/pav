@@ -9,7 +9,7 @@ require (
 	github.com/goose-lang/std v0.7.0
 	github.com/stretchr/testify v1.12.1
 	github.com/tchajed/marshal v0.6.5
-	golang.org/x/tools v0.50.0
+	golang.org/x/tools v0.51.0
 )
 
 tool (
