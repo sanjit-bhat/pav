@@ -23,7 +23,7 @@ Lemma wp_checkMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_memb memb :
     is_pkg_init client ∗
     "#Hown_vrf_pk" ∷ cryptoffi.own_vrf_pk ptr_pk pk ∗
     "#Hsl_dig" ∷ sl_dig ↦*□ dig ∗
-    "#Hown_memb" ∷ ktcore.Memb.own ptr_memb memb (□)
+    "#Hown_memb" ∷ ktcore.Memb.own ptr_memb memb
   }}}
   @! client.checkMemb #ptr_pk #uid #ver #sl_dig #ptr_memb
   {{{
@@ -83,7 +83,7 @@ Lemma wp_checkMembs ptr_pk pk (uid prefixLen : w64) sl_dig dig sl_hist sl0_hist 
     "#Hsl_dig" ∷ sl_dig ↦*□ dig ∗
     "#Hsl_hist" ∷ sl_hist ↦*□ sl0_hist ∗
     "#Hown_hist" ∷ ([∗ list] ptr;memb ∈ sl0_hist;hist,
-      ktcore.Memb.own ptr memb (□)) ∗
+      ktcore.Memb.own ptr memb) ∗
     "%Hnoof_ver" ∷ ⌜num_vers = uint.nat (W64 num_vers)⌝
   }}}
   @! client.checkMembs #ptr_pk #uid #prefixLen #sl_dig #sl_hist
@@ -156,7 +156,7 @@ Lemma wp_checkNonMemb ptr_pk pk (uid ver : w64) sl_dig dig ptr_nonMemb nonMemb :
     is_pkg_init client ∗
     "#Hown_vrf_pk" ∷ cryptoffi.own_vrf_pk ptr_pk pk ∗
     "#Hsl_dig" ∷ sl_dig ↦*□ dig ∗
-    "#Hown_nonMemb" ∷ ktcore.NonMemb.own ptr_nonMemb nonMemb (□)
+    "#Hown_nonMemb" ∷ ktcore.NonMemb.own ptr_nonMemb nonMemb
   }}}
   @! client.checkNonMemb #ptr_pk #uid #ver #sl_dig #ptr_nonMemb
   {{{
@@ -207,7 +207,7 @@ Lemma wp_checkAuditLink sl_servPk servPk sl_adtrPk adtrPk (ep : w64) ptr_link li
     is_pkg_init client ∗
     "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
     "#Hsl_adtrPk" ∷ sl_adtrPk ↦*□ adtrPk ∗
-    "#Hown_link" ∷ auditor.SignedLink.own ptr_link link (□)
+    "#Hown_link" ∷ auditor.SignedLink.own ptr_link link
   }}}
   @! client.checkAuditLink #sl_servPk #sl_adtrPk #ep #ptr_link
   {{{
@@ -242,7 +242,7 @@ Lemma wp_checkAuditVrf sl_servPk servPk sl_adtrPk adtrPk ptr_vrf vrf :
     is_pkg_init client ∗
     "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
     "#Hsl_adtrPk" ∷ sl_adtrPk ↦*□ adtrPk ∗
-    "#Hown_vrf" ∷ auditor.SignedVrf.own ptr_vrf vrf (□)
+    "#Hown_vrf" ∷ auditor.SignedVrf.own ptr_vrf vrf
   }}}
   @! client.checkAuditVrf #sl_servPk #sl_adtrPk #ptr_vrf
   {{{

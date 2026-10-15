@@ -165,7 +165,7 @@ Definition own ptr γ σ q : iProp Σ :=
   "#Halign_serv" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
     serv.align_serv γ servγ end ∗
 
-  "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
+  "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf ∗
   "#Hwish_vrf" ∷ wish_SignedVrf γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) vrf ∗
   (* from signed vrf_pk. *)
   "%Heq_vrf_pk" ∷ ⌜vrf.(SignedVrf.VrfPk) = agreeγ.(ktcore.Agree.vrf_pk)⌝.
@@ -217,7 +217,7 @@ Lemma wp_CheckStartChain sl_servPk servPk ptr_chain chain :
   {{{
     is_pkg_init auditor ∗
     "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
-    "#Hown_chain" ∷ server.StartChain.own ptr_chain chain (□)
+    "#Hown_chain" ∷ server.StartChain.own ptr_chain chain
   }}}
   @! auditor.CheckStartChain #sl_servPk #ptr_chain
   {{{
@@ -291,7 +291,7 @@ Lemma wp_CheckStartVrf sl_servPk servPk ptr_vrf vrf :
   {{{
     is_pkg_init auditor ∗
     "#Hsl_servPk" ∷ sl_servPk ↦*□ servPk ∗
-    "#Hown_vrf" ∷ server.StartVrf.own ptr_vrf vrf (□)
+    "#Hown_vrf" ∷ server.StartVrf.own ptr_vrf vrf
   }}}
   @! auditor.CheckStartVrf #sl_servPk #ptr_vrf
   {{{
@@ -328,7 +328,7 @@ Lemma wp_getNextDig sl_prevDig prevDig sl_updates updates :
   {{{
     is_pkg_init auditor ∗
     "#Hsl_prevDig" ∷ sl_prevDig ↦*□ prevDig ∗
-    "#Hown_updates" ∷ ktcore.UpdateProofSlice1D.own sl_updates updates (□)
+    "#Hown_updates" ∷ ktcore.UpdateProofSlice1D.own sl_updates updates
   }}}
   @! auditor.getNextDig #sl_prevDig #sl_updates
   {{{
@@ -426,7 +426,7 @@ Lemma wp_getNextLink γ σ sl_sigPk (prevEp : w64) sl_prevDig prevDig
     "#Hsl_sigPk" ∷ sl_sigPk ↦*□ γ.(cfg.serv_sig_pk) ∗
     "#Hsl_prevDig" ∷ sl_prevDig ↦*□ prevDig ∗
     "#Hsl_prevLink" ∷ sl_prevLink ↦*□ prevLink ∗
-    "#Hproof" ∷ ktcore.AuditProof.own ptr_p proof (□) ∗
+    "#Hproof" ∷ ktcore.AuditProof.own ptr_p proof ∗
 
     "%Heq_prevEp" ∷ ⌜uint.Z prevEp = γ.(cfg.agreeγ).(ktcore.Agree.digs_start) + length σ.(state.digs) - 1⌝ ∗
     "%Heq_prevDig" ∷ ⌜last σ.(state.digs) = Some prevDig⌝ ∗
@@ -498,9 +498,9 @@ Lemma wp_Auditor_Get a γ epoch Q :
         uint.Z epoch >= agreeγ.(ktcore.Agree.digs_start) + length σ.(state.digs)⌝
       | false =>
         ∃ startLink currLink vrf,
-        "#Hown_startLink" ∷ SignedLink.own ptr_startLink startLink (□) ∗
-        "#Hown_currLink" ∷ SignedLink.own ptr_currLink currLink (□) ∗
-        "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
+        "#Hown_startLink" ∷ SignedLink.own ptr_startLink startLink ∗
+        "#Hown_currLink" ∷ SignedLink.own ptr_currLink currLink ∗
+        "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf ∗
 
         "#Hwish_startLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) startEp startLink ∗
         "#Hwish_currLink" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk) epoch currLink ∗
@@ -567,7 +567,7 @@ Lemma wp_Auditor_updOnce ptr_a γ σ Q ptr_proof proof :
       let σ' := set state.digs (.++ new_digs) σ in
       own γ σ' ={∅,⊤}=∗ Q σ')) ∗
 
-    "#Hproof" ∷ ktcore.AuditProof.own ptr_proof proof (□) ∗
+    "#Hproof" ∷ ktcore.AuditProof.own ptr_proof proof ∗
     "Hgood" ∷ match server.Trust.get_full γ.(cfg.serv_good) with None => True | Some servγ =>
       ∃ ep dig link,
       let σ' := set state.digs (.++ [dig]) σ in

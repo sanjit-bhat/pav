@@ -561,7 +561,7 @@ Definition own γ ptr digs q : iProp Σ :=
   "Hsl_audits" ∷ sl_audits ↦*{#q} sl0_audits ∗
   "Hcap_audits" ∷ own_slice_cap loc sl_audits (DfracOwn q) ∗
   "#Hown_audits" ∷ ([∗ list] idx ↦ p; aud ∈ sl0_audits; audits,
-    ktcore.AuditProof.own p aud (□)) ∗
+    ktcore.AuditProof.own p aud) ∗
   "#His_audits" ∷ is_audits γ digs audits ∗
   "%Hmono_plain" ∷ ⌜ktcore.mono_plain agreeγ.(ktcore.Agree.vrf_pk) digs⌝ ∗
 
@@ -812,7 +812,7 @@ Lemma wp_Server_getHist s γ σ obj (uid prefixLen : w64) q last_dig :
   {{{
     sl_hist hist, RET #sl_hist;
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
-    "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
+    "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist ∗
     "#Hwish_hist" ∷ ktcore.wish_ListMemb agreeγ.(ktcore.Agree.vrf_pk) uid
       (uint.nat prefixLen) last_dig hist ∗
     "%Heq_hist" ∷ ⌜drop (uint.nat prefixLen) pks =
@@ -860,7 +860,7 @@ Proof.
     "hist" ∷ hist_ptr ↦ sl_hist ∗
     "Hsl_hist" ∷ sl_hist ↦* sl0_hist ∗
     "Hcap_hist" ∷ own_slice_cap loc sl_hist 1 ∗
-    "#Hsl0_hist" ∷ ([∗ list] ptr;obj ∈ sl0_hist;hist, ktcore.Memb.own ptr obj (□)) ∗
+    "#Hsl0_hist" ∷ ([∗ list] ptr;obj ∈ sl0_hist;hist, ktcore.Memb.own ptr obj) ∗
 
     "#Hwish_hist" ∷ ktcore.wish_ListMemb (γ.(cfg.agreeγ).(ktcore.Agree.vrf_pk)) uid
       (uint.nat prefixLen) last_dig hist ∗
@@ -955,7 +955,7 @@ Lemma wp_Server_getBound s γ σ obj (uid numVers : w64) q last_dig :
   {{{
     ptr_bound bound, RET #ptr_bound;
     "Hown_serv" ∷ Server.own γ s σ obj q ∗
-    "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
+    "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound ∗
     "#Hwish_bound" ∷ ktcore.wish_NonMemb agreeγ.(ktcore.Agree.vrf_pk) uid
       (uint.nat numVers) last_dig bound
   }}}.
@@ -1126,7 +1126,7 @@ Proof.
     "upd" ∷ upd_ptr ↦ sl_upd ∗
     "Hsl_upd" ∷ sl_upd ↦* sl0_upd ∗
     "Hcap_upd" ∷ own_slice_cap loc sl_upd 1 ∗
-    "#Hsl0_upd" ∷ ([∗ list] ptr;obj ∈ sl0_upd;upd, ktcore.UpdateProof.own ptr obj (□)) ∗
+    "#Hsl0_upd" ∷ ([∗ list] ptr;obj ∈ sl0_upd;upd, ktcore.UpdateProof.own ptr obj) ∗
     "#His_upd" ∷ ktcore.wish_ListUpdate last_dig upd new_dig ∗
     "%Hmono" ∷ ⌜ktcore.plain_sub (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) last_dig)
       (ktcore.to_plain agreeγ.(ktcore.Agree.vrf_pk) new_dig)⌝ ∗
@@ -1400,8 +1400,8 @@ Lemma wp_Server_History s γ obj (uid prevEpoch prevVerLen : w64) Q :
 
         "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
         "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
-        "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
-        "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
+        "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist ∗
+        "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound ∗
 
         "%Hwish_chainProof" ∷ ⌜hashchain.wish_Proof chainProof
           (drop (S (uint.nat prevEpoch)) σ.(state.digs))⌝ ∗
@@ -1515,7 +1515,7 @@ Lemma wp_Server_Audit s γ obj (prevEpoch : w64) Q :
         ∃ proofs,
         "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
 
-        "#Hsl_proofs" ∷ ktcore.AuditProofSlice1D.own sl_proofs proofs (□) ∗
+        "#Hsl_proofs" ∷ ktcore.AuditProofSlice1D.own sl_proofs proofs ∗
         "%Hlen_proofs" ∷ ⌜(uint.Z prevEpoch + length proofs + 1)%Z = numEps⌝ ∗
 
         "#His_upds" ∷ ([∗ list] i ↦ aud ∈ proofs,
@@ -1598,8 +1598,8 @@ Lemma wp_Server_Start s γ obj Q :
     "Hown_serv_lock" ∷ Server.lock_perm γ s obj ∗
     "HQ" ∷ Q σ ∗
 
-    "#Hptr_chain" ∷ StartChain.own ptr_chain chain (□) ∗
-    "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
+    "#Hptr_chain" ∷ StartChain.own ptr_chain chain ∗
+    "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf ∗
 
     "%Hnoof_eps" ∷ ⌜numEps = sint.nat (W64 $ numEps)⌝ ∗
     "%His_PrevEpochLen" ∷ ⌜uint.nat chain.(StartChain.PrevEpochLen) < numEps⌝ ∗
@@ -1766,7 +1766,7 @@ Proof.
     2: { by iApply op_add_digs. }
     iExists [ktcore.AuditProof.mk' [] _].
     iFrame "Hptr_audit #". simpl. repeat iSplit; try done.
-    by iDestruct own_slice_nil as "$". }
+    iExists []. rewrite big_sepL2_nil. iSplit; [iApply own_slice_nil|done]. }
   iDestruct (big_sepL_replicate_impl _ (Server.lock_perm γ ptr_serv obj)
     with "Hlock_perms []") as "Hlock_perms".
   { iIntros "!> H". simplify_eq/=. iFrame "∗#". simpl. word. }

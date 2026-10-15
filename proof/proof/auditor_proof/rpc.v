@@ -93,14 +93,14 @@ Lemma wp_Get_cli_call (Q : cfg.t → state.t → iProp Σ)
     "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
     let agreeγ := γ.(cfg.agreeγ) in
     ∃ startEp startLink currLink vrf err1,
-    "%His_reply" ∷ ⌜GetReply.wish replyB
-      (GetReply.mk' startEp startLink currLink vrf err1) []⌝ ∗
+    "%His_reply" ∷ ⌜replyB = GetReply.enc_fn (GetReply.mk' startEp startLink currLink vrf err1) ∧
+      GetReply.valid (GetReply.mk' startEp startLink currLink vrf err1)⌝ ∗
 
     (("%Herr_adtr_dec" ∷ ⌜err1 = true⌝ ∗
-      "Hgenie" ∷ ¬ ⌜∃ obj tail, GetArg.wish arg obj tail⌝) ∨
+      "Hgenie" ∷ ¬ ⌜∃ obj tail, arg = GetArg.enc_fn obj ++ tail⌝) ∨
 
     ∃ epoch tail σ,
-    "%Hdec" ∷ ⌜GetArg.wish arg (GetArg.mk' epoch) tail⌝ ∗
+    "%Hdec" ∷ ⌜arg = GetArg.enc_fn (GetArg.mk' epoch) ++ tail⌝ ∗
     "HQ" ∷ Q γ σ ∗
 
     "#Herr_adtr_args" ∷
@@ -130,9 +130,9 @@ Lemma wp_CallGet c good (epoch : w64) :
     "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameAdtrFull:=option_bool $ Trust.get_full good]}⌝ ∗
     "Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ startLink currLink vrf,
-      "#Hown_startLink" ∷ SignedLink.own ptr_startLink startLink (□) ∗
-      "#Hown_currLink" ∷ SignedLink.own ptr_currLink currLink (□) ∗
-      "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf (□) ∗
+      "#Hown_startLink" ∷ SignedLink.own ptr_startLink startLink ∗
+      "#Hown_currLink" ∷ SignedLink.own ptr_currLink currLink ∗
+      "#Hown_vrf" ∷ SignedVrf.own ptr_vrf vrf ∗
 
       "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
         let agreeγ := γ.(cfg.agreeγ) in
@@ -145,7 +145,8 @@ Lemma wp_CallGet c good (epoch : w64) :
 Proof.
   wp_start as "@". wp_auto.
   wp_apply wp_alloc as "* Ha".
-  wp_apply (GetArg.wp_enc (GetArg.mk' _) with "[$Ha]") as "* (Hsl_b&_&_&%Hwish)".
+  iPersist "Ha".
+  wp_apply (GetArg.wp_enc (GetArg.mk' _) with "[$Ha]") as "* (Hsl_b&_)".
   { iDestruct own_slice_nil as "$".
     iDestruct own_slice_cap_nil as "$". }
   simpl in *.
@@ -172,9 +173,11 @@ Proof.
     iIntros (?).
     case_match; try done.
     iNamed "Hgood".
-    iApply "Hgenie".
-    naive_solver. }
+    iDestruct "Hgenie" as %Hgenie.
+    exfalso. apply Hgenie. destruct His_reply.
+    eexists _, []. rewrite app_nil_r. by split. }
   iDestruct "Hgenie" as (??) "(#Hreply&_&%His_dec)".
+  iDestruct (GetReply.own_valid with "Hreply") as %Hvalid_dec.
   destruct obj. iNamed "Hreply".
   wp_auto. simpl.
   wp_if_destruct.
@@ -190,10 +193,12 @@ Proof.
   iFrame "#".
   case_match; try done.
   iNamed "Hgood".
-  opose proof (GetReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+  opose proof (GetReply.enc_inj _ _ _ []
+    (eq_trans (eq_sym His_dec) (eq_trans (proj1 His_reply) (eq_sym (app_nil_r _))))
+    Hvalid_dec (proj2 His_reply)) as [? _].
   simplify_eq/=.
   iDestruct "Hgood" as "[@|@]"; try done.
-  opose proof (GetArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
+  opose proof (GetArg.enc_inj _ _ [] _ (eq_trans (app_nil_r _) Hdec)) as [? _].
   simplify_eq/=.
   iNamed "Herr_adtr_args".
   by iFrame "#%".

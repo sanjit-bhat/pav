@@ -378,8 +378,8 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
       ∃ chainProof linkSig hist bound,
       "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
       "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
-      "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
-      "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
+      "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist ∗
+      "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound ∗
 
       "Hgood" ∷ match server.Trust.get_full good with None => True | Some γ =>
         ∀ γcli digs,

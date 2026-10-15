@@ -88,7 +88,8 @@ Lemma wp_Put_cli_call c good uid pk ver sl_arg d0 arg ptr_reply (x : slice.t) :
     "#His_cli" ∷ is_rpc_cli c good ∗
     "Hsl_arg" ∷ sl_arg ↦*{d0} arg ∗
     "Hptr_reply" ∷ ptr_reply ↦ x ∗
-    "%His_arg" ∷ ⌜PutArg.wish arg (PutArg.mk' uid pk ver) []⌝ ∗
+    "%His_arg" ∷ ⌜arg = PutArg.enc_fn (PutArg.mk' uid pk ver) ∧
+      PutArg.valid (PutArg.mk' uid pk ver)⌝ ∗
     "#Hperm_put" ∷ match Trust.get_full good with None => True | Some γ =>
       perm_put γ uid (uint.nat ver) pk end
   }}}
@@ -116,14 +117,14 @@ Proof.
   wp_start as "@". wp_auto.
   wp_apply wp_alloc as "* Ha".
   iPersist "Ha".
-  wp_apply (PutArg.wp_enc (PutArg.mk' _ _ _)) as "* (Hsl_b&_&_&%Hwish)".
+  wp_apply (PutArg.wp_enc (PutArg.mk' _ _ _)) as "* (Hsl_b&_&%Hvalid_arg)".
   { iFrame "#".
     iDestruct own_slice_nil as "$".
     iDestruct own_slice_cap_nil as "$". }
   simpl in *.
   wp_apply wp_alloc as "* Hreply".
   wp_apply (wp_Put_cli_call with "[$Hsl_b $Hreply]") as "* @".
-  { iFrame "#%".
+  { iFrame "#". iSplit; [iPureIntro; split; done|].
     rewrite /is_rpc_cli.
     case_match; [|done].
     subst.
@@ -153,18 +154,19 @@ Lemma wp_History_cli_call (Q : cfg.t → state.t → iProp Σ)
     "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
     let agreeγ := γ.(cfg.agreeγ) in
     ∃ chainProof linkSig hist bound err1,
-    "%His_reply" ∷ ⌜HistoryReply.wish replyB
-      (HistoryReply.mk' chainProof linkSig hist bound err1) []⌝ ∗
+    "%His_reply" ∷ ⌜replyB = HistoryReply.enc_fn
+      (HistoryReply.mk' chainProof linkSig hist bound err1) ∧
+      HistoryReply.valid (HistoryReply.mk' chainProof linkSig hist bound err1)⌝ ∗
 
     (* align with serv rpc rcvr, which doesn't know encoded args in precond. *)
     (("%Herr_serv_dec" ∷ ⌜err1 = true⌝ ∗
-      "Hgenie" ∷ ¬ ⌜∃ obj tail, HistoryArg.wish arg obj tail⌝) ∨
+      "Hgenie" ∷ ¬ ⌜∃ obj tail, arg = HistoryArg.enc_fn obj ++ tail⌝) ∨
 
     ∃ uid prevEpoch prevVerLen tail σ lastDig,
     let numEps := length σ.(state.digs) in
     let pks := ktcore.to_pks (agreeγ.(ktcore.Agree.vrf_pk)) uid lastDig in
-    "%Hdec" ∷ ⌜HistoryArg.wish arg
-      (HistoryArg.mk' uid prevEpoch prevVerLen) tail⌝ ∗
+    "%Hdec" ∷ ⌜arg = HistoryArg.enc_fn
+      (HistoryArg.mk' uid prevEpoch prevVerLen) ++ tail⌝ ∗
     "HQ" ∷ Q γ σ ∗
     "%Hlast_digs" ∷ ⌜last σ.(state.digs) = Some lastDig⌝ ∗
 
@@ -212,8 +214,8 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
       ∃ chainProof linkSig hist bound,
       "#Hsl_chainProof" ∷ sl_chainProof ↦*□ chainProof ∗
       "#Hsl_linkSig" ∷ sl_linkSig ↦*□ linkSig ∗
-      "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist (□) ∗
-      "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound (□) ∗
+      "#Hsl_hist" ∷ ktcore.MembSlice1D.own sl_hist hist ∗
+      "#Hptr_bound" ∷ ktcore.NonMemb.own ptr_bound bound ∗
 
       "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
         let agreeγ := γ.(cfg.agreeγ) in
@@ -240,7 +242,8 @@ Lemma wp_CallHistory c good (uid prevEpoch prevVerLen : w64) :
 Proof.
   wp_start as "@". wp_auto.
   wp_apply wp_alloc as "* Ha".
-  wp_apply (HistoryArg.wp_enc (HistoryArg.mk' _ _ _) with "[$Ha]") as "* (Hsl_b&_&_&%Hwish)".
+  iPersist "Ha".
+  wp_apply (HistoryArg.wp_enc (HistoryArg.mk' _ _ _) with "[$Ha]") as "* (Hsl_b&_)".
   { iDestruct own_slice_nil as "$".
     iDestruct own_slice_cap_nil as "$". }
   simpl in *.
@@ -270,9 +273,11 @@ Proof.
     iIntros (?).
     case_match; try done.
     iNamed "Hgood".
-    iApply "Hgenie".
-    naive_solver. }
+    iDestruct "Hgenie" as %Hgenie.
+    exfalso. apply Hgenie. destruct His_reply.
+    eexists _, []. rewrite app_nil_r. by split. }
   iDestruct "Hgenie" as (??) "(#Hreply&_&%His_dec)".
+  iDestruct (HistoryReply.own_valid with "Hreply") as %Hvalid_dec.
   destruct obj. iNamed "Hreply".
   wp_auto. simpl.
   rewrite -wp_fupd.
@@ -289,13 +294,15 @@ Proof.
     rewrite /is_rpc_cli.
     case_match; try done.
     iNamed "Hgood".
-    opose proof (HistoryReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+    opose proof (HistoryReply.enc_inj _ _ _ []
+    (eq_trans (eq_sym His_dec) (eq_trans (proj1 His_reply) (eq_sym (app_nil_r _))))
+    Hvalid_dec (proj2 His_reply)) as [? _].
     simplify_eq/=.
     iDestruct "Hgood" as "[@|@]".
     (* we gave well-encoded arg. *)
-    - iApply "Hgenie". naive_solver.
+    - iApply "Hgenie". iPureIntro. eexists _, []. by rewrite app_nil_r.
     (* we gave valid decoded args. *)
-    - opose proof (HistoryArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
+    - opose proof (HistoryArg.enc_inj _ _ [] _ (eq_trans (app_nil_r _) Hdec)) as [? _].
       simplify_eq/=.
       iDestruct "HQ" as "[#Hnew_digs %]".
       iDestruct "Herr_serv_args" as %[?|?].
@@ -320,10 +327,12 @@ Proof.
   iFrame "#".
   case_match; try done.
   iNamed "Hgood".
-  opose proof (HistoryReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+  opose proof (HistoryReply.enc_inj _ _ _ []
+    (eq_trans (eq_sym His_dec) (eq_trans (proj1 His_reply) (eq_sym (app_nil_r _))))
+    Hvalid_dec (proj2 His_reply)) as [? _].
   simplify_eq/=.
   iDestruct "Hgood" as "[@|@]"; try done.
-  opose proof (HistoryArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
+  opose proof (HistoryArg.enc_inj _ _ [] _ (eq_trans (app_nil_r _) Hdec)) as [? _].
   simplify_eq/=.
   iDestruct "HQ" as "[#Hnew_digs %]".
   iNamed "Herr_serv_args".
@@ -351,14 +360,15 @@ Lemma wp_Audit_cli_call (Q : cfg.t → state.t → iProp Σ)
 
     "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
     ∃ proofs err1,
-    "%His_reply" ∷ ⌜AuditReply.wish replyB (AuditReply.mk' proofs err1) []⌝ ∗
+    "%His_reply" ∷ ⌜replyB = AuditReply.enc_fn (AuditReply.mk' proofs err1) ∧
+      AuditReply.valid (AuditReply.mk' proofs err1)⌝ ∗
 
     (("%Herr_serv_dec" ∷ ⌜err1 = true⌝ ∗
-      "Hgenie" ∷ ¬ ⌜∃ obj tail, AuditArg.wish arg obj tail⌝) ∨
+      "Hgenie" ∷ ¬ ⌜∃ obj tail, arg = AuditArg.enc_fn obj ++ tail⌝) ∨
 
     ∃ prevEpoch tail σ,
     let numEps := length σ.(state.digs) in
-    "%Hdec" ∷ ⌜AuditArg.wish arg (AuditArg.mk' prevEpoch) tail⌝ ∗
+    "%Hdec" ∷ ⌜arg = AuditArg.enc_fn (AuditArg.mk' prevEpoch) ++ tail⌝ ∗
     "HQ" ∷ Q γ σ ∗
     "Herr" ∷
       match err1 with
@@ -405,7 +415,8 @@ Lemma wp_Start_cli_call (Q : cfg.t → state.t → iProp Σ)
     let agreeγ := γ.(cfg.agreeγ) in
     ∃ chain vrf σ last_link,
     let numEps := length σ.(state.digs) in
-    "%His_reply" ∷ ⌜StartReply.wish replyB (StartReply.mk' chain vrf) []⌝ ∗
+    "%His_reply" ∷ ⌜replyB = StartReply.enc_fn (StartReply.mk' chain vrf) ∧
+      StartReply.valid (StartReply.mk' chain vrf)⌝ ∗
 
     "HQ" ∷ Q γ σ ∗
 
@@ -492,8 +503,8 @@ Lemma wp_CallStart c good :
     "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ Trust.get_full good]}⌝ ∗
     "#Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ chain vrf,
-      "#Hptr_chain" ∷ StartChain.own ptr_chain chain (□) ∗
-      "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf (□) ∗
+      "#Hptr_chain" ∷ StartChain.own ptr_chain chain ∗
+      "#Hptr_vrf" ∷ StartVrf.own ptr_vrf vrf ∗
 
       "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
         let agreeγ := γ.(cfg.agreeγ) in
@@ -539,9 +550,11 @@ Proof.
     iIntros (?).
     case_match; try done.
     iNamed "Hgood".
-    iApply "Hgenie".
-    naive_solver. }
+    iDestruct "Hgenie" as %Hgenie.
+    exfalso. apply Hgenie. destruct His_reply.
+    eexists _, []. rewrite app_nil_r. by split. }
   iDestruct "Hgenie" as (??) "(#Hreply&_&%His_dec)".
+  iDestruct (StartReply.own_valid with "Hreply") as %Hvalid_dec.
   destruct obj. iNamed "Hreply".
   wp_auto. simpl.
 
@@ -552,7 +565,9 @@ Proof.
   iFrame "#".
   case_match; try done.
   iNamed "Hgood".
-  opose proof (StartReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+  opose proof (StartReply.enc_inj _ _ _ []
+    (eq_trans (eq_sym His_dec) (eq_trans (proj1 His_reply) (eq_sym (app_nil_r _))))
+    Hvalid_dec (proj2 His_reply)) as [? _].
   simplify_eq/=.
   iDestruct "HQ" as "[#Hnew_digs %]".
   rewrite Heq_VrfPk.

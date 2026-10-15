@@ -28,51 +28,31 @@ Collection W := sem.
 (** map_labels and map_vals. *)
 
 Definition map_label_fn vrf_pk uid (ver : nat) map_label :=
-  let enc := MapLabel.pure_enc (MapLabel.mk' uid (W64 ver)) in
+  let enc := MapLabel.enc_fn (MapLabel.mk' uid (W64 ver)) in
   cryptoffi.vrf_fn vrf_pk enc = Some map_label ∧
   ver = uint.nat (W64 ver).
 
 Definition map_label_inv_fn vrf_pk map_label :=
-  rem0 ← cryptoffi.vrf_inv_fn vrf_pk map_label;
-  guard (length rem0 ≥ 8);;
-  let uid := le_to_u64 (take 8 rem0) in
-  let rem1 := drop 8 rem0 in
-  guard (length rem1 ≥ 8);;
-  let ver := le_to_u64 (take 8 rem1) in
-  let rem2 := drop 8 rem1 in
-  guard (length rem2 = 0%nat);;
-  Some (uid, uint.nat ver).
+  enc ← cryptoffi.vrf_inv_fn vrf_pk map_label;
+  '(obj, tail) ← MapLabel.dec_fn enc;
+  guard (tail = []);;
+  Some (obj.(MapLabel.Uid), uint.nat obj.(MapLabel.Ver)).
 
 Lemma map_label_iff {vrf_pk uid ver map_label} :
   map_label_fn vrf_pk uid ver map_label ↔
   map_label_inv_fn vrf_pk map_label = Some (uid, ver).
 Proof.
-  rewrite /map_label_fn /map_label_inv_fn /MapLabel.pure_enc /safemarshal.w64.pure_enc /=.
-  pose proof (u64_le_length uid) as Hlen_uid.
-  pose proof (u64_le_length (W64 ver)) as Hlen_ver.
-  split.
-  - intros [?%cryptoffi.vrf_bij_l Hver].
-    simplify_option_eq; try done.
-    all: try (autorewrite with len in *; lia).
-    rewrite take_app_le; [|lia].
-    rewrite take_ge; [|lia].
-    rewrite drop_app_le; [|lia].
-    rewrite drop_ge; [|lia]. simpl.
-    rewrite take_ge; [|lia].
-    rewrite !u64_le_to_word. rewrite -Hver. done.
-  - intros Hinv.
-    simplify_option_eq.
-    split_and!.
-    + suffices Henc : u64_le (le_to_u64 (take 8 H)) ++
-                      u64_le (W64 (uint.nat (le_to_u64 (take 8 (drop 8 H))))) = H.
-      { rewrite Henc. by apply cryptoffi.vrf_bij_r. }
-      rewrite le_to_u64_le; [|apply length_take_le; lia].
-      rewrite w64_to_nat_id.
-      rewrite le_to_u64_le; [|apply length_take_le; lia].
-      rewrite (take_ge (drop 8 H)).
-      2: { rewrite length_drop in H2. lia. }
-      apply take_drop.
-    + word.
+  rewrite /map_label_fn /map_label_inv_fn. split.
+  - intros [Hvrf%cryptoffi.vrf_bij_l Hver]. rewrite Hvrf /=.
+    rewrite (proj2 (MapLabel.dec_fn_iff _ (MapLabel.mk' uid (W64 ver)) []));
+      [|by rewrite app_nil_r].
+    simpl. by rewrite -Hver.
+  - destruct (cryptoffi.vrf_inv_fn vrf_pk map_label) as [enc|] eqn:Hvrf; simpl; [|intros [=]].
+    destruct (MapLabel.dec_fn enc) as [[obj tail]|] eqn:Hdec; simpl; [|intros [=]].
+    intros ?. simplify_option_eq.
+    apply MapLabel.dec_fn_iff in Hdec as ->. rewrite app_nil_r in Hvrf.
+    apply cryptoffi.vrf_bij_r in Hvrf.
+    rewrite w64_to_nat_id. destruct obj. split; [done|word].
 Qed.
 
 Lemma map_label_det {vrf_pk uid ver map_label0 map_label1} :
@@ -93,108 +73,30 @@ Qed.
 
 Definition map_val_fn kt_pk rand map_val :=
   let obj := CommitOpen.mk' kt_pk rand in
-  let enc := CommitOpen.pure_enc obj in
+  let enc := CommitOpen.enc_fn obj in
   cryptoffi.hash_fn enc = Some map_val ∧
   CommitOpen.valid obj.
 
 Definition map_val_inv_fn map_val :=
-  rem0 ← cryptoffi.hash_inv_fn map_val;
-  guard (length rem0 ≥ 8);;
-  guard (0 ≤ sint.Z (le_to_u64 (take 8 rem0)));;
-  let pk_len := sint.nat (le_to_u64 (take 8 rem0)) in
-  let rem1 := drop 8 rem0 in
-  guard (length rem1 ≥ pk_len);;
-  let pk := take pk_len rem1 in
-  let rem2 := drop pk_len rem1 in
-  guard (length rem2 ≥ 8);;
-  guard (0 ≤ sint.Z (le_to_u64 (take 8 rem2)));;
-  let rand_len := sint.nat (le_to_u64 (take 8 rem2)) in
-  let rem3 := drop 8 rem2 in
-  guard (length rem3 = rand_len);;
-  let rand := take rand_len rem3 in
-  Some (pk, rand).
+  enc ← cryptoffi.hash_inv_fn map_val;
+  '(obj, tail) ← CommitOpen.dec_fn enc;
+  guard (tail = []);;
+  Some (obj.(CommitOpen.Val), obj.(CommitOpen.Rand)).
 
 Lemma map_val_iff {kt_pk rand map_val} :
   map_val_fn kt_pk rand map_val ↔
   map_val_inv_fn map_val = Some (kt_pk, rand).
 Proof.
-  rewrite /map_val_fn /map_val_inv_fn /CommitOpen.pure_enc /CommitOpen.valid
-    /safemarshal.Slice1D.pure_enc /safemarshal.Slice1D.valid
-    /safemarshal.w64.pure_enc /=.
-  pose proof (u64_le_length (W64 (length kt_pk))) as Hlen_pk.
-  pose proof (u64_le_length (W64 (length rand))) as Hlen_rand.
-  split.
-  - intros [Hhash%cryptoffi.hash_bij_l [HvVal HvRand]].
-    rewrite Hhash /=.
-    rewrite -!app_assoc.
-    (* take 8 of the encoding gives back the pk-length prefix *)
-    rewrite (take_app_length' _ _ 8); [|len..].
-    rewrite !u64_le_to_word.
-    replace (sint.nat (W64 (length kt_pk))) with (length kt_pk) by word.
-    rewrite (drop_app_length' _ _ 8); [|len..].
-    rewrite (take_app_length' kt_pk); [|done..].
-    rewrite (drop_app_length' kt_pk); [|done..].
-    rewrite (take_app_length' _ _ 8); [|len..].
-    rewrite !u64_le_to_word.
-    replace (sint.nat (W64 (length rand))) with (length rand) by word.
-    rewrite (drop_app_length' _ _ 8); [|len..].
-    rewrite take_ge; [|done..].
-    (* now discharge the guards *)
-    rewrite option_guard_True; [|len].
-    rewrite option_guard_True; [|word].
-    rewrite option_guard_True; [|len].
-    rewrite option_guard_True; [|len].
-    rewrite option_guard_True; [|word].
-    rewrite option_guard_True; [|done].
+  rewrite /map_val_fn /map_val_inv_fn. split.
+  - intros [Hhash%cryptoffi.hash_bij_l Hv]. rewrite Hhash /=.
+    rewrite (proj2 (CommitOpen.dec_fn_iff _ (CommitOpen.mk' kt_pk rand) []));
+      [|by rewrite app_nil_r].
     done.
-  - intros Hinv.
-    destruct (cryptoffi.hash_inv_fn map_val) as [rem0|] eqn:Hinvfn; [|done].
-    simpl in Hinv.
-    repeat case_guard; try done.
-    simplify_eq/=.
-    (* abbreviations *)
-    set (pk_len := sint.nat (le_to_u64 (take 8 rem0))) in *.
-    set (rem1 := drop 8 rem0) in *.
-    set (rem2 := drop pk_len rem1) in *.
-    set (rand_len := sint.nat (le_to_u64 (take 8 rem2))) in *.
-    set (rem3 := drop 8 rem2) in *.
-    (* hypotheses available (folded):
-       Hg0 : length rem0 ≥ 8
-       Hg1 : length rem1 ≥ pk_len
-       Hg2 : length rem2 ≥ 8
-       Hp0 : 0 ≤ sint.Z (le_to_u64 (take 8 rem0))
-       Hp2 : 0 ≤ sint.Z (le_to_u64 (take 8 rem2))
-       Hr3 : length rem3 = rand_len *)
-    assert (length rem3 = rand_len) as Hr3 by assumption.
-    assert (length rem1 ≥ pk_len) as Hg1 by assumption.
-    assert (length rem0 ≥ 8) as Hg0 by assumption.
-    assert (length rem2 ≥ 8) as Hg2 by assumption.
-    assert (length (take pk_len rem1) = pk_len) as Hlpk
-      by (rewrite length_take_le; [done|lia]).
-    assert (length (take rand_len rem3) = rand_len) as Hlrand
-      by (rewrite length_take_le; [done|lia]).
-    split_and!.
-    + (* reconstruct rem0 and apply hash_bij_r *)
-      rewrite -!app_assoc.
-      suffices Henc :
-        u64_le (W64 (length (take pk_len rem1))) ++ take pk_len rem1 ++
-        u64_le (W64 (length (take rand_len rem3))) ++ take rand_len rem3 = rem0.
-      { rewrite Henc. by apply cryptoffi.hash_bij_r. }
-      rewrite Hlpk Hlrand.
-      (* rebuild the two length prefixes *)
-      replace (W64 pk_len) with (le_to_u64 (take 8 rem0)) by (subst pk_len; word).
-      rewrite le_to_u64_le; [|rewrite length_take; lia].
-      replace (W64 rand_len) with (le_to_u64 (take 8 rem2)) by (subst rand_len; word).
-      rewrite le_to_u64_le; [|rewrite length_take; lia].
-      (* peel rand: take rand_len rem3 = rem3 *)
-      rewrite (take_ge rem3 rand_len); [|lia].
-      (* unfold the let-bound remainders to drop-expressions, then collapse *)
-      try subst rem3. try subst rem2. try subst rem1.
-      by rewrite !take_drop.
-    + (* validity of Val *)
-      rewrite Hlpk. subst pk_len. word.
-    + (* validity of Rand *)
-      rewrite Hlrand. subst rand_len. word.
+  - destruct (cryptoffi.hash_inv_fn map_val) as [enc|] eqn:Hinv; simpl; [|intros [=]].
+    destruct (CommitOpen.dec_fn enc) as [[obj tail]|] eqn:Hdec; simpl; [|intros [=]].
+    intros ?. simplify_option_eq.
+    apply CommitOpen.dec_fn_iff in Hdec as [-> Hv]. rewrite app_nil_r in Hinv.
+    apply cryptoffi.hash_bij_r in Hinv. by destruct obj.
 Qed.
 
 Lemma map_val_det {kt_pk rand map_val0 map_val1} :

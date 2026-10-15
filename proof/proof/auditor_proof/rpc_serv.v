@@ -62,7 +62,7 @@ Collection W := sem.
 Definition own_ep ptr σ (ep : nat) γ : iProp Σ :=
   let agreeγ := γ.(cfg.agreeγ) in
   ∃ sig_link,
-  "#Hown_epoch" ∷ SignedLink.own ptr sig_link (□) ∗
+  "#Hown_epoch" ∷ SignedLink.own ptr sig_link ∗
   "#His_epoch" ∷ wish_SignedLink γ.(cfg.serv_sig_pk) γ.(cfg.adtr_sig_pk)
     (W64 ep) sig_link ∗
   (* could derive this from LinkSig, but it's easier to state explicitly. *)
@@ -185,7 +185,7 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
     "%Hblame" ∷ ⌜ktcore.BlameSpec err {[ktcore.BlameServFull:=option_bool $ Trust.get_full good]}⌝ ∗
     "#Herr" ∷ (if decide (err ≠ ∅) then True else
       ∃ proofs,
-      "#Hsl_proofs" ∷ ktcore.AuditProofSlice1D.own sl_proofs proofs (□) ∗
+      "#Hsl_proofs" ∷ ktcore.AuditProofSlice1D.own sl_proofs proofs ∗
 
       "Hgood" ∷ match Trust.get_full good with None => True | Some γ =>
         (* writing determ trans per epoch makes postcond easier to use
@@ -205,7 +205,8 @@ Lemma wp_CallAudit c good (prevEpoch : w64) :
 Proof.
   wp_start as "@". wp_auto.
   wp_apply wp_alloc as "* Ha".
-  wp_apply (AuditArg.wp_enc (AuditArg.mk' _) with "[$Ha]") as "* (Hsl_b&_&_&%Hwish)".
+  iPersist "Ha".
+  wp_apply (AuditArg.wp_enc (AuditArg.mk' _) with "[$Ha]") as "* (Hsl_b&_)".
   { iDestruct own_slice_nil as "$".
     iDestruct own_slice_cap_nil as "$". }
   simpl in *.
@@ -233,9 +234,11 @@ Proof.
     iIntros (?).
     case_match; try done.
     iNamed "Hgood".
-    iApply "Hgenie".
-    naive_solver. }
+    iDestruct "Hgenie" as %Hgenie.
+    exfalso. apply Hgenie. destruct His_reply.
+    eexists _, []. rewrite app_nil_r. by split. }
   iDestruct "Hgenie" as (??) "(#Hreply&_&%His_dec)".
+  iDestruct (AuditReply.own_valid with "Hreply") as %Hvalid_dec.
   destruct obj. iNamed "Hreply".
   wp_auto. simpl.
   wp_if_destruct.
@@ -246,11 +249,13 @@ Proof.
     iIntros (?).
     case_match; try done.
     iNamed "Hgood".
-    opose proof (AuditReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+    opose proof (AuditReply.enc_inj _ _ _ []
+    (eq_trans (eq_sym His_dec) (eq_trans (proj1 His_reply) (eq_sym (app_nil_r _))))
+    Hvalid_dec (proj2 His_reply)) as [? _].
     simplify_eq/=.
     iDestruct "Hgood" as "[@|@]".
-    - iApply "Hgenie". naive_solver.
-    - opose proof (AuditArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
+    - iApply "Hgenie". iPureIntro. eexists _, []. by rewrite app_nil_r.
+    - opose proof (AuditArg.enc_inj _ _ [] _ (eq_trans (app_nil_r _) Hdec)) as [? _].
       simplify_eq/=.
       iDestruct "HQ" as "[#Hnew_digs %]".
       iDestruct "Herr" as %?.
@@ -264,10 +269,12 @@ Proof.
   iFrame "#".
   case_match; try done.
   iNamed "Hgood".
-  opose proof (AuditReply.wish_det _ _ _ _ His_dec His_reply) as [? _].
+  opose proof (AuditReply.enc_inj _ _ _ []
+    (eq_trans (eq_sym His_dec) (eq_trans (proj1 His_reply) (eq_sym (app_nil_r _))))
+    Hvalid_dec (proj2 His_reply)) as [? _].
   simplify_eq/=.
   iDestruct "Hgood" as "[@|@]"; try done.
-  opose proof (AuditArg.wish_det _ _ _ _ Hwish Hdec) as [? _].
+  opose proof (AuditArg.enc_inj _ _ [] _ (eq_trans (app_nil_r _) Hdec)) as [? _].
   simplify_eq/=.
   iDestruct "HQ" as "[#Hnew_digs %]".
   iNamed "Herr".

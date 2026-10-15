@@ -252,25 +252,7 @@ Qed.
 
 End proof.
 
-Section dfrac_valid.
-Context `{!heapGS Σ}.
-Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
-Collection W := sem + package_sem.
-#[local] Set Default Proof Using "W".
-
-Lemma own_slice_dfrac_valid (s : slice.t) (vs : list w8) dq :
-  0 < length vs →
-  s ↦*{dq} vs -∗ ⌜✓ dq⌝.
-Proof.
-  iIntros (Hlen) "Hsl".
-  destruct vs as [|v vs']; [simpl in Hlen; lia|].
-  iDestruct (own_slice_elem_acc 0 with "Hsl") as "[Helem _]"; [done|done|].
-  iEval (rewrite typed_pointsto_unseal_eq) in "Helem".
-  iDestruct "Helem" as "[Hdef _]".
-  iApply (heap_pointsto_valid with "Hdef").
-Qed.
-End dfrac_valid.
-
+(* [Proof] unseals publicly: [code.v] proves the hand-written encoder in [prove]. *)
 Module Proof.
 Record t :=
   mk' {
@@ -280,73 +262,58 @@ Record t :=
     LeafVal: list w8;
   }.
 
-Definition encodes (obj : t) (enc : list w8) : Prop :=
-  sint.Z (W64 (length obj.(Siblings))) = length obj.(Siblings) ∧
-  sint.Z (W64 (length obj.(LeafLabel))) = length obj.(LeafLabel) ∧
-  sint.Z (W64 (length obj.(LeafVal))) = length obj.(LeafVal) ∧
+Definition enc_fn_def obj :=
+  safemarshal.Slice1D.enc_fn obj.(Siblings) ++
+  safemarshal.bool.enc_fn obj.(IsOtherLeaf) ++
+  safemarshal.Slice1D.enc_fn obj.(LeafLabel) ++
+  safemarshal.Slice1D.enc_fn obj.(LeafVal).
+Program Definition enc_fn := sealed @enc_fn_def.
+Definition enc_fn_unseal : enc_fn = _ := seal_eq _.
 
-  enc = (u64_le $ W64 $ length obj.(Siblings)) ++ obj.(Siblings) ++
-  [(if obj.(IsOtherLeaf) then W8 1 else W8 0)] ++
-  (u64_le $ W64 $ length obj.(LeafLabel)) ++ obj.(LeafLabel) ++
-  (u64_le $ W64 $ length obj.(LeafVal)) ++ obj.(LeafVal).
+Definition valid_def obj :=
+  safemarshal.Slice1D.valid obj.(Siblings) ∧
+  safemarshal.Slice1D.valid obj.(LeafLabel) ∧
+  safemarshal.Slice1D.valid obj.(LeafVal).
+Program Definition valid := sealed @valid_def.
+Definition valid_unseal : valid = _ := seal_eq _.
 
-Lemma inj {obj0 obj1 enc0 enc1 tail0 tail1} :
-  enc0 ++ tail0 = enc1 ++ tail1 →
-  encodes obj0 enc0 →
-  encodes obj1 enc1 →
-  obj0 = obj1 ∧ enc0 = enc1 ∧ tail0 = tail1.
+Lemma enc_inj obj obj' tail tail' :
+  enc_fn obj ++ tail = enc_fn obj' ++ tail' →
+  valid obj → valid obj' →
+  obj = obj' ∧ tail = tail'.
 Proof.
-  intros ? (?&?&? & Henc0) (?&?&? & Henc). subst.
-  list_simplifier. move: H => Henc.
-  apply app_inj_1 in Henc as [Hlen_sib Henc]; [|len].
-  apply (inj u64_le) in Hlen_sib.
-  apply app_inj_1 in Henc as [Heq_sib Henc]; [|word].
-  inv Henc as [[Heq_found Henc']].
-  apply app_inj_1 in Henc' as [Hlen_label Henc]; [|len].
-  apply (inj u64_le) in Hlen_label.
-  apply app_inj_1 in Henc as [Heq_label Henc]; [|word].
-  apply app_inj_1 in Henc as [Hlen_val Henc]; [|len].
-  apply (inj u64_le) in Hlen_val.
-  assert (obj0.(IsOtherLeaf) = obj1.(IsOtherLeaf)) as ?.
-  { by repeat case_match. }
-  apply app_inj_1 in Henc as [Heq_val Henc]; [|word].
-  destruct obj0, obj1. by simplify_eq/=.
+  rewrite enc_fn_unseal valid_unseal /enc_fn_def /valid_def. intros Heq (?&?&?) (?&?&?). repeat rewrite <- app_assoc in Heq.
+  apply safemarshal.Slice1D.enc_inj in Heq as [? Heq]; [|done..].
+  apply safemarshal.bool.enc_inj in Heq as [? Heq].
+  apply safemarshal.Slice1D.enc_inj in Heq as [? Heq]; [|done..].
+  apply safemarshal.Slice1D.enc_inj in Heq as [? ->]; [|done..].
+  destruct obj, obj'. by simplify_eq/=.
 Qed.
 
-Section proof.
+Section defs.
 Context `{!heapGS Σ}.
 Context {sem : go.Semantics}.
-Collection W := sem.
-#[local] Set Default Proof Using "W".
 
-Definition own ptr obj d : iProp Σ :=
+Definition own ptr obj : iProp Σ :=
   ∃ sl_Siblings sl_LeafLabel sl_LeafVal,
-  "Hstruct" ∷ ptr ↦{d} (merkle.Proof.mk sl_Siblings
-    obj.(IsOtherLeaf) sl_LeafLabel sl_LeafVal) ∗
+  "#Hstr_Proof" ∷ ptr ↦□ (merkle.Proof.mk sl_Siblings obj.(IsOtherLeaf) sl_LeafLabel sl_LeafVal) ∗
 
-  "Hsl_Siblings" ∷ sl_Siblings ↦*{d} obj.(Siblings) ∗
-  "Hsl_LeafLabel" ∷ sl_LeafLabel ↦*{d} obj.(LeafLabel) ∗
-  "Hsl_LeafVal" ∷ sl_LeafVal ↦*{d} obj.(LeafVal).
+  "#Hsl_Siblings" ∷ sl_Siblings ↦*□ obj.(Siblings) ∗
+  "#Hsl_LeafLabel" ∷ sl_LeafLabel ↦*□ obj.(LeafLabel) ∗
+  "#Hsl_LeafVal" ∷ sl_LeafVal ↦*□ obj.(LeafVal).
+#[global] Instance own_pers ptr obj : Persistent (own ptr obj) := _.
 
-(* TODO: other serde files have pure wishes. *)
-Definition wish b obj tail : iProp Σ :=
-  ∃ enc,
-  "%Henc_obj" ∷ ⌜encodes obj enc⌝ ∗
-  "%Heq_tail" ∷ ⌜b = enc ++ tail⌝.
-
-Lemma wish_det b obj0 obj1 tail0 tail1 :
-  wish b obj0 tail0 -∗
-  wish b obj1 tail1 -∗
-  ⌜obj0 = obj1 ∧ tail0 = tail1⌝.
+Lemma own_valid ptr obj :
+  own ptr obj ⊢ ⌜valid obj⌝.
 Proof.
-  iNamedSuffix 1 "0".
-  iNamedSuffix 1 "1".
-  opose proof (inj _ Henc_obj0 Henc_obj1) as ?.
-  { by subst. }
-  naive_solver.
+  iNamed 1.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_Siblings") as %?.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_LeafLabel") as %?.
+  iDestruct (safemarshal.Slice1D.own_valid with "Hsl_LeafVal") as %?.
+  iPureIntro. rewrite valid_unseal /valid_def. naive_solver.
 Qed.
 
-End proof.
+End defs.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -354,149 +321,106 @@ Context {sem : go.Semantics} {package_sem : merkle.Assumptions}.
 Collection W := sem + package_sem.
 #[local] Set Default Proof Using "W".
 
-Lemma wp_dec sl_b d b :
+Lemma wp_enc obj sl_b b ptr_obj :
   {{{
     is_pkg_init merkle ∗
-    "Hsl_b" ∷ sl_b ↦*{d} b
+    "Hsl_b" ∷ sl_b ↦* b ∗
+    "Hcap_b" ∷ own_slice_cap w8 sl_b 1 ∗
+    "#Hown_obj" ∷ own ptr_obj obj
+  }}}
+  @! merkle.ProofEncode #sl_b #ptr_obj
+  {{{
+    sl_b', RET #sl_b';
+    sl_b' ↦* (b ++ enc_fn obj) ∗
+    own_slice_cap w8 sl_b' 1 ∗
+    ⌜valid obj⌝
+  }}}.
+Proof.
+  wp_start as "(Hsl_b & Hcap_b & Hown)".
+  iDestruct "Hown" as (sl_Siblings sl_LeafLabel sl_LeafVal) "(Hstr_Proof & Hsl_Siblings & Hsl_LeafLabel & Hsl_LeafVal)".
+  wp_auto.
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_Siblings]") as "* (Hsl_b & Hcap_b & Hsl_Siblings & %)".
+  wp_apply (safemarshal.bool.wp_enc with "[$Hsl_b $Hcap_b]") as "* [Hsl_b Hcap_b]".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_LeafLabel]") as "* (Hsl_b & Hcap_b & Hsl_LeafLabel & %)".
+  wp_apply (safemarshal.Slice1D.wp_enc with "[$Hsl_b $Hcap_b $Hsl_LeafVal]") as "* (Hsl_b & Hcap_b & Hsl_LeafVal & %)".
+  iApply "HΦ". iFrame "Hcap_b".
+  iSplitL "Hsl_b". { iExactEq "Hsl_b". rewrite enc_fn_unseal /enc_fn_def. by repeat rewrite <- app_assoc. }
+  iPureIntro. rewrite valid_unseal /valid_def. naive_solver.
+Qed.
+
+Lemma wp_dec sl_b b :
+  {{{
+    is_pkg_init merkle ∗
+    "#Hsl_b" ∷ sl_b ↦*□ b
   }}}
   @! merkle.ProofDecode #sl_b
   {{{
     ptr_obj sl_tail err, RET (#ptr_obj, #sl_tail, #err);
     match err with
-    | true => ¬ ∃ obj tail, wish b obj tail
+    | true => ⌜¬ ∃ obj tail, b = enc_fn obj ++ tail ∧ valid obj⌝
     | false =>
       ∃ obj tail,
-      "Hwish" ∷ wish b obj tail ∗
-      "Hown_obj" ∷ own ptr_obj obj d ∗
-      "Hsl_tail" ∷ sl_tail ↦*{d} tail
+      own ptr_obj obj ∗
+      sl_tail ↦*□ tail ∗
+      ⌜b = enc_fn obj ++ tail⌝
     end
   }}}.
 Proof.
-  wp_start as "Hsl_b". wp_auto.
-  destruct b as [|b0 brest].
-  - (* empty input: no valid encoding (it needs >= 8 bytes) *)
-    wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
-    iIntros (a1 b1 err1) "Hpost1". destruct err1.
-    + wp_auto. iApply "HΦ". iIntros "Hex".
-      iDestruct "Hex" as (obj tail) "Hwish". iNamed "Hwish".
-      destruct Henc_obj as (_ & _ & _ & Henc).
-      iExFalso. iPureIntro. subst enc. apply (f_equal length) in Heq_tail.
-      rewrite !length_app !u64_le_length /= in Heq_tail. lia.
-    + iDestruct "Hpost1" as (sib rem1) "(Ha1 & Hb1 & %Hsl1)".
-      destruct Hsl1 as [Henc1 _].
-      rewrite /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Henc1.
-      iExFalso. iPureIntro. apply (f_equal length) in Henc1.
-      rewrite !length_app u64_le_length /= in Henc1. lia.
-  - iDestruct (own_slice_dfrac_valid with "Hsl_b") as %Hvd; [simpl; lia|].
-    wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
-    iIntros (a1 b1 err1) "Hpost1". destruct err1.
-    { (* Siblings read failed *)
-      wp_auto. iApply "HΦ". iIntros "Hex".
-      iDestruct "Hex" as (obj tail) "Hwish". iNamed "Hwish".
-      destruct Henc_obj as (Hvsib & Hvlabel & Hvval & Henc).
-      iApply "Hpost1". iExists obj.(Siblings), _. iPureIntro.
-      rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
-              /safemarshal.w64.pure_enc /safemarshal.Slice1D.valid.
-      split; [rewrite Heq_tail Henc -?app_assoc // | word]. }
-    iDestruct "Hpost1" as (sib rem1) "(Ha1 & Hb1 & %Hsl1)".
-    wp_auto.
-    wp_apply (safemarshal.bool.wp_dec with "[$Hb1]").
-    iIntros (a2 b2 err2) "Hpost2". destruct err2.
-    { (* IsOtherLeaf read failed *)
-      wp_auto. iApply "HΦ". iIntros "Hex".
-      iDestruct "Hex" as (obj tail) "Hwish". iNamed "Hwish".
-      destruct Henc_obj as (Hvsib & Hvlabel & Hvval & Henc). subst enc.
-      iApply "Hpost2".
-      iExists obj.(IsOtherLeaf),
-        (u64_le (W64 (length obj.(LeafLabel))) ++ obj.(LeafLabel) ++
-         u64_le (W64 (length obj.(LeafVal))) ++ obj.(LeafVal) ++ tail).
-      iPureIntro.
-      assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(Siblings)
-        ([if obj.(IsOtherLeaf) then W8 1 else W8 0] ++
-         u64_le (W64 (length obj.(LeafLabel))) ++ obj.(LeafLabel) ++
-         u64_le (W64 (length obj.(LeafVal))) ++ obj.(LeafVal) ++ tail)) as Hwsib.
-      { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
-          /safemarshal.w64.pure_enc. split; [|exact Hvsib].
-        rewrite Heq_tail -?app_assoc //. }
-      destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1 Hwsib) as [_ Hrem1].
-      rewrite /safemarshal.bool.wish /safemarshal.bool.pure_enc Hrem1 -?app_assoc //. }
-    iDestruct "Hpost2" as (rem2) "(Hb2 & %Hbool)".
-    wp_auto.
-    wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb2]").
-    iIntros (a3 b3 err3) "Hpost3". destruct err3.
-    { (* LeafLabel read failed *)
-      wp_auto. iApply "HΦ". iIntros "Hex".
-      iDestruct "Hex" as (obj tail) "Hwish". iNamed "Hwish".
-      destruct Henc_obj as (Hvsib & Hvlabel & Hvval & Henc). subst enc.
-      iApply "Hpost3".
-      iExists obj.(LeafLabel),
-        (u64_le (W64 (length obj.(LeafVal))) ++ obj.(LeafVal) ++ tail).
-      iPureIntro.
-      assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(Siblings)
-        ([if obj.(IsOtherLeaf) then W8 1 else W8 0] ++
-         u64_le (W64 (length obj.(LeafLabel))) ++ obj.(LeafLabel) ++
-         u64_le (W64 (length obj.(LeafVal))) ++ obj.(LeafVal) ++ tail)) as Hwsib.
-      { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
-          /safemarshal.w64.pure_enc. split; [|exact Hvsib].
-        rewrite Heq_tail -?app_assoc //. }
-      destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1 Hwsib) as [_ Hrem1].
-      rewrite /safemarshal.bool.wish /safemarshal.bool.pure_enc in Hbool.
-      rewrite Hrem1 in Hbool. apply app_inj_1 in Hbool as [_ Hrem2]; [|len].
-      rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
-        /safemarshal.w64.pure_enc. split; [|exact Hvlabel].
-      rewrite -Hrem2 -?app_assoc //. }
-    iDestruct "Hpost3" as (label rem3) "(Ha3 & Hb3 & %Hsl3)".
-    wp_auto.
-    wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb3]").
-    iIntros (a4 b4 err4) "Hpost4". destruct err4.
-    { (* LeafVal read failed *)
-      wp_auto. iApply "HΦ". iIntros "Hex".
-      iDestruct "Hex" as (obj tail) "Hwish". iNamed "Hwish".
-      destruct Henc_obj as (Hvsib & Hvlabel & Hvval & Henc). subst enc.
-      iApply "Hpost4".
-      iExists obj.(LeafVal), tail.
-      iPureIntro.
-      assert (safemarshal.Slice1D.wish (b0 :: brest) obj.(Siblings)
-        ([if obj.(IsOtherLeaf) then W8 1 else W8 0] ++
-         u64_le (W64 (length obj.(LeafLabel))) ++ obj.(LeafLabel) ++
-         u64_le (W64 (length obj.(LeafVal))) ++ obj.(LeafVal) ++ tail)) as Hwsib.
-      { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
-          /safemarshal.w64.pure_enc. split; [|exact Hvsib].
-        rewrite Heq_tail -?app_assoc //. }
-      destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl1 Hwsib) as [_ Hrem1].
-      rewrite /safemarshal.bool.wish /safemarshal.bool.pure_enc in Hbool.
-      rewrite Hrem1 in Hbool. apply app_inj_1 in Hbool as [_ Hrem2]; [|len].
-      assert (safemarshal.Slice1D.wish rem2 obj.(LeafLabel)
-        (u64_le (W64 (length obj.(LeafVal))) ++ obj.(LeafVal) ++ tail)) as Hwlabel.
-      { rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
-          /safemarshal.w64.pure_enc. split; [|exact Hvlabel].
-        rewrite -Hrem2 -?app_assoc //. }
-      destruct (safemarshal.Slice1D.wish_det _ _ _ _ Hsl3 Hwlabel) as [_ Hrem3].
-      rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc
-        /safemarshal.w64.pure_enc. split; [|exact Hvval].
-      rewrite Hrem3 -?app_assoc //. }
-    iDestruct "Hpost4" as (val rem4) "(Ha4 & Hb4 & %Hsl4)".
-    wp_auto.
-    wp_alloc l as "Hptr".
-    iMod (dfractional_update_to_dfrac _ d with "Hptr") as "Hptr"; [exact Hvd|].
-    wp_auto.
-    iApply "HΦ".
-    iExists (Proof.mk' sib a2 label val), rem4.
-    destruct Hsl1 as [Heq1 Hv1]. destruct Hsl3 as [Heq3 Hv3]. destruct Hsl4 as [Heq4 Hv4].
-    rewrite /safemarshal.Slice1D.wish /safemarshal.Slice1D.pure_enc /safemarshal.w64.pure_enc in Heq1 Heq3 Heq4.
-    rewrite /safemarshal.Slice1D.valid in Hv1 Hv3 Hv4.
-    rewrite /safemarshal.bool.wish /safemarshal.bool.pure_enc in Hbool.
-    iSplitR.
-    { iExists (u64_le (W64 (length sib)) ++ sib ++ [if a2 then W8 1 else W8 0] ++
-               u64_le (W64 (length label)) ++ label ++ u64_le (W64 (length val)) ++ val).
-      iSplit; iPureIntro.
-      - rewrite /encodes /=. split_and!; [word | word | word | done].
-      - rewrite Heq1 Hbool Heq3 Heq4 -!app_assoc //. }
-    iSplitR "Hb4".
-    { iExists a1, a3, a4. iFrame "Hptr Ha1 Ha3 Ha4". }
-    iFrame "Hb4".
+  wp_start as "#Hsl_b". wp_auto.
+  wp_apply (safemarshal.Slice1D.wp_dec with "[$Hsl_b]").
+  iIntros (a1 b1 err1) "Hpost". destruct err1.
+  { iDestruct "Hpost" as %Hfail. wp_auto.
+    iApply "HΦ". iPureIntro. intros (obj & tail & Henc & Hv).
+    rewrite valid_unseal /valid_def in Hv. destruct Hv as (?&?&?).
+    rewrite enc_fn_unseal /enc_fn_def in Henc. repeat rewrite <- app_assoc in Henc.
+    apply Hfail. eexists _, _. split; [exact Henc|done]. }
+  iDestruct "Hpost" as (v1 rem1) "(Hv1 & Hb1 & %Hrem1)".
+  iDestruct (safemarshal.Slice1D.own_valid with "Hv1") as %?.
+  wp_auto.
+  wp_apply (safemarshal.bool.wp_dec with "[$Hb1]").
+  iIntros (a2 b2 err2) "Hpost". destruct err2.
+  { iDestruct "Hpost" as %Hfail. wp_auto.
+    iApply "HΦ". iPureIntro. intros (obj & tail & Henc & Hv).
+    rewrite valid_unseal /valid_def in Hv. destruct Hv as (?&?&?).
+    rewrite Hrem1 enc_fn_unseal /enc_fn_def in Henc. repeat rewrite <- app_assoc in Henc.
+    apply safemarshal.Slice1D.enc_inj in Henc as [_ Henc]; [|done..].
+    apply Hfail. eexists _, _. exact Henc. }
+  iDestruct "Hpost" as (rem2) "(Hb2 & %Hrem2)".
+  wp_auto.
+  wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb2]").
+  iIntros (a3 b3 err3) "Hpost". destruct err3.
+  { iDestruct "Hpost" as %Hfail. wp_auto.
+    iApply "HΦ". iPureIntro. intros (obj & tail & Henc & Hv).
+    rewrite valid_unseal /valid_def in Hv. destruct Hv as (?&?&?).
+    rewrite Hrem1 Hrem2 enc_fn_unseal /enc_fn_def in Henc. repeat rewrite <- app_assoc in Henc.
+    apply safemarshal.Slice1D.enc_inj in Henc as [_ Henc]; [|done..].
+    apply safemarshal.bool.enc_inj in Henc as [_ Henc].
+    apply Hfail. eexists _, _. split; [exact Henc|done]. }
+  iDestruct "Hpost" as (v3 rem3) "(Hv3 & Hb3 & %Hrem3)".
+  iDestruct (safemarshal.Slice1D.own_valid with "Hv3") as %?.
+  wp_auto.
+  wp_apply (safemarshal.Slice1D.wp_dec with "[$Hb3]").
+  iIntros (a4 b4 err4) "Hpost". destruct err4.
+  { iDestruct "Hpost" as %Hfail. wp_auto.
+    iApply "HΦ". iPureIntro. intros (obj & tail & Henc & Hv).
+    rewrite valid_unseal /valid_def in Hv. destruct Hv as (?&?&?).
+    rewrite Hrem1 Hrem2 Hrem3 enc_fn_unseal /enc_fn_def in Henc. repeat rewrite <- app_assoc in Henc.
+    apply safemarshal.Slice1D.enc_inj in Henc as [_ Henc]; [|done..].
+    apply safemarshal.bool.enc_inj in Henc as [_ Henc].
+    apply safemarshal.Slice1D.enc_inj in Henc as [_ Henc]; [|done..].
+    apply Hfail. eexists _, _. split; [exact Henc|done]. }
+  iDestruct "Hpost" as (v4 rem4) "(Hv4 & Hb4 & %Hrem4)".
+  iDestruct (safemarshal.Slice1D.own_valid with "Hv4") as %?.
+  wp_auto.
+  wp_alloc l as "Hptr".
+  iPersist "Hptr".
+  wp_auto.
+  iApply "HΦ". iExists (mk' v1 a2 v3 v4), rem4.
+  iFrame "Hb4". iSplit; [iExists a1, a3, a4; by iFrame "∗#"|].
+  iPureIntro. rewrite Hrem1 Hrem2 Hrem3 Hrem4 enc_fn_unseal /enc_fn_def. by repeat rewrite <- app_assoc.
 Qed.
 
 End proof.
 End Proof.
+
 End merkle.

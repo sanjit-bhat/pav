@@ -18,7 +18,7 @@ Collection W := sem + package_sem.
 
 Definition wish_VrfSig sig_pk vrf_pk sig : iProp Σ :=
   let obj := VrfSig.mk' (W8 VrfSigTag) vrf_pk in
-  let enc := VrfSig.pure_enc obj in
+  let enc := VrfSig.enc_fn obj in
   "#His_sig" ∷ cryptoffi.is_sig sig_pk enc sig ∗
   "%Hvalid" ∷ ⌜VrfSig.valid obj⌝.
 
@@ -28,12 +28,11 @@ Lemma get_vrf_sigpred γ sig_pk vrf_pk sig :
   sigpred.vrfP γ vrf_pk.
 Proof.
   iIntros "Hsig_pk @".
-  iDestruct (cryptoffi.is_sig_to_pred with "Hsig_pk His_sig") as "[@|@]"; try done.
-  opose proof (VrfSig.wish_det [] []
-    (VrfSig.mk' _ _) (VrfSig.mk' _ _) _ _) as [? _].
-  { split; [|exact Hvalid]. by list_simplifier. }
-  { split; [|exact Hvalid0]. list_simplifier.
-    by f_equal. }
+  iDestruct (cryptoffi.is_sig_to_pred with "Hsig_pk His_sig") as "[@|@]";
+    [|by rewrite VrfSig.enc_fn_unseal LinkSig.enc_fn_unseal /VrfSig.enc_fn_def /LinkSig.enc_fn_def in Henc].
+  opose proof (VrfSig.enc_inj (VrfSig.mk' _ _) (VrfSig.mk' _ _) [] [] _ Hvalid Hvalid0)
+    as [? _].
+  { by rewrite !app_nil_r. }
   by simplify_eq/=.
 Qed.
 
@@ -56,7 +55,7 @@ Proof.
   wp_apply wp_alloc as "* Hstruct".
   iPersist "Hstruct".
   wp_apply (VrfSig.wp_enc (VrfSig.mk' _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_&(_&%Hvalid))".
+    as "* (Hsl_b&Hcap_b&%Hvalid)".
   { iFrame "#". }
   simpl in *.
   iDestruct (own_slice_len with "Hsl_vrfPk") as %[? ?].
@@ -96,7 +95,7 @@ Proof.
   iPersist "Hstruct".
   replace (sint.nat _) with (0%nat) by word.
   wp_apply (VrfSig.wp_enc (VrfSig.mk' _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_&(_&%Hvalid))".
+    as "* (Hsl_b&Hcap_b&%Hvalid)".
   { iFrame "#". }
   simpl in *.
   wp_apply (cryptoffi.wp_SigPublicKey_Verify with "[$pk Hsl_b]") as "* H".
@@ -110,7 +109,7 @@ Qed.
 
 Definition wish_LinkSig sig_pk ep link sig : iProp Σ :=
   let obj := LinkSig.mk' (W8 LinkSigTag) ep link in
-  let enc := LinkSig.pure_enc obj in
+  let enc := LinkSig.enc_fn obj in
   "#His_sig" ∷ cryptoffi.is_sig sig_pk enc sig ∗
   "%Hvalid" ∷ ⌜LinkSig.valid obj⌝.
 
@@ -120,12 +119,11 @@ Lemma get_link_sigpred γ sig_pk ep link sig :
   sigpred.linkP γ ep link.
 Proof.
   iIntros "Hsig_pk @".
-  iDestruct (cryptoffi.is_sig_to_pred with "Hsig_pk His_sig") as "[@|@]"; try done.
-  opose proof (LinkSig.wish_det [] []
-    (LinkSig.mk' _ _ _) (LinkSig.mk' _ _ _) _ _) as [? _].
-  { split; [|exact Hvalid]. by list_simplifier. }
-  { split; [|exact Hvalid0]. list_simplifier.
-    by f_equal. }
+  iDestruct (cryptoffi.is_sig_to_pred with "Hsig_pk His_sig") as "[@|@]";
+    [by rewrite VrfSig.enc_fn_unseal LinkSig.enc_fn_unseal /VrfSig.enc_fn_def /LinkSig.enc_fn_def in Henc|].
+  opose proof (LinkSig.enc_inj (LinkSig.mk' _ _ _) (LinkSig.mk' _ _ _) [] [] _ Hvalid Hvalid0)
+    as [? _].
+  { by rewrite !app_nil_r. }
   by simplify_eq/=.
 Qed.
 
@@ -148,7 +146,7 @@ Proof.
   wp_apply wp_alloc as "* Hstruct".
   iPersist "Hstruct".
   wp_apply (LinkSig.wp_enc (LinkSig.mk' _ _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_&(_&%Hvalid))".
+    as "* (Hsl_b&Hcap_b&%Hvalid)".
   { iFrame "#". }
   simpl in *.
   iDestruct (own_slice_len with "Hsl_link") as %[? ?].
@@ -188,7 +186,7 @@ Proof.
   iPersist "Hstruct".
   replace (sint.nat _) with (0%nat) by word.
   wp_apply (LinkSig.wp_enc (LinkSig.mk' _ _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_&(_&%Hvalid))".
+    as "* (Hsl_b&Hcap_b&%Hvalid)".
   { iFrame "#". }
   simpl in *.
   wp_apply (cryptoffi.wp_SigPublicKey_Verify with "[$pk Hsl_b]") as "* H".
@@ -201,7 +199,7 @@ Proof.
 Qed.
 
 Definition is_MapLabelProof vrf_pk uid ver proof : iProp Σ :=
-  let enc := MapLabel.pure_enc (MapLabel.mk' uid ver) in
+  let enc := MapLabel.enc_fn (MapLabel.mk' uid ver) in
   cryptoffi.is_vrf_proof vrf_pk enc proof.
 
 Lemma wp_ProveMapLabel ptr_sk pk (uid ver : w64) :
@@ -224,7 +222,7 @@ Proof.
   iPersist "Hstruct".
   replace (sint.nat _) with (0%nat) by word.
   wp_apply (MapLabel.wp_enc (MapLabel.mk' _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_)".
+    as "* (Hsl_b&Hcap_b)".
   { iFrame "#". }
   simpl in *.
   rewrite -wp_fupd.
@@ -256,7 +254,7 @@ Proof.
   iPersist "Hstruct".
   replace (sint.nat _) with (0%nat) by word.
   wp_apply (MapLabel.wp_enc (MapLabel.mk' _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_)".
+    as "* (Hsl_b&Hcap_b)".
   { iFrame "#". }
   simpl in *.
   rewrite -wp_fupd.
@@ -295,7 +293,7 @@ Proof.
   iPersist "Hstruct".
   replace (sint.nat _) with (0%nat) by word.
   wp_apply (MapLabel.wp_enc (MapLabel.mk' _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_)".
+    as "* (Hsl_b&Hcap_b)".
   { iFrame "#". }
   simpl in *.
   rewrite -wp_fupd.
@@ -332,7 +330,7 @@ Proof.
   iPersist "Hstruct".
   replace (sint.nat _) with (0%nat) by word.
   wp_apply (CommitOpen.wp_enc (CommitOpen.mk' _ _) with "[$Hsl_b $Hcap_b]")
-    as "* (Hsl_b&Hcap_b&_&%Hwish)".
+    as "* (Hsl_b&Hcap_b&%Hvalid)".
   { iFrame "#". }
   simpl in *.
   rewrite -wp_fupd.
@@ -340,7 +338,6 @@ Proof.
   iPersist "Hsl_hash".
   iModIntro.
   iApply "HΦ".
-  destruct Hwish as (_&?).
   by iFrame "∗#".
 Qed.
 

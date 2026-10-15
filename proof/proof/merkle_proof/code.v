@@ -172,7 +172,8 @@ Definition wish_proofToTree label proof_enc t : iProp Σ :=
   let proof := Proof.mk' (mjoin (reverse sibs)) IsOtherLeaf LeafLabel LeafVal in
 
   "%Hlen_label" ∷ ⌜Z.of_nat $ length label = cryptoffi.hash_len⌝ ∗
-  "Henc_proof" ∷ Proof.wish proof_enc proof tail ∗
+  "%Henc_proof" ∷ ⌜proof_enc = Proof.enc_fn proof ++ tail⌝ ∗
+  "%Hvalid_proof" ∷ ⌜Proof.valid proof⌝ ∗
   "%Hlen_sibs" ∷ ⌜Forall (λ x, length x = Z.to_nat $ cryptoffi.hash_len) sibs⌝ ∗
   "%Heq_depth" ∷ ⌜length sibs ≤ max_depth⌝ ∗
   "Holeaf" ∷ match oleaf with None => True | Some (l, v) =>
@@ -191,7 +192,8 @@ Lemma wish_proofToTree_det l p t0 t1 :
 Proof.
   iNamedSuffix 1 "0".
   iNamedSuffix 1 "1".
-  iDestruct (Proof.wish_det with "Henc_proof0 Henc_proof1") as %[[=] ->].
+  opose proof (Proof.enc_inj _ _ _ _
+    (eq_trans (eq_sym Henc_proof0) Henc_proof1) Hvalid_proof0 Hvalid_proof1) as [[=] ->].
   opose proof (join_same_len_inj _ (reverse _) (reverse _) _ _ _ _)
     as Heq_s; try done.
   2: { by apply Forall_reverse. }
@@ -900,28 +902,29 @@ Proof.
   2: { iApply "HΦ". intro_wish. word. }
   wp_apply (Proof.wp_dec with "[$Hsl_proof]") as "* Hpost".
   destruct err; wp_auto.
-  { iApply "HΦ". intro_wish. iApply "Hpost". iFrame. }
-  iNamedSuffix "Hpost" "_dec".
+  { iDestruct "Hpost" as %Hfail. iApply "HΦ". intro_wish.
+    iPureIntro. apply Hfail. by eexists _, _. }
+  iDestruct "Hpost" as (obj tail) "(#Hown_obj_dec & _ & %Hwish_dec)". subst proof.
+  iDestruct (Proof.own_valid with "Hown_obj_dec") as %Hvalid_dec.
   iNamed "Hown_obj_dec".
   iDestruct (own_slice_len with "Hsl_Siblings") as %[Hlen_sl_sibs ?].
   wp_auto.
   wp_if_destruct.
   2: { iApply "HΦ". intro_wish.
-    iDestruct (Proof.wish_det with "Hwish_dec Henc_proof") as %[-> ->].
-    iClear "Hwish_dec". simpl in *.
+    opose proof (Proof.enc_inj _ _ _ _ Henc_proof Hvalid_dec Hvalid_proof) as [-> ->].
+    simpl in *.
     apply join_same_len_length in Hlen_sibs.
     rewrite -join_length_reverse in Hlen_sibs.
     word. }
   wp_if_destruct.
   { iApply "HΦ". intro_wish.
-    iDestruct (Proof.wish_det with "Hwish_dec Henc_proof") as %[-> ->].
-    iClear "Hwish_dec". simpl in *.
+    opose proof (Proof.enc_inj _ _ _ _ Henc_proof Hvalid_dec Hvalid_proof) as [-> ->].
+    simpl in *.
     apply join_same_len_length in Hlen_sibs.
     rewrite -join_length_reverse in Hlen_sibs.
     word. }
 
   replace (W64 0) with (W64 0%nat) by word.
-  iDestruct "Hsl_Siblings" as "#Hsl_Siblings".
   wp_apply wp_newShell as "* @".
   { iFrame "#".
     (* [Require ZifyNat] for [Nat.div] reasoning. *)
@@ -935,25 +938,24 @@ Proof.
   destruct IsOtherLeaf; wp_auto.
   2: { iApply "HΦ". iFrame "Hown_tree".
     repeat iSplit; try done.
-    iExists _, None. iFrame.
+    iExists sibs, None, LeafLabel, LeafVal, tail. iFrame.
     iPureIntro; repeat split; try done; word. }
 
   iDestruct (own_slice_len with "Hsl_LeafLabel") as %[].
   wp_if_destruct.
   2: { iApply "HΦ". intro_wish.
     destruct oleaf as [[]|].
-    2: { iDestruct (Proof.wish_det with "Hwish_dec Henc_proof") as %[[=] _]. }
-    iDestruct (Proof.wish_det with "Hwish_dec Henc_proof") as %[[=] ->].
+    2: { opose proof (Proof.enc_inj _ _ _ _ Henc_proof Hvalid_dec Hvalid_proof) as [[=] _]. }
+    opose proof (Proof.enc_inj _ _ _ _ Henc_proof Hvalid_dec Hvalid_proof) as [[=] ->].
     iNamed "Holeaf". simplify_eq/=. word. }
 
-  iPersist "Hsl_LeafLabel Hsl_LeafVal".
   wp_apply bytes.wp_Equal as "_".
   { iFrame "#". }
   wp_if_destruct.
   { iApply "HΦ". intro_wish.
     destruct oleaf as [[]|].
-    2: { iDestruct (Proof.wish_det with "Hwish_dec Henc_proof") as %[[=] _]. }
-    iDestruct (Proof.wish_det with "Hwish_dec Henc_proof") as %[[=] ->].
+    2: { opose proof (Proof.enc_inj _ _ _ _ Henc_proof Hvalid_dec Hvalid_proof) as [[=] _]. }
+    opose proof (Proof.enc_inj _ _ _ _ Henc_proof Hvalid_dec Hvalid_proof) as [[=] ->].
     by iNamed "Holeaf". }
 
   wp_apply (wp_put with "[$tr $Hown_tree]") as "* @".
@@ -965,8 +967,8 @@ Proof.
   destruct err; iNamed "Hgenie"; wp_auto.
   { iApply "HΦ". intro_wish.
     destruct oleaf as [[]|].
-    2: { iDestruct (Proof.wish_det with "Hwish_dec Henc_proof") as %[[=] _]. }
-    iDestruct (Proof.wish_det with "Hwish_dec Henc_proof") as %[[=] ->].
+    2: { opose proof (Proof.enc_inj _ _ _ _ Henc_proof Hvalid_dec Hvalid_proof) as [[=] _]. }
+    opose proof (Proof.enc_inj _ _ _ _ Henc_proof Hvalid_dec Hvalid_proof) as [[=] ->].
     iNamed "Holeaf". simplify_eq/=.
     opose proof (join_same_len_inj _ (reverse _) (reverse _) _ _ _ _)
       as Heq_s; try done.
@@ -979,7 +981,7 @@ Proof.
 
   iApply "HΦ".
   iFrame "Hown_tree".
-  iExists _, (Some (_, _)).
+  iExists sibs, (Some (LeafLabel, LeafVal)), LeafLabel, LeafVal, tail.
   iFrame. iPureIntro. repeat split; try done; word.
 Qed.
 
@@ -1425,8 +1427,11 @@ Proof.
     iFrame "%".
 
     iExists [], [], [].
-    rewrite /Proof.wish /Proof.encodes /=.
-    iExists _. repeat iSplit; try done; [|by list_simplifier].
+    rewrite Proof.enc_fn_unseal Proof.valid_unseal /Proof.enc_fn_def /Proof.valid_def
+      /safemarshal.Slice1D.enc_fn /safemarshal.Slice1D.valid /safemarshal.w64.enc_fn
+      /safemarshal.bool.enc_fn /=.
+    iSplit; [iPureIntro; by list_simplifier|].
+    iPureIntro. split_and!; [|word..].
     erewrite join_same_len_length.
     2: { by apply Forall_reverse. }
     rewrite length_reverse.
@@ -1455,13 +1460,16 @@ Proof.
     eapply find_on_const_label_len in Hconst_len as ?; [|done].
     iFrame (Hcode) "%".
 
-    iExists _, _, []. repeat iSplit; [|done..].
-    rewrite /Proof.wish /Proof.encodes /=.
+    iExists _, _, [].
+    rewrite Proof.enc_fn_unseal Proof.valid_unseal /Proof.enc_fn_def /Proof.valid_def
+      /safemarshal.Slice1D.enc_fn /safemarshal.Slice1D.valid /safemarshal.w64.enc_fn
+      /safemarshal.bool.enc_fn /=.
     iDestruct (own_slice_len with "Hsl_foundLabel") as %[].
     iDestruct (own_slice_len with "Hsl_foundVal") as %[].
-    iExists _. repeat iSplit; try done; [|word..|].
-    2: { list_simplifier. iPureIntro. repeat f_equal; word. }
-    erewrite join_same_len_length.
+    repeat iSplit; try done.
+    { list_simplifier. iPureIntro. repeat f_equal; word. }
+    2-3: iPureIntro; word.
+    iPureIntro. erewrite join_same_len_length.
     2: { by apply Forall_reverse. }
     rewrite length_reverse.
     word. }
@@ -1478,11 +1486,13 @@ Proof.
   iSplit; [done|].
   iExists None.
 
-  iExists [], [], []. repeat iSplit; [|done..].
-  rewrite /Proof.wish /Proof.encodes /=.
-  iExists _. repeat iSplit; try done.
-  2: { by list_simplifier. }
-  erewrite join_same_len_length.
+  iExists [], [], [].
+  rewrite Proof.enc_fn_unseal Proof.valid_unseal /Proof.enc_fn_def /Proof.valid_def
+    /safemarshal.Slice1D.enc_fn /safemarshal.Slice1D.valid /safemarshal.w64.enc_fn
+    /safemarshal.bool.enc_fn /=.
+  repeat iSplit; try done.
+  { iPureIntro. by list_simplifier. }
+  iPureIntro. erewrite join_same_len_length.
   2: { by apply Forall_reverse. }
   rewrite length_reverse.
   word.
