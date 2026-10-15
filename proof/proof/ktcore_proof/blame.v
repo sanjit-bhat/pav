@@ -236,13 +236,12 @@ Lemma blame_two party0 party1 good0 good1 interp :
   ¬ ⌜(good0 = true ∧ good1 = true)⌝ -∗
   ⌜BlameSpec {[ party0; party1 ]} (<[party0:=good0]>(<[party1:=good1]>interp))⌝.
 Proof.
-  iPureIntro. intros [? Heq%Classical_Prop.not_and_or]. right. right.
-  destruct Heq as [?|?].
-  - destruct good0; try done.
-    exists party0.
-    split; [set_solver|by simplify_map_eq/=].
-  - destruct good1; try done.
+  iPureIntro. intros [? Heq]. right. right.
+  destruct good0.
+  - destruct good1; [naive_solver|].
     exists party1.
+    split; [set_solver|by simplify_map_eq/=].
+  - exists party0.
     split; [set_solver|by simplify_map_eq/=].
 Qed.
 
