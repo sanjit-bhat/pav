@@ -224,3 +224,20 @@ Proof.
   rewrite lookup_drop.
   exact_eq Hl. f_equal. lia.
 Qed.
+
+(* injectivity of concatenated prefix-free encodings. *)
+Lemma mjoin_enc_inj {A B} (enc : A → list B) (valid : A → Prop) l0 l1 t0 t1 :
+  (∀ a0 a1 s0 s1, enc a0 ++ s0 = enc a1 ++ s1 →
+    valid a0 → valid a1 → a0 = a1 ∧ s0 = s1) →
+  mjoin (enc <$> l0) ++ t0 = mjoin (enc <$> l1) ++ t1 →
+  length l0 = length l1 →
+  Forall valid l0 → Forall valid l1 →
+  l0 = l1 ∧ t0 = t1.
+Proof.
+  intros Hinj. revert l1 t0 t1.
+  induction l0 as [|a0 l0 IH]; intros [|a1 l1] t0 t1 Heq ???;
+    simplify_eq/=; decompose_Forall_hyps; [done|].
+  rewrite -!app_assoc in Heq.
+  apply Hinj in Heq as [-> Heq]; [|done..].
+  by apply IH in Heq as [-> ->].
+Qed.
