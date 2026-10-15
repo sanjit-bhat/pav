@@ -18,11 +18,11 @@ Collection W := sem + package_sem.
 
 Lemma wp_initialize' get_is_pkg_init :
   get_is_pkg_init_prop ktcore get_is_pkg_init →
-  {{{ own_initializing get_is_pkg_init }}}
+  {{{ own_initializing get_is_pkg_init ∗ crypto_ffi.is_hash_proph_inv }}}
     ktcore.initialize' #()
   {{{ RET #(); own_initializing get_is_pkg_init ∗ is_pkg_init ktcore }}}.
 Proof.
-  intros Hinit. wp_start as "Hown".
+  intros Hinit. wp_start as "[Hown #Hinv]".
   wp_apply (wp_package_init with "[$Hown] HΦ") as "Hown".
   { destruct Hinit as (-> & ?); done. }
   wp_apply (marshal.wp_initialize' with "[$Hown]").
@@ -31,10 +31,10 @@ Proof.
   wp_apply (safemarshal.wp_initialize' with "[$Hown]").
   { naive_solver. }
   iIntros "(Hown & #?)". wp_auto.
-  wp_apply (cryptoutil.wp_initialize' with "[$Hown]").
+  wp_apply (cryptoutil.wp_initialize' with "[$Hown $Hinv]").
   { naive_solver. }
   iIntros "(Hown & #?)". wp_auto.
-  wp_apply (cryptoffi.wp_initialize' with "[$Hown]").
+  wp_apply (cryptoffi.wp_initialize' with "[$Hown $Hinv]").
   { naive_solver. }
   iIntros "(Hown & #?)". wp_auto.
   wp_apply (bytes.wp_initialize' with "[$Hown]").

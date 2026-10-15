@@ -44,19 +44,19 @@ Definition is_initialized : iProp Σ :=
 
 Lemma wp_initialize' get_is_pkg_init :
   get_is_pkg_init_prop merkle get_is_pkg_init →
-  {{{ own_initializing get_is_pkg_init }}}
+  {{{ own_initializing get_is_pkg_init ∗ crypto_ffi.is_hash_proph_inv }}}
     merkle.initialize' #()
   {{{ RET #(); own_initializing get_is_pkg_init ∗ is_pkg_init merkle }}}.
 Proof.
-  intros Hinit. wp_start as "Hown".
+  intros Hinit. wp_start as "[Hown #Hinv]".
   wp_apply (wp_package_init with "[$Hown] HΦ").
   { destruct Hinit as (-> & ?); done. }
   iIntros "Hown". wp_auto.
   wp_apply wp_GlobalAlloc as "Hglobal".
   wp_apply (safemarshal.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
   wp_apply (marshal.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
-  wp_apply (cryptoutil.wp_initialize' with "[$Hown]") as "(Hown & #Hcu)"; first naive_solver.
-  wp_apply (cryptoffi.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
+  wp_apply (cryptoutil.wp_initialize' with "[$Hown $Hinv]") as "(Hown & #Hcu)"; first naive_solver.
+  wp_apply (cryptoffi.wp_initialize' with "[$Hown $Hinv]") as "(Hown & #?)"; first naive_solver.
   wp_apply (std.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
   wp_apply (binary.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
   wp_apply (bytes.wp_initialize' with "[$Hown]") as "(Hown & #?)"; first naive_solver.
